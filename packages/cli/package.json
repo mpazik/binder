@@ -1,0 +1,23 @@
+{
+  "name": "@binder/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "bin": {
+    "binder": "./src/index.ts"
+  },
+  "scripts": {
+    "format": "bun prettier --write --ignore-path ../../.prettierignore .",
+    "lint": "bun eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun lint && bun format && bun typecheck && bun test"
+  },
+  "dependencies": {
+    "@binder/utils": "workspace:*",
+    "@binder/db": "workspace:*",
+    "@types/yargs": "^17.0.33",
+    "yargs": "^18.0.0",
+    "zod": "^4.1.11"
+  }
+}

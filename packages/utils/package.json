@@ -1,0 +1,28 @@
+{
+  "name": "@binder/utils",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./tests": {
+      "types": "./src/tests/index.ts",
+      "default": "./src/tests/index.ts"
+    }
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "transliteration": "^2.3.5"
+  },
+  "scripts": {
+    "format": "bun prettier --write --ignore-path ../../.prettierignore .",
+    "lint": "bun eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun lint && bun format && bun typecheck && bun test"
+  }
+}

@@ -1,0 +1,121 @@
+import { beforeEach, describe, expect, it } from "bun:test";
+import { throwIfError } from "@binder/utils";
+import "@binder/utils/tests";
+import { getTestDatabase } from "./db.mock";
+import { openKnowledgeGraph } from "./knowledge-graph.ts";
+import type { Database } from "./db.ts";
+import { createEntity, fetchEntity } from "./entity-store.ts";
+import { saveTransaction } from "./transaction-store.ts";
+import {
+  mockTask1Key,
+  mockTask1Node,
+  mockTask1Uid,
+  mockTaskNode1Updated,
+  NONEXISTENT_NODE_UID,
+} from "./model/node.mock.ts";
+import {
+  mockTransactionInit,
+  mockTransactionInputUpdate,
+  mockTransactionUpdate,
+} from "./model/transaction.mock.ts";
+import {
+  mockTaskType,
+  mockTaskTypeKey,
+  mockTaskTypeUid,
+} from "./model/config.mock.ts";
+import {
+  type ConfigUid,
+  GENESIS_VERSION,
+  versionFromTransaction,
+} from "./model";
+
+describe("knowledge graph", () => {
+  let db: Database;
+  let kg: ReturnType<typeof openKnowledgeGraph>;
+
+  beforeEach(async () => {
+    db = getTestDatabase();
+    kg = openKnowledgeGraph(db);
+
+    await db.transaction(async (tx) => {
+      await createEntity(tx, "node", mockTask1Node);
+      await createEntity(tx, "config", mockTaskType);
+      await saveTransaction(tx, mockTransactionInit);
+    });
+  });
+
+  describe("fetchNode", () => {
+    it("fetches node by uid", async () => {
+      const result = throwIfError(await kg.fetchNode(mockTask1Uid));
+
+      expect(result).toEqual(mockTask1Node);
+    });
+
+    it("fetches node by key", async () => {
+      const result = throwIfError(await kg.fetchNode(mockTask1Key));
+
+      expect(result).toEqual(mockTask1Node);
+    });
+
+    it("returns error when node doesn't exist", async () => {
+      const result = await kg.fetchNode(NONEXISTENT_NODE_UID);
+
+      expect(result).toBeErr();
+    });
+  });
+
+  describe("fetchConfig", () => {
+    it("fetches config by uid", async () => {
+      const result = throwIfError(await kg.fetchConfig(mockTaskTypeUid));
+
+      expect(result).toEqual(mockTaskType);
+    });
+
+    it("fetches config by key", async () => {
+      const result = throwIfError(await kg.fetchConfig(mockTaskTypeKey));
+
+      expect(result).toEqual(mockTaskType);
+    });
+
+    it("returns error when config doesn't exist", async () => {
+      const result = await kg.fetchConfig(NONEXISTENT_NODE_UID as ConfigUid);
+
+      expect(result).toBeErr();
+    });
+  });
+
+  describe("update", () => {
+    it("processes and applies transaction", async () => {
+      throwIfError(await kg.update(mockTransactionInputUpdate));
+
+      const updatedNode = await db.transaction(async (tx) =>
+        throwIfError(await fetchEntity(tx, "node", mockTask1Uid)),
+      );
+
+      expect(updatedNode).toEqual(mockTaskNode1Updated);
+    });
+  });
+
+  describe("version", () => {
+    it("returns correct version for empty knowledge graph", async () => {
+      db = getTestDatabase();
+      kg = openKnowledgeGraph(db);
+
+      const result = throwIfError(await kg.version());
+
+      expect(result).toEqual(GENESIS_VERSION);
+    });
+
+    it("returns version before and after update", async () => {
+      const result = throwIfError(await kg.version());
+      expect(result).toEqual(versionFromTransaction(mockTransactionInit));
+
+      throwIfError(await kg.update(mockTransactionInputUpdate));
+
+      const updatedResult = throwIfError(await kg.version());
+      expect(updatedResult).toEqual(
+        versionFromTransaction(mockTransactionUpdate),
+      );
+    });
+  });
+});

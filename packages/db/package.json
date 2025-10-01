@@ -1,0 +1,27 @@
+{
+  "name": "@binder/db",
+  "version": "0.0.0",
+  "type": "module",
+  "types": "./src/index.ts",
+  "main": "src/db.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "format": "bun prettier --write --ignore-path ../../.prettierignore .",
+    "lint": "bun eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun lint && bun format && bun typecheck && bun test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@binder/utils": "workspace:*",
+    "drizzle-kit": "^0.31.5",
+    "drizzle-orm": "^0.44.5"
+  }
+}
