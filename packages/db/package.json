@@ -22,6 +22,7 @@
   "dependencies": {
     "@binder/utils": "workspace:*",
     "drizzle-kit": "^0.31.5",
-    "drizzle-orm": "^0.44.5"
+    "drizzle-orm": "^0.44.5",
+    "zod": "^4.1.11"
   }
 }
