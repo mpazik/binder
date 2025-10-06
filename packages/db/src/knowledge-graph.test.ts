@@ -10,6 +10,8 @@ import {
   mockTask1Key,
   mockTask1Node,
   mockTask1Uid,
+  mockTask2Node,
+  mockTask3Node,
   mockTaskNode1Updated,
   NONEXISTENT_NODE_UID,
 } from "./model/node.mock.ts";
@@ -122,6 +124,51 @@ describe("knowledge graph", () => {
       expect(updatedResult).toEqual(
         versionFromTransaction(mockTransactionUpdate),
       );
+    });
+  });
+
+  describe("search", () => {
+    beforeEach(async () => {
+      await db.transaction(async (tx) => {
+        const { mockTask2Node, mockTask3Node, mockProjectNode } = await import(
+          "./model/node.mock.ts"
+        );
+        await createEntity(tx, "node", mockProjectNode);
+        await createEntity(tx, "node", mockTask2Node);
+        await createEntity(tx, "node", mockTask3Node);
+      });
+    });
+
+    it("returns all nodes without filters", async () => {
+      const result = throwIfError(await kg.search({}));
+
+      expect(result.items.length).toBe(4);
+      expect(result.pagination.hasNext).toBe(false);
+    });
+
+    it("filters by type", async () => {
+      const result = throwIfError(
+        await kg.search({
+          filters: { type: "Task" },
+        }),
+      );
+
+      expect(result.items).toEqual([
+        mockTask1Node,
+        mockTask2Node,
+        mockTask3Node,
+      ]);
+    });
+
+    it("respects pagination limit", async () => {
+      const result = throwIfError(
+        await kg.search({
+          pagination: { limit: 2 },
+        }),
+      );
+
+      expect(result.items.length).toBe(2);
+      expect(result.pagination.hasNext).toBe(true);
     });
   });
 });

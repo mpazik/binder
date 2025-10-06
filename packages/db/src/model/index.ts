@@ -11,3 +11,5 @@ export type * from "./transaction.ts";
 export * from "./namespace.ts";
 export type * from "./namespace.ts";
 export * from "./ref.ts";
+export * from "./query.ts";
+export type * from "./query.ts";
