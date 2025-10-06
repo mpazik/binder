@@ -59,7 +59,14 @@ export type KnowledgeGraph = {
   ) => ResultAsync<void>;
 };
 
-export const openKnowledgeGraph = (db: Database): KnowledgeGraph => {
+export type KnowledgeGraphCallbacks = {
+  onTransactionSaved?: (transaction: Transaction) => void;
+};
+
+export const openKnowledgeGraph = (
+  db: Database,
+  callbacks?: KnowledgeGraphCallbacks,
+): KnowledgeGraph => {
   return {
     fetchNode: async (ref: NodeRef) => {
       return db.transaction(async (tx) => {
@@ -91,6 +98,8 @@ export const openKnowledgeGraph = (db: Database): KnowledgeGraph => {
 
         const applyResult = await applyTransaction(tx, processedResult.data);
         if (isErr(applyResult)) return applyResult;
+
+        callbacks?.onTransactionSaved?.(processedResult.data);
 
         return ok(processedResult.data);
       });

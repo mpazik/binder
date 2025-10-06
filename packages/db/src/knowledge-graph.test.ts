@@ -28,6 +28,7 @@ import {
 import {
   type ConfigUid,
   GENESIS_VERSION,
+  type Transaction,
   versionFromTransaction,
 } from "./model";
 
@@ -94,13 +95,24 @@ describe("knowledge graph", () => {
 
   describe("update", () => {
     it("processes and applies transaction", async () => {
-      throwIfError(await kg.update(mockTransactionInputUpdate));
+      let savedTransaction: Transaction | undefined;
+      const kgWithCallback = openKnowledgeGraph(db, {
+        onTransactionSaved: (tx) => {
+          savedTransaction = tx;
+        },
+      });
+
+      const returnedTransaction = throwIfError(
+        await kgWithCallback.update(mockTransactionInputUpdate),
+      );
+      expect(returnedTransaction).toEqual(mockTransactionUpdate);
 
       const updatedNode = await db.transaction(async (tx) =>
         throwIfError(await fetchEntity(tx, "node", mockTask1Uid)),
       );
 
       expect(updatedNode).toEqual(mockTaskNode1Updated);
+      expect(savedTransaction).toEqual(mockTransactionUpdate);
     });
   });
 
