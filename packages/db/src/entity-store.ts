@@ -1,5 +1,4 @@
 import {
-  assertCheck,
   assertDefinedPass,
   assertNotEmpty,
   errorToObject,

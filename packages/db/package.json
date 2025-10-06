@@ -8,6 +8,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./mocks": {
+      "types": "./src/mocks.ts",
+      "default": "./src/mocks.ts"
     }
   },
   "scripts": {

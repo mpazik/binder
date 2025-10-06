@@ -1,15 +1,12 @@
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
-import { errorToObject, isErr, tryCatch } from "@binder/utils";
+import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
 import {
   TransactionInput as TransactionInputSchema,
-  openDb,
-  openKnowledgeGraph,
   normalizeEntityRef,
+  type TransactionRef,
 } from "@binder/db";
-import { Log } from "../log.ts";
-import { AUTHOR, DB_PATH } from "../config.ts";
-import { printData } from "../ui.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -27,6 +24,67 @@ const transformToArray = (
     key,
     ...(typeof value === "object" && value !== null ? value : {}),
   }));
+};
+
+export const transactionCreateHandler: CommandHandlerWithDb<{
+  path: string;
+}> = async ({ kg, author, ui, log, args }) => {
+  const path = args.path;
+
+  if (!path) {
+    log.error("Path to transaction file is required");
+    process.exit(1);
+  }
+
+  const fileResult = await tryCatch(async () => {
+    const bunFile = Bun.file(path);
+    const text = await bunFile.text();
+    return YAML.parse(text);
+  }, errorToObject);
+
+  if (isErr(fileResult)) {
+    log.error("Failed to read transaction file", {
+      path,
+      error: fileResult.error,
+    });
+    process.exit(1);
+  }
+
+  const rawData = fileResult.data as RawTransactionData;
+  const transactionInput = {
+    author: rawData.author || author,
+    nodes: transformToArray(rawData.nodes),
+    configurations: transformToArray(rawData.configurations),
+  };
+
+  const validationResult = tryCatch(
+    () => TransactionInputSchema.parse(transactionInput),
+    errorToObject,
+  );
+
+  if (isErr(validationResult)) {
+    log.error("Invalid transaction format", {
+      error: validationResult.error,
+    });
+    process.exit(1);
+  }
+
+  const result = await kg.update(validationResult.data);
+  if (isErr(result)) return result;
+
+  log.info("Transaction created successfully", { path });
+  ui.printData(result.data);
+  return ok(undefined);
+};
+
+export const transactionReadHandler: CommandHandlerWithDb<{
+  ref: TransactionRef;
+}> = async ({ kg, ui, args }) => {
+  const result = await kg.fetchTransaction(args.ref);
+  if (isErr(result)) return result;
+
+  ui.printData(result.data);
+  return ok(undefined);
 };
 
 const TransactionCommand = types({
@@ -47,69 +105,7 @@ const TransactionCommand = types({
               demandOption: true,
             });
           },
-          handler: async (args) => {
-            const path = args.path;
-
-            if (!path) {
-              Log.error("Path to transaction file is required");
-              process.exit(1);
-            }
-
-            const fileResult = await tryCatch(async () => {
-              const bunFile = Bun.file(path);
-              const text = await bunFile.text();
-              return YAML.parse(text);
-            }, errorToObject);
-
-            if (isErr(fileResult)) {
-              Log.error("Failed to read transaction file", {
-                path,
-                error: fileResult.error,
-              });
-              process.exit(1);
-            }
-
-            const rawData = fileResult.data as RawTransactionData;
-            const transactionInput = {
-              author: rawData.author || AUTHOR,
-              nodes: transformToArray(rawData.nodes),
-              configurations: transformToArray(rawData.configurations),
-            };
-
-            const validationResult = tryCatch(
-              () => TransactionInputSchema.parse(transactionInput),
-              errorToObject,
-            );
-
-            if (isErr(validationResult)) {
-              Log.error("Invalid transaction format", {
-                error: validationResult.error,
-              });
-              process.exit(1);
-            }
-
-            const dbResult = openDb({ path: DB_PATH, migrate: true });
-            if (isErr(dbResult)) {
-              Log.error("Failed to open database", {
-                error: dbResult.error,
-              });
-              process.exit(1);
-            }
-
-            const db = dbResult.data;
-            const kg = openKnowledgeGraph(db);
-
-            const result = await kg.update(validationResult.data);
-            if (isErr(result)) {
-              Log.error("Failed to create transaction", {
-                error: result.error,
-              });
-              process.exit(1);
-            }
-
-            Log.info("Transaction created successfully", { path });
-            printData(result.data);
-          },
+          handler: bootstrapWithDb(transactionCreateHandler),
         }),
       )
       .command(
@@ -126,26 +122,7 @@ const TransactionCommand = types({
                 normalizeEntityRef<"transaction">(value),
             });
           },
-          handler: async (args) => {
-            const dbResult = openDb({ path: DB_PATH, migrate: true });
-            if (isErr(dbResult)) {
-              Log.error("Failed to open database", {
-                error: dbResult.error,
-              });
-              process.exit(1);
-            }
-
-            const db = dbResult.data;
-            const kg = openKnowledgeGraph(db);
-
-            const result = await kg.fetchTransaction(args.ref);
-            if (isErr(result)) {
-              Log.error("Failed to read transaction", { error: result.error });
-              process.exit(1);
-            }
-
-            printData(result.data);
-          },
+          handler: bootstrapWithDb(transactionReadHandler),
         }),
       )
       .demandCommand(1, "You need to specify a subcommand: create, read");
