@@ -1,7 +1,8 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
-import { RunCommand } from "./commands/run";
+import NodeCommand from "./commands/node";
+import TransactionCommand from "./commands/transaction.ts";
 import { Log } from "./log";
 import * as UI from "./ui";
 
@@ -21,10 +22,11 @@ process.on("uncaughtException", (e) => {
 
 const version = "0.0.0";
 const cli = yargs(hideBin(process.argv))
-  .scriptName("binder-cli")
+  .scriptName("binder")
   .help("help", "show help")
   .version("version", "show version number", version)
   .alias("version", "v")
+  .completion("completion", "generate bash/zsh completion script")
   .option("print-logs", {
     describe: "print logs to stderr",
     type: "boolean",
@@ -40,8 +42,9 @@ const cli = yargs(hideBin(process.argv))
       args: process.argv.slice(2),
     });
   })
-  .usage("\n" + UI.logo())
-  .command(RunCommand)
+  .usage(UI.logo())
+  .command(NodeCommand)
+  .command(TransactionCommand)
   .fail((msg) => {
     if (
       msg.startsWith("Unknown argument") ||
@@ -56,19 +59,16 @@ const cli = yargs(hideBin(process.argv))
 
 const result = await tryCatch<void, any>(() => cli.parse());
 if (isErr(result)) {
-  const data: Record<string, any> = {};
   const e = result.error;
   if (e instanceof Error) {
-    Object.assign(data, {
+    Log.error("fatal", {
       name: e.name,
       message: e.message,
       cause: e.cause?.toString(),
       stack: e.stack,
     });
-  }
-
-  if (e instanceof ResolveMessage) {
-    Object.assign(data, {
+  } else if (e instanceof ResolveMessage) {
+    Log.error("fatal", {
       name: e.name,
       message: e.message,
       code: e.code,
@@ -77,8 +77,9 @@ if (isErr(result)) {
       position: e.position,
       importKind: e.importKind,
     });
+  } else {
+    Log.error("fatal", { error: e });
   }
-  Log.error("fatal", data);
   process.exitCode = 1;
 }
 

@@ -10,3 +10,4 @@ export * from "./transaction.ts";
 export type * from "./transaction.ts";
 export * from "./namespace.ts";
 export type * from "./namespace.ts";
+export * from "./ref.ts";

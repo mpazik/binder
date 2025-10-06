@@ -1,4 +1,9 @@
-import { isErr, notImplementedError, type ResultAsync } from "@binder/utils";
+import {
+  isErr,
+  notImplementedError,
+  ok,
+  type ResultAsync,
+} from "@binder/utils";
 import type {
   ConfigRef,
   ConfigUid,
@@ -6,12 +11,13 @@ import type {
   GraphVersion,
   NodeRef,
   NodeUid,
+  Transaction,
   TransactionInput,
   TransactionRef,
 } from "./model";
 import type { Database } from "./db.ts";
 import { fetchEntity, resolveEntityRefs } from "./entity-store.ts";
-import { getVersion } from "./transaction-store.ts";
+import { fetchTransaction, getVersion } from "./transaction-store.ts";
 import {
   applyTransaction,
   processTransactionInput,
@@ -20,8 +26,9 @@ import {
 export type KnowledgeGraph = {
   fetchNode: (ref: NodeRef) => ResultAsync<Fieldset>;
   fetchConfig: (ref: ConfigRef) => ResultAsync<Fieldset>;
+  fetchTransaction: (ref: TransactionRef) => ResultAsync<Transaction>;
   version: () => ResultAsync<GraphVersion>;
-  update: (input: TransactionInput) => ResultAsync<void>;
+  update: (input: TransactionInput) => ResultAsync<Transaction>;
   rollback: (
     tx: TransactionRef,
     opt?: {
@@ -57,12 +64,20 @@ export const openKnowledgeGraph = (db: Database): KnowledgeGraph => {
         return fetchEntity(tx, "config", configUid);
       });
     },
+    fetchTransaction: async (ref: TransactionRef) => {
+      return db.transaction(async (tx) => {
+        return fetchTransaction(tx, ref);
+      });
+    },
     update: async (input: TransactionInput) => {
       return db.transaction(async (tx) => {
         const processedResult = await processTransactionInput(tx, input);
         if (isErr(processedResult)) return processedResult;
 
-        return applyTransaction(tx, processedResult.data);
+        const applyResult = await applyTransaction(tx, processedResult.data);
+        if (isErr(applyResult)) return applyResult;
+
+        return ok(processedResult.data);
       });
     },
     version: async () => {

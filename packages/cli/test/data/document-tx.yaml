@@ -1,0 +1,152 @@
+author: contact@marekpazik.pl
+configurations:
+  title:
+    type: field
+    dataType: string
+    description: Human-readable title (used by Document and Section).
+  blockContent:
+    type: field
+    dataType: relation
+    multiple: true
+    range: DocumentBlock
+    ordered: true
+    description: Child blocks contained by a Document or container block.
+  textContent:
+    type: field
+    dataType: text
+    description: Text blockContent; for Paragraph or Code body.
+  headingLevel:
+    type: field
+    dataType: integer
+    min: 1
+    max: 6
+    description: Heading level for Section; if omitted, derive from nesting depth.
+  citationSource:
+    type: field
+    dataType: string
+    description: Optional citation/source for Quote.
+  codeLanguage:
+    type: field
+    dataType: string
+    description: Optional language hint for syntax highlighting in Code (e.g., "ts", "sql").
+  query:
+    type: field
+    dataType: query
+    description: Query string.
+
+  Document:
+    type: type
+    description: A top-level note made of ordered blocks.
+    mandatory:
+      - title
+      - blockContent
+  DocumentBlock:
+    type: type
+    description: Abstract base for all blocks. Not instantiable.
+    abstract: true
+  Section:
+    type: type
+    baseType: DocumentBlock
+    description: A titled container; renders as a heading plus nested blockContent.
+    mandatory:
+      - title
+      - blockContent
+  Paragraph:
+    type: type
+    baseType: DocumentBlock
+    description: A plain text paragraph (inline markdown allowed).
+    mandatory:
+      - textContent
+  Quote:
+    type: type
+    baseType: DocumentBlock
+    description: A blockquote with optional citation.
+    mandatory:
+      - textContent
+      - citationSource
+    optional:
+      - headingLevel
+  Code:
+    type: type
+    baseType: DocumentBlock
+    description: A fenced code block.
+    mandatory:
+      - lang
+      - textContent
+  Dataview:
+    type: type
+    baseType: DocumentBlock
+    description: A dataview query block.
+    mandatory:
+      - query
+
+nodes:
+  - key: simple.md
+    uid: BNupvr3JwPl
+    type: Document
+    blockContent:
+      - n1G4RYLpqCy
+      - 7KNebjPGCil
+      - 5l8giR3SJl0
+
+  - uid: n1G4RYLpqCy
+    type: Section
+    title: Simple Markdown Document
+    blockContent:
+      - 3sbJjrIXR0h
+
+  - uid: 3sbJjrIXR0h
+    type: Paragraph
+    text: This is a simple markdown document.
+
+  - uid: 7KNebjPGCil
+    type: Section
+    title: Key Features
+    blockContent:
+      - DsftL7GkTQ3
+      - xGXwraeyMHz
+      - qVw8YnKpRTz
+
+  - uid: DsftL7GkTQ3
+    type: Paragraph
+    text: "Supports:"
+
+  - uid: xGXwraeyMHz
+    type: List
+    blockContent:
+      - izziT9iRMnm
+      - ZYMH25QeU45
+      - B92AgfCR6aH
+
+  - uid: izziT9iRMnm
+    type: ListItem
+    text: "**Bold** text for emphasis"
+
+  - uid: ZYMH25QeU45
+    type: ListItem
+    text: _Italic_ text for subtle emphasis
+
+  - uid: B92AgfCR6aH
+    type: ListItem
+    text: "`Code snippets` for technical content"
+
+  - uid: qVw8YnKpRTz
+    type: Dataview
+    query: type=Task
+
+  - uid: 5l8giR3SJl0
+    type: Section
+    title: Paragraphs
+    blockContent:
+      - XKQe9TqpFTL
+      - dh44jbz45rm
+
+  - uid: XKQe9TqpFTL
+    type: Paragraph
+    text: Paragraphs separated by blank lines for readability.
+
+  - uid: dh44jbz45rm
+    type: Paragraph
+    text: |
+      Inline formatting like bold,
+      italics, code possible.

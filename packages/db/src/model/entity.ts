@@ -33,9 +33,3 @@ export const isEntityId = (id: EntityRef): id is EntityId =>
   typeof id === "number";
 
 export const isEntityUid = (id: EntityRef): id is EntityUid => isValidUid(id);
-
-export const resolveEntityRefType = (ref: EntityRef): EntityRefType => {
-  if (isEntityId(ref)) return "id";
-  if (isEntityUid(ref)) return "uid";
-  return "key";
-};

@@ -16,6 +16,7 @@ tools:
   documentation: true
   websearch: true
   fetch: true
+  runcli: true
   "*": false
 ---
 

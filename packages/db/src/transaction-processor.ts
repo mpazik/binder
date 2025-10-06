@@ -2,8 +2,6 @@ import { isErr, newIsoTimestamp, ok, type ResultAsync } from "@binder/utils";
 import {
   type ChangesetsInput,
   type ConfigUid,
-  type EntityNsUid,
-  type EntityUid,
   hashTransaction,
   incrementEntityId,
   type NodeUid,

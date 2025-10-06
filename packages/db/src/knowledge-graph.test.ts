@@ -45,6 +45,12 @@ describe("knowledge graph", () => {
   });
 
   describe("fetchNode", () => {
+    it("fetches node by id", async () => {
+      const result = throwIfError(await kg.fetchNode(mockTask1Node.id));
+
+      expect(result).toEqual(mockTask1Node);
+    });
+
     it("fetches node by uid", async () => {
       const result = throwIfError(await kg.fetchNode(mockTask1Uid));
 
