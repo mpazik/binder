@@ -1,13 +1,16 @@
+import { mkdirSync } from "fs";
 import { isErr, type Result } from "@binder/utils";
 import {
   openDb,
   openKnowledgeGraph,
   type Database,
   type KnowledgeGraph,
+  type Transaction,
 } from "@binder/db";
 import { Log } from "./log.ts";
-import { DB_PATH, AUTHOR } from "./config.ts";
+import { BINDER_DIR, DB_PATH, AUTHOR, TRANSACTION_LOG_PATH } from "./config.ts";
 import * as ui from "./ui.ts";
+import { logTransaction } from "./transaction-log.ts";
 
 type CommandContext = {
   author: string;
@@ -55,6 +58,8 @@ export const bootstrapWithDb = <TArgs>(
   handler: CommandHandlerWithDb<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
+    mkdirSync(BINDER_DIR, { recursive: true });
+
     const dbResult = openDb({ path: DB_PATH, migrate: true });
     if (isErr(dbResult)) {
       Log.error("Failed to open database", { error: dbResult.error });
@@ -62,7 +67,11 @@ export const bootstrapWithDb = <TArgs>(
     }
 
     const db = dbResult.data;
-    const kg = openKnowledgeGraph(db);
+    const kg = openKnowledgeGraph(db, {
+      onTransactionSaved: (transaction: Transaction) => {
+        logTransaction(transaction, TRANSACTION_LOG_PATH);
+      },
+    });
 
     return handler({
       ...context,
