@@ -10,6 +10,11 @@ import {
 import type { Fieldset, KnowledgeGraph, NodeRef } from "@binder/db";
 import type { SlimAST } from "./markdown.ts";
 import { parseStringQuery } from "./query.ts";
+import {
+  compileTemplate,
+  DEFAULT_DATAVIEW_TEMPLATE,
+  renderTemplateForItems,
+} from "./template.ts";
 
 export const buildAstDoc = async (
   kg: KnowledgeGraph,
@@ -145,6 +150,10 @@ export const buildAstDoc = async (
         const queryParams = parseStringQuery(node.query as string);
         const searchResult = await kg.search(queryParams);
 
+        const templateAttr = node.template
+          ? ` template="${node.template}"`
+          : "";
+
         if (isErr(searchResult)) {
           diagnostics.push(
             `Dataview query failed: ${searchResult.error.message}`,
@@ -152,20 +161,50 @@ export const buildAstDoc = async (
           return [
             {
               type: "html",
-              value: `<dataview query="${node.query}" error="true"></dataview>`,
+              value: `<dataview query="${node.query}"${templateAttr} error="true"></dataview>`,
             },
           ];
         }
 
-        const yamlContent = YAML.stringify(
-          searchResult.data.items.map((it) =>
-            pick(it, ["title", "description"]),
-          ),
+        const template = (() => {
+          if (node.template) {
+            const compileResult = compileTemplate(node.template as string);
+            if (isErr(compileResult)) {
+              const errorMessage = `Dataview template compile failed: ${compileResult.error.message}`;
+              diagnostics.push(errorMessage);
+              return DEFAULT_DATAVIEW_TEMPLATE;
+            }
+            return compileResult.data;
+          }
+          return DEFAULT_DATAVIEW_TEMPLATE;
+        })();
+        const renderResult = renderTemplateForItems(
+          template,
+          searchResult.data.items,
         );
+
+        if (isErr(renderResult)) {
+          diagnostics.push(
+            `Dataview template render failed: ${renderResult.error.message}`,
+          );
+          const yamlContent = YAML.stringify(
+            searchResult.data.items.map((it) =>
+              pick(it, ["title", "description"]),
+            ),
+          );
+          return [
+            {
+              type: "html",
+              value: `<dataview query="${node.query}"${templateAttr}>\n${yamlContent}</dataview>`,
+            },
+          ];
+        }
+
+        const content = renderResult.data ? renderResult.data + "\n" : "";
         return [
           {
             type: "html",
-            value: `<dataview query="${node.query}">\n${yamlContent}</dataview>`,
+            value: `<dataview query="${node.query}"${templateAttr}>\n${content}</dataview>`,
           },
         ];
       }

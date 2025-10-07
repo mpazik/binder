@@ -97,7 +97,7 @@
     },
     {
       "type": "html",
-      "value": "<dataview query=\"type=Task\">\n- title: Implement user authentication\n  description: Add login and registration functionality with JWT tokens\n- title: Implement schema generator\n  description: Create a dynamic schema generator\n</dataview>"
+      "value": "<dataview query=\"type=Task\" template=\"- **{{title}}**: {{description}}\">\n- **Implement user authentication**: Add login and registration functionality with JWT tokens\n- **Implement schema generator**: Create a dynamic schema generator\n</dataview>"
     },
     {
       "type": "heading",

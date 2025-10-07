@@ -1,3 +1,14 @@
 dynamicDirectories:
   - path: "tasks/{title}.md"
     query: "type=Task"
+    template: |
+      # {{type}}: {{title}}
+      **UID:** {{uid}}
+      **Status:** {{status}}
+      **Priority:** {{priority}}
+      {{#if description}}
+
+      ## Description
+
+      {{description}}
+      {{/if}}

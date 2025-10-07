@@ -15,6 +15,7 @@ export const BinderConfigSchema = z.object({
       z.object({
         path: z.string(),
         query: z.string(),
+        template: z.string().optional(),
       }),
     )
     .optional()

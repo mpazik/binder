@@ -15,12 +15,11 @@ export const mockSection3Uid = "5l8giR3SJl0" as NodeUid;
 export const mockParagraph3Uid = "XKQe9TqpFTL" as NodeUid;
 export const mockParagraph4Uid = "dh44jbz45rm" as NodeUid;
 
-export const mockDocumentTransactionInput: TransactionInput = {
+export const mockDocumentTransactionInput = {
   author: "test",
   createdAt: newIsoTimestamp("2024-01-01"),
   nodes: [
     {
-      key: "simple.md",
       uid: mockDocumentUid,
       type: "Document",
       path: "simple.md",
@@ -72,6 +71,7 @@ export const mockDocumentTransactionInput: TransactionInput = {
       uid: mockDataviewUid,
       type: "Dataview",
       query: "type=Task",
+      template: "- **{{title}}**: {{description}}",
     },
     {
       uid: mockSection3Uid,
@@ -91,4 +91,4 @@ export const mockDocumentTransactionInput: TransactionInput = {
     },
   ] as any,
   configurations: [],
-};
+} as const satisfies TransactionInput;
