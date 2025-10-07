@@ -47,10 +47,10 @@ const parsePatches = (patches: string[]): FieldChangesetInput => {
 export const nodeCreateHandler: CommandHandlerWithDb<{
   type: NodeType;
   patches: string[];
-}> = async ({ kg, author, ui, args }) => {
+}> = async ({ kg, config, ui, args }) => {
   const fields = parsePatches(args.patches);
   const result = await kg.update({
-    author,
+    author: config.author,
     nodes: [
       {
         type: args.type,
@@ -78,11 +78,11 @@ export const nodeReadHandler: CommandHandlerWithDb<{
 export const nodeUpdateHandler: CommandHandlerWithDb<{
   ref: NodeRef;
   patches: string[];
-}> = async ({ kg, author, ui, args }) => {
+}> = async ({ kg, config, ui, args }) => {
   const fields = parsePatches(args.patches);
 
   const result = await kg.update({
-    author,
+    author: config.author,
     nodes: [
       {
         $ref: args.ref,

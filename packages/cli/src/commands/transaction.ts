@@ -1,11 +1,7 @@
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
-import {
-  TransactionInput as TransactionInputSchema,
-  normalizeEntityRef,
-  type TransactionRef,
-} from "@binder/db";
+import { normalizeEntityRef, TransactionInput as TransactionInputSchema, type TransactionRef } from "@binder/db";
 import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { types } from "./types.ts";
 
@@ -28,7 +24,7 @@ const transformToArray = (
 
 export const transactionCreateHandler: CommandHandlerWithDb<{
   path: string;
-}> = async ({ kg, author, ui, log, args }) => {
+}> = async ({ kg, config, ui, log, args }) => {
   const path = args.path;
 
   if (!path) {
@@ -52,7 +48,7 @@ export const transactionCreateHandler: CommandHandlerWithDb<{
 
   const rawData = fileResult.data as RawTransactionData;
   const transactionInput = {
-    author: rawData.author || author,
+    author: rawData.author || config.author,
     nodes: transformToArray(rawData.nodes),
     configurations: transformToArray(rawData.configurations),
   };

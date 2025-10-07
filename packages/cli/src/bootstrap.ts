@@ -1,19 +1,44 @@
 import { mkdirSync } from "fs";
-import { isErr, type Result } from "@binder/utils";
+import * as YAML from "yaml";
+import { errorToObject, isErr, type Result, tryCatch } from "@binder/utils";
 import {
-  openDb,
-  openKnowledgeGraph,
   type Database,
   type KnowledgeGraph,
+  openDb,
+  openKnowledgeGraph,
   type Transaction,
 } from "@binder/db";
 import { Log } from "./log.ts";
-import { BINDER_DIR, DB_PATH, AUTHOR, TRANSACTION_LOG_PATH } from "./config.ts";
+import {
+  BINDER_DIR,
+  type BinderConfig,
+  BinderConfigSchema,
+  CONFIG_PATH,
+  DB_PATH,
+  TRANSACTION_LOG_PATH,
+} from "./config.ts";
 import * as ui from "./ui.ts";
 import { logTransaction } from "./transaction-log.ts";
 
+const loadConfig = async (): Promise<Result<BinderConfig>> => {
+  const fileResult = await tryCatch(async () => {
+    const bunFile = Bun.file(CONFIG_PATH);
+    if (!(await bunFile.exists())) {
+      return null;
+    }
+    const text = await bunFile.text();
+    return YAML.parse(text);
+  }, errorToObject);
+
+  if (isErr(fileResult)) return fileResult;
+
+  const rawConfig = fileResult.data ?? {};
+
+  return tryCatch(() => BinderConfigSchema.parse(rawConfig), errorToObject);
+};
+
 type CommandContext = {
-  author: string;
+  config: BinderConfig;
   log: typeof Log;
   ui: typeof ui;
 };
@@ -35,8 +60,15 @@ export const bootstrap = <TArgs>(
   handler: CommandHandler<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return async (args: TArgs) => {
+    const configResult = await loadConfig();
+    if (isErr(configResult)) {
+      ui.error(`Failed to load config: ${configResult.error.message}`);
+      Log.error("Config loading failed", { error: configResult.error });
+      process.exit(1);
+    }
+
     const result = await handler({
-      author: AUTHOR,
+      config: configResult.data,
       log: Log,
       ui,
       args,

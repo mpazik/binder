@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import { openKnowledgeGraph, type Database } from "@binder/db";
+import { type Database, openKnowledgeGraph } from "@binder/db";
 import {
   getTestDatabase,
   mockTask1Key,
@@ -37,7 +37,7 @@ describe("node commands", () => {
       const result = await nodeReadHandler({
         kg,
         db,
-        author: "test-user",
+        config: { author: "test-user" },
         log: Log,
         ui: mockUi,
         args: { ref: mockTask1Key },
