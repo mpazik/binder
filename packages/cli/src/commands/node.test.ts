@@ -37,7 +37,7 @@ describe("node commands", () => {
       const result = await nodeReadHandler({
         kg,
         db,
-        config: { author: "test-user" },
+        config: { author: "test-user", docsPath: "./docs" },
         log: Log,
         ui: mockUi,
         args: { ref: mockTask1Key },

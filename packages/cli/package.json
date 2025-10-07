@@ -14,8 +14,8 @@
     "check": "bun lint && bun format && bun typecheck && bun test"
   },
   "dependencies": {
-    "@binder/utils": "workspace:*",
     "@binder/db": "workspace:*",
+    "@binder/utils": "workspace:*",
     "@types/yargs": "^17.0.33",
     "yaml": "^2.8.1",
     "yargs": "^18.0.0",

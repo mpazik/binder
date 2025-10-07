@@ -73,7 +73,14 @@ export const transactionCreateHandler: CommandHandlerWithDb<{
   if (isErr(result)) return result;
 
   log.info("Transaction created successfully", { path });
-  ui.printData(result.data);
+  ui.println("");
+  ui.printTransaction(result.data);
+  ui.println("");
+  ui.println(
+    ui.Style.TEXT_SUCCESS +
+      "✓ Transaction created successfully" +
+      ui.Style.TEXT_NORMAL,
+  );
   return ok(undefined);
 };
 

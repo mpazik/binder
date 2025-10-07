@@ -19,6 +19,7 @@ import {
 } from "./config.ts";
 import * as ui from "./ui.ts";
 import { logTransaction } from "./transaction-log.ts";
+import { renderDocs } from "./document/repository.ts";
 
 const loadConfig = async (): Promise<Result<BinderConfig>> => {
   const fileResult = await tryCatch(async () => {
@@ -102,6 +103,13 @@ export const bootstrapWithDb = <TArgs>(
     const kg = openKnowledgeGraph(db, {
       onTransactionSaved: (transaction: Transaction) => {
         logTransaction(transaction, TRANSACTION_LOG_PATH);
+        renderDocs(kg, context.config.docsPath).then((renderResult) => {
+          if (isErr(renderResult)) {
+            Log.error("Failed to re-render docs after transaction", {
+              error: renderResult.error,
+            });
+          }
+        });
       },
     });
 

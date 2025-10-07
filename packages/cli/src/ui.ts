@@ -76,3 +76,69 @@ export const printData = (data: unknown) => {
 
   println(highlighted);
 };
+
+const getEntityOperation = (changeset: Record<string, any>): string => {
+  if ("createdAt" in changeset) {
+    const createdAtChange = changeset.createdAt;
+    if (createdAtChange.op === "set") {
+      if (createdAtChange.previous === undefined) return "created";
+      if (createdAtChange.value === undefined) return "deleted";
+    }
+  }
+  return "updated";
+};
+
+const getEntityLabel = (changeset: Record<string, any>): string => {
+  const type = changeset.type?.value ?? changeset.type?.previous;
+  const name = changeset.name?.value ?? changeset.name?.previous;
+  const title = changeset.title?.value ?? changeset.title?.previous;
+
+  const label = type ?? name ?? title;
+  return label ? ` (${label})` : "";
+};
+
+const printEntityChanges = (
+  label: string,
+  changes: Record<string, Record<string, any>>,
+) => {
+  const entries = Object.entries(changes);
+  if (entries.length === 0) return;
+
+  println(`  ${Style.TEXT_DIM}${label} (${entries.length}):`);
+  for (const [uid, changeset] of entries) {
+    const operation = getEntityOperation(changeset);
+    const entityLabel = getEntityLabel(changeset);
+    println(`    • ${uid}${entityLabel} - ${operation}`);
+  }
+};
+
+export const printTransaction = (transaction: {
+  id: number;
+  hash: string;
+  author: string;
+  createdAt: string;
+  nodes: Record<string, unknown>;
+  configurations: Record<string, unknown>;
+}) => {
+  println(
+    Style.TEXT_INFO_BOLD + `Transaction #${transaction.id}` + Style.TEXT_NORMAL,
+  );
+  println(
+    `  ${Style.TEXT_DIM}Hash:${Style.TEXT_NORMAL} ${transaction.hash.slice(0, 12)}...`,
+  );
+  println(
+    `  ${Style.TEXT_DIM}Author:${Style.TEXT_NORMAL} ${transaction.author}`,
+  );
+  println(
+    `  ${Style.TEXT_DIM}Created:${Style.TEXT_NORMAL} ${transaction.createdAt}`,
+  );
+
+  printEntityChanges(
+    "Node changes",
+    transaction.nodes as Record<string, Record<string, any>>,
+  );
+  printEntityChanges(
+    "Config changes",
+    transaction.configurations as Record<string, Record<string, any>>,
+  );
+};

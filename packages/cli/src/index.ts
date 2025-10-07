@@ -4,6 +4,7 @@ import { isErr, tryCatch } from "@binder/utils";
 import NodeCommand from "./commands/node";
 import TransactionCommand from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
+import DocsCommand from "./commands/docs.ts";
 import { Log } from "./log";
 import * as UI from "./ui";
 
@@ -47,6 +48,7 @@ const cli = yargs(hideBin(process.argv))
   .command(NodeCommand)
   .command(TransactionCommand)
   .command(SearchCommand)
+  .command(DocsCommand)
   .fail((msg) => {
     if (
       msg.startsWith("Unknown argument") ||
