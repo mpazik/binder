@@ -103,7 +103,11 @@ export const bootstrapWithDb = <TArgs>(
     const kg = openKnowledgeGraph(db, {
       onTransactionSaved: (transaction: Transaction) => {
         logTransaction(transaction, TRANSACTION_LOG_PATH);
-        renderDocs(kg, context.config.docsPath).then((renderResult) => {
+        renderDocs(
+          kg,
+          context.config.docsPath,
+          context.config.dynamicDirectories,
+        ).then((renderResult) => {
           if (isErr(renderResult)) {
             Log.error("Failed to re-render docs after transaction", {
               error: renderResult.error,

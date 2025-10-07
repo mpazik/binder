@@ -1,0 +1,3 @@
+dynamicDirectories:
+  - path: "tasks/{title}.md"
+    query: "type=Task"

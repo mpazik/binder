@@ -7,9 +7,9 @@ import { types } from "./types.ts";
 export const docsRenderHandler: CommandHandlerWithDb = async ({
   kg,
   ui,
-  config: { docsPath },
+  config: { docsPath, dynamicDirectories },
 }) => {
-  const result = await renderDocs(kg, docsPath);
+  const result = await renderDocs(kg, docsPath, dynamicDirectories);
   if (isErr(result)) return result;
 
   ui.println("Documentation rendered successfully");

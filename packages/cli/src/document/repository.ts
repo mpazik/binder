@@ -11,6 +11,7 @@ import {
 import { Log } from "../log.ts";
 import { buildAstDoc } from "./doc-builder.ts";
 import { renderAstToMarkdown } from "./markdown.ts";
+import { renderDynamicDirectory } from "./dynamic-dir.ts";
 
 export type DocumentWithPath = {
   uid: NodeUid;
@@ -42,6 +43,7 @@ const fetchDocumentsWithPath = async (
 export const renderDocs = async (
   kg: KnowledgeGraph,
   docsPath: string,
+  dynamicDirectories: Array<{ path: string; query: string }> = [],
 ): ResultAsync<undefined> => {
   const removeResult = tryCatch(() => {
     rmSync(docsPath, { recursive: true, force: true });
@@ -74,6 +76,10 @@ export const renderDocs = async (
     if (isErr(writeResult)) {
       Log.error(`Failed to write ${filePath}`, { error: writeResult.error });
     }
+  }
+
+  for (const dynamicDir of dynamicDirectories) {
+    await renderDynamicDirectory(kg, docsPath, dynamicDir);
   }
 
   return ok(undefined);

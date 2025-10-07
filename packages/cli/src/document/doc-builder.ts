@@ -7,25 +7,9 @@ import {
   pick,
   type ResultAsync,
 } from "@binder/utils";
-import type {
-  Fieldset,
-  KnowledgeGraph,
-  NodeRef,
-  QueryParams,
-} from "@binder/db";
+import type { Fieldset, KnowledgeGraph, NodeRef } from "@binder/db";
 import type { SlimAST } from "./markdown.ts";
-
-const parseDataviewQuery = (query: string): QueryParams => {
-  const filters: Record<string, string> = {};
-  const pairs = query.split(",").map((p) => p.trim());
-  for (const pair of pairs) {
-    const [field, value] = pair.split("=").map((s) => s.trim());
-    if (field && value) {
-      filters[field] = value;
-    }
-  }
-  return { filters };
-};
+import { parseStringQuery } from "./query.ts";
 
 export const buildAstDoc = async (
   kg: KnowledgeGraph,
@@ -158,7 +142,7 @@ export const buildAstDoc = async (
           },
         ];
       case "Dataview": {
-        const queryParams = parseDataviewQuery(node.query as string);
+        const queryParams = parseStringQuery(node.query as string);
         const searchResult = await kg.search(queryParams);
 
         if (isErr(searchResult)) {

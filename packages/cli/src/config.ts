@@ -10,6 +10,15 @@ export const TRANSACTION_LOG_PATH = `${BINDER_DIR}/log.jsonl`;
 export const BinderConfigSchema = z.object({
   author: z.string().default(DEFAULT_AUTHOR),
   docsPath: z.string().default(DEFAULT_DOCS_DIR),
+  dynamicDirectories: z
+    .array(
+      z.object({
+        path: z.string(),
+        query: z.string(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export type BinderConfig = z.infer<typeof BinderConfigSchema>;
