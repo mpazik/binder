@@ -3,6 +3,7 @@ import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
 import NodeCommand from "./commands/node";
 import TransactionCommand from "./commands/transaction.ts";
+import { SearchCommand } from "./commands/search.ts";
 import { Log } from "./log";
 import * as UI from "./ui";
 
@@ -45,6 +46,7 @@ const cli = yargs(hideBin(process.argv))
   .usage(UI.logo())
   .command(NodeCommand)
   .command(TransactionCommand)
+  .command(SearchCommand)
   .fail((msg) => {
     if (
       msg.startsWith("Unknown argument") ||
