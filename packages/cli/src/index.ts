@@ -5,6 +5,7 @@ import NodeCommand from "./commands/node";
 import TransactionCommand from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
 import DocsCommand from "./commands/docs.ts";
+import DevCommand from "./commands/dev.ts";
 import { Log } from "./log";
 import * as UI from "./ui";
 
@@ -49,6 +50,7 @@ const cli = yargs(hideBin(process.argv))
   .command(TransactionCommand)
   .command(SearchCommand)
   .command(DocsCommand)
+  .command(DevCommand)
   .fail((msg) => {
     if (
       msg.startsWith("Unknown argument") ||
