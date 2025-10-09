@@ -2,9 +2,12 @@ import { dirname, join } from "path";
 import { mkdirSync, writeFileSync } from "fs";
 import type { Fieldset, KnowledgeGraph, NodeUid } from "@binder/db";
 import {
+  createError,
+  err,
   errorToObject,
   isErr,
   ok,
+  type Result,
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
@@ -19,8 +22,8 @@ import {
   renderTemplate,
 } from "./template.ts";
 
-const resolvePath = (template: string, item: Fieldset): string => {
-  return template.replace(/\{(\w+)\}/g, (match, fieldName) => {
+export const resolvePath = (template: string, item: Fieldset): string => {
+  return template.replace(/\{(\w+)}/g, (match, fieldName) => {
     const value = item[fieldName];
 
     if (value === null || value === undefined) {
@@ -36,6 +39,37 @@ const resolvePath = (template: string, item: Fieldset): string => {
 
     return sanitizeFilename(String(value));
   });
+};
+
+export const extractFieldsFromPath = (
+  path: string,
+  pathTemplate: string,
+): Result<Fieldset> => {
+  const fieldNames: string[] = [];
+  const regexPattern = pathTemplate.replace(/\{(\w+)}/g, (_, fieldName) => {
+    fieldNames.push(fieldName);
+    return "([^/]+)";
+  });
+
+  const regex = new RegExp(`^${regexPattern}$`);
+  const match = path.match(regex);
+
+  if (!match) {
+    return err(
+      createError(
+        "path_template_mismatch",
+        "Path does not match the template",
+        { path, pathTemplate },
+      ),
+    );
+  }
+
+  const fieldSet: Fieldset = {};
+  fieldNames.forEach((fieldName, index) => {
+    fieldSet[fieldName] = match[index + 1];
+  });
+
+  return ok(fieldSet);
 };
 
 export const renderItem = async (
@@ -55,7 +89,6 @@ export const renderItem = async (
     return renderTemplate(DEFAULT_DYNAMIC_TEMPLATE, item);
   }
 };
-
 export const renderDynamicDirectory = async (
   kg: KnowledgeGraph,
   docsPath: string,

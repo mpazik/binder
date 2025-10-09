@@ -6,9 +6,6 @@ dynamicDirectories:
       **UID:** {{uid}}
       **Status:** {{status}}
       **Priority:** {{priority}}
-      {{#if description}}
 
       ## Description
-
       {{description}}
-      {{/if}}
