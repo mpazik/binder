@@ -13,6 +13,9 @@ import { isValidUid, type Uid } from "../utils/uid.ts";
 export type FieldKey = string;
 export type FieldValue = JsonValue;
 export type Fieldset = Record<FieldKey, FieldValue>;
+export type FieldsetNested = {
+  [key: FieldKey]: FieldValue | FieldsetNested;
+};
 export type EntityId = Brand<number, "EntityId">;
 export type EntityUid = BrandDerived<Uid, "EntityUid">;
 export type EntityKey = string;
@@ -33,3 +36,10 @@ export const isEntityId = (id: EntityRef): id is EntityId =>
   typeof id === "number";
 
 export const isEntityUid = (id: EntityRef): id is EntityUid => isValidUid(id);
+
+export const systemFields = [
+  "id",
+  "version",
+  "createdAt",
+  "updatedAt",
+] as const;

@@ -38,10 +38,12 @@ export const TransactionInput = z.object({
     .optional(),
   nodes: z
     .array(z.record(z.string(), z.unknown()))
-    .transform((val) => val as ChangesetsInput<"node">),
+    .transform((val) => val as ChangesetsInput<"node">)
+    .optional(),
   configurations: z
     .array(z.record(z.string(), z.unknown()))
-    .transform((val) => val as ChangesetsInput<"config">),
+    .transform((val) => val as ChangesetsInput<"config">)
+    .optional(),
 });
 
 export type TransactionInput = z.infer<typeof TransactionInput>;

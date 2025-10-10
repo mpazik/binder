@@ -1,7 +1,6 @@
 import {
   errorToObject,
   isErr,
-  notImplementedError,
   ok,
   type ResultAsync,
   tryCatch,
@@ -15,6 +14,7 @@ import type {
   NodeRef,
   NodeUid,
   Transaction,
+  TransactionId,
   TransactionInput,
   TransactionRef,
   PaginationInfo,
@@ -31,6 +31,7 @@ import { fetchTransaction, getVersion } from "./transaction-store.ts";
 import {
   applyTransaction,
   processTransactionInput,
+  rollbackTransaction,
 } from "./transaction-processor";
 import { buildWhereClause } from "./filter-entities.ts";
 
@@ -38,25 +39,14 @@ export type KnowledgeGraph = {
   fetchNode: (ref: NodeRef) => ResultAsync<Fieldset>;
   fetchConfig: (ref: ConfigRef) => ResultAsync<Fieldset>;
   fetchTransaction: (ref: TransactionRef) => ResultAsync<Transaction>;
-  version: () => ResultAsync<GraphVersion>;
-  update: (input: TransactionInput) => ResultAsync<Transaction>;
   search: (query: QueryParams) => ResultAsync<{
     items: Fieldset[];
     pagination: PaginationInfo;
   }>;
-  rollback: (
-    tx: TransactionRef,
-    opt?: {
-      maxDepth: number;
-    },
-  ) => ResultAsync<void>;
-  revert: (
-    tx: TransactionRef,
-    opt?: {
-      force: boolean;
-      permanent: boolean;
-    },
-  ) => ResultAsync<void>;
+  version: () => ResultAsync<GraphVersion>;
+  update: (input: TransactionInput) => ResultAsync<Transaction>;
+  apply: (transaction: Transaction) => ResultAsync<Transaction>;
+  rollback: (count: number, version?: TransactionId) => ResultAsync<void>;
 };
 
 export type KnowledgeGraphCallbacks = {
@@ -89,24 +79,6 @@ export const openKnowledgeGraph = (
     fetchTransaction: async (ref: TransactionRef) => {
       return db.transaction(async (tx) => {
         return fetchTransaction(tx, ref);
-      });
-    },
-    update: async (input: TransactionInput) => {
-      return db.transaction(async (tx) => {
-        const processedResult = await processTransactionInput(tx, input);
-        if (isErr(processedResult)) return processedResult;
-
-        const applyResult = await applyTransaction(tx, processedResult.data);
-        if (isErr(applyResult)) return applyResult;
-
-        callbacks?.onTransactionSaved?.(processedResult.data);
-
-        return ok(processedResult.data);
-      });
-    },
-    version: async () => {
-      return db.transaction(async (tx) => {
-        return getVersion(tx);
       });
     },
     search: async (query: QueryParams) => {
@@ -189,8 +161,39 @@ export const openKnowledgeGraph = (
         });
       });
     },
-    rollback: async (tx: TransactionRef, opt?) =>
-      notImplementedError("rollback"),
-    revert: async (tx: TransactionRef, opt?) => notImplementedError("revert"),
+    version: async () => {
+      return db.transaction(async (tx) => {
+        return getVersion(tx);
+      });
+    },
+    update: async (input: TransactionInput) => {
+      return db.transaction(async (tx) => {
+        const processedResult = await processTransactionInput(tx, input);
+        if (isErr(processedResult)) return processedResult;
+
+        const applyResult = await applyTransaction(tx, processedResult.data);
+        if (isErr(applyResult)) return applyResult;
+
+        callbacks?.onTransactionSaved?.(processedResult.data);
+
+        return ok(processedResult.data);
+      });
+    },
+    apply: async (transaction: Transaction) => {
+      return db.transaction(async (tx) => {
+        const applyResult = await applyTransaction(tx, transaction);
+        if (isErr(applyResult)) return applyResult;
+
+        return ok(transaction);
+      });
+    },
+    rollback: async (count, version) => {
+      return db.transaction(async (dbTx) => {
+        const versionResult = await getVersion(dbTx);
+        if (isErr(versionResult)) return versionResult;
+        const txId = version ?? versionResult.data.id;
+        return rollbackTransaction(dbTx, count, txId);
+      });
+    },
   };
 };

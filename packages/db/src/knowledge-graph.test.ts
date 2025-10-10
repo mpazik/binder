@@ -183,4 +183,44 @@ describe("knowledge graph", () => {
       expect(result.pagination.hasNext).toBe(true);
     });
   });
+
+  describe("rollback", () => {
+    it("reverts changes", async () => {
+      throwIfError(await kg.update(mockTransactionInputUpdate));
+      const updatedNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+      expect(updatedNode).toEqual(mockTaskNode1Updated);
+
+      throwIfError(await kg.rollback(1));
+
+      const rolledBackNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+      expect(rolledBackNode).toEqual(mockTask1Node);
+    });
+
+    it("reverts changes with explicit version", async () => {
+      throwIfError(await kg.update(mockTransactionInputUpdate));
+      const version = throwIfError(await kg.version());
+      const updatedNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+      expect(updatedNode).toEqual(mockTaskNode1Updated);
+
+      throwIfError(await kg.rollback(1, version.id));
+
+      const rolledBackNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+      expect(rolledBackNode).toEqual(mockTask1Node);
+    });
+
+    it("returns error when version mismatches", async () => {
+      throwIfError(await kg.update(mockTransactionInputUpdate));
+
+      const result = await kg.rollback(1, mockTransactionInit.id);
+
+      expect(result).toBeErr();
+      expect(result).toEqual(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            key: "version-mismatch",
+          }),
+        }),
+      );
+    });
+  });
 });

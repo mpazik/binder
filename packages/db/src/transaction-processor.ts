@@ -1,9 +1,20 @@
-import { isErr, newIsoTimestamp, ok, type ResultAsync } from "@binder/utils";
+import {
+  createError,
+  err,
+  errorToObject,
+  isErr,
+  newIsoTimestamp,
+  ok,
+  type ResultAsync,
+  tryCatch,
+} from "@binder/utils";
+import { and, desc, gte, lte } from "drizzle-orm";
 import {
   type ChangesetsInput,
   type ConfigUid,
   hashTransaction,
   incrementEntityId,
+  inverseChangeset,
   type NodeUid,
   type Transaction,
   type TransactionId,
@@ -14,6 +25,7 @@ import type { DbTransaction } from "./db.ts";
 import { applyChangeset, processChangesetInput } from "./changeset-processor";
 import { getVersion, saveTransaction } from "./transaction-store";
 import { getLastEntityId } from "./entity-store";
+import { transactionTable } from "./schema.ts";
 
 export const processTransactionInput = async (
   tx: DbTransaction,
@@ -29,14 +41,19 @@ export const processTransactionInput = async (
   if (isErr(lastConfigIdResult)) return lastConfigIdResult;
 
   const [nodesResult, configurationsResult, versionResult] = await Promise.all([
-    processChangesetInput(tx, "node", input.nodes as ChangesetsInput<"node">, {
-      updatedAt: createdAt,
-      lastEntityId: lastNodeIdResult.data,
-    }),
+    processChangesetInput(
+      tx,
+      "node",
+      (input.nodes ?? []) as ChangesetsInput<"node">,
+      {
+        updatedAt: createdAt,
+        lastEntityId: lastNodeIdResult.data,
+      },
+    ),
     processChangesetInput(
       tx,
       "config",
-      input.configurations as ChangesetsInput<"config">,
+      (input.configurations ?? []) as ChangesetsInput<"config">,
       {
         updatedAt: createdAt,
         lastEntityId: lastConfigIdResult.data,
@@ -103,6 +120,125 @@ export const applyTransaction = async (
 
   const saveResult = await saveTransaction(tx, transaction);
   if (isErr(saveResult)) return saveResult;
+
+  return ok(undefined);
+};
+
+export const rollbackTransaction = async (
+  tx: DbTransaction,
+  count: number,
+  version: TransactionId,
+): ResultAsync<void> => {
+  if (count < 1)
+    return err(
+      createError("invalid-rollback", `Count must be at least 1, got ${count}`),
+    );
+
+  const versionResult = await getVersion(tx);
+  if (isErr(versionResult)) return versionResult;
+
+  const currentId = versionResult.data.id;
+
+  if (currentId !== version)
+    return err(
+      createError(
+        "version-mismatch",
+        `Repository version mismatch: expected ${version}, got ${currentId}`,
+      ),
+    );
+
+  if (currentId === 1)
+    return err(
+      createError(
+        "invalid-rollback",
+        "Cannot rollback the genesis transaction",
+      ),
+    );
+
+  if (count > currentId - 1)
+    return err(
+      createError(
+        "invalid-rollback",
+        `Cannot rollback ${count} transactions, only ${currentId - 1} available`,
+      ),
+    );
+
+  const targetId = (currentId - count + 1) as TransactionId;
+
+  const transactionsToRevertResult = await tryCatch(
+    tx
+      .select()
+      .from(transactionTable)
+      .where(
+        and(
+          gte(transactionTable.id, targetId),
+          lte(transactionTable.id, currentId),
+        ),
+      )
+      .orderBy(desc(transactionTable.id))
+      .then((rows) => rows),
+    errorToObject,
+  );
+  if (isErr(transactionsToRevertResult)) return transactionsToRevertResult;
+
+  const transactionsToRevert: Transaction[] =
+    transactionsToRevertResult.data.map((row) => ({
+      id: row.id,
+      hash: row.hash,
+      previous: row.previous,
+      nodes: row.nodes,
+      configurations: row.configurations,
+      author: row.author ?? undefined,
+      createdAt: row.createdAt,
+    }));
+
+  for (const transaction of transactionsToRevert) {
+    const inverseNodes = Object.fromEntries(
+      Object.entries(transaction.nodes).map(([uid, changeset]) => [
+        uid,
+        inverseChangeset(changeset),
+      ]),
+    );
+
+    const inverseConfigurations = Object.fromEntries(
+      Object.entries(transaction.configurations).map(([uid, changeset]) => [
+        uid,
+        inverseChangeset(changeset),
+      ]),
+    );
+
+    for (const [entityUid, changeset] of Object.entries(inverseNodes)) {
+      const result = await tryCatch(
+        applyChangeset(tx, "node", entityUid as NodeUid, changeset),
+        errorToObject,
+      );
+      if (isErr(result)) return result;
+    }
+
+    for (const [entityUid, changeset] of Object.entries(
+      inverseConfigurations,
+    )) {
+      const result = await tryCatch(
+        applyChangeset(tx, "config", entityUid as ConfigUid, changeset),
+        errorToObject,
+      );
+      if (isErr(result)) return result;
+    }
+  }
+
+  const deleteTransactionsResult = await tryCatch(
+    tx
+      .delete(transactionTable)
+      .where(
+        and(
+          gte(transactionTable.id, targetId),
+          lte(transactionTable.id, currentId),
+        ),
+      )
+      .then(() => undefined),
+    errorToObject,
+  );
+  if (isErr(deleteTransactionsResult)) return deleteTransactionsResult;
 
   return ok(undefined);
 };

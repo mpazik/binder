@@ -8,7 +8,12 @@ import {
   omit,
   pick,
 } from "@binder/utils";
-import type { FieldKey, Fieldset, FieldValue } from "./entity.ts";
+import {
+  systemFields,
+  type FieldKey,
+  type Fieldset,
+  type FieldValue,
+} from "./entity.ts";
 import type {
   NamespaceEditable,
   EntityNsKey,
@@ -393,12 +398,7 @@ export type ChangesetsInput<N extends NamespaceEditable> =
 export const changesetInputForNewEntity = <N extends NamespaceEditable>(
   entity: Fieldset,
 ): EntityChangesetInput<N> =>
-  omit(entity, [
-    "id",
-    "version",
-    "createdAt",
-    "updatedAt",
-  ]) as EntityChangesetInput<N>;
+  omit(entity, systemFields) as EntityChangesetInput<N>;
 
 export const isEntityUpdate = <N extends NamespaceEditable>(
   input: EntityChangesetInput<N>,

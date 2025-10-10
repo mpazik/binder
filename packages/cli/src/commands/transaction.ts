@@ -1,7 +1,11 @@
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
-import { normalizeEntityRef, TransactionInput as TransactionInputSchema, type TransactionRef } from "@binder/db";
+import {
+  normalizeEntityRef,
+  TransactionInput as TransactionInputSchema,
+  type TransactionRef,
+} from "@binder/db";
 import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { types } from "./types.ts";
 
