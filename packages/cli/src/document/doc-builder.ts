@@ -15,7 +15,7 @@ import type {
   NodeRef,
 } from "@binder/db";
 import { Log } from "../log.ts";
-import type { SlimAST } from "./markdown.ts";
+import { type SlimAST } from "./markdown.ts";
 import { parseStringQuery } from "./query.ts";
 import {
   compileTemplate,
@@ -170,15 +170,20 @@ export const buildAstDoc = async (
         const queryParams = parseStringQuery(node.query as string);
         const searchResult = await kg.search(queryParams);
 
-        const templateAttr = node.template
-          ? ` template="${node.template}"`
-          : "";
+        const attributes: Record<string, string> = {
+          query: node.query as string,
+        };
+        if (node.template) {
+          attributes.template = node.template as string;
+        }
 
         if (isErr(searchResult)) {
           return [
             {
-              type: "html",
-              value: `<dataview query="${node.query}"${templateAttr} error="true"></dataview>`,
+              type: "containerDirective",
+              name: "dataview",
+              attributes: { ...attributes, error: "true" },
+              children: [],
             },
           ];
         }
@@ -204,17 +209,53 @@ export const buildAstDoc = async (
           );
           return [
             {
-              type: "html",
-              value: `<dataview query="${node.query}"${templateAttr}>\n${yamlContent}</dataview>`,
+              type: "containerDirective",
+              name: "dataview",
+              attributes,
+              children: [
+                {
+                  type: "paragraph",
+                  children: [{ type: "text", value: yamlContent }],
+                },
+              ],
             },
           ];
         }
 
-        const content = renderResult.data ? renderResult.data + "\n" : "";
+        const content = renderResult.data || "";
+        let children: any[] = [];
+        if (content) {
+          const lines = content.split("\n").filter((line) => line.trim());
+          children = [
+            {
+              type: "list",
+              ordered: false,
+              start: null,
+              spread: false,
+              children: lines.map((line) => {
+                const text = line.startsWith("- ") ? line.slice(2) : line;
+                return {
+                  type: "listItem",
+                  spread: false,
+                  checked: null,
+                  children: [
+                    {
+                      type: "paragraph",
+                      children: [{ type: "text", value: text }],
+                    },
+                  ],
+                };
+              }),
+            },
+          ];
+        }
+
         return [
           {
-            type: "html",
-            value: `<dataview query="${node.query}"${templateAttr}>\n${content}</dataview>`,
+            type: "containerDirective",
+            name: "dataview",
+            attributes,
+            children,
           },
         ];
       }
@@ -236,19 +277,22 @@ const extractTextValue = (node: any): string => {
   return node.children[0].value || "";
 };
 
-const parseDataviewQuery = (htmlValue: string): string | null => {
-  const match = htmlValue.match(/<dataview\s+query="([^"]*)"/);
-  return match ? match[1] : null;
-};
+const extractDirectiveContent = (node: any): string => {
+  if (!node.children || node.children.length === 0) return "";
 
-const parseDataviewTemplate = (htmlValue: string): string | null => {
-  const match = htmlValue.match(/template="([^"]*)"/);
-  return match ? match[1] : null;
-};
+  const extractText = (n: any): string[] => {
+    if (n.type === "text") return [n.value || ""];
+    if (n.type === "listItem" && n.children) {
+      const text = n.children.flatMap(extractText).join("");
+      return [`- ${text}`];
+    }
+    if (n.children) {
+      return n.children.flatMap(extractText);
+    }
+    return [];
+  };
 
-const parseDataviewContent = (htmlValue: string): string => {
-  const match = htmlValue.match(/<dataview[^>]*>\n?(.*?)<\/dataview>/s);
-  return match ? match[1].trim() : "";
+  return node.children.flatMap(extractText).join("\n").trim();
 };
 
 export const deconstructAstDocument = (ast: SlimAST): Result<Fieldset> => {
@@ -288,26 +332,29 @@ export const deconstructAstDocument = (ast: SlimAST): Result<Fieldset> => {
         (currentParent.blockContent as Fieldset[]).push(list);
         break;
       }
-      case "html": {
-        const query = parseDataviewQuery(node.value);
-        if (query) {
-          const dataview: Fieldset = { type: "Dataview", query };
-          const template = parseDataviewTemplate(node.value);
-          if (template) {
-            dataview.template = template;
-          }
-          const content = parseDataviewContent(node.value);
-          if (content) {
-            const templateString = template || DEFAULT_DATAVIEW_TEMPLATE_STRING;
-            const extractResult = extractFieldsFromRenderedItems(
-              templateString,
-              content,
-            );
-            if (!isErr(extractResult)) {
-              dataview.data = extractResult.data;
+      case "containerDirective": {
+        if (node.name === "dataview") {
+          const query = node.attributes?.query;
+          if (query) {
+            const dataview: Fieldset = { type: "Dataview", query };
+            const template = node.attributes?.template;
+            if (template) {
+              dataview.template = template;
             }
+            const content = extractDirectiveContent(node);
+            if (content) {
+              const templateString =
+                template || DEFAULT_DATAVIEW_TEMPLATE_STRING;
+              const extractResult = extractFieldsFromRenderedItems(
+                templateString,
+                content,
+              );
+              if (!isErr(extractResult)) {
+                dataview.data = extractResult.data;
+              }
+            }
+            (currentParent.blockContent as Fieldset[]).push(dataview);
           }
-          (currentParent.blockContent as Fieldset[]).push(dataview);
         }
         break;
       }

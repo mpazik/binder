@@ -53,7 +53,7 @@ nodes:
   - uid: qVw8YnKpRTz
     type: Dataview
     query: type=Task
-    template: "- **{{title}}**: {{description}}"
+    template: "**{{title}}**: {{description}}"
 
   - uid: 5l8giR3SJl0
     type: Section

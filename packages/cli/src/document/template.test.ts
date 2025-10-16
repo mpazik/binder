@@ -196,7 +196,7 @@ describe("template", () => {
     };
 
     it("returns empty array for empty content", () => {
-      check("- title: {{title}}\n  description: {{description}}", "", []);
+      check("title: {{title}}\n  description: {{description}}", "", []);
     });
 
     const task1 = {
@@ -210,7 +210,7 @@ describe("template", () => {
 
     it("extracts single item", () => {
       check(
-        "- title: {{title}}\n  description: {{description}}",
+        "title: {{title}}\n  description: {{description}}",
         "- title: Task 1\n  description: First task",
         [task1],
       );
@@ -218,7 +218,7 @@ describe("template", () => {
 
     it("extracts multiple items with simple template", () => {
       check(
-        "- title: {{title}}\n  description: {{description}}",
+        "title: {{title}}\n  description: {{description}}",
         "- title: Task 1\n  description: First task\n- title: Task 2\n  description: Second task",
         [task1, task2],
       );
@@ -226,7 +226,7 @@ describe("template", () => {
 
     it("extracts multiple items with three items", () => {
       check(
-        "- title: {{title}}\n  description: {{description}}",
+        "title: {{title}}\n  description: {{description}}",
         "- title: Task 1\n  description: First task\n- title: Task 2\n  description: Second task\n- title: Task 3\n  description: Third task",
         [
           task1,
@@ -241,7 +241,7 @@ describe("template", () => {
 
     it("extracts multiple items with conditionals present", () => {
       check(
-        "- title: {{title}}\n  {{#if status}}status: {{status}}\n  {{/if}}description: {{description}}",
+        "title: {{title}}\n  {{#if status}}status: {{status}}\n  {{/if}}description: {{description}}",
         "- title: Task 1\n  status: active\n  description: First task\n- title: Task 2\n  description: Second task",
         [
           {
@@ -257,7 +257,7 @@ describe("template", () => {
     it("extracts multiple items with different line counts due to conditionals", () => {
       check(
         "## {{title}}{{#if status}}\nStatus: {{status}}{{/if}}",
-        "## Task 1\nStatus: active## Task 2## Task 3\nStatus: completed",
+        "- ## Task 1\nStatus: active- ## Task 2- ## Task 3\nStatus: completed",
         [
           {
             title: "Task 1",
@@ -276,24 +276,22 @@ describe("template", () => {
 
     it("handles items with extra whitespace between them", () => {
       check(
-        "- title: {{title}}\n  description: {{description}}",
+        "title: {{title}}\n  description: {{description}}",
         "- title: Task 1\n  description: First task\n\n- title: Task 2\n  description: Second task",
         [task1, task2],
       );
     });
 
-    it("returns error when template has no start anchor", () => {
-      const result = extractFieldsFromRenderedItems(
-        "{{title}}\n{{description}}",
-        "Task 1\nFirst task\nTask 2\nSecond task",
-      );
-
-      expect(result).toBeErr();
+    it("extracts items when template has no start anchor by splitting on list markers", () => {
+      check("{{title}}", "- Task 1\n- Task 2", [
+        { title: "Task 1" },
+        { title: "Task 2" },
+      ]);
     });
 
     it("returns error when item does not match template", () => {
       const result = extractFieldsFromRenderedItems(
-        "- title: {{title}}\n  description: {{description}}",
+        "title: {{title}}\n  description: {{description}}",
         "- title: Task 1\n  invalid_field: First task\n- title: Task 2\n  description: Second task",
       );
 

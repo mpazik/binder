@@ -28,7 +28,7 @@ export const parseTemplate = (
 };
 
 export const DEFAULT_DATAVIEW_TEMPLATE_STRING =
-  "- title: {{title}}\n  description: {{description}}";
+  "title: {{title}}\n  description: {{description}}";
 
 export const DEFAULT_DATAVIEW_TEMPLATE = throwIfError(
   compileTemplate(DEFAULT_DATAVIEW_TEMPLATE_STRING),
@@ -67,7 +67,7 @@ export const renderTemplateForItems = (
   for (const item of items) {
     const renderResult = tryCatch(() => template(item), errorToObject);
     if (isErr(renderResult)) return renderResult;
-    renderedItems.push(renderResult.data);
+    renderedItems.push(`- ${renderResult.data}`);
   }
 
   return ok(renderedItems.join("\n"));
@@ -539,20 +539,24 @@ export const extractFieldsFromRenderedItems = (
   if (isErr(segmentsResult)) return segmentsResult;
 
   const startAnchor = findStartAnchor(segmentsResult.data);
-  if (!startAnchor) {
-    return err(
-      createError(
-        "template-extraction-no-anchor",
-        "Template must start with or contain literal text to identify item boundaries",
-      ),
-    );
-  }
 
-  const items = splitByAnchor(renderedContent, startAnchor);
+  let items: string[];
+  if (!startAnchor) {
+    items = renderedContent
+      .split("\n")
+      .filter((line) => line.trim().startsWith("- "));
+  } else {
+    const anchorWithPrefix = `- ${startAnchor}`;
+    items = splitByAnchor(renderedContent, anchorWithPrefix);
+  }
 
   const results: Fieldset[] = [];
   for (const item of items) {
-    const extractResult = extractFieldsFromRendered(templateString, item);
+    const strippedItem = item.startsWith("- ") ? item.slice(2) : item;
+    const extractResult = extractFieldsFromRendered(
+      templateString,
+      strippedItem,
+    );
     if (isErr(extractResult)) return extractResult;
     results.push(extractResult.data);
   }

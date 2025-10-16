@@ -140,16 +140,55 @@ describe("DocumentBuilder", () => {
 
       const ast = throwIfError(await buildAstDoc(kg, mockDocumentUid));
       const dataviewNode = ast.children.find(
-        (node: any) => node.type === "html" && node.value?.includes("dataview"),
+        (node: any) =>
+          node.type === "containerDirective" && node.name === "dataview",
       ) as any;
 
       expect(dataviewNode).toBeDefined();
-      expect(dataviewNode?.value).toContain(
-        "**Implement user authentication** - Add login and registration functionality with JWT tokens",
-      );
-      expect(dataviewNode?.value).toContain(
-        "**Implement schema generator** - Create a dynamic schema generator",
-      );
+      expect(dataviewNode.children).toEqual([
+        {
+          type: "list",
+          ordered: false,
+          start: null,
+          spread: false,
+          children: [
+            {
+              type: "listItem",
+              spread: false,
+              checked: null,
+              children: [
+                {
+                  type: "paragraph",
+                  children: [
+                    {
+                      type: "text",
+                      value:
+                        "**Implement user authentication** - Add login and registration functionality with JWT tokens",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: "listItem",
+              spread: false,
+              checked: null,
+              children: [
+                {
+                  type: "paragraph",
+                  children: [
+                    {
+                      type: "text",
+                      value:
+                        "**Implement schema generator** - Create a dynamic schema generator",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ]);
     });
   });
 
@@ -205,7 +244,7 @@ describe("DocumentBuilder", () => {
               {
                 type: "Dataview",
                 query: "type=Task",
-                template: "- **{{title}}**: {{description}}",
+                template: "**{{title}}**: {{description}}",
                 data: [
                   {
                     title: "Implement user authentication",
@@ -325,9 +364,9 @@ Second paragraph`,
     it("handles dataview blocks", () => {
       check(
         `# Query Section
-<dataview query="type=Task AND status=active">
+:::dataview{query="type=Task AND status=active"}
 Some content
-</dataview>`,
+:::`,
         {
           type: "Document",
           blockContent: [
@@ -346,12 +385,14 @@ Some content
       );
     });
 
-    it("ignores malformed dataview blocks", () => {
+    it("ignores non-dataview directives", () => {
       check(
         `# Section
-<div>Not a dataview</div>
+:::other{attr="value"}
+Content
+:::
 
-After invalid html`,
+After directive`,
         {
           type: "Document",
           blockContent: [
@@ -361,7 +402,7 @@ After invalid html`,
               blockContent: [
                 {
                   type: "Paragraph",
-                  textContent: "After invalid html",
+                  textContent: "After directive",
                 },
               ],
             },

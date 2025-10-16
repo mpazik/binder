@@ -2,7 +2,10 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkParseFrontmatter from "remark-parse-frontmatter";
-import remarkStringify, { type Options } from "remark-stringify";
+import remarkDirective from "remark-directive";
+import { type Options } from "remark-stringify";
+import { toMarkdown } from "mdast-util-to-markdown";
+import { directiveToMarkdown } from "mdast-util-directive";
 import {
   type Brand,
   createError,
@@ -21,17 +24,55 @@ export const defaultRenderOptions: Options = {
   bullet: "-",
 };
 
+const extractTextFromInline = (node: any): string => {
+  if (node.type === "text") {
+    return node.value || "";
+  }
+  if (node.type === "strong") {
+    const innerText = node.children.map(extractTextFromInline).join("");
+    return `**${innerText}**`;
+  }
+  if (node.type === "emphasis") {
+    const innerText = node.children.map(extractTextFromInline).join("");
+    return `_${innerText}_`;
+  }
+  if (node.type === "inlineCode") {
+    return `\`${node.value || ""}\``;
+  }
+  if (node.type === "delete") {
+    const innerText = node.children.map(extractTextFromInline).join("");
+    return `~~${innerText}~~`;
+  }
+  if (node.type === "link") {
+    const text = node.children.map(extractTextFromInline).join("");
+    return `[${text}](${node.url || ""})`;
+  }
+  if ("children" in node && Array.isArray(node.children)) {
+    return node.children.map(extractTextFromInline).join("");
+  }
+  return "";
+};
+
 const renderInlineToMarkdown = (
   node: RootContent,
   options: Options = defaultRenderOptions,
 ): string => {
-  const processor = unified().use(remarkStringify, options);
-  return processor.stringify({ type: "root", children: [node] }).trim();
+  return extractTextFromInline(node);
 };
 
 export const renderAstToMarkdown = (ast: FullAST | SlimAST): string => {
-  const processor = unified().use(remarkStringify, defaultRenderOptions);
-  return processor.stringify(ast);
+  const markdown = toMarkdown(ast, {
+    ...defaultRenderOptions,
+    extensions: [directiveToMarkdown()],
+  });
+
+  return markdown
+    .replace(/\\(\*)/g, "$1")
+    .replace(/\\(_)/g, "$1")
+    .replace(/\\(`)/g, "$1")
+    .replace(/\\(\[)/g, "$1")
+    .replace(/\\(\])/g, "$1")
+    .replace(/\\(~)/g, "$1");
 };
 
 const isInline = (type: string): boolean =>
@@ -71,6 +112,7 @@ export const parseAst = (content: string): Result<any> =>
     () => {
       const processor = unified()
         .use(remarkParse)
+        .use(remarkDirective)
         .use(remarkFrontmatter)
         .use(remarkParseFrontmatter);
       return processor.parse(content);
