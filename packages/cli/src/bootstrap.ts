@@ -16,9 +16,10 @@ import {
   CONFIG_PATH,
   DB_PATH,
   TRANSACTION_LOG_PATH,
+  UNDO_LOG_PATH,
 } from "./config.ts";
 import * as ui from "./ui.ts";
-import { logTransaction } from "./transaction-log.ts";
+import { clearTransactionLog, logTransaction } from "./transaction-log.ts";
 import { renderDocs } from "./document/repository.ts";
 
 const loadConfig = async (): Promise<Result<BinderConfig>> => {
@@ -103,6 +104,10 @@ export const bootstrapWithDb = <TArgs>(
     const kg = openKnowledgeGraph(db, {
       onTransactionSaved: (transaction: Transaction) => {
         logTransaction(transaction, TRANSACTION_LOG_PATH);
+        const clearResult = clearTransactionLog(UNDO_LOG_PATH);
+        if (isErr(clearResult)) {
+          Log.error("Failed to clear undo log", { error: clearResult.error });
+        }
         renderDocs(
           kg,
           context.config.docsPath,

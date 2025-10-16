@@ -6,6 +6,8 @@ import TransactionCommand from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
 import DocsCommand from "./commands/docs.ts";
 import DevCommand from "./commands/dev.ts";
+import UndoCommand from "./commands/undo.ts";
+import RedoCommand from "./commands/redo.ts";
 import { Log } from "./log";
 import * as UI from "./ui";
 
@@ -51,6 +53,8 @@ const cli = yargs(hideBin(process.argv))
   .command(SearchCommand)
   .command(DocsCommand)
   .command(DevCommand)
+  .command(UndoCommand)
+  .command(RedoCommand)
   .fail((msg) => {
     if (
       msg.startsWith("Unknown argument") ||
