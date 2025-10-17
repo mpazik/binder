@@ -31,9 +31,22 @@ When creating implementation plan:
 
 ## References
 
+### Project description
+@README.md 
+
 ### Technical Stack
-@.openagent/docs/tech-stack.md
+@.opencode/docs/tech-stack.md
 
 ### Directory Structure
-!`find -name "*.ts" -o -name "*.tsx"  | grep -v -E "(test|mock|\.d\.ts|dist/|node_modules/)" | sed "s|^\./packages/||" | sort | awk -F/ "{dir = \$1 \"/\" \$2; for (i = 3; i < NF; i++) dir = dir \"/\"\$i; files[dir] = files[dir] \" \" \$NF} END {for (d in files) print d \":\" files[d]}" | sort`
+!`find . \( -name "*.ts" -o -name "*.tsx" \) \
+| grep -v -E "(test|mock|mocks|\.d\.ts|dist/|node_modules/)" \
+| sed "s|^\./||" \
+| sort \
+| awk 'BEGIN{FS="/"}{
+    dir=$1; for(i=2;i<NF;i++) dir=dir"/"$i;
+    files[dir]=files[dir]" "$NF
+  } END {
+    for(d in files) print d":"files[d]
+  }' \
+| sort`
 
