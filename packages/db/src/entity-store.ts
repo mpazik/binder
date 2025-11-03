@@ -2,7 +2,6 @@ import {
   assertDefinedPass,
   assertNotEmpty,
   errorToObject,
-  type IsoTimestamp,
   type JsonObject,
   objectFromKeys,
   ok,
@@ -23,11 +22,12 @@ import {
   type EntityUid,
   type FieldKey,
   type Fieldset,
+  GENESIS_ENTITY_ID,
   isEntityId,
   isEntityUid,
   type Namespace,
   type NamespaceEditable,
-  GENESIS_ENTITY_ID,
+  type TransactionId,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 import {
@@ -41,10 +41,7 @@ export type EntityDb<N extends NamespaceEditable> = {
   uid: EntityNsUid[N];
   key?: EntityNsKey[N];
   type: EntityNsType[N];
-  version: number;
-  createdAt: IsoTimestamp;
-  updatedAt: IsoTimestamp;
-  deletedAt?: IsoTimestamp;
+  txIds: TransactionId[];
   fields: JsonObject;
 };
 
@@ -80,7 +77,7 @@ export const entityToDbModel = <N extends NamespaceEditable>(
 export const dbModelToEntity = (db: EntityDb<any>): Fieldset => {
   return {
     ...objectFromKeys(
-      tableStoredFields,
+      tableStoredFields.filter((key) => key !== "txIds"),
       (key) => db[key as keyof EntityDb<any>],
     ),
     ...db.fields,
@@ -124,22 +121,18 @@ export const fetchEntityFieldset = async <N extends NamespaceEditable>(
 export const fetchEntity = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-  entityUid: EntityNsUid[N],
+  ref: EntityNsRef[N],
 ): ResultAsync<Fieldset> => {
   const table = editableEntityTables[namespace];
   return tryCatch(
     tx
       .select()
       .from(table)
-      .where(eq(table.uid, entityUid))
+      .where(entityRefClause(namespace, ref))
       .limit(1)
       .then((result) => {
         assertNotEmpty(result);
-        const row = result[0];
-        return dbModelToEntity({
-          ...row,
-          deletedAt: row.deletedAt ?? undefined,
-        });
+        return dbModelToEntity(result[0]);
       }),
     errorToObject,
   );
@@ -148,7 +141,7 @@ export const fetchEntity = async <N extends NamespaceEditable>(
 export const updateEntity = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-  entityUid: EntityNsUid[N],
+  ref: EntityNsRef[N],
   patch: Fieldset,
 ): ResultAsync<void> => {
   const table = editableEntityTables[namespace];
@@ -165,7 +158,7 @@ export const updateEntity = async <N extends NamespaceEditable>(
       await tx
         .update(table)
         .set(updateObj as any)
-        .where(eq(table.uid, entityUid)),
+        .where(entityRefClause(namespace, ref)),
     errorToObject,
   );
 };
@@ -173,7 +166,7 @@ export const updateEntity = async <N extends NamespaceEditable>(
 export const createEntity = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-  patch: Fieldset & { uid: EntityNsUid[N] },
+  patch: Fieldset,
 ): ResultAsync<void> => {
   return tryCatch(
     async () =>

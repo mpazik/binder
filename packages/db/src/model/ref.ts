@@ -1,5 +1,4 @@
 import {
-  type EntityId,
   type EntityRef,
   type EntityRefType,
   isEntityId,
@@ -12,6 +11,7 @@ export const resolveEntityRefType = (ref: EntityRef): EntityRefType => {
   if (isEntityUid(ref)) return "uid";
   return "key";
 };
+
 export const normalizeEntityRef = <N extends Namespace>(
   ref: string | number,
 ): EntityNsRef[N] => {

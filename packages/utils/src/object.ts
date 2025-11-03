@@ -32,13 +32,13 @@ export const mapObjectValues = <T, K>(
   );
 };
 
-export const filterObjectValues = <T>(
+export const filterObjectValues = <T, O extends Record<string, T>>(
   obj: Record<string, T>,
-  fn: (value: T, key: string) => boolean,
-): Record<string, T> => {
+  fn: (value: T, key: keyof O) => boolean,
+): O => {
   return Object.fromEntries(
     Object.entries(obj).filter(([key, value]) => fn(value, key)),
-  );
+  ) as O;
 };
 
 export const objectFromKeys = <T>(keys: string[], fn: (key: string) => T) => {

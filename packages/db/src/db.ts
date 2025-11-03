@@ -4,7 +4,14 @@ import { drizzle } from "drizzle-orm/bun-sqlite";
 import { Database as BunDatabase } from "bun:sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
-import { createError, type Result, ok, isErr, tryCatch } from "@binder/utils";
+import {
+  createError,
+  type Result,
+  ok,
+  isErr,
+  tryCatch,
+  serializeErrorData,
+} from "@binder/utils";
 import * as schema from "./schema";
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
@@ -47,7 +54,7 @@ export const openDb = (options: OpenDbOptions): Result<Database> => {
       () => migrate(db, { migrationsFolder: migrationsPath }),
       (error) =>
         createError("db-migration-failed", "Failed to run migrations", {
-          error,
+          error: serializeErrorData(error),
         }),
     );
 

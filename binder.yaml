@@ -23,14 +23,13 @@ dynamicDirectories:
     query: "type=Decision"
     template: |
       # Decision: {{title}}
-  
+
       **Key:** {{key}}
       **Project:** {{project}}
       **Date:** {{date}}
-  
+
       ## Summary
       {{summary}}
-  
+
       ## Rationale
       {{rationale}}
-

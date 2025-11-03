@@ -11,18 +11,24 @@ import {
 import { and, desc, gte, lte } from "drizzle-orm";
 import {
   type ChangesetsInput,
+  configSchema,
   type ConfigUid,
-  hashTransaction,
+  type FieldChangeset,
   incrementEntityId,
   inverseChangeset,
+  type NodeSchema,
   type NodeUid,
   type Transaction,
   type TransactionId,
   type TransactionInput,
-  transactionToCanonical,
+  withHashTransaction,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
-import { applyChangeset, processChangesetInput } from "./changeset-processor";
+import {
+  applyChangeset,
+  applyConfigChangesetToSchema,
+  processChangesetInput,
+} from "./changeset-processor";
 import { getVersion, saveTransaction } from "./transaction-store";
 import { getLastEntityId } from "./entity-store";
 import { transactionTable } from "./schema.ts";
@@ -30,66 +36,65 @@ import { transactionTable } from "./schema.ts";
 export const processTransactionInput = async (
   tx: DbTransaction,
   input: TransactionInput,
+  nodeSchema: NodeSchema,
 ): ResultAsync<Transaction> => {
   const createdAt = input.createdAt ?? newIsoTimestamp();
 
-  const [lastNodeIdResult, lastConfigIdResult] = await Promise.all([
-    getLastEntityId(tx, "node"),
-    getLastEntityId(tx, "config"),
-  ]);
+  const [lastNodeIdResult, lastConfigIdResult, versionResult] =
+    await Promise.all([
+      getLastEntityId(tx, "node"),
+      getLastEntityId(tx, "config"),
+      getVersion(tx),
+    ]);
   if (isErr(lastNodeIdResult)) return lastNodeIdResult;
   if (isErr(lastConfigIdResult)) return lastConfigIdResult;
-
-  const [nodesResult, configurationsResult, versionResult] = await Promise.all([
-    processChangesetInput(
-      tx,
-      "node",
-      (input.nodes ?? []) as ChangesetsInput<"node">,
-      {
-        updatedAt: createdAt,
-        lastEntityId: lastNodeIdResult.data,
-      },
-    ),
-    processChangesetInput(
-      tx,
-      "config",
-      (input.configurations ?? []) as ChangesetsInput<"config">,
-      {
-        updatedAt: createdAt,
-        lastEntityId: lastConfigIdResult.data,
-      },
-    ),
-    getVersion(tx),
-  ]);
-
-  if (isErr(nodesResult)) return nodesResult;
-  if (isErr(configurationsResult)) return configurationsResult;
   if (isErr(versionResult)) return versionResult;
 
-  const author = input.author ?? "";
-  const previous = versionResult.data.hash;
+  const configurationsResult = await processChangesetInput(
+    tx,
+    "config",
+    (input.configurations ?? []) as ChangesetsInput<"config">,
+    configSchema,
+    lastConfigIdResult.data,
+  );
 
+  if (isErr(configurationsResult)) return configurationsResult;
   const configurations = configurationsResult.data;
-  const nodes = nodesResult.data;
-  const canonical = transactionToCanonical({
-    nodes,
-    configurations,
-    author,
-    createdAt,
-    previous,
-  });
-  const hash = await hashTransaction(canonical);
 
-  return ok({
-    id: incrementEntityId(versionResult.data.id) as TransactionId,
-    previous,
-    hash,
-    nodes,
-    configurations,
-    author,
-    createdAt,
-  });
+  const nodesResult = await processChangesetInput(
+    tx,
+    "node",
+    (input.nodes ?? []) as ChangesetsInput<"node">,
+    applyConfigChangesetToSchema(nodeSchema, configurationsResult.data),
+    lastNodeIdResult.data,
+  );
+  if (isErr(nodesResult)) return nodesResult;
+
+  return ok(
+    await withHashTransaction(
+      {
+        nodes: nodesResult.data,
+        configurations,
+        author: input.author ?? "",
+        createdAt,
+        previous: versionResult.data.hash,
+      },
+      incrementEntityId(versionResult.data.id) as TransactionId,
+    ),
+  );
 };
+
+const addTxIdsToChangeset = (
+  changeset: FieldChangeset,
+  txId: TransactionId,
+  kind: "insert" | "remove",
+): FieldChangeset => ({
+  ...changeset,
+  txIds: {
+    op: "seq",
+    mutations: [kind === "insert" ? ["insert", txId] : ["remove", txId]],
+  },
+});
 
 export const applyTransaction = async (
   tx: DbTransaction,
@@ -103,7 +108,7 @@ export const applyTransaction = async (
       tx,
       "node",
       entityUid as NodeUid,
-      changeset,
+      addTxIdsToChangeset(changeset, transaction.id, "insert"),
     );
     if (isErr(result)) return result;
   }
@@ -113,7 +118,7 @@ export const applyTransaction = async (
       tx,
       "config",
       entityUid as ConfigUid,
-      changeset,
+      addTxIdsToChangeset(changeset, transaction.id, "insert"),
     );
     if (isErr(result)) return result;
   }
@@ -209,7 +214,12 @@ export const rollbackTransaction = async (
 
     for (const [entityUid, changeset] of Object.entries(inverseNodes)) {
       const result = await tryCatch(
-        applyChangeset(tx, "node", entityUid as NodeUid, changeset),
+        applyChangeset(
+          tx,
+          "node",
+          entityUid as NodeUid,
+          addTxIdsToChangeset(changeset, transaction.id, "remove"),
+        ),
         errorToObject,
       );
       if (isErr(result)) return result;
@@ -219,7 +229,12 @@ export const rollbackTransaction = async (
       inverseConfigurations,
     )) {
       const result = await tryCatch(
-        applyChangeset(tx, "config", entityUid as ConfigUid, changeset),
+        applyChangeset(
+          tx,
+          "config",
+          entityUid as ConfigUid,
+          addTxIdsToChangeset(changeset, transaction.id, "remove"),
+        ),
         errorToObject,
       );
       if (isErr(result)) return result;

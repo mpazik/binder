@@ -7,14 +7,16 @@ import {
 } from "@binder/utils";
 
 /**
- * A unique identifier (UID) if format {prefix}_{random base64url encoded}
+ * A unique identifier (UID) in format:
+ * - Without prefix: base64url string (e.g., "a1b2c3d4e5f" - 11 chars for default 8 bytes)
+ * - With prefix: {prefix}_{random} (e.g., "typ_a1b2c3d4" - 12 chars total: 3 + 1 + 8)
  */
 export type Uid = Brand<string, "Uid">;
 
 const DEFAULT_UID_LENGTH = 8;
-// 4 bytes = 6 chars (2^32, ~4B IDs, 1% collision at ~9K IDs)
-// 6 bytes = 8 chars (2^48, ~281T IDs, 1% collision at ~19M IDs)
-// 8 bytes = 11 chars (2^64, ~18 quintillion IDs, 1% collision at ~5B IDs)
+// 4 bytes = 6 chars random part (2^32, ~4B IDs, 1% collision at ~9K IDs)
+// 6 bytes = 8 chars random part (2^48, ~281T IDs, 1% collision at ~19M IDs)
+// 8 bytes = 11 chars random part (2^64, ~18 quintillion IDs, 1% collision at ~5B IDs)
 export type ByteLength = 4 | 6 | 8;
 
 const generateRandomBase64Uri = (byteLength: number): string => {
@@ -54,6 +56,12 @@ const byteLengthToCharLength = (byteLength: ByteLength): number => {
   return 11;
 };
 
+/**
+ * Validates UID format
+ * @param value - The value to validate
+ * @param prefix - When provided, validates "{prefix}_{random}" format. When omitted, validates entire value length.
+ * @param length - Byte length of random part
+ */
 export const isValidUid = (
   value: unknown,
   prefix?: string,

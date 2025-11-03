@@ -140,7 +140,7 @@ Query multiple entities with filters, includes, ordering, and pagination:
 
 The `includes` parameter specifies which related entities and attributes to include in the response.
 
-**Note**: 
+**Note**:
 - If `includes` is not defined or omitted, all fields will be returned by default.
 - When `includes` is specified, only the requested fields are returned. Identifier fields (`id`, `uid`, `key`) are not automatically included and must be explicitly requested.
 
@@ -220,21 +220,21 @@ The `includes` parameter specifies which related entities and attributes to incl
           "name": "Urgent",
           "color": "red"
         }
-    },
-    {
-      "project": {
-        "name": "Security Team",
-        "status": "active"
+        },
+        {
+          "project": {
+            "name": "Security Team",
+            "status": "active"
+          }
+        }
+      ],
+      "pagination": {
+        "hasNext": true,
+        "hasPrevious": false,
+        "nextCursor": "cursor-next-123",
+        "previousCursor": null
       }
     }
-  ],
-  "pagination": {
-    "hasNext": true,
-    "hasPrevious": false,
-    "nextCursor": "cursor-next-123",
-    "previousCursor": null
-  }
-}
 ```
 
 ## Best Practices
@@ -248,12 +248,17 @@ The `includes` parameter specifies which related entities and attributes to incl
 
 ## Design rationale
 Requirements:
-- use JSON so we have schema for easy validation, and it is easier to use for LLMs 
+
+- use JSON so we have schema for easy validation, and it is easier to use for LLMs
 - nested include to fetch only what we need
 - nested filtering
 - condition tree with `or` and `and`
 - aggregation
 
-Naming, all query fields are imperatives to make it logic, concise and similar to SQL. 
+**Naming convention:** Top-level query fields use nouns describing query structure (`filters`, `includes`, `orderBy`,
+`pagination`), while operators use verbs or action-oriented names describing operations (`count`, `sum`, `match`,
+`contains`). This balances natural JSON object naming (describing what the container holds) with clear operational
+semantics (describing what the operation does).
 
-It is inspired by graphql and [GitHub: modql/joql-spec](https://github.com/modql/joql-spec), but it is simplified and more tailored for Binder
+It is inspired by GraphQL and [joql](https://github.com/modql/joql-spec), but simplified and tailored for Binder's
+entity-centric approach.

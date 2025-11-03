@@ -36,7 +36,7 @@ export type ComplexFilter = z.infer<typeof ComplexFilterSchema>;
 const FilterSchema = z.union([SimpleFilterSchema, ComplexFilterSchema]);
 export type Filter = z.infer<typeof FilterSchema>;
 
-const FiltersSchema = z.record(z.string(), FilterSchema);
+export const FiltersSchema = z.record(z.string(), FilterSchema);
 export type Filters = z.infer<typeof FiltersSchema>;
 
 const IncludesBaseSchema: z.ZodType<any> = z.lazy(() =>
@@ -69,7 +69,7 @@ export type Pagination = z.infer<typeof PaginationSchema>;
 const OrderBySchema = z.array(z.string());
 export type OrderBy = z.infer<typeof OrderBySchema>;
 
-const QueryParamsSchema = z.object({
+export const QueryParamsSchema = z.object({
   filters: FiltersSchema.optional(),
   includes: IncludesSchema.optional(),
   orderBy: OrderBySchema.optional(),

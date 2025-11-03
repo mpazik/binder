@@ -1,3 +1,4 @@
+import { newIsoTimestamp } from "@binder/utils";
 import {
   GENESIS_VERSION,
   type Transaction,
@@ -5,44 +6,50 @@ import {
   type TransactionId,
   type TransactionInput,
 } from "./transaction.ts";
-import {
-  changesetInputForNewEntity,
-  type ConfigurationsChangeset,
-} from "./changeset.ts";
+import { changesetInputForNewEntity } from "./changeset.ts";
 import {
   mockProjectNode,
   mockTask1Node,
   mockTask1Uid,
   mockTask2Node,
-  mockTaskNode1Updated,
 } from "./node.mock.ts";
 import {
   mockChangesetCreateTask1,
   mockChangesetUpdateTask1,
 } from "./changeset.mock.ts";
+import { mockNodeSchema } from "./schema.mock.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
-  "567e574235ec98dccb362ca1607fecc7ee80e103e5807a143daed22d2830506f" as TransactionHash;
-
-export const mockConfigurationsChangeset: ConfigurationsChangeset = {};
+  "ca2fdd762719841ec80c52df46b3d2070f88c75506eefac70cb13c21789086b0" as TransactionHash;
 
 const mockAuthor = "test-user";
+const mockCreated = newIsoTimestamp("2024-01-01");
+const mockUpdated = newIsoTimestamp("2024-01-02");
 export const mockTransactionInit: Transaction = {
   id: mockTransactionInitId,
   previous: GENESIS_VERSION.hash,
   hash: mockTransactionInitHash,
   nodes: {
     [mockTask1Uid]: mockChangesetCreateTask1,
+    [mockProjectNode.uid]: mockProjectNode,
+    [mockTask2Node.uid]: mockTask2Node,
   },
-  configurations: mockConfigurationsChangeset,
+  configurations: {
+    ...Object.fromEntries(
+      Object.values(mockNodeSchema.fields).map((field) => [field.key, field]),
+    ),
+    ...Object.fromEntries(
+      Object.values(mockNodeSchema.types).map((type) => [type.key, type]),
+    ),
+  },
   author: mockAuthor,
-  createdAt: mockTask1Node.createdAt,
+  createdAt: mockCreated,
 };
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "46f6543886dc178c49ee06394a938b6153563780c4456dda38addd0d3e4be490" as TransactionHash;
+  "e413afa51b8ef65efb5810765403ddbfc433232ca07dcc49a7926c088570dda5" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
   previous: mockTransactionInitHash,
@@ -50,30 +57,37 @@ export const mockTransactionUpdate: Transaction = {
   nodes: {
     [mockTask1Uid]: mockChangesetUpdateTask1,
   },
-  configurations: mockConfigurationsChangeset,
+  configurations: {},
   author: mockAuthor,
-  createdAt: mockTaskNode1Updated.updatedAt as any,
+  createdAt: mockUpdated,
 };
 
 export const mockTransactionInitInput: TransactionInput = {
   author: mockAuthor,
-  createdAt: mockTask1Node.createdAt,
+  createdAt: mockCreated,
   nodes: [
     changesetInputForNewEntity(mockTask1Node),
     changesetInputForNewEntity(mockProjectNode),
     changesetInputForNewEntity(mockTask2Node),
   ],
-  configurations: [],
+  configurations: [
+    ...Object.values(mockNodeSchema.fields).map((field) =>
+      changesetInputForNewEntity<"config">(field),
+    ),
+    ...Object.values(mockNodeSchema.types).map((type) =>
+      changesetInputForNewEntity<"config">(type),
+    ),
+  ],
 };
 
 export const mockTransactionInputUpdate: TransactionInput = {
   author: mockAuthor,
-  createdAt: mockTaskNode1Updated.updatedAt,
+  createdAt: mockUpdated,
   nodes: [
     {
       $ref: mockTask1Uid,
       title: "Implement user authentication system",
-      tags: [{ kind: "insert", value: "completed", position: 1 }],
+      tags: [["insert", "completed", 1]],
     },
   ],
   configurations: [],

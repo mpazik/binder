@@ -13,7 +13,6 @@ import {
   getTestDatabase,
   mockTask1Node,
   mockTask2Node,
-  mockTransactionInitInput,
 } from "@binder/db/mocks";
 import {
   buildAstDoc,
@@ -22,6 +21,7 @@ import {
 } from "./doc-builder.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
+  mockCoreTransactionInputForDocs,
   mockDataviewUid,
   mockDocumentTransactionInput,
   mockDocumentUid,
@@ -54,8 +54,8 @@ describe("DocumentBuilder", () => {
     beforeEach(async () => {
       const db = getTestDatabase();
       kg = openKnowledgeGraph(db);
-      throwIfError(await kg.update(mockTransactionInitInput));
       throwIfError(await kg.update(documentSchemaTransactionInput));
+      throwIfError(await kg.update(mockCoreTransactionInputForDocs));
       throwIfError(await kg.update(mockDocumentTransactionInput));
     });
 
@@ -88,7 +88,7 @@ describe("DocumentBuilder", () => {
 
       expect(dataviewBlock).toMatchObject({
         type: "Dataview",
-        query: "type=Task",
+        query: { filters: { type: "Task" } },
         data: [mockTask1Node, mockTask2Node],
       });
     });
@@ -105,16 +105,16 @@ describe("DocumentBuilder", () => {
     beforeEach(async () => {
       const db = getTestDatabase();
       kg = openKnowledgeGraph(db);
+      throwIfError(await kg.update(documentSchemaTransactionInput));
       throwIfError(
         await kg.update({
-          ...mockTransactionInitInput,
+          ...mockCoreTransactionInputForDocs,
           nodes: [
             changesetInputForNewEntity(mockTask1Node),
             changesetInputForNewEntity(mockTask2Node),
           ],
         }),
       );
-      throwIfError(await kg.update(documentSchemaTransactionInput));
     });
 
     it("renders document AST", async () => {
@@ -243,7 +243,7 @@ describe("DocumentBuilder", () => {
               },
               {
                 type: "Dataview",
-                query: "type=Task",
+                query: { filters: { type: "Task" } },
                 template: "**{{title}}**: {{description}}",
                 data: [
                   {
@@ -376,7 +376,7 @@ Some content
               blockContent: [
                 {
                   type: "Dataview",
-                  query: "type=Task AND status=active",
+                  query: { filters: { type: "Task", status: "active" } },
                 },
               ],
             },

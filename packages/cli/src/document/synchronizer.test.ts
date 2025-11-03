@@ -3,16 +3,14 @@ import { fileURLToPath } from "url";
 import { beforeEach, describe, expect, it } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import { openKnowledgeGraph, type KnowledgeGraph } from "@binder/db";
-import {
-  getTestDatabase,
-  mockTask1Node,
-  mockTask1Uid,
-  mockTransactionInitInput,
-} from "@binder/db/mocks";
-import type { BinderConfig } from "../config.ts";
+import { type KnowledgeGraph, openKnowledgeGraph } from "@binder/db";
+import { getTestDatabase, mockTask1Node, mockTask1Uid } from "@binder/db/mocks";
+import { BINDER_DIR, type BinderConfig } from "../config.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
-import { mockDocumentTransactionInput } from "./document.mock.ts";
+import {
+  mockCoreTransactionInputForDocs,
+  mockDocumentTransactionInput,
+} from "./document.mock.ts";
 import { parseFile, synchronizeFile } from "./synchronizer.ts";
 import { diffNodeTrees } from "./tree-diff.ts";
 
@@ -22,16 +20,16 @@ describe("synchronizer", () => {
   let kg: KnowledgeGraph;
   const config: BinderConfig = {
     author: "test",
-    docsPath: join(__dirname, "../../test/data"),
     dynamicDirectories: [],
+    docsPath: join(__dirname, "../../test/data"),
   };
 
   beforeEach(async () => {
     const db = getTestDatabase();
     kg = openKnowledgeGraph(db);
     throwIfError(await kg.update(documentSchemaTransactionInput));
+    throwIfError(await kg.update(mockCoreTransactionInputForDocs));
     throwIfError(await kg.update(mockDocumentTransactionInput));
-    throwIfError(await kg.update(mockTransactionInitInput));
   });
 
   describe("parseFile", () => {
@@ -83,7 +81,7 @@ describe("synchronizer", () => {
               },
               {
                 type: "Dataview",
-                query: "type=Task",
+                query: { filters: { type: "Task" } },
                 template: "**{{title}}**: {{description}}",
                 data: [
                   {
@@ -122,8 +120,7 @@ describe("synchronizer", () => {
 
     it("parses task from dynamic directory", async () => {
       const configWithDynamicDir: BinderConfig = {
-        author: "test",
-        docsPath: join(__dirname, "../../test/data"),
+        ...config,
         dynamicDirectories: [
           {
             path: "tasks/{key}.md",

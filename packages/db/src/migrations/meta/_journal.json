@@ -8,6 +8,13 @@
       "when": 1759680102086,
       "tag": "0000_chunky_captain_cross",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1762178790843,
+      "tag": "0001_thin_kylun",
+      "breakpoints": true
     }
   ]
 }

@@ -5,7 +5,7 @@ import {
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
-import type { Table } from "drizzle-orm";
+import { sql, type Table } from "drizzle-orm";
 import type { IsoTimestamp, JsonObject } from "@binder/utils";
 import type {
   ConfigId,
@@ -24,11 +24,11 @@ import type {
   TransactionId,
 } from "./model";
 
-export const createdAt = text("created_at").$type<IsoTimestamp>().notNull();
-export const updatedAt = text("updated_at").$type<IsoTimestamp>().notNull();
-export const deletedAt = text("deleted_at").$type<IsoTimestamp>();
+export const txIds = blob("tx_ids", { mode: "json" })
+  .notNull()
+  .$type<TransactionId[]>()
+  .default(sql`'[]'`);
 export const name = text("name").notNull();
-const version = integer("version").notNull();
 
 export const nodeTable = sqliteTable(
   "nodes",
@@ -36,19 +36,14 @@ export const nodeTable = sqliteTable(
     // manually added WITHOUT ROWID as not supported by Drizzle
     id: integer("id").primaryKey().$type<NodeId>(),
     uid: text("uid").notNull().$type<NodeUid>().unique(),
-    key: text("key").$type<NodeKey>(),
+    key: text("key").$type<NodeKey>().unique(),
     type: text("type").notNull().$type<NodeType>(),
     fields: blob("fields", { mode: "json" }).notNull().$type<JsonObject>(),
-    version,
-    createdAt,
-    updatedAt,
-    deletedAt,
+    txIds,
   },
   (table) => [
     index("node_type_idx").on(table.type),
     index("node_key_idx").on(table.key),
-    index("node_created_at_idx").on(table.createdAt),
-    index("node_updated_at_idx").on(table.updatedAt),
   ],
 );
 
@@ -58,19 +53,15 @@ export const configTable = sqliteTable(
     // manually added WITHOUT ROWID as not supported by Drizzle
     id: integer("id").primaryKey().$type<ConfigId>(),
     uid: text("uid").notNull().$type<ConfigUid>().unique(),
-    key: text("key").notNull().$type<ConfigKey>(),
+    key: text("key").notNull().$type<ConfigKey>().unique(),
     type: text("type").notNull().$type<ConfigType>(),
     fields: blob("fields", { mode: "json" }).notNull().$type<JsonObject>(),
-    version,
-    createdAt,
-    updatedAt,
-    deletedAt,
+    txIds,
   },
   (table) => [
     index("config_uid_idx").on(table.uid),
     index("config_type_idx").on(table.type),
     index("config_key_idx").on(table.key),
-    index("config_created_at_idx").on(table.createdAt),
   ],
 );
 export const transactionTable = sqliteTable(
@@ -86,8 +77,7 @@ export const transactionTable = sqliteTable(
     nodes: blob("nodes", { mode: "json" }).notNull().$type<NodesChangeset>(),
     author: text("author").notNull(),
     fields: blob("fields", { mode: "json" }).notNull().$type<JsonObject>(),
-    createdAt,
-    deletedAt,
+    createdAt: text("created_at").$type<IsoTimestamp>().notNull(),
   },
   (table) => [
     index("transactions_created_at_idx").on(table.createdAt),
@@ -105,13 +95,4 @@ export const entityTables = {
   transaction: transactionTable,
 } as const satisfies Record<Namespace, Table>;
 
-export const tableStoredFields = [
-  "id",
-  "uid",
-  "key",
-  "type",
-  "version",
-  "createdAt",
-  "updatedAt",
-  "deletedAt",
-];
+export const tableStoredFields = ["id", "uid", "key", "type", "txIds"];

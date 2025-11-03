@@ -7,6 +7,7 @@ import type {
   ConfigUid,
 } from "./config.ts";
 import type { TransactionId, TransactionRef } from "./transaction.ts";
+import type { ConfigSchema, NodeSchema } from "./schema.ts";
 
 export const entityNamespaces = ["node", "config", "transaction"] as const;
 export const namespacesEditable = ["node", "config"] as const;
@@ -34,4 +35,8 @@ export type EntityNsRef = {
   node: NodeRef;
   config: ConfigRef;
   transaction: TransactionRef;
+};
+export type EntityNsSchema = {
+  node: NodeSchema;
+  config: ConfigSchema;
 };

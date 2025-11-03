@@ -366,7 +366,7 @@ describe("diffNodeTrees", () => {
           blockContent: [
             {
               type: "Dataview",
-              query: "type=Task AND status=active",
+              query: { filters: { type: "Task", status: "active" } },
             },
           ],
         },
@@ -385,7 +385,7 @@ describe("diffNodeTrees", () => {
             {
               type: "Dataview",
               uid: "dataview-1",
-              query: "type=Task",
+              query: { filters: { type: "Task" } },
             },
           ],
         },
@@ -396,7 +396,7 @@ describe("diffNodeTrees", () => {
     expect(result).toEqual([
       expect.objectContaining({
         $ref: "dataview-1",
-        query: "type=Task AND status=active",
+        query: { filters: { type: "Task", status: "active" } },
       }),
     ]);
   });
@@ -504,7 +504,7 @@ describe("diffNodeTrees", () => {
       blockContent: [
         {
           type: "Dataview",
-          query: "type=Task",
+          query: { filters: { type: "Task" } },
           data: [
             {
               title: "Updated Task",
@@ -526,7 +526,7 @@ describe("diffNodeTrees", () => {
         {
           type: "Dataview",
           uid: "dataview-1",
-          query: "type=Task",
+          query: { filters: { type: "Task" } },
           data: [
             {
               type: "Task",
@@ -560,7 +560,7 @@ describe("diffNodeTrees", () => {
       blockContent: [
         {
           type: "Dataview",
-          query: "type=Idea AND ideaStatus=exploring",
+          query: { filters: { type: "Idea", ideaStatus: "exploring" } },
           data: [
             {
               title: "Implement real-time collaboration",
@@ -580,7 +580,7 @@ describe("diffNodeTrees", () => {
         {
           type: "Dataview",
           uid: "dataview-1",
-          query: "type=Idea AND ideaStatus=exploring",
+          query: { filters: { type: "Idea", ideaStatus: "exploring" } },
           data: [],
         },
       ],

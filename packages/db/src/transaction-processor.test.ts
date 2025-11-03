@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { throwIfError } from "@binder/utils";
+import { throwIfError, throwIfValue } from "@binder/utils";
 import "@binder/utils/tests";
 import {
   mockTask1Node,
@@ -8,10 +8,16 @@ import {
 } from "./model/node.mock.ts";
 import {
   mockTransactionInit,
+  mockTransactionInitInput,
   mockTransactionInputUpdate,
   mockTransactionUpdate,
 } from "./model/transaction.mock.ts";
-import { type TransactionId, type TransactionInput } from "./model";
+import {
+  emptyNodeSchema,
+  fieldConfigType,
+  type TransactionId,
+  type TransactionInput,
+} from "./model";
 import { getTestDatabase } from "./db.mock.ts";
 import { type Database } from "./db.ts";
 import {
@@ -25,46 +31,56 @@ import {
   getVersion,
   saveTransaction,
 } from "./transaction-store.ts";
+import { mockNodeSchema } from "./model/schema.mock.ts";
+import { mockTaskTypeKey } from "./model/config.mock.ts";
 
 describe("transaction processor", () => {
   let db: Database;
 
-  const applyTransactionInput = async (input: TransactionInput) =>
-    await db.transaction(async (tx) => {
-      const transaction = throwIfError(
-        await processTransactionInput(tx, input),
-      );
-      throwIfError(await applyTransaction(tx, transaction));
-    });
-
-  const getNode = async () =>
-    await db.transaction(async (tx) =>
-      throwIfError(await fetchEntity(tx, "node", mockTask1Uid)),
-    );
-
-  const getCurrentVersion = async () =>
-    await db.transaction(async (tx) => throwIfError(await getVersion(tx)));
-
   beforeEach(async () => {
     db = getTestDatabase();
-    await db.transaction(async (tx) => {
-      await createEntity(tx, "node", mockTask1Node);
-      await saveTransaction(tx, mockTransactionInit);
-    });
   });
 
   describe("processTransaction", () => {
     it("processes transaction input", async () => {
+      await db.transaction(async (tx) => {
+        await createEntity(tx, "node", mockTask1Node);
+        await saveTransaction(tx, mockTransactionInit);
+      });
+
       const result = await db.transaction(async (tx) =>
         throwIfError(
-          await processTransactionInput(tx, mockTransactionInputUpdate),
+          await processTransactionInput(
+            tx,
+            mockTransactionInputUpdate,
+            mockNodeSchema,
+          ),
         ),
       );
 
       expect(result).toEqual(mockTransactionUpdate);
     });
 
+    it("processes transaction input with nodes and config", async () => {
+      const result = await db.transaction(async (tx) =>
+        throwIfError(
+          await processTransactionInput(
+            tx,
+            mockTransactionInitInput,
+            emptyNodeSchema,
+          ),
+        ),
+      );
+
+      expect(result).toEqual(mockTransactionInit);
+    });
+
     it("applies transaction and saves to database", async () => {
+      await db.transaction(async (tx) => {
+        await createEntity(tx, "node", mockTask1Node);
+        await saveTransaction(tx, mockTransactionInit);
+      });
+
       await db.transaction(async (tx) =>
         throwIfError(await applyTransaction(tx, mockTransactionUpdate)),
       );
@@ -77,10 +93,81 @@ describe("transaction processor", () => {
       expect(updatedNode).toEqual(mockTaskNode1Updated);
       expect(transaction).toEqual(mockTransactionUpdate);
     });
+
+    it("returns errors where there is configuration issue", async () => {
+      const result = await db.transaction(async (tx) =>
+        processTransactionInput(
+          tx,
+          {
+            configurations: [{ type: fieldConfigType, dataType: "string" }],
+            author: "test",
+          },
+          mockNodeSchema,
+        ),
+      );
+
+      expect(throwIfValue(result)).toEqual({
+        key: "changeset-input-process-failed",
+        message: "failed creating changeset",
+        data: {
+          errors: [
+            {
+              changesetIndex: 0,
+              namespace: "config",
+              fieldKey: "key",
+              message: "mandatory property is missing or null",
+            },
+          ],
+        },
+      });
+    });
+  });
+
+  it("returns errors where there is node issue", async () => {
+    const result = await db.transaction(async (tx) =>
+      processTransactionInput(
+        tx,
+        {
+          nodes: [{ type: mockTaskTypeKey }],
+          author: "test",
+        },
+        mockNodeSchema,
+      ),
+    );
+
+    expect(throwIfValue(result)).toEqual({
+      key: "changeset-input-process-failed",
+      message: "failed creating changeset",
+      data: {
+        errors: [
+          {
+            changesetIndex: 0,
+            namespace: "node",
+            fieldKey: "title",
+            message: "mandatory property is missing or null",
+          },
+        ],
+      },
+    });
   });
 
   describe("rollbackTransaction", () => {
-    it("rolls back 1 transaction", async () => {
+    const getNode = async () =>
+      await db.transaction(async (tx) =>
+        throwIfError(await fetchEntity(tx, "node", mockTask1Uid)),
+      );
+    const getCurrentVersion = async () =>
+      await db.transaction(async (tx) => throwIfError(await getVersion(tx)));
+    const applyTransactionInput = async (input: TransactionInput) =>
+      await db.transaction(async (tx) => {
+        const transaction = throwIfError(
+          await processTransactionInput(tx, input, mockNodeSchema),
+        );
+        throwIfError(await applyTransaction(tx, transaction));
+      });
+
+    it("rolls back ;", async () => {
+      await applyTransactionInput(mockTransactionInitInput);
       await applyTransactionInput(mockTransactionInputUpdate);
       expect(await getNode()).toEqual(mockTaskNode1Updated);
 
@@ -94,6 +181,7 @@ describe("transaction processor", () => {
     });
 
     it("rolls back 3 transactions", async () => {
+      await applyTransactionInput(mockTransactionInitInput);
       await applyTransactionInput(mockTransactionInputUpdate);
       await applyTransactionInput({
         author: "test",
@@ -101,7 +189,7 @@ describe("transaction processor", () => {
       });
       await applyTransactionInput({
         author: "test",
-        nodes: [{ $ref: mockTask1Uid, taskStatus: "done" }],
+        nodes: [{ $ref: mockTask1Uid, status: "done" }],
       });
 
       await db.transaction(async (tx) => {
@@ -123,6 +211,7 @@ describe("transaction processor", () => {
     });
 
     it("returns error when version mismatches", async () => {
+      await applyTransactionInput(mockTransactionInitInput);
       await applyTransactionInput(mockTransactionInputUpdate);
 
       const result = await db.transaction(async (tx) =>

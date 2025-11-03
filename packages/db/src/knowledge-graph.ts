@@ -1,27 +1,32 @@
 import {
   errorToObject,
+  groupByToObject,
   isErr,
   ok,
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
-import { and, asc, desc, sql } from "drizzle-orm";
-import type {
-  ConfigRef,
-  ConfigUid,
-  Fieldset,
-  GraphVersion,
-  NodeRef,
-  NodeUid,
-  Transaction,
-  TransactionId,
-  TransactionInput,
-  TransactionRef,
-  PaginationInfo,
-  QueryParams,
+import { and, asc, desc, inArray, or, sql } from "drizzle-orm";
+import {
+  type ConfigRef,
+  type ConfigUid,
+  fieldNodeTypes,
+  type Fieldset,
+  type GraphVersion,
+  type NodeFieldDefinition,
+  type NodeRef,
+  type NodeSchema,
+  type NodeTypeDefinition,
+  type PaginationInfo,
+  type QueryParams,
+  type Transaction,
+  type TransactionId,
+  type TransactionInput,
+  type TransactionRef,
+  typeConfigType,
 } from "./model";
 import type { Database } from "./db.ts";
-import { nodeTable } from "./schema.ts";
+import { configTable, nodeTable } from "./schema.ts";
 import {
   dbModelToEntity,
   fetchEntity,
@@ -47,6 +52,7 @@ export type KnowledgeGraph = {
   update: (input: TransactionInput) => ResultAsync<Transaction>;
   apply: (transaction: Transaction) => ResultAsync<Transaction>;
   rollback: (count: number, version?: TransactionId) => ResultAsync<void>;
+  getNodeSchema: () => ResultAsync<NodeSchema>;
 };
 
 export type KnowledgeGraphCallbacks = {
@@ -57,14 +63,67 @@ export const openKnowledgeGraph = (
   db: Database,
   callbacks?: KnowledgeGraphCallbacks,
 ): KnowledgeGraph => {
+  let nodeSchemaCache: NodeSchema | null = null;
+
+  const getNodeSchema = async () => {
+    if (nodeSchemaCache !== null) {
+      return ok(nodeSchemaCache);
+    }
+
+    return db.transaction(async (tx) => {
+      const configsResult = await tryCatch(
+        tx
+          .select()
+          .from(configTable)
+          .where(
+            or(inArray(configTable.type, [...fieldNodeTypes, typeConfigType])),
+          )
+          .then((rows) => rows.map((row) => dbModelToEntity(row))),
+        errorToObject,
+      );
+
+      if (isErr(configsResult)) return configsResult;
+
+      const fields = configsResult.data.filter((config) =>
+        fieldNodeTypes.includes(config.type as any),
+      ) as unknown as NodeFieldDefinition[];
+
+      const types = configsResult.data.filter(
+        (config) => config.type === typeConfigType,
+      ) as unknown as NodeTypeDefinition[];
+
+      const schema: NodeSchema = {
+        fields: groupByToObject(fields, (f) => f.key),
+        types: groupByToObject(types, (t) => t.key),
+      };
+
+      nodeSchemaCache = schema;
+
+      return ok(schema);
+    });
+  };
+
+  const applyAndNotify = async (transaction: Transaction) => {
+    return db.transaction(async (tx) => {
+      const applyResult = await applyTransaction(tx, transaction);
+      if (isErr(applyResult)) return applyResult;
+
+      const hasConfigChanges =
+        Object.keys(transaction.configurations).length > 0;
+      if (hasConfigChanges) {
+        nodeSchemaCache = null;
+      }
+
+      callbacks?.onTransactionSaved?.(transaction);
+
+      return ok(transaction);
+    });
+  };
+
   return {
     fetchNode: async (ref: NodeRef) => {
       return db.transaction(async (tx) => {
-        const resolvedRefs = await resolveEntityRefs(tx, "node", [ref]);
-        if (isErr(resolvedRefs)) return resolvedRefs;
-        const nodeUid = resolvedRefs.data[0] as NodeUid;
-
-        return fetchEntity(tx, "node", nodeUid);
+        return fetchEntity(tx, "node", ref);
       });
     },
     fetchConfig: async (ref: ConfigRef) => {
@@ -89,11 +148,6 @@ export const openKnowledgeGraph = (
         const before = pagination?.before;
 
         const filterClause = buildWhereClause(nodeTable, filters);
-        const deletedClause = sql`${nodeTable.deletedAt} IS NULL`;
-
-        let whereClause = filterClause
-          ? and(filterClause, deletedClause)
-          : deletedClause;
 
         const orderClause = before ? desc(nodeTable.id) : asc(nodeTable.id);
         const paginationClause = after
@@ -101,7 +155,7 @@ export const openKnowledgeGraph = (
           : before
             ? sql`${nodeTable.id} < ${parseInt(before, 10)}`
             : undefined;
-        whereClause = and(whereClause, paginationClause);
+        const whereClause = and(filterClause, paginationClause);
 
         const results = await tryCatch(
           tx
@@ -117,12 +171,9 @@ export const openKnowledgeGraph = (
 
         const orderedResults = before ? results.data.reverse() : results.data;
         const hasMore = orderedResults.length > limit;
-        const items = orderedResults.slice(0, limit).map((row) =>
-          dbModelToEntity({
-            ...row,
-            deletedAt: row.deletedAt ?? undefined,
-          }),
-        );
+        const items = orderedResults
+          .slice(0, limit)
+          .map((row) => dbModelToEntity(row));
 
         const firstItem = items[0];
         const lastItem = items[items.length - 1];
@@ -132,16 +183,11 @@ export const openKnowledgeGraph = (
 
         let hasPrevious = false;
         if (after && firstItem) {
-          const baseWhereClause = filterClause
-            ? and(filterClause, deletedClause)
-            : deletedClause;
           const prevCheck = await tryCatch(
             tx
               .select({ id: nodeTable.id })
               .from(nodeTable)
-              .where(
-                and(baseWhereClause, sql`${nodeTable.id} < ${firstItem.id}`),
-              )
+              .where(and(filterClause, sql`${nodeTable.id} < ${firstItem.id}`))
               .limit(1)
               .then((rows) => rows),
             errorToObject,
@@ -168,32 +214,33 @@ export const openKnowledgeGraph = (
     },
     update: async (input: TransactionInput) => {
       return db.transaction(async (tx) => {
-        const processedResult = await processTransactionInput(tx, input);
+        const nodeSchemaResult = await getNodeSchema();
+        if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+        const processedResult = await processTransactionInput(
+          tx,
+          input,
+          nodeSchemaResult.data,
+        );
+
         if (isErr(processedResult)) return processedResult;
 
-        const applyResult = await applyTransaction(tx, processedResult.data);
-        if (isErr(applyResult)) return applyResult;
-
-        callbacks?.onTransactionSaved?.(processedResult.data);
-
-        return ok(processedResult.data);
+        return applyAndNotify(processedResult.data);
       });
     },
     apply: async (transaction: Transaction) => {
-      return db.transaction(async (tx) => {
-        const applyResult = await applyTransaction(tx, transaction);
-        if (isErr(applyResult)) return applyResult;
-
-        return ok(transaction);
-      });
+      return applyAndNotify(transaction);
     },
     rollback: async (count, version) => {
       return db.transaction(async (dbTx) => {
         const versionResult = await getVersion(dbTx);
         if (isErr(versionResult)) return versionResult;
         const txId = version ?? versionResult.data.id;
+
+        nodeSchemaCache = null;
+
         return rollbackTransaction(dbTx, count, txId);
       });
     },
+    getNodeSchema,
   };
 };

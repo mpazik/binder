@@ -12,6 +12,7 @@ import type {
   ConfigurationsChangeset,
   NodesChangeset,
 } from "./changeset.ts";
+import squashChangesets from "./changeset.ts";
 
 export type TransactionId = BrandDerived<EntityId, "TransactionId">;
 export type TransactionHash = Brand<string, "TransactionHash">;
@@ -61,6 +62,7 @@ export const transactionToCanonical = (
     "previous" | "author" | "createdAt" | "nodes" | "configurations"
   >,
 ): CanonicalTransaction => {
+  // we assume that changeset is always in succinct form, later perhaps we should do something here
   return pick(tx, [
     "previous",
     "author",
@@ -72,10 +74,22 @@ export const transactionToCanonical = (
 
 export const hashTransaction = async (
   canonical: CanonicalTransaction,
-): Promise<TransactionHash> => {
-  const json = JSON.stringify(canonical);
-  const hash = hashToHex(await hashString(json));
-  return hash as TransactionHash;
+): Promise<TransactionHash> =>
+  hashToHex(await hashString(JSON.stringify(canonical))) as TransactionHash;
+
+export const withHashTransaction = async (
+  tx: Pick<
+    Transaction,
+    "previous" | "author" | "createdAt" | "nodes" | "configurations"
+  >,
+  id: TransactionId,
+): Promise<Transaction> => {
+  const canonical = transactionToCanonical(tx);
+  return {
+    id,
+    hash: await hashTransaction(canonical),
+    ...tx,
+  };
 };
 
 export type GraphVersion = {
@@ -96,4 +110,41 @@ export const GENESIS_VERSION: GraphVersion = {
   id: GENESIS_ENTITY_ID as TransactionId,
   hash: "0".repeat(64) as TransactionHash,
   updatedAt: "2025-10-01T00:00:00.000Z" as IsoTimestamp,
+};
+
+export const squashTransactions = async (
+  transactions: Transaction[],
+): Promise<Transaction> => {
+  const oldest = transactions[0]!;
+  const newest = transactions[transactions.length - 1]!;
+
+  const squashedNodes = {} as NodesChangeset;
+  const squashedConfigurations = {} as ConfigurationsChangeset;
+
+  for (const tx of transactions) {
+    for (const [uid, changeset] of Object.entries(tx.nodes)) {
+      const nodeUid = uid as keyof NodesChangeset;
+      squashedNodes[nodeUid] = squashedNodes[nodeUid]
+        ? squashChangesets(squashedNodes[nodeUid]!, changeset)
+        : changeset;
+    }
+
+    for (const [uid, changeset] of Object.entries(tx.configurations)) {
+      const configUid = uid as keyof ConfigurationsChangeset;
+      squashedConfigurations[configUid] = squashedConfigurations[configUid]
+        ? squashChangesets(squashedConfigurations[configUid]!, changeset)
+        : changeset;
+    }
+  }
+
+  return withHashTransaction(
+    {
+      previous: oldest.previous,
+      author: newest.author,
+      createdAt: newest.createdAt,
+      nodes: squashedNodes,
+      configurations: squashedConfigurations,
+    },
+    oldest.id,
+  );
 };

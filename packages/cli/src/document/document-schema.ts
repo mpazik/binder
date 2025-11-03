@@ -1,147 +1,304 @@
 import { newIsoTimestamp } from "@binder/utils";
-import type {
-  ConfigKey,
-  ConfigType,
-  ConfigUid,
-  TransactionInput,
+import {
+  changesetInputForNewEntity,
+  type ConfigId,
+  type ConfigKey,
+  type ConfigUid,
+  fieldConfigType,
+  type NodeFieldDefinition,
+  type NodeType,
+  type NodeTypeDefinition,
+  relationFieldConfigType,
+  type TransactionInput,
+  typeConfigType,
 } from "@binder/db";
 
 export const fieldTitleUid = "a7Kx2mPqRtU" as ConfigUid;
+export const fieldTitleKey = "title" as ConfigKey;
+const fieldTitle = {
+  id: 1 as ConfigId,
+  uid: fieldTitleUid,
+  key: fieldTitleKey,
+  type: fieldConfigType,
+  name: "Title",
+  description: "A few word description of the node.",
+  dataType: "string",
+} as const satisfies NodeFieldDefinition;
+
 export const fieldBlockContentUid = "b9Lm3nQrSvW" as ConfigUid;
+export const fieldBlockContentKey = "blockContent" as ConfigKey;
+const fieldBlockContent = {
+  id: 2 as ConfigId,
+  uid: fieldBlockContentUid,
+  key: fieldBlockContentKey,
+  type: relationFieldConfigType,
+  name: "Block Content",
+  description: "Ordered list of child blocks.",
+  dataType: "relation",
+  allowMultiple: true,
+  range: ["DocumentBlock"],
+} as const satisfies NodeFieldDefinition;
+
 export const fieldTextContentUid = "c1Np4oRsTwX" as ConfigUid;
+export const fieldTextContentKey = "textContent" as ConfigKey;
+const fieldTextContent = {
+  id: 3 as ConfigId,
+  uid: fieldTextContentUid,
+  key: fieldTextContentKey,
+  type: fieldConfigType,
+  name: "Text Content",
+  description: "Text content.",
+  dataType: "text",
+} as const satisfies NodeFieldDefinition;
+
 export const fieldHeadingLevelUid = "d2Oq5pStUxY" as ConfigUid;
+export const fieldHeadingLevelKey = "headingLevel" as ConfigKey;
+const fieldHeadingLevel = {
+  id: 4 as ConfigId,
+  uid: fieldHeadingLevelUid,
+  key: fieldHeadingLevelKey,
+  type: fieldConfigType,
+  name: "Heading Level",
+  description: "Heading level from 1 to 6.",
+  dataType: "integer",
+} as const satisfies NodeFieldDefinition;
+
 export const fieldCitationSourceUid = "e3Pr6qTuVyZ" as ConfigUid;
+export const fieldCitationSourceKey = "citationSource" as ConfigKey;
+const fieldCitationSource = {
+  id: 5 as ConfigId,
+  uid: fieldCitationSourceUid,
+  key: fieldCitationSourceKey,
+  type: fieldConfigType,
+  name: "Citation Source",
+  description: "Citation or source reference.",
+  dataType: "string",
+} as const satisfies NodeFieldDefinition;
+
 export const fieldCodeLanguageUid = "f4Qs7rVwWzA" as ConfigUid;
+export const fieldCodeLanguageKey = "codeLanguage" as ConfigKey;
+const fieldCodeLanguage = {
+  id: 6 as ConfigId,
+  uid: fieldCodeLanguageUid,
+  key: fieldCodeLanguageKey,
+  type: fieldConfigType,
+  name: "Code Language",
+  description: "Programming language identifier.",
+  dataType: "string",
+} as const satisfies NodeFieldDefinition;
+
 export const fieldQueryUid = "g5Rt8sWxXaB" as ConfigUid;
+export const fieldQueryKey = "query" as ConfigKey;
+const fieldQuery = {
+  id: 7 as ConfigId,
+  uid: fieldQueryUid,
+  key: fieldQueryKey,
+  type: fieldConfigType,
+  name: "Query",
+  description: "Query expression.",
+  dataType: "query",
+} as const satisfies NodeFieldDefinition;
+
 export const fieldTemplateUid = "h6Su9tYzYbC" as ConfigUid;
+export const fieldTemplateKey = "template" as ConfigKey;
+const fieldTemplate = {
+  id: 8 as ConfigId,
+  uid: fieldTemplateUid,
+  key: fieldTemplateKey,
+  type: fieldConfigType,
+  name: "Template",
+  description: "Template string.",
+  dataType: "string",
+} as const satisfies NodeFieldDefinition;
+
+export const fieldPathUid = "r6Cd9eIjIlM" as ConfigUid;
+export const fieldPathKey = "path" as ConfigKey;
+const fieldPath = {
+  id: 9 as ConfigId,
+  uid: fieldPathUid,
+  key: fieldPathKey,
+  type: fieldConfigType,
+  name: "Path",
+  description: "File system path.",
+  dataType: "string",
+} as const satisfies NodeFieldDefinition;
+
+export const fieldDescriptionUid = "s7De0fKlKmN" as ConfigUid;
+export const fieldDescriptionKey = "description" as ConfigKey;
+const fieldDescription = {
+  id: 19 as ConfigId,
+  uid: fieldDescriptionUid,
+  key: fieldDescriptionKey,
+  type: fieldConfigType,
+  name: "Description",
+  description: "A detailed multi word description with spaces for context.",
+  dataType: "text",
+} as const satisfies NodeFieldDefinition;
 
 export const typeDocumentUid = "i7Tv0uZaZcD" as ConfigUid;
+export const typeDocumentKey = "Document" as NodeType;
+const typeDocument = {
+  id: 10 as ConfigId,
+  uid: typeDocumentUid,
+  key: typeDocumentKey,
+  type: typeConfigType,
+  name: "Document",
+  description: "A top-level note made of ordered blocks.",
+  fields: [fieldPathKey, fieldTitleKey, fieldBlockContentKey],
+  fields_attrs: {
+    [fieldBlockContentKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
+
 export const typeDocumentBlockUid = "j8Uw1vAbAdE" as ConfigUid;
+export const typeDocumentBlockKey = "DocumentBlock" as NodeType;
+const typeDocumentBlock = {
+  id: 11 as ConfigId,
+  uid: typeDocumentBlockUid,
+  key: typeDocumentBlockKey,
+  type: typeConfigType,
+  name: "Document Block",
+  description: "Abstract base for all blocks. Not instantiable.",
+  fields: [],
+} as const satisfies NodeTypeDefinition;
+
 export const typeSectionUid = "k9Vx2wBcBeF" as ConfigUid;
+export const typeSectionKey = "Section" as NodeType;
+const typeSection = {
+  id: 12 as ConfigId,
+  uid: typeSectionUid,
+  key: typeSectionKey,
+  type: typeConfigType,
+  name: "Section",
+  description: "A titled container with nested blocks.",
+  extends: typeDocumentBlockKey,
+  fields: [fieldTitleKey, fieldBlockContentKey],
+  fields_attrs: {
+    [fieldTitleKey]: { required: true },
+    [fieldBlockContentKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
+
 export const typeParagraphUid = "l0Wy3xCdCfG" as ConfigUid;
+export const typeParagraphKey = "Paragraph" as NodeType;
+const typeParagraph = {
+  id: 13 as ConfigId,
+  uid: typeParagraphUid,
+  key: typeParagraphKey,
+  type: typeConfigType,
+  name: "Paragraph",
+  description: "A text paragraph block.",
+  extends: typeDocumentBlockKey,
+  fields: [fieldTextContentKey],
+  fields_attrs: {
+    [fieldTextContentKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
+
 export const typeQuoteUid = "m1Xz4yDeDgH" as ConfigUid;
+export const typeQuoteKey = "Quote" as NodeType;
+const typeQuote = {
+  id: 14 as ConfigId,
+  uid: typeQuoteUid,
+  key: typeQuoteKey,
+  type: typeConfigType,
+  name: "Quote",
+  description: "A quoted text block.",
+  extends: typeDocumentBlockKey,
+  fields: [fieldTextContentKey, fieldCitationSourceKey],
+  fields_attrs: {
+    [fieldTextContentKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
+
 export const typeCodeUid = "n2Ya5zEfEhI" as ConfigUid;
+export const typeCodeKey = "Code" as NodeType;
+const typeCode = {
+  id: 15 as ConfigId,
+  uid: typeCodeUid,
+  key: typeCodeKey,
+  type: typeConfigType,
+  name: "Code",
+  description: "A code block.",
+  extends: typeDocumentBlockKey,
+  fields: [fieldCodeLanguageKey, fieldTextContentKey],
+  fields_attrs: {
+    [fieldCodeLanguageKey]: { required: true },
+    [fieldTextContentKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
+
 export const typeDataviewUid = "o3Zb6aFgFiJ" as ConfigUid;
+export const typeDataviewKey = "Dataview" as NodeType;
+const typeDataview = {
+  id: 16 as ConfigId,
+  uid: typeDataviewUid,
+  key: typeDataviewKey,
+  type: typeConfigType,
+  name: "Dataview",
+  description: "A query-driven view block.",
+  extends: typeDocumentBlockKey,
+  fields: [fieldQueryKey, fieldTemplateKey],
+  fields_attrs: {
+    [fieldQueryKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
+
+export const typeListUid = "p4Ab7cGhGjK" as ConfigUid;
+export const typeListKey = "List" as NodeType;
+const typeList = {
+  id: 17 as ConfigId,
+  uid: typeListUid,
+  key: typeListKey,
+  type: typeConfigType,
+  name: "List",
+  description: "A list container.",
+  extends: typeDocumentBlockKey,
+  fields: [fieldBlockContentKey],
+  fields_attrs: {
+    [fieldBlockContentKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
+
+export const typeListItemUid = "q5Bc8dHiHkL" as ConfigUid;
+export const typeListItemKey = "ListItem" as NodeType;
+const typeListItem = {
+  id: 18 as ConfigId,
+  uid: typeListItemUid,
+  key: typeListItemKey,
+  type: typeConfigType,
+  name: "List Item",
+  description: "A list item.",
+  extends: typeDocumentBlockKey,
+  fields: [fieldTextContentKey],
+  fields_attrs: {
+    [fieldTextContentKey]: { required: true },
+  },
+} as const satisfies NodeTypeDefinition;
 
 export const documentSchemaTransactionInput: TransactionInput = {
   author: "system",
-  createdAt: newIsoTimestamp("2024-01-01"),
+  createdAt: newIsoTimestamp("2024-10-05"),
   nodes: [],
   configurations: [
-    {
-      uid: fieldTitleUid,
-      type: "Field" as ConfigType,
-      key: "title" as ConfigKey,
-      dataType: "string",
-      description: "A few word description of the node.",
-    },
-    {
-      uid: fieldBlockContentUid,
-      type: "Field" as ConfigType,
-      key: "blockContent" as ConfigKey,
-      dataType: "relation",
-      multiple: true,
-      range: "DocumentBlock",
-      ordered: true,
-      description: "Ordered list of child blocks.",
-    },
-    {
-      uid: fieldTextContentUid,
-      type: "Field" as ConfigType,
-      key: "textContent" as ConfigKey,
-      dataType: "text",
-      description: "Text content.",
-    },
-    {
-      uid: fieldHeadingLevelUid,
-      type: "Field" as ConfigType,
-      key: "headingLevel" as ConfigKey,
-      dataType: "integer",
-      min: 1,
-      max: 6,
-      description: "Heading level from 1 to 6.",
-    },
-    {
-      uid: fieldCitationSourceUid,
-      type: "Field" as ConfigType,
-      key: "citationSource" as ConfigKey,
-      dataType: "string",
-      description: "Citation or source reference.",
-    },
-    {
-      uid: fieldCodeLanguageUid,
-      type: "Field" as ConfigType,
-      key: "codeLanguage" as ConfigKey,
-      dataType: "string",
-      description: "Programming language identifier.",
-    },
-    {
-      uid: fieldQueryUid,
-      type: "Field" as ConfigType,
-      key: "query" as ConfigKey,
-      dataType: "query",
-      description: "Query expression.",
-    },
-    {
-      uid: fieldTemplateUid,
-      type: "Field" as ConfigType,
-      key: "template" as ConfigKey,
-      dataType: "string",
-      description: "Template string.",
-    },
-    {
-      uid: typeDocumentUid,
-      type: "Type" as ConfigType,
-      key: "Document" as ConfigKey,
-      description: "A top-level note made of ordered blocks.",
-      fields: ["title", "blockContent"],
-    },
-    {
-      uid: typeDocumentBlockUid,
-      type: "Type" as ConfigType,
-      key: "DocumentBlock" as ConfigKey,
-      description: "Abstract base for all blocks. Not instantiable.",
-      abstract: true,
-    },
-    {
-      uid: typeSectionUid,
-      type: "Type" as ConfigType,
-      key: "Section" as ConfigKey,
-      baseType: "DocumentBlock",
-      description: "A titled container with nested blocks.",
-      fields: ["title", "blockContent"],
-    },
-    {
-      uid: typeParagraphUid,
-      type: "Type" as ConfigType,
-      key: "Paragraph" as ConfigKey,
-      baseType: "DocumentBlock",
-      description: "A text paragraph block.",
-      fields: ["textContent"],
-    },
-    {
-      uid: typeQuoteUid,
-      type: "Type" as ConfigType,
-      key: "Quote" as ConfigKey,
-      baseType: "DocumentBlock",
-      description: "A quoted text block.",
-      fields: ["textContent", { citationSource: { optional: true } }],
-    },
-    {
-      uid: typeCodeUid,
-      type: "Type" as ConfigType,
-      key: "Code" as ConfigKey,
-      baseType: "DocumentBlock",
-      description: "A code block.",
-      fields: ["codeLanguage", "textContent"],
-    },
-    {
-      uid: typeDataviewUid,
-      type: "Type" as ConfigType,
-      key: "Dataview" as ConfigKey,
-      baseType: "DocumentBlock",
-      description: "A query-driven view block.",
-      fields: ["query", { template: { optional: true } }],
-    },
+    changesetInputForNewEntity(fieldTitle),
+    changesetInputForNewEntity(fieldBlockContent),
+    changesetInputForNewEntity(fieldTextContent),
+    changesetInputForNewEntity(fieldHeadingLevel),
+    changesetInputForNewEntity(fieldCitationSource),
+    changesetInputForNewEntity(fieldCodeLanguage),
+    changesetInputForNewEntity(fieldQuery),
+    changesetInputForNewEntity(fieldTemplate),
+    changesetInputForNewEntity(fieldPath),
+    changesetInputForNewEntity(fieldDescription),
+    changesetInputForNewEntity(typeDocument),
+    changesetInputForNewEntity(typeDocumentBlock),
+    changesetInputForNewEntity(typeSection),
+    changesetInputForNewEntity(typeParagraph),
+    changesetInputForNewEntity(typeQuote),
+    changesetInputForNewEntity(typeCode),
+    changesetInputForNewEntity(typeDataview),
+    changesetInputForNewEntity(typeList),
+    changesetInputForNewEntity(typeListItem),
   ],
 };

@@ -155,8 +155,8 @@ const generateNodeChangeset = (
     let nodeType = fileNode.type as string | undefined;
 
     if (!nodeType && parentNode?.type === "Dataview") {
-      const fieldset = extractFieldsetFromQuery(parentNode.query as string);
-      nodeType = fieldset.type;
+      const fieldset = extractFieldsetFromQuery(parentNode.query as any);
+      nodeType = fieldset.type as string | undefined;
     }
 
     if (!nodeType) {
@@ -250,7 +250,7 @@ export const diffNodeTrees = (
       let fileDataItems = fileData.filter(isFieldsetNested);
 
       if (fileNode.type === "Dataview" && fileDataItems.length > 0) {
-        const fieldset = extractFieldsetFromQuery(fileNode.query as string);
+        const fieldset = extractFieldsetFromQuery(fileNode.query as any);
         fileDataItems = fileDataItems.map((item) => ({
           ...fieldset,
           ...item,

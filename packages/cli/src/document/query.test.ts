@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { extractFieldsetFromQuery, parseStringQuery } from "./query.ts";
 
 const check = (query: string, expected: Record<string, string>) => {
-  const result = extractFieldsetFromQuery(query);
+  const queryParams = parseStringQuery(query);
+  const result = extractFieldsetFromQuery(queryParams);
   expect(result).toEqual(expected);
 };
 

@@ -6,26 +6,25 @@ import {
   filterObjectValues,
   mapObjectValues,
   omit,
-  pick,
 } from "@binder/utils";
 import {
-  systemFields,
   type FieldKey,
   type Fieldset,
   type FieldValue,
+  systemFields,
 } from "./entity.ts";
 import type {
-  NamespaceEditable,
   EntityNsKey,
   EntityNsRef,
   EntityNsType,
-  EntityNsUid,
+  NamespaceEditable,
 } from "./namespace.ts";
-import { mockTask1Node } from "./node.mock.ts";
+import type { NodeUid } from "./node.ts";
+import type { ConfigKey } from "./config.ts";
 
 export type ListMutation =
-  | { kind: "insert"; value: FieldValue; position: number }
-  | { kind: "remove"; removed: FieldValue; position: number };
+  | [kind: "insert", inserted: FieldValue, position?: number]
+  | [kind: "remove", removed: FieldValue, position?: number];
 
 export type ValueChange =
   | {
@@ -34,14 +33,17 @@ export type ValueChange =
       previous?: FieldValue;
     }
   | {
-      op: "sequence";
+      op: "seq";
       mutations: ListMutation[];
     };
 
-export type FieldChangeset = Record<FieldKey, ValueChange>;
+export type FieldChangeset = Record<FieldKey, ValueChange | FieldValue>;
 export const emptyChangeset: FieldChangeset = {};
+export type EntityChangesetRef<N extends NamespaceEditable> = N extends "node"
+  ? NodeUid
+  : ConfigKey;
 export type EntitiesChangeset<N extends NamespaceEditable> = Record<
-  EntityNsUid[N],
+  EntityChangesetRef<N>,
   FieldChangeset
 >; // assumption is that order or entity change application does not matter
 export type NodesChangeset = EntitiesChangeset<"node">;
@@ -59,69 +61,44 @@ const isEqual = (left: unknown, right: unknown): boolean => {
   return false;
 };
 
+export const isValueChange = (
+  value: ValueChange | FieldValue,
+): value is ValueChange =>
+  typeof value === "object" && value !== null && "op" in value;
+
+export const normalizeValueChange = (
+  change: ValueChange | FieldValue,
+): ValueChange =>
+  isValueChange(change) ? change : { op: "set", value: change };
+
 export const inverseChange = (change: ValueChange): ValueChange => {
   switch (change.op) {
     case "set":
       return { op: "set", value: change.previous, previous: change.value };
-    case "sequence": {
+    case "seq": {
       // Reverse the order of mutations and invert each one
       const invertedMutations = change.mutations
         .slice()
         .reverse()
         .map((mutation): ListMutation => {
-          if (mutation.kind === "insert") {
-            return {
-              kind: "remove",
-              removed: mutation.value,
-              position: mutation.position,
-            };
+          const [kind, value, position] = mutation;
+          if (kind === "insert") {
+            return ["remove", value, position];
           }
-          if (mutation.kind === "remove") {
-            return {
-              kind: "insert",
-              value: mutation.removed,
-              position: mutation.position,
-            };
+          if (kind === "remove") {
+            return ["insert", value, position];
           }
           assertFailed("Unknown mutation kind");
         });
-      return { op: "sequence", mutations: invertedMutations };
+      return { op: "seq", mutations: invertedMutations };
     }
   }
 };
 
-export const inverseChangeset = (changeset: FieldChangeset): FieldChangeset => {
-  return mapObjectValues(changeset, (value) => inverseChange(value)) as Record<
-    FieldKey,
-    ValueChange
-  >;
-};
-
-export const computeSequenceMutations = (
-  oldArr: FieldValue[],
-  newArr: FieldValue[],
-): ListMutation[] => {
-  const mutations: ListMutation[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < oldArr.length || j < newArr.length) {
-    if (
-      i < oldArr.length &&
-      j < newArr.length &&
-      isEqual(oldArr[i], newArr[j])
-    ) {
-      i++;
-      j++;
-    } else if (j < newArr.length) {
-      mutations.push({ kind: "insert", value: newArr[j], position: i });
-      j++;
-    } else {
-      mutations.push({ kind: "remove", removed: oldArr[i], position: i });
-      i++;
-    }
-  }
-  return mutations;
-};
+export const inverseChangeset = (changeset: FieldChangeset): FieldChangeset =>
+  mapObjectValues(changeset, (value) =>
+    inverseChange(normalizeValueChange(value)),
+  ) as Record<FieldKey, ValueChange>;
 
 const rebaseChange = (
   baseChange: ValueChange,
@@ -149,46 +126,46 @@ const rebaseChange = (
     );
   }
 
-  if (baseChange.op === "sequence" && change.op === "sequence") {
+  if (baseChange.op === "seq" && change.op === "seq") {
     // Rebase sequence mutations by applying base mutations first, then adjusting change mutations
     const rebasedMutations = change.mutations.map((mutation) => {
-      let adjustedPosition = mutation.position;
+      if (mutation[2] === undefined) {
+        return mutation;
+      }
+
+      let adjustedPosition = mutation[2];
 
       // Apply position adjustments based on base mutations that occur before this position
       for (const baseMutation of baseChange.mutations) {
-        if (
-          baseMutation.kind === "insert" &&
-          baseMutation.position <= adjustedPosition
-        ) {
+        const [kind, _, position] = baseMutation;
+        if (position === undefined) continue;
+
+        if (kind === "insert" && position <= adjustedPosition) {
           adjustedPosition++;
-        } else if (
-          baseMutation.kind === "remove" &&
-          baseMutation.position < adjustedPosition
-        ) {
+        } else if (kind === "remove" && position < adjustedPosition) {
           adjustedPosition--;
-        } else if (baseMutation.position === adjustedPosition) {
+        } else if (position === adjustedPosition) {
           // Conflict: both base and change operate on the same position
-          if (baseMutation.kind === "remove" && mutation.kind === "remove") {
+          const mutKind = mutation[0];
+          if (kind === "remove" && mutKind === "remove") {
             assertFailed(
               `Cannot rebase remove operation at position ${adjustedPosition}: both base and change remove from the same position`,
             );
           }
           // For add vs add or add vs remove, we might allow it, but for now, let's be strict
-          if (baseMutation.kind === mutation.kind) {
+          if (kind === mutKind) {
             assertFailed(
-              `Cannot rebase ${mutation.kind} operation at position ${adjustedPosition}: conflicting operations at the same position`,
+              `Cannot rebase ${mutKind} operation at position ${adjustedPosition}: conflicting operations at the same position`,
             );
           }
         }
       }
 
-      return {
-        ...mutation,
-        position: adjustedPosition,
-      };
+      const [kind, value] = mutation;
+      return [kind, value, adjustedPosition] as ListMutation;
     });
 
-    return { op: "sequence", mutations: rebasedMutations };
+    return { op: "seq", mutations: rebasedMutations };
   }
 
   return change;
@@ -202,8 +179,11 @@ export const rebaseChangeset = (
     (acc, [attributeKey, change]) => {
       const key = attributeKey as FieldKey;
       const baseChange = base[key];
+      const normalizedChange = normalizeValueChange(change);
 
-      acc[key] = baseChange ? rebaseChange(baseChange, change) : change;
+      acc[key] = baseChange
+        ? rebaseChange(normalizeValueChange(baseChange), normalizedChange)
+        : normalizedChange;
 
       return acc;
     },
@@ -217,45 +197,47 @@ export const applyChange = (
 ): FieldValue => {
   switch (change.op) {
     case "set": {
-      if (current) {
+      if (current !== null && current !== undefined) {
         assertEqual(current, change.previous, "change field");
       } else {
         assertUndefined(change.previous);
       }
       return change.value ?? null;
     }
-    case "sequence": {
-      let result = current;
+    case "seq": {
+      let result = current ?? [];
       for (const mutation of change.mutations) {
-        if (mutation.kind === "insert") {
+        const [mutKind, mutValue, mutPos] = mutation;
+        if (mutKind === "insert") {
           assertType(
             result,
             (it): it is FieldValue[] => Array.isArray(it),
             "attribute",
           );
           const arr = [...result];
-          if (isEqual(arr[mutation.position], mutation.value))
-            arr.splice(mutation.position, 1);
-          else arr.splice(mutation.position, 0, mutation.value);
+          const pos = mutPos ?? arr.length;
+          if (isEqual(arr[pos], mutValue)) arr.splice(pos, 1);
+          else arr.splice(pos, 0, mutValue);
           result = arr;
-        } else if (mutation.kind === "remove") {
+        } else if (mutKind === "remove") {
           assertType(
             result,
             (it): it is FieldValue[] => Array.isArray(it),
             "attribute",
           );
           const arr = [...result];
-          if (mutation.position >= arr.length) {
+          const pos = mutPos ?? arr.length - 1;
+          if (pos >= arr.length) {
             assertFailed(
-              `Remove mutation position ${mutation.position} is out of bounds for array of length ${arr.length}`,
+              `Remove mutation position ${pos} is out of bounds for array of length ${arr.length}`,
             );
           }
-          if (!isEqual(arr[mutation.position], mutation.removed)) {
+          if (!isEqual(arr[pos], mutValue)) {
             assertFailed(
-              `Remove mutation expected ${JSON.stringify(mutation.removed)} at position ${mutation.position}, but found ${JSON.stringify(arr[mutation.position])}`,
+              `Remove mutation expected ${JSON.stringify(mutValue)} at position ${pos}, but found ${JSON.stringify(arr[pos])}`,
             );
           }
-          arr.splice(mutation.position, 1);
+          arr.splice(pos, 1);
           result = arr;
         }
       }
@@ -270,7 +252,10 @@ export const applyChangeset = (
 ): Fieldset => {
   const applied = {} as Fieldset;
   for (const [key, change] of Object.entries(changeset)) {
-    applied[key as FieldKey] = applyChange(fields[key], change);
+    applied[key as FieldKey] = applyChange(
+      fields[key],
+      normalizeValueChange(change),
+    );
   }
   return { ...fields, ...applied };
 };
@@ -286,28 +271,38 @@ export const squashChange = (
     return { op: "set", value: change.value, previous: baseChange.previous };
   }
 
-  if (baseChange.op === "sequence" && change.op === "sequence") {
+  if (baseChange.op === "set" && change.op === "seq") {
+    const resultValue = applyChange(baseChange.value ?? null, change);
+    return { op: "set", value: resultValue, previous: baseChange.previous };
+  }
+
+  if (baseChange.op === "seq" && change.op === "seq") {
     // Squash sequences by normalizing mutations
     const combinedMutations = [...baseChange.mutations];
 
     for (const nextMutation of change.mutations) {
       // First, check for direct cancellation without position adjustment
       let cancelled = false;
-      if (nextMutation.kind === "remove") {
+      const [nextKind, nextVal, nextPos] = nextMutation;
+      if (nextKind === "remove") {
         const cancelIndex = combinedMutations.findIndex(
-          (m) =>
-            m.kind === "insert" &&
-            m.position === nextMutation.position &&
-            isEqual(m.value, nextMutation.removed),
+          ([kind, value, position]) =>
+            kind === "insert" &&
+            (position === nextPos ||
+              (position === undefined && nextPos === undefined)) &&
+            isEqual(value, nextVal),
         );
 
         if (cancelIndex !== -1) {
           // Remove the cancelling add operation
           combinedMutations.splice(cancelIndex, 1);
           // Adjust positions of subsequent mutations
-          for (let i = cancelIndex; i < combinedMutations.length; i++) {
-            if (combinedMutations[i]!.position > nextMutation.position) {
-              combinedMutations[i]!.position--;
+          if (nextPos !== undefined) {
+            for (let i = cancelIndex; i < combinedMutations.length; i++) {
+              const [kind, val, pos] = combinedMutations[i]!;
+              if (pos !== undefined && pos > nextPos) {
+                combinedMutations[i] = [kind, val, pos - 1] as ListMutation;
+              }
             }
           }
           cancelled = true;
@@ -315,32 +310,28 @@ export const squashChange = (
       }
 
       if (!cancelled) {
-        // Adjust position based on prior mutations in the combined sequence
-        let adjustedPosition = nextMutation.position;
-        for (let i = 0; i < combinedMutations.length; i++) {
-          const baseMutation = combinedMutations[i]!;
-          if (
-            baseMutation.kind === "insert" &&
-            baseMutation.position <= adjustedPosition
-          ) {
-            adjustedPosition++;
-          } else if (
-            baseMutation.kind === "remove" &&
-            baseMutation.position < adjustedPosition
-          ) {
-            adjustedPosition--;
+        if (nextPos === undefined) {
+          combinedMutations.push(nextMutation);
+        } else {
+          // Adjust position based on prior mutations in the combined sequence
+          let adjustedPosition = nextPos;
+          for (let i = 0; i < combinedMutations.length; i++) {
+            const [baseKind, _, basePos] = combinedMutations[i]!;
+            if (basePos === undefined) continue;
+            if (baseKind === "insert" && basePos <= adjustedPosition) {
+              adjustedPosition++;
+            } else if (baseKind === "remove" && basePos < adjustedPosition) {
+              adjustedPosition--;
+            }
           }
-        }
 
-        // Add the mutation with adjusted position
-        combinedMutations.push({
-          ...nextMutation,
-          position: adjustedPosition,
-        });
+          // Add the mutation with adjusted position
+          combinedMutations.push([nextKind, nextVal, adjustedPosition]);
+        }
       }
     }
 
-    return { op: "sequence", mutations: combinedMutations };
+    return { op: "seq", mutations: combinedMutations };
   }
 
   assertFailed(`Cannot squash ${baseChange.op} and ${change.op} operations`);
@@ -352,32 +343,29 @@ const squashChangesets = (
 ): FieldChangeset => {
   const squashedChanges = { ...base };
   for (const [key, change] of Object.entries(changeset)) {
+    const normalizedChange = normalizeValueChange(change);
     if (squashedChanges[key]) {
-      const squashed = squashChange(squashedChanges[key], change);
+      const squashed = squashChange(
+        normalizeValueChange(squashedChanges[key]),
+        normalizedChange,
+      );
       if (squashed === null) {
         delete squashedChanges[key];
       } else {
         squashedChanges[key] = squashed;
       }
     } else {
-      squashedChanges[key] = change;
+      squashedChanges[key] = normalizedChange;
     }
   }
 
   // Filter out attributes with empty mutation sequences
-  return filterObjectValues(
-    squashedChanges,
-    (change) => !(change.op === "sequence" && change.mutations.length === 0),
-  );
+  return filterObjectValues(squashedChanges, (change) => {
+    const normalized = normalizeValueChange(change);
+    return !(normalized.op === "seq" && normalized.mutations.length === 0);
+  });
 };
 export default squashChangesets;
-
-export const changesetForNewEntity = (fields: Fieldset): FieldChangeset => {
-  return mapObjectValues(fields, (value) => ({
-    op: "set",
-    value,
-  })) as FieldChangeset;
-};
 
 export type FieldChangeInput = FieldValue | ListMutation | ListMutation[];
 export type FieldChangesetInput = Record<FieldKey, FieldChangeInput>;
@@ -407,12 +395,14 @@ export const isEntityUpdate = <N extends NamespaceEditable>(
 export const isListMutation = (
   input: FieldChangeInput,
 ): input is ListMutation =>
-  input != null &&
-  typeof input === "object" &&
-  "kind" in input &&
-  ("insert" === input.kind || "remove" === input.kind);
+  Array.isArray(input) &&
+  input.length >= 2 &&
+  input.length <= 3 &&
+  (input[0] === "insert" || input[0] === "remove");
 
 export const isListMutationArray = (
   input: FieldChangeInput,
 ): input is ListMutation[] =>
-  Array.isArray(input) && input.every((item) => isListMutation(item));
+  Array.isArray(input) &&
+  input.length > 0 &&
+  input.every((item) => item !== undefined && isListMutation(item));

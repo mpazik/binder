@@ -1,20 +1,20 @@
 import {
-  parse,
-  startOfDay,
-  endOfDay,
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  startOfYear,
-  endOfYear,
-  isValid,
-  intervalToDuration,
-  format,
   addDays,
   addMonths,
   addWeeks,
   addYears,
+  endOfDay,
+  endOfMonth,
+  endOfWeek,
+  endOfYear,
+  format,
+  intervalToDuration,
+  isValid,
+  parse,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  startOfYear,
 } from "date-fns";
 import type { Brand } from "./type";
 import type { Comparator } from "./function";
@@ -25,8 +25,9 @@ export { addDays, addMonths, addWeeks, addYears };
 /**
  * Branded type for Unix epoch timestamps (milliseconds since Jan 1 1970)
  */
-export type EpochTimestamp = Brand<number, "timestamp">;
-export type IsoTimestamp = Brand<string, "iso-timestamp">;
+export type EpochTimestamp = Brand<number, "EpochTimestamp">;
+export type IsoTimestamp = Brand<string, "IsoTimestamp">;
+export type IsoDate = Brand<string, "IsoDate">;
 
 export const newTimestamp = (
   timestamp?: string | Date | number,
@@ -66,8 +67,12 @@ export const formatRelativeDate = (date: Date | string) => {
   return formatDate(dateObj);
 };
 
+export const isIsoDate = (value: string): value is IsoDate => {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+};
+
 export const isIsoTimestamp = (value: string): value is IsoTimestamp => {
-  return value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) !== null;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value);
 };
 
 export const parseIsoTimestamps = <T extends object = object>(

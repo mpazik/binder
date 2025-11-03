@@ -17,6 +17,7 @@ export type Result<T, E = ErrorObject> = Ok<T> | Err<E>;
 
 export const ok = <T>(data: T): Ok<T> => ({ data });
 export const err = <E>(error: E): Err<E> => ({ error });
+export const okVoid: Ok<void> = ok(undefined);
 
 export const isOk = <T, E>(result: Result<T, E>): result is Ok<T> => {
   return "data" in result;

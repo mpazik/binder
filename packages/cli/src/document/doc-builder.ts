@@ -16,7 +16,7 @@ import type {
 } from "@binder/db";
 import { Log } from "../log.ts";
 import { type SlimAST } from "./markdown.ts";
-import { parseStringQuery } from "./query.ts";
+import { parseStringQuery, stringifyQuery } from "./query.ts";
 import {
   compileTemplate,
   DEFAULT_DATAVIEW_TEMPLATE,
@@ -43,8 +43,7 @@ export const fetchDocumentNodes = async (
 
   const buildNestedNode = async (node: Fieldset): Promise<FieldsetNested> => {
     if (node.type === "Dataview") {
-      const queryParams = parseStringQuery(node.query as string);
-      const searchResult = await kg.search(queryParams);
+      const searchResult = await kg.search(node.query as any);
       const data = isErr(searchResult) ? [] : searchResult.data.items;
       return { ...node, data };
     }
@@ -167,11 +166,10 @@ export const buildAstDoc = async (
         ];
       case "Dataview": {
         const data = (node.data as Fieldset[]) || [];
-        const queryParams = parseStringQuery(node.query as string);
-        const searchResult = await kg.search(queryParams);
+        const searchResult = await kg.search(node.query as any);
 
         const attributes: Record<string, string> = {
-          query: node.query as string,
+          query: stringifyQuery(node.query as any),
         };
         if (node.template) {
           attributes.template = node.template as string;
@@ -334,8 +332,9 @@ export const deconstructAstDocument = (ast: SlimAST): Result<Fieldset> => {
       }
       case "containerDirective": {
         if (node.name === "dataview") {
-          const query = node.attributes?.query;
-          if (query) {
+          const queryString = node.attributes?.query;
+          if (queryString) {
+            const query = parseStringQuery(queryString);
             const dataview: Fieldset = { type: "Dataview", query };
             const template = node.attributes?.template;
             if (template) {

@@ -1,5 +1,9 @@
 ## Extension Proposal
 
+This document extends the base query format with advanced features for logical operations, search, and aggregations. All
+operators follow the naming convention: verbs or action-oriented names that describe what the operation does (e.g.,
+`count`, `sum`, `match`, `search`).
+
 ### Logical Operators
 
 - `$and` - All conditions must match (implicit at root level)
@@ -14,9 +18,10 @@ The `$` prefix is needed to avoid conflict with user fields which those names.
 - `similar` - Vector similarity search (semantic/embedding-based)
 - `search` - Hybrid search (with `type`: `"fulltext"`, `"vector"`, or `"hybrid"`)
 
-### Aggregation Operators (Computed Fields)
+### Computed Fields
 
-Computed fields are defined inline in `includes` and calculated at query time. They can be used in filters and orderBy.
+Computed fields are defined in a separate `computed` section and calculated at query time. They can be referenced in
+`filters`, `orderBy`, and optionally included in results via `includes`.
 
 **Count:** `count`
 **Numeric:** `sum`, `avg`, `min`, `max`
@@ -24,14 +29,20 @@ Computed fields are defined inline in `includes` and calculated at query time. T
 **Boolean:** `every`, `some`
 **Date:** `earliest`, `latest`
 
+#### Design Rationale
+
+Separating computed field definitions from result selection allows:
+
+- Filtering/sorting by computed values without including them in results
+- Clear separation between field definition and selection
+- Explicit control over response payload
+- LLM-friendly predictability (what's in `includes` = what's in response)
+
 ### Complete Example
 
 ```json
 {
-  "includes": {
-    "title": true,
-    "status": true,
-    
+  "computed": {
     "relevance": {
       "op": "search",
       "type": "hybrid",
@@ -39,7 +50,6 @@ Computed fields are defined inline in `includes` and calculated at query time. T
       "fields": ["title", "description"],
       "relations": { "comments": ["content"] }
     },
-    
     "commentCount": { "op": "count", "relation": "comments" },
     "approvedComments": { 
       "op": "count", 
@@ -50,8 +60,17 @@ Computed fields are defined inline in `includes` and calculated at query time. T
     "totalHours": { "op": "sum", "relation": "timeEntries", "field": "hours" },
     "tagList": { "op": "concat", "relation": "tags", "field": "name", "separator": ", " },
     "allDone": { "op": "every", "relation": "subtasks", "field": "completed" },
-    "lastUpdate": { "op": "latest", "relation": "comments", "field": "createdAt" },
-    
+    "lastUpdate": {
+      "op": "latest",
+      "relation": "comments",
+      "field": "createdAt"
+    }
+  },
+  "includes": {
+    "title": true,
+    "status": true,
+    "commentCount": true,
+    "avgRating": true,
     "project": { "includes": { "name": true } }
   },
   "filters": {
@@ -79,16 +98,13 @@ Computed fields are defined inline in `includes` and calculated at query time. T
     {
       "title": "Fix deployment script",
       "status": "open",
-      "relevance": 0.95,
       "commentCount": 12,
-      "approvedComments": 8,
       "avgRating": 4.2,
-      "totalHours": 15.5,
-      "tagList": "urgent, deployment, devops",
-      "allDone": false,
-      "lastUpdate": "2024-01-15T10:30:00Z",
       "project": { "name": "DevOps" }
     }
   ]
 }
 ```
+
+Note: `relevance`, `approvedComments`, `totalHours`, `tagList`, `allDone`, and `lastUpdate` are computed but not
+included in the response because they're omitted from `includes`.
