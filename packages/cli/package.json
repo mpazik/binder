@@ -4,9 +4,14 @@
   "type": "module",
   "main": "./src/index.ts",
   "bin": {
-    "binder": "./src/index.ts"
+    "binder": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "bun run build.ts",
+    "build:prod": "bun run build.ts --prod",
     "format": "bun prettier --write --ignore-path ../../.prettierignore .",
     "lint": "bun eslint . --fix",
     "typecheck": "tsc --noEmit",

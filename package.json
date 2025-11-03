@@ -9,6 +9,8 @@
     "packages/*"
   ],
   "scripts": {
+    "build": "bun --filter @binder/cli build",
+    "build:prod": "bun --filter @binder/cli build:prod",
     "dev": "bun run --conditions=development packages/cli/src/index.ts",
     "clean": "bun --filter '*' exec rm -rf dist dist-ssr node_modules",
     "format": "prettier --write .",

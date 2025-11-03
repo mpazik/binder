@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
@@ -10,6 +11,7 @@ import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
 import { Log } from "./log";
 import * as UI from "./ui";
+import { BINDER_VERSION } from "./build-time";
 
 const cancel = new AbortController();
 
@@ -25,13 +27,13 @@ process.on("uncaughtException", (e) => {
   });
 });
 
-const version = "0.0.0";
 const cli = yargs(hideBin(process.argv))
   .scriptName("binder")
   .help("help", "show help")
-  .version("version", "show version number", version)
+  .version("version", "show version number", BINDER_VERSION)
   .alias("version", "v")
   .completion("completion", "generate bash/zsh completion script")
+  .exitProcess(false)
   .option("print-logs", {
     describe: "print logs to stderr",
     type: "boolean",
@@ -41,13 +43,8 @@ const cli = yargs(hideBin(process.argv))
     type: "string",
     choices: ["DEBUG", "INFO", "WARN", "ERROR"],
   })
-  .middleware(async (opts) => {
-    Log.info("binder-cli", {
-      version: version,
-      args: process.argv.slice(2),
-    });
-  })
   .usage(UI.logo())
+  .wrap(null)
   .command(NodeCommand)
   .command(TransactionCommand)
   .command(SearchCommand)
