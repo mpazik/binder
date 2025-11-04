@@ -1,8 +1,9 @@
+import { join } from "path";
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
 import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { readTransactionLog, removeLastFromLog } from "../transaction-log.ts";
-import { UNDO_LOG_PATH } from "../config.ts";
+import { UNDO_LOG_FILE } from "../config.ts";
 import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
@@ -17,7 +18,8 @@ export const redoHandler: CommandHandlerWithDb<{
       ),
     );
 
-  const undoLogResult = readTransactionLog(UNDO_LOG_PATH);
+  const undoLogPath = join(config.paths.binder, UNDO_LOG_FILE);
+  const undoLogResult = readTransactionLog(undoLogPath);
   if (isErr(undoLogResult)) return undoLogResult;
 
   const undoLog = undoLogResult.data;
@@ -69,12 +71,12 @@ export const redoHandler: CommandHandlerWithDb<{
     if (isErr(applyResult)) return applyResult;
   }
 
-  const removeResult = removeLastFromLog(UNDO_LOG_PATH, args.steps);
+  const removeResult = removeLastFromLog(undoLogPath, args.steps);
   if (isErr(removeResult)) return removeResult;
 
   const renderResult = await renderDocs(
     kg,
-    config.docsPath,
+    config.paths.docs,
     config.dynamicDirectories,
   );
   if (isErr(renderResult)) {

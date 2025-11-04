@@ -1,9 +1,10 @@
+import { join } from "path";
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
 import type { Transaction, TransactionRef } from "@binder/db";
 import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { logTransaction } from "../transaction-log.ts";
-import { UNDO_LOG_PATH } from "../config.ts";
+import { UNDO_LOG_FILE } from "../config.ts";
 import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
@@ -60,13 +61,14 @@ export const undoHandler: CommandHandlerWithDb<{
   const rollbackResult = await kg.rollback(args.steps, currentId);
   if (isErr(rollbackResult)) return rollbackResult;
 
+  const undoLogPath = join(config.paths.binder, UNDO_LOG_FILE);
   for (const tx of transactionsToUndo) {
-    logTransaction(tx, UNDO_LOG_PATH);
+    logTransaction(tx, undoLogPath);
   }
 
   const renderResult = await renderDocs(
     kg,
-    config.docsPath,
+    config.paths.docs,
     config.dynamicDirectories,
   );
   if (isErr(renderResult)) {

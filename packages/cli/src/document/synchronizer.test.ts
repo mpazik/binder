@@ -5,7 +5,8 @@ import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { type KnowledgeGraph, openKnowledgeGraph } from "@binder/db";
 import { getTestDatabase, mockTask1Node, mockTask1Uid } from "@binder/db/mocks";
-import { BINDER_DIR, type BinderConfig } from "../config.ts";
+import { BINDER_DIR } from "../config.ts";
+import type { Config } from "../bootstrap.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
   mockCoreTransactionInputForDocs,
@@ -18,10 +19,15 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 describe("synchronizer", () => {
   let kg: KnowledgeGraph;
-  const config: BinderConfig = {
+  const docsPath = join(__dirname, "../../test/data");
+  const config: Config = {
     author: "test",
     dynamicDirectories: [],
-    docsPath: join(__dirname, "../../test/data"),
+    paths: {
+      root: join(__dirname, "../../test"),
+      binder: join(__dirname, "../../test", BINDER_DIR),
+      docs: docsPath,
+    },
   };
 
   beforeEach(async () => {
@@ -34,7 +40,7 @@ describe("synchronizer", () => {
 
   describe("parseFile", () => {
     it("parses file and returns file and kg representations", async () => {
-      const filePath = join(config.docsPath, "simple.md");
+      const filePath = join(config.paths.docs, "simple.md");
       const markdown = await Bun.file(filePath).text();
 
       const result = throwIfError(
@@ -119,7 +125,7 @@ describe("synchronizer", () => {
     });
 
     it("parses task from dynamic directory", async () => {
-      const configWithDynamicDir: BinderConfig = {
+      const configWithDynamicDir: Config = {
         ...config,
         dynamicDirectories: [
           {
@@ -130,7 +136,7 @@ describe("synchronizer", () => {
       };
 
       const filePath = join(
-        configWithDynamicDir.docsPath,
+        configWithDynamicDir.paths.docs,
         "tasks",
         "task-implement-user-auth.md",
       );
@@ -167,7 +173,7 @@ ${mockTask1Node.description}`;
   });
 
   describe("synchronizeFile", async () => {
-    const filePath = join(config.docsPath, "simple.md");
+    const filePath = join(config.paths.docs, "simple.md");
     const originalMarkdown = await Bun.file(filePath).text();
 
     it("generates no changesets when dataview items match query results", async () => {

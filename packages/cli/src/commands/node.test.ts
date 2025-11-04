@@ -39,7 +39,11 @@ describe("node commands", () => {
         db,
         config: {
           author: "test-user",
-          docsPath: "./docs",
+          paths: {
+            root: "/test",
+            binder: "/test/.binder",
+            docs: "/test/docs",
+          },
           dynamicDirectories: [],
         },
         log: Log,

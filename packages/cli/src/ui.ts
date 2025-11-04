@@ -28,7 +28,11 @@ export const logo = () => {
     " █▙▄▟▛ █▌ █▌ ▐█ ▜▙▄▟▛ ▜▙▄▄▆ ▐█   ",
   ];
 
-  return Style.TEXT_DIM + binderCondensed.join(EOL) + Style.TEXT_NORMAL;
+  return (
+    Style.TEXT_DIM +
+    binderCondensed.map((line) => "\u00A0\u00A0" + line).join(EOL) +
+    Style.TEXT_NORMAL
+  );
 };
 
 export function println(...message: string[]) {
@@ -46,12 +50,85 @@ export async function input(prompt: string): Promise<string> {
     output: process.stdout,
   });
 
-  return rl.question(prompt);
+  const answer = await rl.question(prompt);
+  rl.close();
+  return answer;
 }
 
 export function error(message: string) {
   println(Style.TEXT_DANGER_BOLD + "Error: " + Style.TEXT_NORMAL + message);
 }
+
+export const printError = (error: {
+  key: string;
+  message?: string;
+  data?: object;
+}) => {
+  println(
+    Style.TEXT_DANGER_BOLD +
+      "Error: " +
+      Style.TEXT_NORMAL +
+      (error.message || error.key),
+  );
+
+  if (!error.data || Object.keys(error.data).length === 0) return;
+
+  const formatValue = (value: unknown, indent: string): string => {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean")
+      return String(value);
+    if (value === null || value === undefined) return String(value);
+    if (Array.isArray(value)) {
+      if (value.length === 0) return "[]";
+      return (
+        "\n" +
+        value
+          .map((item, i) => {
+            const itemStr = formatValue(item, indent + "  ");
+            return `${indent}  [${i}] ${itemStr}`;
+          })
+          .join("\n")
+      );
+    }
+    if (typeof value === "object") {
+      const entries = Object.entries(value);
+      if (entries.length === 0) return "{}";
+      return (
+        "\n" +
+        entries
+          .map(([k, v]) => {
+            const valStr = formatValue(v, indent + "  ");
+            return `${indent}  ${Style.TEXT_INFO}${k}${Style.TEXT_NORMAL}: ${valStr}`;
+          })
+          .join("\n")
+      );
+    }
+    return String(value);
+  };
+
+  if (
+    error.key === "changeset-input-process-failed" &&
+    error.data &&
+    "errors" in error.data
+  ) {
+    const errors = (error.data as any).errors as any[];
+    if (Array.isArray(errors) && errors.length > 0) {
+      println(Style.TEXT_DANGER + "Validation errors:" + Style.TEXT_NORMAL);
+      for (const validationError of errors) {
+        const message =
+          validationError.fieldKey && validationError.message
+            ? `Field '${Style.TEXT_INFO}${validationError.fieldKey}${Style.TEXT_NORMAL}': ${validationError.message}`
+            : formatValue(validationError, "    ");
+        println(`  ${Style.TEXT_DANGER}•${Style.TEXT_NORMAL} ${message})}`);
+      }
+      return;
+    }
+  }
+
+  println(Style.TEXT_DIM + "Error details:" + Style.TEXT_NORMAL);
+  const formatted = formatValue(error.data, "");
+  println(formatted);
+};
 
 export const printData = (data: unknown) => {
   const yamlOutput = YAML.stringify(data, {

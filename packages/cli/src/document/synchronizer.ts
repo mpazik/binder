@@ -6,7 +6,7 @@ import type {
   TransactionInput,
 } from "@binder/db";
 import { createError, err, isErr, ok, type ResultAsync } from "@binder/utils";
-import type { BinderConfig } from "../config.ts";
+import type { Config } from "../bootstrap.ts";
 import { parseMarkdown } from "./markdown.ts";
 import {
   DEFAULT_DYNAMIC_TEMPLATE_STRING,
@@ -21,10 +21,10 @@ export { diffNodeTrees } from "./tree-diff.ts";
 export const parseFile = async (
   markdown: string,
   filePath: string,
-  config: BinderConfig,
+  config: Config,
   kg: KnowledgeGraph,
 ): ResultAsync<{ file: FieldsetNested; kg: FieldsetNested }> => {
-  const relativePath = relative(config.docsPath, filePath);
+  const relativePath = relative(config.paths.docs, filePath);
 
   const searchResult = await kg.search({
     filters: { path: relativePath },
@@ -106,7 +106,7 @@ export const parseFile = async (
 export const synchronizeFile = async (
   markdown: string,
   filePath: string,
-  config: BinderConfig,
+  config: Config,
   kg: KnowledgeGraph,
 ): ResultAsync<TransactionInput | null> => {
   const parseResult = await parseFile(markdown, filePath, config, kg);

@@ -1,6 +1,14 @@
 import { mkdirSync } from "fs";
+import { join } from "path";
 import * as YAML from "yaml";
-import { errorToObject, isErr, type Result, tryCatch } from "@binder/utils";
+import {
+  errorToObject,
+  isErr,
+  ok,
+  type Result,
+  type ResultAsync,
+  tryCatch,
+} from "@binder/utils";
 import {
   type Database,
   type KnowledgeGraph,
@@ -13,18 +21,27 @@ import {
   BINDER_DIR,
   type BinderConfig,
   BinderConfigSchema,
-  CONFIG_PATH,
-  DB_PATH,
-  TRANSACTION_LOG_PATH,
-  UNDO_LOG_PATH,
+  CONFIG_FILE,
+  DB_FILE,
+  TRANSACTION_LOG_FILE,
+  UNDO_LOG_FILE,
 } from "./config.ts";
 import * as ui from "./ui.ts";
 import { clearTransactionLog, logTransaction } from "./transaction-log.ts";
 import { renderDocs } from "./document/repository.ts";
 
-const loadConfig = async (): Promise<Result<BinderConfig>> => {
+export type Config = Omit<BinderConfig, "docsPath"> & {
+  paths: {
+    root: string;
+    binder: string;
+    docs: string;
+  };
+};
+
+const loadConfig = async (root: string): ResultAsync<Config> => {
+  const configPath = join(root, BINDER_DIR, CONFIG_FILE);
   const fileResult = await tryCatch(async () => {
-    const bunFile = Bun.file(CONFIG_PATH);
+    const bunFile = Bun.file(configPath);
     if (!(await bunFile.exists())) {
       return null;
     }
@@ -36,11 +53,25 @@ const loadConfig = async (): Promise<Result<BinderConfig>> => {
 
   const rawConfig = fileResult.data ?? {};
 
-  return tryCatch(() => BinderConfigSchema.parse(rawConfig), errorToObject);
+  const loadedConfig = tryCatch(
+    () => BinderConfigSchema.parse(rawConfig),
+    errorToObject,
+  );
+  if (isErr(loadedConfig)) return loadedConfig;
+
+  const { docsPath, ...rest } = loadedConfig.data;
+  return ok({
+    ...rest,
+    paths: {
+      root,
+      binder: join(root, BINDER_DIR),
+      docs: join(root, docsPath),
+    },
+  });
 };
 
 type CommandContext = {
-  config: BinderConfig;
+  config: Config;
   log: typeof Log;
   ui: typeof ui;
 };
@@ -62,7 +93,7 @@ export const bootstrap = <TArgs>(
   handler: CommandHandler<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return async (args: TArgs) => {
-    const configResult = await loadConfig();
+    const configResult = await loadConfig(BINDER_DIR);
     if (isErr(configResult)) {
       ui.error(`Failed to load config: ${configResult.error.message}`);
       Log.error("Config loading failed", { error: configResult.error });
@@ -77,8 +108,7 @@ export const bootstrap = <TArgs>(
     });
 
     if (isErr(result)) {
-      ui.error(result.error.message || "Command failed");
-      Log.error("Command failed", { error: result.error });
+      ui.printError(result.error);
       process.exit(1);
     }
 
@@ -92,25 +122,30 @@ export const bootstrapWithDb = <TArgs>(
   handler: CommandHandlerWithDb<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
-    mkdirSync(BINDER_DIR, { recursive: true });
+    const { paths } = context.config;
+    mkdirSync(paths.binder, { recursive: true });
 
-    const dbResult = openDb({ path: DB_PATH, migrate: true });
+    const dbPath = join(paths.binder, DB_FILE);
+    const dbResult = openDb({ path: dbPath, migrate: true });
     if (isErr(dbResult)) {
       Log.error("Failed to open database", { error: dbResult.error });
       process.exit(1);
     }
 
     const db = dbResult.data;
+    const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
+    const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
+
     const kg = openKnowledgeGraph(db, {
       onTransactionSaved: (transaction: Transaction) => {
-        logTransaction(transaction, TRANSACTION_LOG_PATH);
-        const clearResult = clearTransactionLog(UNDO_LOG_PATH);
+        logTransaction(transaction, transactionLogPath);
+        const clearResult = clearTransactionLog(undoLogPath);
         if (isErr(clearResult)) {
           Log.error("Failed to clear undo log", { error: clearResult.error });
         }
         renderDocs(
           kg,
-          context.config.docsPath,
+          context.config.paths.docs,
           context.config.dynamicDirectories,
         ).then((renderResult) => {
           if (isErr(renderResult)) {
