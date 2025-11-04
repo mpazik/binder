@@ -5,6 +5,7 @@ import {
   errorToObject,
   isErr,
   ok,
+  okVoid,
   type Result,
   type ResultAsync,
   tryCatch,
@@ -30,6 +31,7 @@ import {
 import * as ui from "./ui.ts";
 import { clearTransactionLog, logTransaction } from "./transaction-log.ts";
 import { renderDocs } from "./document/repository.ts";
+import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 
 export type Config = Omit<BinderConfig, "docsPath"> & {
   paths: {
@@ -71,13 +73,14 @@ const loadConfig = async (root: string): ResultAsync<Config> => {
   });
 };
 
-type CommandContext = {
+export type CommandContext = {
   config: Config;
   log: typeof Log;
   ui: typeof ui;
+  fs: FileSystem;
 };
 
-type CommandContextWithDb = CommandContext & {
+export type CommandContextWithDb = CommandContext & {
   db: Database;
   kg: KnowledgeGraph;
 };
@@ -94,7 +97,8 @@ export const bootstrap = <TArgs>(
   handler: CommandHandler<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return async (args: TArgs) => {
-    const rootResult = findBinderRoot();
+    const fs = createRealFileSystem();
+    const rootResult = findBinderRoot(fs);
     if (isErr(rootResult)) {
       ui.error(`Failed to load binder workspace: ${rootResult.error.message}`);
       process.exit(1);
@@ -118,6 +122,7 @@ export const bootstrap = <TArgs>(
       log: Log,
       ui,
       args,
+      fs,
     });
 
     if (isErr(result)) {
@@ -135,7 +140,8 @@ export const bootstrapWithDb = <TArgs>(
   handler: CommandHandlerWithDb<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
-    const { paths } = context.config;
+    const { fs, config } = context;
+    const { paths } = config;
     mkdirSync(paths.binder, { recursive: true });
 
     const dbPath = join(paths.binder, DB_FILE);
@@ -146,27 +152,35 @@ export const bootstrapWithDb = <TArgs>(
     }
 
     const db = dbResult.data;
-    const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
-    const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
 
     const kg = openKnowledgeGraph(db, {
       onTransactionSaved: (transaction: Transaction) => {
-        logTransaction(transaction, transactionLogPath);
-        const clearResult = clearTransactionLog(undoLogPath);
-        if (isErr(clearResult)) {
-          Log.error("Failed to clear undo log", { error: clearResult.error });
-        }
-        renderDocs(
-          kg,
-          context.config.paths.docs,
-          context.config.dynamicDirectories,
-        ).then((renderResult) => {
-          if (isErr(renderResult)) {
-            Log.error("Failed to re-render docs after transaction", {
-              error: renderResult.error,
-            });
-          }
-        });
+        logTransaction(fs, paths.binder, transaction, TRANSACTION_LOG_FILE)
+          .then((result) => {
+            if (isErr(result)) {
+              Log.error("Failed to log transaction", {
+                error: result.error,
+              });
+              return okVoid;
+            }
+            return clearTransactionLog(fs, paths.binder, UNDO_LOG_FILE);
+          })
+          .then((result) => {
+            if (isErr(result)) {
+              Log.error("Failed to clear undo log", {
+                error: result.error,
+              });
+            }
+          });
+        renderDocs(kg, config.paths.docs, config.dynamicDirectories).then(
+          (renderResult) => {
+            if (isErr(renderResult)) {
+              Log.error("Failed to re-render docs after transaction", {
+                error: renderResult.error,
+              });
+            }
+          },
+        );
       },
     });
 
@@ -174,6 +188,7 @@ export const bootstrapWithDb = <TArgs>(
       ...context,
       db,
       kg,
+      fs,
     });
   });
 };

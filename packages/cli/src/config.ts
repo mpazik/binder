@@ -1,7 +1,7 @@
 import { dirname, join, resolve } from "path";
-import { existsSync } from "fs";
 import { z } from "zod";
 import { ok, type Result } from "@binder/utils";
+import type { FileSystem } from "./lib/filesystem.ts";
 
 const DEFAULT_DOCS_DIR = "./docs";
 const DEFAULT_AUTHOR = "cli-user";
@@ -29,14 +29,17 @@ export const BinderConfigSchema = z.object({
 
 export type BinderConfig = z.infer<typeof BinderConfigSchema>;
 
-export const findBinderRoot = (startPath?: string): Result<string | null> => {
+export const findBinderRoot = (
+  fs: FileSystem,
+  startPath?: string,
+): Result<string | null> => {
   let currentPath = resolve(startPath ?? process.cwd());
   const root = resolve("/");
 
   while (currentPath !== root) {
     const binderDirPath = join(currentPath, BINDER_DIR);
 
-    if (existsSync(binderDirPath)) {
+    if (fs.exists(binderDirPath)) {
       return ok(currentPath);
     }
 

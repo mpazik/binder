@@ -1,93 +1,161 @@
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 import type { Transaction } from "@binder/db";
 import {
   createError,
   err,
-  errorToObject,
   isErr,
   ok,
   type Result,
-  tryCatch,
+  type ResultAsync,
+  okVoid,
 } from "@binder/utils";
-import * as ui from "./ui.ts";
+import type { FileSystem } from "./lib/filesystem.ts";
+import { TRANSACTION_LOG_FILE } from "./config.ts";
 
-export const logTransaction = (
-  transaction: Transaction,
+const CHUNK_SIZE = 65536;
+
+const readLinesFromEnd = async function* (
+  fs: FileSystem,
   path: string,
-): void => {
-  const json = JSON.stringify(transaction);
-  const result = tryCatch(
-    () => appendFileSync(path, json + "\n"),
-    errorToObject,
-  );
+): AsyncGenerator<
+  Result<{ line: string; bytePositionBefore: number }>,
+  void,
+  unknown
+> {
+  const statResult = await fs.stat(path);
+  if (isErr(statResult)) {
+    yield err(
+      createError("file-read-error", "Failed to stat transaction log", {
+        path,
+        error: statResult.error,
+      }),
+    );
+    return;
+  }
 
-  if (isErr(result)) {
-    ui.error(`Failed to log transaction: ${result.error.message}`);
+  const fileSize = statResult.data.size;
+  if (fileSize === 0) return;
+
+  let position = fileSize;
+  let partialLine = "";
+  const encoder = new TextEncoder();
+
+  while (position > 0) {
+    const readStart = Math.max(position - CHUNK_SIZE, 0);
+    const sliceResult = await fs.slice(path, readStart, position);
+    if (isErr(sliceResult)) {
+      yield err(
+        createError("file-read-error", "Failed to read transaction log", {
+          path,
+          error: sliceResult.error,
+        }),
+      );
+      return;
+    }
+
+    const chunk = new TextDecoder().decode(sliceResult.data);
+    const chunkLines = chunk.split("\n");
+
+    if (position < fileSize) {
+      chunkLines[chunkLines.length - 1] =
+        chunkLines[chunkLines.length - 1]! + partialLine;
+    }
+
+    if (readStart > 0) {
+      partialLine = chunkLines[0]!;
+      chunkLines.shift();
+    }
+
+    let bytesProcessed = 0;
+    for (let i = chunkLines.length - 1; i >= 0; i--) {
+      const line = chunkLines[i]!;
+      const lineBytes = encoder.encode(line + "\n");
+      const trimmedLine = line.trim();
+
+      if (trimmedLine.length > 0) {
+        const bytePositionBefore = position - bytesProcessed - lineBytes.length;
+        yield ok({ line: trimmedLine, bytePositionBefore });
+      }
+      bytesProcessed += lineBytes.length;
+    }
+
+    position = readStart;
   }
 };
 
-export const readTransactionLog = (path: string): Result<Transaction[]> => {
-  if (!existsSync(path)) return ok([]);
-
-  const result = tryCatch(() => {
-    const content = readFileSync(path, "utf-8");
-    const lines = content
-      .trim()
-      .split("\n")
-      .filter((line) => line.length > 0);
-    return lines.map((line) => JSON.parse(line) as Transaction);
-  }, errorToObject);
-
-  if (isErr(result))
-    return err(
-      createError("file-read-error", "Failed to read transaction log", {
-        path,
-        error: result.error,
-      }),
-    );
-
-  return ok(result.data);
+export const logTransaction = async (
+  fs: FileSystem,
+  root: string,
+  transaction: Transaction,
+  file: string = TRANSACTION_LOG_FILE,
+): ResultAsync<void> => {
+  const json = JSON.stringify(transaction);
+  return fs.appendFile(join(root, file), json + "\n");
 };
 
-export const removeLastFromLog = (
-  path: string,
+export const readLastTransactions = async (
+  fs: FileSystem,
+  root: string,
   count: number,
-): Result<Transaction[]> => {
-  const readResult = readTransactionLog(path);
-  if (isErr(readResult)) return readResult;
+  file: string = TRANSACTION_LOG_FILE,
+): ResultAsync<Transaction[]> => {
+  const path = join(root, file);
+  if (!fs.exists(path)) return ok([]);
+  if (count === 0) return ok([]);
 
-  const transactions = readResult.data;
-  if (count > transactions.length)
+  const transactions: Transaction[] = [];
+  for await (const result of readLinesFromEnd(fs, path)) {
+    if (isErr(result)) return result;
+    const transaction = JSON.parse(result.data.line) as Transaction;
+    transactions.push(transaction);
+    if (transactions.length >= count) break;
+  }
+
+  return ok(transactions.reverse());
+};
+
+export const removeLastFromLog = async (
+  fs: FileSystem,
+  root: string,
+  count: number,
+  file: string = TRANSACTION_LOG_FILE,
+): ResultAsync<void> => {
+  const path = join(root, file);
+  if (!fs.exists(path)) return okVoid;
+
+  let truncatePosition = 0;
+  let transactionsFound = 0;
+
+  for await (const result of readLinesFromEnd(fs, path)) {
+    if (isErr(result)) return result;
+
+    transactionsFound++;
+    if (transactionsFound === count) {
+      truncatePosition = result.data.bytePositionBefore;
+      break;
+    }
+  }
+
+  if (count > transactionsFound)
     return err(
       createError(
         "invalid-count",
-        `Cannot remove ${count} transactions, only ${transactions.length} available in log`,
+        `Cannot remove ${count} transactions, only ${transactionsFound} available in log`,
       ),
     );
 
-  const removed = transactions.slice(-count);
-  const remaining = transactions.slice(0, -count);
-
-  const writeResult = tryCatch(() => {
-    const content = remaining.map((tx) => JSON.stringify(tx)).join("\n");
-    writeFileSync(path, remaining.length > 0 ? content + "\n" : "");
-  }, errorToObject);
-
-  if (isErr(writeResult))
-    return err(
-      createError("file-write-error", "Failed to write transaction log", {
-        path,
-        error: writeResult.error,
-      }),
-    );
-
-  return ok(removed);
+  return await fs.truncate(path, truncatePosition);
 };
 
-export const clearTransactionLog = (path: string): Result<void> => {
-  if (!existsSync(path)) return ok(undefined);
+export const clearTransactionLog = async (
+  fs: FileSystem,
+  root: string,
+  file: string = TRANSACTION_LOG_FILE,
+): ResultAsync<void> => {
+  const path = join(root, file);
+  if (!fs.exists(path)) return okVoid;
 
-  const result = tryCatch(() => writeFileSync(path, ""), errorToObject);
+  const result = fs.writeFile(path, "");
 
   if (isErr(result))
     return err(
@@ -97,5 +165,5 @@ export const clearTransactionLog = (path: string): Result<void> => {
       }),
     );
 
-  return ok(undefined);
+  return okVoid;
 };

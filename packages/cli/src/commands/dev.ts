@@ -1,4 +1,3 @@
-import { rmSync } from "fs";
 import type { Argv } from "yargs";
 import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
 import {
@@ -12,9 +11,9 @@ import { documentSchemaTransactionInput } from "../document/document-schema.ts";
 import { mockDocumentTransactionInput } from "../document/document.mock.ts";
 import { types } from "./types.ts";
 
-export const cleanupHandler: CommandHandler = async ({ ui }) => {
+export const cleanupHandler: CommandHandler = async ({ ui, fs }) => {
   const removeResult = tryCatch(() => {
-    rmSync(BINDER_DIR, { recursive: true, force: true });
+    fs.rm(BINDER_DIR, { recursive: true, force: true });
   }, errorToObject);
 
   if (isErr(removeResult)) return removeResult;

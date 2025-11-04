@@ -1,4 +1,3 @@
-import { join } from "path";
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
 import type { Transaction, TransactionRef } from "@binder/db";
@@ -10,7 +9,7 @@ import { types } from "./types.ts";
 
 export const undoHandler: CommandHandlerWithDb<{
   steps: number;
-}> = async ({ kg, ui, log, config, args }) => {
+}> = async ({ kg, ui, log, config, fs, args }) => {
   if (args.steps < 1)
     return err(
       createError(
@@ -61,9 +60,8 @@ export const undoHandler: CommandHandlerWithDb<{
   const rollbackResult = await kg.rollback(args.steps, currentId);
   if (isErr(rollbackResult)) return rollbackResult;
 
-  const undoLogPath = join(config.paths.binder, UNDO_LOG_FILE);
   for (const tx of transactionsToUndo) {
-    logTransaction(tx, undoLogPath);
+    await logTransaction(fs, config.paths.binder, tx, UNDO_LOG_FILE);
   }
 
   const renderResult = await renderDocs(

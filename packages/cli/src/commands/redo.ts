@@ -2,14 +2,14 @@ import { join } from "path";
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
 import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
-import { readTransactionLog, removeLastFromLog } from "../transaction-log.ts";
+import { readLastTransactions, removeLastFromLog } from "../transaction-log.ts";
 import { UNDO_LOG_FILE } from "../config.ts";
 import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
 export const redoHandler: CommandHandlerWithDb<{
   steps: number;
-}> = async ({ kg, ui, log, config, args }) => {
+}> = async ({ kg, ui, log, config, fs, args }) => {
   if (args.steps < 1)
     return err(
       createError(
@@ -18,8 +18,13 @@ export const redoHandler: CommandHandlerWithDb<{
       ),
     );
 
-  const undoLogPath = join(config.paths.binder, UNDO_LOG_FILE);
-  const undoLogResult = readTransactionLog(undoLogPath);
+  const undoLogResult = await readLastTransactions(
+    fs,
+    config.paths.binder,
+    args.steps,
+    UNDO_LOG_FILE,
+  );
+
   if (isErr(undoLogResult)) return undoLogResult;
 
   const undoLog = undoLogResult.data;
@@ -36,7 +41,7 @@ export const redoHandler: CommandHandlerWithDb<{
       ),
     );
 
-  const transactionsToRedo = undoLog.slice(-args.steps).reverse();
+  const transactionsToRedo = undoLog.reverse();
 
   const versionResult = await kg.version();
   if (isErr(versionResult)) return versionResult;
@@ -71,7 +76,12 @@ export const redoHandler: CommandHandlerWithDb<{
     if (isErr(applyResult)) return applyResult;
   }
 
-  const removeResult = removeLastFromLog(undoLogPath, args.steps);
+  const removeResult = await removeLastFromLog(
+    fs,
+    config.paths.binder,
+    args.steps,
+    UNDO_LOG_FILE,
+  );
   if (isErr(removeResult)) return removeResult;
 
   const renderResult = await renderDocs(

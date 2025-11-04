@@ -1,4 +1,3 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
@@ -13,6 +12,7 @@ import {
   findBinderRoot,
 } from "../config.ts";
 import * as ui from "../ui.ts";
+import { createRealFileSystem, type FileSystem } from "../lib/filesystem.ts";
 import { types } from "./types.ts";
 
 const GITIGNORE_CONTENT = `# Ignore everything in .binder except logs and config
@@ -30,10 +30,11 @@ const getAuthorNameFromGit = async (): Promise<string | undefined> => {
   if (isOk(gitResult)) return gitResult.data ?? undefined;
 };
 
-const isDirectoryEmpty = (path: string): boolean => {
-  if (!existsSync(path)) return true;
-  const files = readdirSync(path);
-  return files.length === 0;
+const isDirectoryEmpty = (fs: FileSystem, path: string): boolean => {
+  if (!fs.exists(path)) return true;
+  const filesResult = fs.readdir(path);
+  if (isErr(filesResult)) return false;
+  return filesResult.data.length === 0;
 };
 
 const initSetupHandler = async (args: {
@@ -41,8 +42,9 @@ const initSetupHandler = async (args: {
   author?: string;
 }): Promise<void> => {
   const currentDir = process.cwd();
+  const fs = createRealFileSystem();
 
-  const existingRootResult = findBinderRoot(currentDir);
+  const existingRootResult = findBinderRoot(fs, currentDir);
   if (isErr(existingRootResult)) {
     ui.error(
       `Failed to check for existing workspace: ${existingRootResult.error.message}`,
@@ -79,7 +81,7 @@ const initSetupHandler = async (args: {
       docsPath = input.trim() || DEFAULT_DOCS_PATH;
 
       const fullPath = join(currentDir, docsPath);
-      if (isDirectoryEmpty(fullPath)) break;
+      if (isDirectoryEmpty(fs, fullPath)) break;
 
       ui.error(
         `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
@@ -87,7 +89,7 @@ const initSetupHandler = async (args: {
     }
   } else {
     const fullPath = join(currentDir, docsPath);
-    if (!isDirectoryEmpty(fullPath)) {
+    if (!isDirectoryEmpty(fs, fullPath)) {
       ui.error(
         `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
       );
@@ -101,10 +103,7 @@ const initSetupHandler = async (args: {
   };
 
   const binderDirPath = join(currentDir, BINDER_DIR);
-  const mkdirResult = tryCatch(() => {
-    mkdirSync(binderDirPath, { recursive: true });
-  }, errorToObject);
-
+  const mkdirResult = fs.mkdir(binderDirPath, { recursive: true });
   if (isErr(mkdirResult)) {
     ui.error(
       `Failed to create .binder directory: ${mkdirResult.error.message}`,
@@ -119,9 +118,7 @@ const initSetupHandler = async (args: {
     defaultStringType: "PLAIN",
   });
 
-  const writeConfigResult = tryCatch(() => {
-    writeFileSync(configPath, configYaml, "utf-8");
-  }, errorToObject);
+  const writeConfigResult = fs.writeFile(configPath, configYaml);
 
   if (isErr(writeConfigResult)) {
     ui.error(`Failed to write config file: ${writeConfigResult.error.message}`);
@@ -129,9 +126,7 @@ const initSetupHandler = async (args: {
   }
 
   const gitignorePath = join(binderDirPath, ".gitignore");
-  const writeGitignoreResult = tryCatch(() => {
-    writeFileSync(gitignorePath, GITIGNORE_CONTENT, "utf-8");
-  }, errorToObject);
+  const writeGitignoreResult = fs.writeFile(gitignorePath, GITIGNORE_CONTENT);
 
   if (isErr(writeGitignoreResult)) {
     ui.error(
@@ -142,10 +137,8 @@ const initSetupHandler = async (args: {
 
   if (docsPath !== ".") {
     const docsDirPath = join(currentDir, docsPath);
-    if (!existsSync(docsDirPath)) {
-      const mkdirDocsResult = tryCatch(() => {
-        mkdirSync(docsDirPath, { recursive: true });
-      }, errorToObject);
+    if (!fs.exists(docsDirPath)) {
+      const mkdirDocsResult = fs.mkdir(docsDirPath, { recursive: true });
 
       if (isErr(mkdirDocsResult)) {
         ui.error(
@@ -159,14 +152,17 @@ const initSetupHandler = async (args: {
   await bootstrapWithDb(initSchemaHandler)({});
 };
 
-const initSchemaHandler: CommandHandlerWithDb = async ({ kg, ui, config }) => {
+const initSchemaHandler: CommandHandlerWithDb = async ({
+  kg,
+  ui,
+  config,
+  fs,
+}) => {
   const schemaResult = await kg.update(documentSchemaTransactionInput);
   if (isErr(schemaResult)) return schemaResult;
 
   if (config.paths.docs !== config.paths.root) {
-    const mkdirResult = tryCatch(() => {
-      mkdirSync(config.paths.docs, { recursive: true });
-    }, errorToObject);
+    const mkdirResult = fs.mkdir(config.paths.docs, { recursive: true });
     if (isErr(mkdirResult)) {
       ui.error(`Failed to create docs directory: ${mkdirResult.error.message}`);
       return mkdirResult;
