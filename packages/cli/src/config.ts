@@ -11,6 +11,9 @@ export const BINDER_DIR = ".binder";
 export const DB_FILE = "binder.db";
 export const TRANSACTION_LOG_FILE = "log.jsonl";
 export const UNDO_LOG_FILE = "undo.jsonl";
+export const LOCK_FILE = "lock";
+export const LOCK_RETRY_DELAY_MS = 200;
+export const LOCK_MAX_RETRIES = 3;
 
 export const BinderConfigSchema = z.object({
   author: z.string().default(DEFAULT_AUTHOR),

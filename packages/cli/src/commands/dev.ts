@@ -2,9 +2,9 @@ import type { Argv } from "yargs";
 import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
 import {
   bootstrap,
-  bootstrapWithDb,
+  bootstrapWithDbWrite,
   type CommandHandler,
-  type CommandHandlerWithDb,
+  type CommandHandlerWithDbWrite,
 } from "../bootstrap.ts";
 import { BINDER_DIR } from "../config.ts";
 import { documentSchemaTransactionInput } from "../document/document-schema.ts";
@@ -22,7 +22,7 @@ export const cleanupHandler: CommandHandler = async ({ ui, fs }) => {
   return ok(undefined);
 };
 
-export const setupHandler: CommandHandlerWithDb = async ({ kg }) => {
+export const setupHandler: CommandHandlerWithDbWrite = async ({ kg }) => {
   const docSchemaResult = await kg.update(documentSchemaTransactionInput);
   if (isErr(docSchemaResult)) return docSchemaResult;
 
@@ -44,7 +44,7 @@ const DevCommand = types({
           handler: async () => {
             await bootstrap(cleanupHandler)({});
             // bootstrap again, to initialize new database instance
-            return bootstrapWithDb(setupHandler)({});
+            return bootstrapWithDbWrite(setupHandler)({});
           },
         }),
       )

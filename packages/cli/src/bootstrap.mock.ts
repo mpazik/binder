@@ -3,7 +3,7 @@ import { getTestDatabase } from "@binder/db/mocks";
 import type {
   Config,
   CommandContext,
-  CommandContextWithDb,
+  CommandContextWithDbWrite,
 } from "./bootstrap.ts";
 import { type Logger } from "./log.ts";
 import * as ui from "./ui.ts";
@@ -49,7 +49,7 @@ export const mockCommandContext: CommandContext = {
   fs: createInMemoryFileSystem(),
 };
 
-export const createMockCommandContextWithDb = (): CommandContextWithDb => {
+export const createMockCommandContextWithDb = (): CommandContextWithDbWrite => {
   const db = getTestDatabase();
   return {
     ...mockCommandContext,

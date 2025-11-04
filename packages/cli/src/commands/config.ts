@@ -11,17 +11,22 @@ import {
   normalizeEntityRef,
 } from "@binder/db";
 import { Log } from "../log.ts";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import {
+  bootstrapWithDbRead,
+  bootstrapWithDbWrite,
+  type CommandHandlerWithDbRead,
+  type CommandHandlerWithDbWrite,
+} from "../bootstrap.ts";
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchemaByTypes } from "../schema/schema-filter.ts";
 import { printTransaction } from "../ui.ts";
 import { parsePatches, patchesDescription } from "../lib/patch-parser.ts";
 import { types } from "./types.ts";
 
-export const configCreateHandler: CommandHandlerWithDb<{
+export const configCreateHandler: CommandHandlerWithDbWrite<{
   type: ConfigType;
   patches: string[];
-}> = async ({ kg, config, ui, args }) => {
+}> = async ({ kg, config, args }) => {
   const fields = parsePatches(args.patches);
   const result = await kg.update({
     author: config.author,
@@ -39,7 +44,7 @@ export const configCreateHandler: CommandHandlerWithDb<{
   return ok("Config entity created successfully");
 };
 
-export const configReadHandler: CommandHandlerWithDb<{
+export const configReadHandler: CommandHandlerWithDbRead<{
   ref: ConfigRef;
 }> = async ({ kg, ui, args }) => {
   const result = await kg.fetchConfig(args.ref);
@@ -49,7 +54,7 @@ export const configReadHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
-export const configUpdateHandler: CommandHandlerWithDb<{
+export const configUpdateHandler: CommandHandlerWithDbWrite<{
   ref: ConfigRef;
   patches: string[];
 }> = async ({ kg, config, ui, args }) => {
@@ -71,7 +76,7 @@ export const configUpdateHandler: CommandHandlerWithDb<{
   return ok("Config entity updated successfully");
 };
 
-export const configListHandler: CommandHandlerWithDb<{
+export const configListHandler: CommandHandlerWithDbRead<{
   type?: ConfigType;
 }> = async ({ args }) => {
   const filters = args.type ? { type: args.type } : {};
@@ -82,7 +87,7 @@ export const configListHandler: CommandHandlerWithDb<{
   return ok("Config list not yet implemented");
 };
 
-export const configSchemaHandler: CommandHandlerWithDb<{
+export const configSchemaHandler: CommandHandlerWithDbRead<{
   format: "json" | "yaml" | "pretty";
   namespace: "node" | "config";
   types?: NodeType[];
@@ -143,7 +148,7 @@ const ConfigCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDb(configCreateHandler),
+          handler: bootstrapWithDbWrite(configCreateHandler),
         }),
       )
       .command(
@@ -159,7 +164,7 @@ const ConfigCommand = types({
               coerce: (value: string) => normalizeEntityRef<"config">(value),
             });
           },
-          handler: bootstrapWithDb(configReadHandler),
+          handler: bootstrapWithDbRead(configReadHandler),
         }),
       )
       .command(
@@ -181,7 +186,7 @@ const ConfigCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDb(configUpdateHandler),
+          handler: bootstrapWithDbWrite(configUpdateHandler),
         }),
       )
       .command(
@@ -214,7 +219,7 @@ const ConfigCommand = types({
               coerce: (value: string) => value as ConfigType,
             });
           },
-          handler: bootstrapWithDb(configListHandler),
+          handler: bootstrapWithDbRead(configListHandler),
         }),
       )
       .command(
@@ -244,7 +249,7 @@ const ConfigCommand = types({
                 alias: "n",
               });
           },
-          handler: bootstrapWithDb(configSchemaHandler),
+          handler: bootstrapWithDbRead(configSchemaHandler),
         }),
       )
       .demandCommand(

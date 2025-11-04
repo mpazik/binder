@@ -5,7 +5,6 @@ import {
   errorToObject,
   isErr,
   ok,
-  type Result,
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
@@ -17,7 +16,12 @@ import {
   type TransactionRef,
 } from "@binder/db";
 import * as YAML from "yaml";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import {
+  bootstrapWithDbRead,
+  bootstrapWithDbWrite,
+  type CommandHandlerWithDbRead,
+  type CommandHandlerWithDbWrite,
+} from "../bootstrap.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -88,7 +92,7 @@ export const importTransactionFromFile = async (
   return kg.update(transactionResult.data);
 };
 
-export const transactionCreateHandler: CommandHandlerWithDb<{
+export const transactionCreateHandler: CommandHandlerWithDbWrite<{
   path: string;
 }> = async ({ kg, config, ui, log, args }) => {
   const path = args.path;
@@ -123,7 +127,7 @@ export const transactionCreateHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
-export const transactionReadHandler: CommandHandlerWithDb<{
+export const transactionReadHandler: CommandHandlerWithDbRead<{
   ref: TransactionRef;
 }> = async ({ kg, ui, args }) => {
   const result = await kg.fetchTransaction(args.ref);
@@ -133,7 +137,7 @@ export const transactionReadHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
-export const transactionRollbackHandler: CommandHandlerWithDb<{
+export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
   count: number;
 }> = async ({ kg, ui, log, args }) => {
   const versionResult = await kg.version();
@@ -191,7 +195,7 @@ export const transactionRollbackHandler: CommandHandlerWithDb<{
 const TransactionCommand = types({
   command: "transaction <command>",
   aliases: ["tx"],
-  describe: "create or read transactions",
+  describe: "create transactions",
   builder: (yargs: Argv) => {
     return yargs
       .command(
@@ -206,7 +210,7 @@ const TransactionCommand = types({
               demandOption: true,
             });
           },
-          handler: bootstrapWithDb(transactionCreateHandler),
+          handler: bootstrapWithDbWrite(transactionCreateHandler),
         }),
       )
       .command(
@@ -223,7 +227,7 @@ const TransactionCommand = types({
                 normalizeEntityRef<"transaction">(value),
             });
           },
-          handler: bootstrapWithDb(transactionReadHandler),
+          handler: bootstrapWithDbRead(transactionReadHandler),
         }),
       )
       .command(
@@ -237,7 +241,7 @@ const TransactionCommand = types({
               default: 1,
             });
           },
-          handler: bootstrapWithDb(transactionRollbackHandler),
+          handler: bootstrapWithDbWrite(transactionRollbackHandler),
         }),
       )
       .demandCommand(

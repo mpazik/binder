@@ -1,19 +1,14 @@
 import type { Argv } from "yargs";
+import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
 import {
-  errorToObject,
-  isErr,
-  mapObjectValues,
-  ok,
-  omit,
-  tryCatch,
-} from "@binder/utils";
-import { systemFields } from "@binder/db";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+  bootstrapWithDbWrite,
+  type CommandHandlerWithDbWrite,
+} from "../bootstrap.ts";
 import { renderDocs } from "../document/repository.ts";
 import { synchronizeFile } from "../document/synchronizer.ts";
 import { types } from "./types.ts";
 
-export const docsRenderHandler: CommandHandlerWithDb = async ({
+export const docsRenderHandler: CommandHandlerWithDbWrite = async ({
   kg,
   ui,
   config,
@@ -29,7 +24,7 @@ export const docsRenderHandler: CommandHandlerWithDb = async ({
   return ok(undefined);
 };
 
-export const docsSyncHandler: CommandHandlerWithDb<{
+export const docsSyncHandler: CommandHandlerWithDbWrite<{
   filePath: string;
 }> = async ({ kg, ui, config, args }) => {
   const fileResult = await tryCatch(async () => {
@@ -83,7 +78,7 @@ const DocsCommand = types({
         types({
           command: "render",
           describe: "render documents to markdown files",
-          handler: bootstrapWithDb(docsRenderHandler),
+          handler: bootstrapWithDbWrite(docsRenderHandler),
         }),
       )
       .command(
@@ -97,7 +92,7 @@ const DocsCommand = types({
               demandOption: true,
             });
           },
-          handler: bootstrapWithDb(docsSyncHandler),
+          handler: bootstrapWithDbWrite(docsSyncHandler),
         }),
       )
       .demandCommand(1, "You need to specify a subcommand: render, sync");

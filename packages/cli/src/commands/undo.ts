@@ -1,13 +1,16 @@
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
 import type { Transaction, TransactionRef } from "@binder/db";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import {
+  bootstrapWithDbWrite,
+  type CommandHandlerWithDbWrite,
+} from "../bootstrap.ts";
 import { logTransaction } from "../transaction-log.ts";
 import { UNDO_LOG_FILE } from "../config.ts";
 import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
-export const undoHandler: CommandHandlerWithDb<{
+export const undoHandler: CommandHandlerWithDbWrite<{
   steps: number;
 }> = async ({ kg, ui, log, config, fs, args }) => {
   if (args.steps < 1)
@@ -97,7 +100,7 @@ const UndoCommand = types({
       default: 1,
     });
   },
-  handler: bootstrapWithDb(undoHandler),
+  handler: bootstrapWithDbWrite(undoHandler),
 });
 
 export default UndoCommand;

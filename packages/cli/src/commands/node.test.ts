@@ -10,11 +10,11 @@ import {
   createMockCommandContextWithDb,
   mockUi as baseMockUi,
 } from "../bootstrap.mock.ts";
-import type { CommandContextWithDb } from "../bootstrap.ts";
+import type { CommandContextWithDbWrite } from "../bootstrap.ts";
 import { nodeReadHandler } from "./node.ts";
 
 describe("node commands", () => {
-  let context: CommandContextWithDb;
+  let context: CommandContextWithDbWrite;
   let printedData: unknown[] = [];
 
   beforeEach(async () => {

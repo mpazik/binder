@@ -1,13 +1,16 @@
 import { join } from "path";
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import {
+  bootstrapWithDbWrite,
+  type CommandHandlerWithDbWrite,
+} from "../bootstrap.ts";
 import { readLastTransactions, removeLastFromLog } from "../transaction-log.ts";
 import { UNDO_LOG_FILE } from "../config.ts";
 import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
-export const redoHandler: CommandHandlerWithDb<{
+export const redoHandler: CommandHandlerWithDbWrite<{
   steps: number;
 }> = async ({ kg, ui, log, config, fs, args }) => {
   if (args.steps < 1)
@@ -112,7 +115,7 @@ const RedoCommand = types({
       default: 1,
     });
   },
-  handler: bootstrapWithDb(redoHandler),
+  handler: bootstrapWithDbWrite(redoHandler),
 });
 
 export default RedoCommand;

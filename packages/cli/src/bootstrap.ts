@@ -32,6 +32,7 @@ import * as ui from "./ui.ts";
 import { clearTransactionLog, logTransaction } from "./transaction-log.ts";
 import { renderDocs } from "./document/repository.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
+import { setupCleanupHandlers, withLock } from "./lib/lock.ts";
 
 export type Config = Omit<BinderConfig, "docsPath"> & {
   paths: {
@@ -80,7 +81,14 @@ export type CommandContext = {
   fs: FileSystem;
 };
 
-export type CommandContextWithDb = CommandContext & {
+export type KnowledgeGraphReadonly = Omit<
+  KnowledgeGraph,
+  "update" | "apply" | "rollback"
+>;
+export type CommandContextWithDbRead = CommandContext & {
+  kg: KnowledgeGraphReadonly;
+};
+export type CommandContextWithDbWrite = CommandContext & {
   db: Database;
   kg: KnowledgeGraph;
 };
@@ -89,8 +97,12 @@ export type CommandHandler<TArgs = unknown> = (
   context: CommandContext & { args: TArgs },
 ) => Promise<Result<string | undefined>>;
 
-export type CommandHandlerWithDb<TArgs = unknown> = (
-  context: CommandContextWithDb & { args: TArgs },
+export type CommandHandlerWithDbWrite<TArgs = unknown> = (
+  context: CommandContextWithDbWrite & { args: TArgs },
+) => Promise<Result<string | undefined>>;
+
+export type CommandHandlerWithDbRead<TArgs = unknown> = (
+  context: CommandContextWithDbRead & { args: TArgs },
 ) => Promise<Result<string | undefined>>;
 
 export const bootstrap = <TArgs>(
@@ -136,13 +148,36 @@ export const bootstrap = <TArgs>(
   };
 };
 
-export const bootstrapWithDb = <TArgs>(
-  handler: CommandHandlerWithDb<TArgs>,
+export const bootstrapWithDbRead = <TArgs>(
+  handler: CommandHandlerWithDbRead<TArgs>,
+): ((args: TArgs) => Promise<void>) => {
+  return bootstrap<TArgs>(async (context) => {
+    const { fs, config } = context;
+    const binderPath = config.paths.binder;
+    mkdirSync(binderPath, { recursive: true });
+    setupCleanupHandlers(fs, binderPath);
+
+    const dbResult = openDb({ path: join(binderPath, DB_FILE), migrate: true });
+    if (isErr(dbResult)) {
+      Log.error("Failed to open database", { error: dbResult.error });
+      process.exit(1);
+    }
+
+    return handler({
+      ...context,
+      kg: openKnowledgeGraph(dbResult.data),
+    });
+  });
+};
+
+export const bootstrapWithDbWrite = <TArgs>(
+  handler: CommandHandlerWithDbWrite<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
     const { fs, config } = context;
     const { paths } = config;
     mkdirSync(paths.binder, { recursive: true });
+    setupCleanupHandlers(fs, paths.binder);
 
     const dbPath = join(paths.binder, DB_FILE);
     const dbResult = openDb({ path: dbPath, migrate: true });
@@ -184,11 +219,12 @@ export const bootstrapWithDb = <TArgs>(
       },
     });
 
-    return handler({
-      ...context,
-      db,
-      kg,
-      fs,
-    });
+    return withLock(fs, paths.binder, async () =>
+      handler({
+        ...context,
+        db,
+        kg,
+      }),
+    );
   });
 };
