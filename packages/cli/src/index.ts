@@ -4,6 +4,7 @@ import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
 import InitCommand from "./commands/init.ts";
 import NodeCommand from "./commands/node";
+import ConfigCommand from "./commands/config.ts";
 import TransactionCommand from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
 import DocsCommand from "./commands/docs.ts";
@@ -48,6 +49,7 @@ const cli = yargs(hideBin(process.argv))
   .wrap(null)
   .command(InitCommand)
   .command(NodeCommand)
+  .command(ConfigCommand)
   .command(TransactionCommand)
   .command(SearchCommand)
   .command(DocsCommand)

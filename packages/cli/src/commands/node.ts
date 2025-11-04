@@ -1,48 +1,10 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
-import {
-  type FieldChangeInput,
-  type FieldChangesetInput,
-  type FieldKey,
-  type NodeRef,
-  type NodeType,
-  normalizeEntityRef,
-} from "@binder/db";
+import { type NodeRef, type NodeType, normalizeEntityRef } from "@binder/db";
 import { Log } from "../log.ts";
 import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { parsePatches, patchesDescription } from "../lib/patch-parser.ts";
 import { types } from "./types.ts";
-
-const parseFieldChange = (fieldChange: string): FieldChangeInput => {
-  const equalIndex = fieldChange.indexOf("=");
-  if (equalIndex === -1) {
-    Log.error("Invalid patch format (expected field=value)", {
-      patch: fieldChange,
-    });
-    process.exit(1);
-  }
-  const value = fieldChange.slice(equalIndex + 1);
-
-  if (value === "true") return true;
-  if (value === "false") return false;
-  if (value === "null") return null;
-  if (/^-?\d+$/.test(value)) return parseInt(value, 10);
-  if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value);
-  return value;
-};
-
-const parsePatches = (patches: string[]): FieldChangesetInput => {
-  const result: Record<string, FieldChangeInput> = {};
-  for (const patch of patches) {
-    const equalIndex = patch.indexOf("=");
-    if (equalIndex === -1) {
-      Log.error("Invalid patch format (expected field=value)", { patch });
-      process.exit(1);
-    }
-    const fieldKey = patch.slice(0, equalIndex) as FieldKey;
-    result[fieldKey] = parseFieldChange(patch);
-  }
-  return result;
-};
 
 export const nodeCreateHandler: CommandHandlerWithDb<{
   type: NodeType;
@@ -116,7 +78,7 @@ const NodeCommand = types({
                 coerce: (value: string) => value as NodeType,
               })
               .positional("patches", {
-                describe: "field=value patches",
+                describe: patchesDescription,
                 type: "string",
                 array: true,
                 default: [],
@@ -154,7 +116,7 @@ const NodeCommand = types({
                 coerce: (value: string) => normalizeEntityRef<"node">(value),
               })
               .positional("patches", {
-                describe: "field=value patches",
+                describe: patchesDescription,
                 type: "string",
                 array: true,
                 default: [],
