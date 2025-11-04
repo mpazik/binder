@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import type { KnowledgeGraph, NodeUid } from "@binder/db";
 import {
@@ -40,13 +40,27 @@ const fetchDocumentsWithPath = async (
   return ok(docsWithPath);
 };
 
+const removeMarkdownFiles = (dir: string): void => {
+  if (!existsSync(dir)) return;
+
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      removeMarkdownFiles(fullPath);
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      rmSync(fullPath);
+    }
+  }
+};
+
 export const renderDocs = async (
   kg: KnowledgeGraph,
   docsPath: string,
   dynamicDirectories: Array<{ path: string; query: string }> = [],
 ): ResultAsync<undefined> => {
   const removeResult = tryCatch(() => {
-    rmSync(docsPath, { recursive: true, force: true });
+    removeMarkdownFiles(docsPath);
     mkdirSync(docsPath, { recursive: true });
   }, errorToObject);
   if (isErr(removeResult)) return removeResult;

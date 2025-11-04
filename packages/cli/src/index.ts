@@ -2,6 +2,7 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
+import InitCommand from "./commands/init.ts";
 import NodeCommand from "./commands/node";
 import TransactionCommand from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
@@ -45,6 +46,7 @@ const cli = yargs(hideBin(process.argv))
   })
   .usage(UI.logo())
   .wrap(null)
+  .command(InitCommand)
   .command(NodeCommand)
   .command(TransactionCommand)
   .command(SearchCommand)
@@ -64,7 +66,7 @@ const cli = yargs(hideBin(process.argv))
   })
   .strict();
 
-const result = await tryCatch<void, any>(() => cli.parse());
+const result = tryCatch<void, any>(() => cli.parse());
 if (isErr(result)) {
   const e = result.error;
   if (e instanceof Error) {

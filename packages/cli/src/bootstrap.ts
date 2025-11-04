@@ -23,6 +23,7 @@ import {
   BinderConfigSchema,
   CONFIG_FILE,
   DB_FILE,
+  findBinderRoot,
   TRANSACTION_LOG_FILE,
   UNDO_LOG_FILE,
 } from "./config.ts";
@@ -93,10 +94,22 @@ export const bootstrap = <TArgs>(
   handler: CommandHandler<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return async (args: TArgs) => {
-    const configResult = await loadConfig(BINDER_DIR);
+    const rootResult = findBinderRoot();
+    if (isErr(rootResult)) {
+      ui.error(`Failed to load binder workspace: ${rootResult.error.message}`);
+      process.exit(1);
+    }
+
+    if (rootResult.data === null) {
+      ui.error(
+        `Not in a binder workspace. Use 'binder init' to initialize a new workspace.`,
+      );
+      process.exit(1);
+    }
+
+    const configResult = await loadConfig(rootResult.data);
     if (isErr(configResult)) {
       ui.error(`Failed to load config: ${configResult.error.message}`);
-      Log.error("Config loading failed", { error: configResult.error });
       process.exit(1);
     }
 
