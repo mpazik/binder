@@ -58,14 +58,10 @@ export const docsSyncHandler: CommandHandlerWithDbWrite<{
   const updateResult = await kg.update(syncResult.data);
   if (isErr(updateResult)) return updateResult;
 
-  ui.println("");
-  ui.printTransaction(updateResult.data);
-  ui.println("");
-  ui.println(
-    ui.Style.TEXT_SUCCESS +
-      "✓ File synchronized successfully" +
-      ui.Style.TEXT_NORMAL,
-  );
+  ui.block(() => {
+    ui.printTransaction(updateResult.data);
+  });
+  ui.success("File synchronized successfully");
   return ok(undefined);
 };
 

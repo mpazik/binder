@@ -55,6 +55,66 @@ export async function input(prompt: string): Promise<string> {
   return answer;
 }
 
+export const success = (message: string) => {
+  println(Style.TEXT_SUCCESS + message + Style.TEXT_NORMAL);
+};
+
+export const warning = (message: string) => {
+  println(Style.TEXT_WARNING + "WARNING: " + Style.TEXT_NORMAL + message);
+};
+
+export const info = (message: string) => {
+  println(Style.TEXT_INFO + message + Style.TEXT_NORMAL);
+};
+
+export const danger = (message: string) => {
+  println(Style.TEXT_DANGER + message + Style.TEXT_NORMAL);
+};
+
+export const divider = () => {
+  println(Style.TEXT_DIM + "─".repeat(60) + Style.TEXT_NORMAL);
+};
+
+export const heading = (message: string) => {
+  println("");
+  println(Style.TEXT_INFO_BOLD + message + Style.TEXT_NORMAL);
+};
+
+export const block = (fn: () => void) => {
+  println("");
+  fn();
+  println("");
+};
+
+export const keyValue = (key: string, value: string) => {
+  println(`  ${Style.TEXT_DIM}${key}:${Style.TEXT_NORMAL} ${value}`);
+};
+
+export const list = (items: string[], indent: number = 2) => {
+  const prefix = " ".repeat(indent);
+  for (const item of items) {
+    println(`${prefix}- ${item}`);
+  }
+};
+
+export const confirm = async (prompt: string): Promise<boolean> => {
+  const answer = await input(prompt);
+  return answer.toLowerCase() === "yes" || answer.toLowerCase() === "y";
+};
+
+export const printTransactions = (
+  transactions: Parameters<typeof printTransaction>[0][],
+  header?: string,
+) => {
+  if (header) {
+    heading(header);
+  }
+  for (const tx of transactions) {
+    printTransaction(tx);
+    println("");
+  }
+};
+
 export function error(message: string) {
   println(Style.TEXT_DANGER_BOLD + "Error: " + Style.TEXT_NORMAL + message);
 }
@@ -119,7 +179,7 @@ export const printError = (error: {
           validationError.fieldKey && validationError.message
             ? `Field '${Style.TEXT_INFO}${validationError.fieldKey}${Style.TEXT_NORMAL}': ${validationError.message}`
             : formatValue(validationError, "    ");
-        println(`  ${Style.TEXT_DANGER}•${Style.TEXT_NORMAL} ${message})}`);
+        println(`  - ${message})}`);
       }
       return;
     }
@@ -181,11 +241,12 @@ const printEntityChanges = (
   const entries = Object.entries(changes);
   if (entries.length === 0) return;
 
-  println(`  ${Style.TEXT_DIM}${label} (${entries.length}):`);
+  println("");
+  println(`  ${Style.TEXT_DIM}${label} (${entries.length})`);
   for (const [uid, changeset] of entries) {
     const operation = getEntityOperation(changeset);
     const entityLabel = getEntityLabel(changeset);
-    println(`    • ${uid}${entityLabel} - ${operation}`);
+    println(`    - ${uid}${entityLabel} ${operation}`);
   }
 };
 
@@ -200,15 +261,9 @@ export const printTransaction = (transaction: {
   println(
     Style.TEXT_INFO_BOLD + `Transaction #${transaction.id}` + Style.TEXT_NORMAL,
   );
-  println(
-    `  ${Style.TEXT_DIM}Hash:${Style.TEXT_NORMAL} ${transaction.hash.slice(0, 12)}...`,
-  );
-  println(
-    `  ${Style.TEXT_DIM}Author:${Style.TEXT_NORMAL} ${transaction.author}`,
-  );
-  println(
-    `  ${Style.TEXT_DIM}Created:${Style.TEXT_NORMAL} ${transaction.createdAt}`,
-  );
+  keyValue("Hash", transaction.hash.slice(0, 12) + "...");
+  keyValue("Author", transaction.author);
+  keyValue("Created", transaction.createdAt);
 
   printEntityChanges(
     "Node changes",

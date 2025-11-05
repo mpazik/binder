@@ -172,11 +172,9 @@ const initSchemaHandler: CommandHandlerWithDbWrite = async ({
     }
   }
 
-  ui.println(
-    ui.Style.TEXT_SUCCESS +
-      "✓ Binder workspace initialized successfully" +
-      ui.Style.TEXT_NORMAL,
-  );
+  ui.block(() => {
+    ui.success("Binder workspace initialized successfully");
+  });
 
   process.exit(0);
   return ok(undefined);

@@ -46,19 +46,12 @@ export const undoHandler: CommandHandlerWithDbWrite<{
     transactionsToUndo.push(txResult.data);
   }
 
-  ui.println("");
-  ui.println(
-    ui.Style.TEXT_WARNING_BOLD +
-      `Undoing ${args.steps} transaction(s):` +
-      ui.Style.TEXT_NORMAL,
-  );
-  ui.println("");
+  ui.heading(`Undoing ${args.steps} transaction(s)`);
 
   for (const tx of transactionsToUndo) {
     ui.printTransaction(tx);
+    ui.println("");
   }
-
-  ui.println("");
 
   const rollbackResult = await kg.rollback(args.steps, currentId);
   if (isErr(rollbackResult)) return rollbackResult;
@@ -79,14 +72,12 @@ export const undoHandler: CommandHandlerWithDbWrite<{
   }
 
   log.info("Undone successfully", { steps: args.steps });
-  ui.println(
-    ui.Style.TEXT_SUCCESS + "✓ Undone successfully" + ui.Style.TEXT_NORMAL,
-  );
-  ui.println(
-    ui.Style.TEXT_INFO +
-      `ℹ Use \`binder redo${args.steps > 1 || ` ${args.steps}`}\` to bring these changes back if needed` +
-      ui.Style.TEXT_NORMAL,
-  );
+  ui.block(() => {
+    ui.success("Undone successfully");
+    ui.info(
+      `Use \`binder redo${args.steps > 1 ? ` ${args.steps}` : ""}\` to bring these changes back if needed`,
+    );
+  });
   return ok(undefined);
 };
 

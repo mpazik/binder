@@ -57,11 +57,8 @@ const cli = yargs(hideBin(process.argv))
   .command(UndoCommand)
   .command(RedoCommand)
   .fail((msg) => {
-    if (
-      msg.startsWith("Unknown argument") ||
-      msg.startsWith("Not enough non-option arguments") ||
-      msg.startsWith("Invalid values:")
-    ) {
+    if (msg) {
+      UI.error(msg);
       cli.showHelp("log");
     }
     process.exit(1);

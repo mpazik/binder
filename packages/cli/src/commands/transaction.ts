@@ -116,14 +116,10 @@ export const transactionCreateHandler: CommandHandlerWithDbWrite<{
   if (isErr(result)) return result;
 
   log.info("Transaction created successfully", { path });
-  ui.println("");
-  ui.printTransaction(result.data);
-  ui.println("");
-  ui.println(
-    ui.Style.TEXT_SUCCESS +
-      "✓ Transaction created successfully" +
-      ui.Style.TEXT_NORMAL,
-  );
+  ui.block(() => {
+    ui.printTransaction(result.data);
+  });
+  ui.success("Transaction created successfully");
   return ok(undefined);
 };
 
@@ -168,27 +164,16 @@ export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
     transactionsToRollback.push(txResult.data);
   }
 
-  ui.println("");
-  ui.println(
-    ui.Style.TEXT_WARNING_BOLD +
-      `Rolling back ${args.count} transaction(s):` +
-      ui.Style.TEXT_NORMAL,
+  ui.printTransactions(
+    transactionsToRollback,
+    `Rolling back ${args.count} transaction(s)`,
   );
-  ui.println("");
-
-  for (const tx of transactionsToRollback) {
-    ui.printTransaction(tx);
-  }
-
-  ui.println("");
 
   const rollbackResult = await kg.rollback(args.count, currentId);
   if (isErr(rollbackResult)) return rollbackResult;
 
   log.info("Rolled back successfully", { count: args.count });
-  ui.println(
-    ui.Style.TEXT_SUCCESS + "✓ Rolled back successfully" + ui.Style.TEXT_NORMAL,
-  );
+  ui.success("Rolled back successfully");
   return ok(undefined);
 };
 

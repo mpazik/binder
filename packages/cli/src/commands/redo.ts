@@ -1,4 +1,3 @@
-import { join } from "path";
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
 import {
@@ -60,19 +59,12 @@ export const redoHandler: CommandHandlerWithDbWrite<{
       ),
     );
 
-  ui.println("");
-  ui.println(
-    ui.Style.TEXT_INFO_BOLD +
-      `Redoing ${args.steps} transaction(s):` +
-      ui.Style.TEXT_NORMAL,
-  );
-  ui.println("");
+  ui.heading(`Redoing ${args.steps} transaction(s)`);
 
   for (const tx of transactionsToRedo) {
     ui.printTransaction(tx);
+    ui.println("");
   }
-
-  ui.println("");
 
   for (const tx of transactionsToRedo) {
     const applyResult = await kg.apply(tx);
@@ -99,9 +91,9 @@ export const redoHandler: CommandHandlerWithDbWrite<{
   }
 
   log.info("Redone successfully", { steps: args.steps });
-  ui.println(
-    ui.Style.TEXT_SUCCESS + "✓ Redone successfully" + ui.Style.TEXT_NORMAL,
-  );
+  ui.block(() => {
+    ui.success("Redone successfully");
+  });
   return ok(undefined);
 };
 
