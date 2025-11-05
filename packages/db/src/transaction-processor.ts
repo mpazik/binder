@@ -103,21 +103,21 @@ export const applyTransaction = async (
   const nodeEntries = Object.entries(transaction.nodes);
   const configEntries = Object.entries(transaction.configurations);
 
-  for (const [entityUid, changeset] of nodeEntries) {
-    const result = await applyChangeset(
-      tx,
-      "node",
-      entityUid as NodeUid,
-      addTxIdsToChangeset(changeset, transaction.id, "insert"),
-    );
-    if (isErr(result)) return result;
-  }
-
   for (const [entityUid, changeset] of configEntries) {
     const result = await applyChangeset(
       tx,
       "config",
       entityUid as ConfigUid,
+      addTxIdsToChangeset(changeset, transaction.id, "insert"),
+    );
+    if (isErr(result)) return result;
+  }
+
+  for (const [entityUid, changeset] of nodeEntries) {
+    const result = await applyChangeset(
+      tx,
+      "node",
+      entityUid as NodeUid,
       addTxIdsToChangeset(changeset, transaction.id, "insert"),
     );
     if (isErr(result)) return result;

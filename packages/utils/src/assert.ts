@@ -1,4 +1,5 @@
 import { isOk, type Ok, type Result } from "./result.ts";
+import { isEqual } from "./object.ts";
 
 export function assertFailed(message: string): never {
   // eslint-disable-next-line no-restricted-syntax
@@ -21,7 +22,7 @@ export function assertEqual<T>(
   second: T,
   name?: string,
 ): asserts first is T {
-  if (first === second) return;
+  if (isEqual(first, second)) return;
   assertFailed(
     name
       ? `${name} assertion failed: ${JSON.stringify(first)} !== ${JSON.stringify(second)}`

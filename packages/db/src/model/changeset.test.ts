@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { omit } from "@binder/utils";
 import {
-  mockChangesetUpdateTask1,
+  mockChangesetCreateTask1,
   mockChangesetInvert,
+  mockChangesetUpdateTask1,
   mockRemoveChange,
 } from "./changeset.mock.ts";
 import squashChangesets, {
@@ -15,44 +17,45 @@ import squashChangesets, {
   rebaseChangeset,
   type ValueChange,
 } from "./changeset.ts";
-import { mockTaskNode1Updated, mockTask1Node } from "./node.mock.ts";
+import type { Fieldset, FieldValue } from "./entity.ts";
+import { mockTask1Node, mockTaskNode1Updated } from "./node.mock.ts";
 
 describe("normalize", () => {
-  test("normalizes string FieldValue to ValueChange with op:set", () => {
-    const result = normalizeValueChange("hello");
-    expect(result).toEqual({
+  const checkNormalized = (
+    input: ValueChange | FieldValue,
+    expected: ValueChange,
+  ) => {
+    const result = normalizeValueChange(input);
+    expect(result).toEqual(expected);
+  };
+
+  test("normalizes string FieldValue to ValueChange with op:set", () =>
+    checkNormalized("hello", {
       op: "set",
       value: "hello",
       previous: undefined,
-    });
-  });
+    }));
 
-  test("normalizes number FieldValue to ValueChange with op:set", () => {
-    const result = normalizeValueChange(42);
-    expect(result).toEqual({
+  test("normalizes number FieldValue to ValueChange with op:set", () =>
+    checkNormalized(42, {
       op: "set",
       value: 42,
       previous: undefined,
-    });
-  });
+    }));
 
-  test("normalizes null FieldValue to ValueChange with op:set", () => {
-    const result = normalizeValueChange(null);
-    expect(result).toEqual({
+  test("normalizes null FieldValue to ValueChange with op:set", () =>
+    checkNormalized(null, {
       op: "set",
       value: null,
       previous: undefined,
-    });
-  });
+    }));
 
-  test("normalizes array FieldValue to ValueChange with op:set", () => {
-    const result = normalizeValueChange([1, 2, 3]);
-    expect(result).toEqual({
+  test("normalizes array FieldValue to ValueChange with op:set", () =>
+    checkNormalized([1, 2, 3], {
       op: "set",
       value: [1, 2, 3],
       previous: undefined,
-    });
-  });
+    }));
 
   test("passes through ValueChange with op:set unchanged", () => {
     const valueChange: ValueChange = {
@@ -60,8 +63,7 @@ describe("normalize", () => {
       value: "world",
       previous: "hello",
     };
-    const result = normalizeValueChange(valueChange);
-    expect(result).toEqual(valueChange);
+    checkNormalized(valueChange, valueChange);
   });
 
   test("passes through ValueChange with op:seq unchanged", () => {
@@ -69,15 +71,13 @@ describe("normalize", () => {
       op: "seq",
       mutations: [["insert", "item", 0]],
     };
-    const result = normalizeValueChange(valueChange);
-    expect(result).toEqual(valueChange);
+    checkNormalized(valueChange, valueChange);
   });
 });
 
-describe("inverse", () => {
+describe("inverseChange", () => {
   test("inverts set change", () => {
     const result = inverseChange(mockChangesetUpdateTask1.title);
-
     expect(result).toEqual({
       op: "set",
       value: mockTask1Node.title,
@@ -87,49 +87,60 @@ describe("inverse", () => {
 
   test("inverts remove change to add", () => {
     const result = inverseChange(mockRemoveChange);
-
     expect(result).toEqual(mockChangesetUpdateTask1.tags);
   });
 
+  test("applying change then its inverse returns original value", () => {
+    expect(
+      applyChange(
+        mockTaskNode1Updated.title,
+        inverseChange(mockChangesetUpdateTask1.title),
+      ),
+    ).toEqual(mockTask1Node.title);
+  });
+
+  test("applying change then its inverse removes field", () => {
+    expect(
+      applyChange(
+        mockTask1Node.title,
+        inverseChange(normalizeValueChange(mockChangesetCreateTask1.title)),
+      ),
+    ).toEqual(null);
+  });
+});
+
+describe("inverseChangeset", () => {
   test("inverts all attribute changes", () => {
     const result = inverseChangeset(mockChangesetUpdateTask1);
-
     expect(result).toEqual(mockChangesetInvert);
   });
 
   test("double inversion returns original changeset", () => {
     const result = inverseChangeset(inverseChangeset(mockChangesetUpdateTask1));
-
     expect(result).toEqual(mockChangesetUpdateTask1);
   });
 });
 
-describe("apply", () => {
+describe("applyChange", () => {
+  const checkApply = (
+    entity: FieldValue,
+    input: ValueChange,
+    expected: FieldValue,
+  ) => {
+    const result = applyChange(entity, input);
+    expect(result).toEqual(expected);
+  };
+
   test("applies set change", () => {
-    const result = applyChange(
+    checkApply(
       mockTask1Node.title,
       mockChangesetUpdateTask1.title,
+      mockTaskNode1Updated.title,
     );
-
-    expect(result).toBe(mockTaskNode1Updated.title);
   });
 
   test("applies remove change", () => {
-    const result = applyChange(mockTaskNode1Updated.tags, mockRemoveChange);
-
-    expect(result).toEqual(mockTask1Node.tags);
-  });
-
-  test("applies mixed changeset", () => {
-    const result = applyChangeset(mockTask1Node, mockChangesetUpdateTask1);
-
-    expect(result).toEqual(mockTaskNode1Updated);
-  });
-
-  test("applies empty changeset", () => {
-    const result = applyChangeset(mockTask1Node, emptyChangeset);
-
-    expect(result).toEqual(mockTask1Node);
+    checkApply(mockTaskNode1Updated.tags, mockRemoveChange, mockTask1Node.tags);
   });
 
   test("throws when remove mutation targets missing value", () => {
@@ -141,35 +152,38 @@ describe("apply", () => {
     ).toThrowError();
   });
 
-  test("applies insert with undefined position (append)", () => {
-    const result = applyChange(["a", "b", "c"], {
-      op: "seq",
-      mutations: [["insert", "d"]],
-    });
+  test("applies insert with undefined position (append)", () =>
+    checkApply(
+      ["a", "b", "c"],
+      {
+        op: "seq",
+        mutations: [["insert", "d"]],
+      },
+      ["a", "b", "c", "d"],
+    ));
 
-    expect(result).toEqual(["a", "b", "c", "d"]);
-  });
+  test("applies remove with undefined position (remove last)", () =>
+    checkApply(
+      ["a", "b", "c"],
+      {
+        op: "seq",
+        mutations: [["remove", "c"]],
+      },
+      ["a", "b"],
+    ));
 
-  test("applies remove with undefined position (remove last)", () => {
-    const result = applyChange(["a", "b", "c"], {
-      op: "seq",
-      mutations: [["remove", "c"]],
-    });
-
-    expect(result).toEqual(["a", "b"]);
-  });
-
-  test("applies multiple appends in sequence", () => {
-    const result = applyChange(["a"], {
-      op: "seq",
-      mutations: [
-        ["insert", "b"],
-        ["insert", "c"],
-      ],
-    });
-
-    expect(result).toEqual(["a", "b", "c"]);
-  });
+  test("applies multiple appends in sequence", () =>
+    checkApply(
+      ["a"],
+      {
+        op: "seq",
+        mutations: [
+          ["insert", "b"],
+          ["insert", "c"],
+        ],
+      },
+      ["a", "b", "c"],
+    ));
 
   test("throws when remove-last targets wrong value", () => {
     expect(() =>
@@ -178,6 +192,151 @@ describe("apply", () => {
         mutations: [["remove", "wrong"]],
       }),
     ).toThrowError();
+  });
+
+  test("removes field by applying inverted field creation", () =>
+    checkApply(
+      mockTask1Node.title,
+      {
+        op: "set",
+        value: undefined,
+        previous: mockTask1Node.title,
+      },
+      null,
+    ));
+
+  test("removes field when all array elements are removed", () => {
+    checkApply(
+      ["a"],
+      {
+        op: "seq",
+        mutations: [["remove", "a", 0]],
+      },
+      null,
+    );
+  });
+
+  test("applies set change with object values (deep equality)", () => {
+    checkApply(
+      {
+        title: { required: true },
+        description: { required: true },
+      },
+      {
+        op: "set",
+        value: { title: { required: false }, description: { required: true } },
+        previous: {
+          title: { required: true },
+          description: { required: true },
+        },
+      },
+      { title: { required: false }, description: { required: true } },
+    );
+  });
+});
+
+describe("applyChangeset", () => {
+  const checkApply = (
+    entity: Fieldset,
+    input: FieldChangeset,
+    expected: Fieldset,
+  ) => {
+    const result = applyChangeset(entity, input);
+    expect(result).toEqual(expected);
+  };
+
+  test("applies mixed changeset", () =>
+    checkApply(mockTask1Node, mockChangesetUpdateTask1, mockTaskNode1Updated));
+
+  test("applies empty changeset", () =>
+    checkApply(mockTask1Node, emptyChangeset, mockTask1Node));
+
+  test("removes entity fields by applying inverted entity creation", () =>
+    checkApply(mockTask1Node, inverseChangeset(mockChangesetCreateTask1), {
+      id: null,
+      uid: null,
+      type: null,
+      key: null,
+      title: null,
+      description: null,
+      status: null,
+      tags: null,
+    }));
+
+  test("preserves null values in patch to signal field deletion to SQL layer", () => {
+    const inverseCset: FieldChangeset = {
+      description: {
+        op: "set",
+        value: undefined,
+        previous: "Product feature",
+      },
+      txIds: {
+        op: "seq",
+        mutations: [["remove", 17]],
+      },
+    };
+
+    const currentValues: Fieldset = {
+      description: "Product feature",
+      txIds: [11, 14, 15, 17],
+    };
+
+    checkApply(currentValues, inverseCset, {
+      description: null,
+      txIds: [11, 14, 15],
+    });
+  });
+
+  test("applies inverse changeset with txIds removal for rollback", () => {
+    const entity: Fieldset = {
+      id: 28,
+      name: "Feature",
+      description: "Product feature",
+      txIds: [11, 14, 15, 17],
+    };
+
+    const tx17Changeset: FieldChangeset = {
+      description: {
+        op: "set",
+        value: "Product feature",
+      },
+    };
+
+    const inverseWithTxIds: FieldChangeset = {
+      ...inverseChangeset(tx17Changeset),
+      txIds: {
+        op: "seq",
+        mutations: [["remove", 17]],
+      },
+    };
+
+    checkApply(entity, inverseWithTxIds, {
+      id: 28,
+      name: "Feature",
+      description: null,
+      txIds: [11, 14, 15],
+    });
+  });
+
+  test("removes entity fields that no longer have value", () => {
+    checkApply(
+      mockTask1Node,
+      {
+        description: {
+          op: "set",
+          value: undefined,
+          previous: mockTask1Node.description,
+        },
+        tags: {
+          op: "seq",
+          mutations: [
+            ["remove", "urgent", 0],
+            ["remove", "important", 0],
+          ],
+        },
+      },
+      omit({ ...mockTask1Node, description: null }, ["tags"]),
+    );
   });
 });
 
@@ -197,13 +356,22 @@ const secondTitleChangeset: FieldChangeset = {
   },
 };
 
-describe("rebase", () => {
+describe("rebaseChangeset", () => {
+  const checkRebase = (
+    base: FieldChangeset,
+    changeset: FieldChangeset,
+    expected: FieldChangeset,
+  ) => {
+    const result = rebaseChangeset(base, changeset);
+    expect(result).toEqual(expected);
+  };
+
   test("keeps changes when base does not touch attribute", () => {
     const changeset: FieldChangeset = {
       tags: mockChangesetUpdateTask1.tags,
     };
 
-    expect(rebaseChangeset(baseTitleChangeset, changeset)).toEqual(changeset);
+    checkRebase(baseTitleChangeset, changeset, changeset);
   });
 
   test("rebases set change sharing the same ancestor", () => {
@@ -214,9 +382,7 @@ describe("rebase", () => {
       },
     };
 
-    expect(rebaseChangeset(baseTitleChangeset, changeset)).toEqual(
-      secondTitleChangeset,
-    );
+    checkRebase(baseTitleChangeset, changeset, secondTitleChangeset);
   });
 
   test("throws when rebasing a conflicting set change", () => {
@@ -241,7 +407,7 @@ describe("rebase", () => {
       },
     };
 
-    expect(rebaseChangeset(baseSeqAddChangeset, changeset)).toEqual({
+    checkRebase(baseSeqAddChangeset, changeset, {
       tags: {
         op: "seq",
         mutations: [["insert", "beta", 4]],
@@ -257,7 +423,7 @@ describe("rebase", () => {
       },
     };
 
-    expect(rebaseChangeset(baseSeqRemoveChangeset, changeset)).toEqual({
+    checkRebase(baseSeqRemoveChangeset, changeset, {
       tags: {
         op: "seq",
         mutations: [["remove", "gamma", 2]],
@@ -286,7 +452,7 @@ describe("rebase", () => {
       },
     };
 
-    expect(rebaseChangeset(baseSeqAddChangeset, changeset)).toEqual({
+    checkRebase(baseSeqAddChangeset, changeset, {
       tags: {
         op: "seq",
         mutations: [["insert", "new", undefined]],
@@ -302,7 +468,7 @@ describe("rebase", () => {
       },
     };
 
-    expect(rebaseChangeset(baseSeqAddChangeset, changeset)).toEqual({
+    checkRebase(baseSeqAddChangeset, changeset, {
       tags: {
         op: "seq",
         mutations: [["remove", "last", undefined]],
@@ -311,75 +477,88 @@ describe("rebase", () => {
   });
 });
 
-describe("squash", () => {
-  test("squashes non-conflicting changesets", () => {
-    expect(squashChangesets(baseTitleChangeset, baseSeqAddChangeset)).toEqual({
+describe("squashChangesets", () => {
+  const checkSquash = (
+    first: FieldChangeset,
+    second: FieldChangeset,
+    expected: FieldChangeset,
+  ) => {
+    const result = squashChangesets(first, second);
+    expect(result).toEqual(expected);
+  };
+
+  test("squashes non-conflicting changesets", () =>
+    checkSquash(baseTitleChangeset, baseSeqAddChangeset, {
       ...baseTitleChangeset,
       ...baseSeqAddChangeset,
-    });
-  });
+    }));
 
-  test("squashes set changes on same attribute", () => {
-    expect(squashChangesets(baseTitleChangeset, secondTitleChangeset)).toEqual({
+  test("squashes set changes on same attribute", () =>
+    checkSquash(baseTitleChangeset, secondTitleChangeset, {
       title: {
         op: "set",
         previous: mockTask1Node.title,
         value: finalTitle,
       },
-    });
-  });
+    }));
 
-  test("squashes sequence operations", () => {
-    const anotherSeqAddChange: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "beta", 1]],
+  test("squashes sequence operations", () =>
+    checkSquash(
+      baseSeqAddChangeset,
+      {
+        tags: {
+          op: "seq",
+          mutations: [["insert", "beta", 1]],
+        },
       },
-    };
-
-    expect(squashChangesets(baseSeqAddChangeset, anotherSeqAddChange)).toEqual({
-      tags: {
-        op: "seq",
-        mutations: [
-          ["insert", "completed", 1],
-          ["insert", "beta", 2],
-        ],
+      {
+        tags: {
+          op: "seq",
+          mutations: [
+            ["insert", "completed", 1],
+            ["insert", "beta", 2],
+          ],
+        },
       },
-    });
-  });
+    ));
 
-  test("cancels out add followed by remove", () => {
-    const seqRemoveChange: FieldChangeset = { tags: mockRemoveChange };
-
-    expect(squashChangesets(baseSeqAddChangeset, seqRemoveChange)).toEqual(
+  test("cancels out add followed by remove", () =>
+    checkSquash(
+      baseSeqAddChangeset,
+      { tags: mockRemoveChange },
       emptyChangeset,
-    );
-  });
+    ));
 
-  test("squashes set followed by seq operations", () => {
-    const setChangeset: FieldChangeset = {
-      tags: {
-        op: "set",
-        value: ["a", "b"],
-        previous: undefined,
+  test("squashes set followed by seq operations", () =>
+    checkSquash(
+      {
+        tags: {
+          op: "set",
+          value: ["a", "b"],
+          previous: undefined,
+        },
       },
-    };
+      {
+        tags: {
+          op: "seq",
+          mutations: [["insert", "c", 2]],
+        },
+      },
+      {
+        tags: {
+          op: "set",
+          value: ["a", "b", "c"],
+          previous: undefined,
+        },
+      },
+    ));
 
-    const seqChangeset: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "c", 2]],
-      },
-    };
-
-    expect(squashChangesets(setChangeset, seqChangeset)).toEqual({
-      tags: {
-        op: "set",
-        value: ["a", "b", "c"],
-        previous: undefined,
-      },
-    });
-  });
+  test("squash of changeset and its inverse is empty", () =>
+    checkSquash(
+      mockChangesetUpdateTask1,
+      inverseChangeset(mockChangesetUpdateTask1),
+      emptyChangeset,
+    ));
 
   test("squashing preserves application order", () => {
     const squashed = squashChangesets(baseTitleChangeset, secondTitleChangeset);
@@ -393,93 +572,53 @@ describe("squash", () => {
     expect(sequential).toEqual(direct);
   });
 
-  test("squash of changeset and its inverse is empty", () => {
-    const inverse = inverseChangeset(mockChangesetUpdateTask1);
-
-    expect(squashChangesets(mockChangesetUpdateTask1, inverse)).toEqual(
-      emptyChangeset,
-    );
-  });
-
-  test("squashing repeated removals matches sequential application", () => {
-    const repeatedRemoval: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["remove", "important", 1]],
+  test("squashes multiple appends", () =>
+    checkSquash(
+      {
+        tags: {
+          op: "seq",
+          mutations: [["insert", "first"]],
+        },
       },
-    };
-
-    const squashed = squashChangesets(baseSeqRemoveChangeset, repeatedRemoval);
-
-    const sequential = applyChangeset(
-      applyChangeset(mockTaskNode1Updated, baseSeqRemoveChangeset),
-      repeatedRemoval,
-    );
-    const direct = applyChangeset(mockTaskNode1Updated, squashed);
-
-    expect(direct).toEqual(sequential);
-  });
-
-  test("squashes append followed by remove-last", () => {
-    const appendChange: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "new"]],
+      {
+        tags: {
+          op: "seq",
+          mutations: [["insert", "second"]],
+        },
       },
-    };
-    const removeLastChange: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["remove", "new"]],
+      {
+        tags: {
+          op: "seq",
+          mutations: [
+            ["insert", "first", undefined],
+            ["insert", "second", undefined],
+          ],
+        },
       },
-    };
+    ));
 
-    expect(squashChangesets(appendChange, removeLastChange)).toEqual(
-      emptyChangeset,
-    );
-  });
-
-  test("squashes multiple appends", () => {
-    const firstAppend: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "first"]],
+  test("adjusts positions of remaining mutations after cancellation", () =>
+    checkSquash(
+      {
+        items: {
+          op: "seq",
+          mutations: [
+            ["insert", 17, 2],
+            ["remove", 15, 6],
+          ],
+        },
       },
-    };
-    const secondAppend: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "second"]],
+      {
+        items: {
+          op: "seq",
+          mutations: [["remove", 17, 2]],
+        },
       },
-    };
-
-    expect(squashChangesets(firstAppend, secondAppend)).toEqual({
-      tags: {
-        op: "seq",
-        mutations: [
-          ["insert", "first", undefined],
-          ["insert", "second", undefined],
-        ],
+      {
+        items: {
+          op: "seq",
+          mutations: [["remove", 15, 5]],
+        },
       },
-    });
-  });
-
-  test("squashing with appends matches sequential application", () => {
-    const appendChange: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "new"]],
-      },
-    };
-
-    const squashed = squashChangesets(baseSeqAddChangeset, appendChange);
-
-    const sequential = applyChangeset(
-      applyChangeset(mockTask1Node, baseSeqAddChangeset),
-      appendChange,
-    );
-    const direct = applyChangeset(mockTask1Node, squashed);
-
-    expect(direct).toEqual(sequential);
-  });
+    ));
 });

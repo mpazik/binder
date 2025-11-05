@@ -1,3 +1,4 @@
+import { join } from "path";
 import type { Argv } from "yargs";
 import {
   createError,
@@ -21,7 +22,12 @@ import {
   type CommandHandlerWithDbRead,
   type CommandHandlerWithDbWrite,
 } from "../bootstrap.ts";
-import { verifySync, repairDbFromLog } from "../lib/orchestrator.ts";
+import {
+  verifySync,
+  repairDbFromLog,
+  squashTransactions,
+} from "../lib/orchestrator.ts";
+import { readLastTransactions } from "../lib/journal.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -166,6 +172,74 @@ export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
   return ok(undefined);
 };
 
+export const transactionSquashHandler: CommandHandlerWithDbWrite<{
+  count: number;
+  yes?: boolean;
+}> = async ({ db, ui, log, config, fs, args }) => {
+  const transactionLogPath = join(config.paths.binder, "transactions.jsonl");
+  const logResult = await readLastTransactions(
+    fs,
+    transactionLogPath,
+    args.count,
+  );
+  if (isErr(logResult)) return logResult;
+
+  const transactionsToSquash = logResult.data;
+
+  if (!args.yes) {
+    ui.printTransactions(
+      transactionsToSquash,
+      `Squashing ${args.count} transaction(s)`,
+    );
+
+    const uniqueAuthors = Array.from(
+      new Set(transactionsToSquash.map((tx) => tx.author)),
+    );
+    if (uniqueAuthors.length > 1) {
+      const newestAuthor =
+        transactionsToSquash[transactionsToSquash.length - 1]!.author;
+      ui.warning(
+        `Authors [${uniqueAuthors.join(", ")}] will be replaced with "${newestAuthor}"`,
+      );
+      ui.println("");
+    }
+
+    if (
+      !(await ui.confirm("Do you want to proceed with squashing? (yes/no): "))
+    ) {
+      ui.info("Squash cancelled");
+      return ok(undefined);
+    }
+  }
+
+  const squashResult = await squashTransactions(
+    fs,
+    db,
+    config.paths.binder,
+    config.paths.docs,
+    config.dynamicDirectories,
+    log,
+    args.count,
+  );
+  if (isErr(squashResult)) {
+    log.error("Failed to squash transactions", {
+      error: squashResult.error,
+    });
+    return squashResult;
+  }
+
+  const squashedTransaction = squashResult.data;
+
+  log.info("Squashed successfully", { count: args.count });
+  ui.block(() => {
+    ui.success("Squashed successfully");
+    ui.info(
+      `Transactions ${transactionsToSquash[0]!.id}-${transactionsToSquash[args.count - 1]!.id} merged into transaction #${squashedTransaction.id}`,
+    );
+  });
+  return ok(undefined);
+};
+
 export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
   kg,
   config,
@@ -173,7 +247,6 @@ export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
   fs,
 }) => {
   const verifyResult = await verifySync(fs, kg, config.paths.binder);
-
   if (isErr(verifyResult)) return verifyResult;
 
   const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
@@ -337,6 +410,27 @@ const TransactionCommand = types({
       )
       .command(
         types({
+          command: "squash [count]",
+          describe: "squash the last N transactions into one",
+          builder: (yargs: Argv) => {
+            return yargs
+              .positional("count", {
+                describe: "number of transactions to squash",
+                type: "number",
+                default: 2,
+              })
+              .option("yes", {
+                alias: "y",
+                describe: "auto-confirm all prompts",
+                type: "boolean",
+                default: false,
+              });
+          },
+          handler: bootstrapWithDbWrite(transactionSquashHandler),
+        }),
+      )
+      .command(
+        types({
           command: "verify",
           describe: "verify database and log are in sync",
           handler: bootstrapWithDbRead(transactionVerifyHandler),
@@ -367,7 +461,7 @@ const TransactionCommand = types({
       )
       .demandCommand(
         1,
-        "You need to specify a subcommand: create, read, rollback, verify, repair",
+        "You need to specify a subcommand: create, read, rollback, squash, verify, repair",
       );
   },
   handler: async () => {},

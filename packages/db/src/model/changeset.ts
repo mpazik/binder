@@ -4,6 +4,7 @@ import {
   assertType,
   assertUndefined,
   filterObjectValues,
+  isEqual,
   mapObjectValues,
   omit,
 } from "@binder/utils";
@@ -48,18 +49,6 @@ export type EntitiesChangeset<N extends NamespaceEditable> = Record<
 >; // assumption is that order or entity change application does not matter
 export type NodesChangeset = EntitiesChangeset<"node">;
 export type ConfigurationsChangeset = EntitiesChangeset<"config">;
-
-const isEqual = (left: unknown, right: unknown): boolean => {
-  if (Object.is(left, right)) {
-    return true;
-  }
-
-  if (left && right && typeof left === "object" && typeof right === "object") {
-    return JSON.stringify(left) === JSON.stringify(right);
-  }
-
-  return false;
-};
 
 export const isValueChange = (
   value: ValueChange | FieldValue,
@@ -202,10 +191,10 @@ export const applyChange = (
 ): FieldValue => {
   switch (change.op) {
     case "set": {
-      if (current !== null && current !== undefined) {
-        assertEqual(current, change.previous, "change field");
+      if (current === null || current === undefined) {
+        assertUndefined(change.previous, "change.previous");
       } else {
-        assertUndefined(change.previous);
+        assertEqual(current, change.previous, "change field");
       }
       return change.value ?? null;
     }
@@ -246,7 +235,7 @@ export const applyChange = (
           result = arr;
         }
       }
-      return result;
+      return Array.isArray(result) && result.length === 0 ? null : result;
     }
   }
 };
@@ -262,7 +251,17 @@ export const applyChangeset = (
       normalizeValueChange(change),
     );
   }
-  return { ...fields, ...applied };
+  const result = { ...fields, ...applied };
+  return filterObjectValues(result, (value, key) => {
+    if (key in applied) {
+      if (value === null) {
+        const change = normalizeValueChange(changeset[key]);
+        return change.op !== "seq";
+      }
+      return true;
+    }
+    return value !== null && !(Array.isArray(value) && value.length === 0);
+  });
 };
 
 export const squashChange = (
@@ -299,13 +298,15 @@ export const squashChange = (
         );
 
         if (cancelIndex !== -1) {
+          // Store the position of the insert being removed before we remove it
+          const removedInsertPos = combinedMutations[cancelIndex]![2];
           // Remove the cancelling add operation
           combinedMutations.splice(cancelIndex, 1);
-          // Adjust positions of subsequent mutations
-          if (nextPos !== undefined) {
+          // Adjust positions of subsequent mutations based on the removed insert's position
+          if (removedInsertPos !== undefined) {
             for (let i = cancelIndex; i < combinedMutations.length; i++) {
               const [kind, val, pos] = combinedMutations[i]!;
-              if (pos !== undefined && pos > nextPos) {
+              if (pos !== undefined && pos > removedInsertPos) {
                 combinedMutations[i] = [kind, val, pos - 1] as ListMutation;
               }
             }

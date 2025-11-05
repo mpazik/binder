@@ -10,6 +10,7 @@ import {
   type Transaction,
   type TransactionId,
 } from "@binder/db";
+import { squashTransactions as mergeTransactions } from "@binder/db";
 import {
   createError,
   err,
@@ -280,4 +281,96 @@ export const setupKnowledgeGraph = (
     },
   });
   return knowledgeGraph;
+};
+
+export const squashTransactions = async (
+  fs: FileSystem,
+  db: Database,
+  binderPath: string,
+  docsPath: string,
+  dynamicDirectories: Array<{ path: string; query: string; template?: string }>,
+  log: Logger,
+  count: number,
+): ResultAsync<Transaction> => {
+  if (count < 2)
+    return err(
+      createError(
+        "invalid-count",
+        `Count must be at least 2 to squash, got ${count}`,
+      ),
+    );
+
+  const plainKg = openKnowledgeGraph(db);
+
+  const versionResult = await plainKg.version();
+  if (isErr(versionResult)) return versionResult;
+
+  const currentId = versionResult.data.id;
+  if (currentId === 0)
+    return err(
+      createError("invalid-squash", "Cannot squash the genesis transaction"),
+    );
+
+  if (count > currentId)
+    return err(
+      createError(
+        "invalid-squash",
+        `Cannot squash ${count} transactions, only ${currentId} available`,
+      ),
+    );
+
+  const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
+  const logResult = await readLastTransactions(fs, transactionLogPath, count);
+  if (isErr(logResult)) return logResult;
+
+  const logTransactions = logResult.data;
+
+  if (logTransactions.length !== count)
+    return err(
+      createError(
+        "log-inconsistency",
+        `Log contains ${logTransactions.length} transactions but expected ${count}`,
+      ),
+    );
+
+  const dbTransactions: Transaction[] = [];
+  for (let i = 0; i < count; i++) {
+    const txId = (currentId - count + 1 + i) as TransactionId;
+    const txResult = await plainKg.fetchTransaction(txId);
+    if (isErr(txResult)) return txResult;
+    dbTransactions.push(txResult.data);
+  }
+
+  for (let i = 0; i < count; i++) {
+    if (logTransactions[i]!.hash !== dbTransactions[i]!.hash)
+      return err(
+        createError(
+          "log-db-mismatch",
+          `Transaction #${dbTransactions[i]!.id} hash mismatch between log and database`,
+        ),
+      );
+  }
+
+  const squashedTransaction = await mergeTransactions(dbTransactions);
+
+  const removeResult = await removeLastFromLog(fs, transactionLogPath, count);
+  if (isErr(removeResult)) return removeResult;
+
+  const rollbackResult = await plainKg.rollback(count, currentId);
+  if (isErr(rollbackResult)) return rollbackResult;
+
+  const kgWithCallbacks = setupKnowledgeGraph(
+    db,
+    fs,
+    binderPath,
+    docsPath,
+    dynamicDirectories,
+    log,
+  );
+  const applyResult = await applyTransactions(kgWithCallbacks, [
+    squashedTransaction,
+  ]);
+  if (isErr(applyResult)) return applyResult;
+
+  return ok(squashedTransaction);
 };

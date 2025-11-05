@@ -19,7 +19,11 @@ import {
 import { throwIfError } from "@binder/utils";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
 import { mockLog } from "../bootstrap.mock.ts";
-import { setupKnowledgeGraph, type VerifySync } from "./orchestrator.ts";
+import {
+  setupKnowledgeGraph,
+  squashTransactions,
+  type VerifySync,
+} from "./orchestrator.ts";
 import {
   applyTransactions,
   redoTransactions,
@@ -27,7 +31,11 @@ import {
   undoTransactions,
   verifySync,
 } from "./orchestrator.ts";
-import { logTransaction, readLastTransactions } from "./journal.ts";
+import {
+  logTransaction,
+  readLastTransactions,
+  removeLastFromLog,
+} from "./journal.ts";
 import { createInMemoryFileSystem } from "./filesystem.mock.ts";
 
 describe("orchestrator", () => {
@@ -351,6 +359,98 @@ describe("orchestrator", () => {
       const result = await redoTransactions(fs, kg, root, 1);
       expect(result).toBeErr();
       await checkVersion(mockTransaction3.id);
+    });
+  });
+  describe("squashTransactions", () => {
+    it("squashes two transactions into one", async () => {
+      throwIfError(
+        await applyTransactions(kg, [
+          mockTransactionInit,
+          mockTransactionUpdate,
+          mockTransaction3,
+        ]),
+      );
+
+      const squashed = throwIfError(
+        await squashTransactions(fs, db, root, "", [], mockLog, 2),
+      );
+
+      await checkVersion(mockTransactionUpdate.id);
+
+      const mainLog = throwIfError(
+        await readLastTransactions(fs, transactionLogPath, 2),
+      );
+      expect(mainLog).toEqual([mockTransactionInit, squashed]);
+    });
+
+    it("squashes multiple transactions into one", async () => {
+      throwIfError(
+        await applyTransactions(kg, [
+          mockTransactionInit,
+          mockTransactionUpdate,
+          mockTransaction3,
+          mockTransaction4,
+        ]),
+      );
+
+      const squashed = throwIfError(
+        await squashTransactions(fs, db, root, "", [], mockLog, 3),
+      );
+
+      await checkVersion(mockTransactionUpdate.id);
+
+      const mainLog = throwIfError(
+        await readLastTransactions(fs, transactionLogPath, 2),
+      );
+      expect(mainLog).toEqual([mockTransactionInit, squashed]);
+    });
+
+    it("errors on invalid count", async () => {
+      const resultLessThan2 = await squashTransactions(
+        fs,
+        db,
+        root,
+        "",
+        [],
+        mockLog,
+        1,
+      );
+      expect(resultLessThan2).toBeErr();
+      await checkVersion(GENESIS_VERSION.id);
+
+      throwIfError(
+        await applyTransactions(kg, [
+          mockTransactionInit,
+          mockTransactionUpdate,
+        ]),
+      );
+
+      const resultOverflow = await squashTransactions(
+        fs,
+        db,
+        root,
+        "",
+        [],
+        mockLog,
+        5,
+      );
+      expect(resultOverflow).toBeErr();
+      await checkVersion(mockTransactionUpdate.id);
+    });
+
+    it("errors when log and db are out of sync", async () => {
+      throwIfError(
+        await applyTransactions(kg, [
+          mockTransactionInit,
+          mockTransactionUpdate,
+        ]),
+      );
+
+      throwIfError(await removeLastFromLog(fs, transactionLogPath, 1));
+
+      const result = await squashTransactions(fs, db, root, "", [], mockLog, 2);
+      expect(result).toBeErr();
+      await checkVersion(mockTransactionInit.id, mockTransactionUpdate.id);
     });
   });
 });
