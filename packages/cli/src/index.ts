@@ -13,7 +13,7 @@ import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
 import { createLogger } from "./log";
 import * as UI from "./ui";
-import { BINDER_VERSION } from "./build-time";
+import { BINDER_VERSION, isDev } from "./build-time";
 
 const cancel = new AbortController();
 
@@ -31,7 +31,7 @@ process.on("uncaughtException", (e) => {
   });
 });
 
-const cli = yargs(hideBin(process.argv))
+let cli = yargs(hideBin(process.argv))
   .scriptName("binder")
   .help("help", "show help")
   .version("version", "show version number", BINDER_VERSION)
@@ -55,9 +55,15 @@ const cli = yargs(hideBin(process.argv))
   .command(TransactionCommand)
   .command(SearchCommand)
   .command(DocsCommand)
-  .command(DevCommand)
   .command(UndoCommand)
-  .command(RedoCommand)
+  .command(RedoCommand);
+
+if (isDev()) {
+  cli = cli.command(DevCommand);
+}
+
+cli = cli
+  .demandCommand(1, "You need to specify a command")
   .fail((msg) => {
     if (msg) {
       UI.error(msg);

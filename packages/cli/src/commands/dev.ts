@@ -1,35 +1,209 @@
+import { join } from "path";
+import { renameSync } from "fs";
 import type { Argv } from "yargs";
-import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
 import {
-  bootstrap,
-  bootstrapWithDbWrite,
-  type CommandHandler,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
-import { BINDER_DIR } from "../config.ts";
-import { documentSchemaTransactionInput } from "../document/document-schema.ts";
-import { mockDocumentTransactionInput } from "../document/document.mock.ts";
+  createError,
+  err,
+  errorToObject,
+  isErr,
+  ok,
+  tryCatch,
+} from "@binder/utils";
+import { openDb } from "@binder/db";
+import { bootstrap, type CommandHandler } from "../bootstrap.ts";
+import {
+  DB_FILE,
+  LOCK_FILE,
+  TRANSACTION_LOG_FILE,
+  UNDO_LOG_FILE,
+} from "../config.ts";
+import { repairDbFromLog } from "../lib/orchestrator.ts";
+import { verifyLog } from "../lib/journal.ts";
 import { types } from "./types.ts";
 
-export const cleanupHandler: CommandHandler = async ({ ui, fs }) => {
-  const removeResult = tryCatch(() => {
-    fs.rm(BINDER_DIR, { recursive: true, force: true });
+export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
+  const binderPath = config.paths.binder;
+  const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
+  const backupPath = join(binderPath, `${TRANSACTION_LOG_FILE}.bac`);
+
+  if (!fs.exists(transactionLogPath))
+    return err(
+      createError("no-transaction-log", "No transaction log to backup", {
+        path: transactionLogPath,
+      }),
+    );
+
+  const verifyResult = await verifyLog(fs, transactionLogPath, {
+    verifyIntegrity: false,
+  });
+  if (isErr(verifyResult)) {
+    return err(
+      createError(
+        "invalid-transaction",
+        "Transaction log verification failed: " + verifyResult.error.message,
+        verifyResult.data,
+      ),
+    );
+  }
+
+  let renamedBackup: string | null = null;
+  if (fs.exists(backupPath)) {
+    const timestamp = new Date()
+      .toISOString()
+      .split(".")[0]!
+      .replace(/:/g, "-");
+    const timestampedBackup = join(
+      binderPath,
+      `${TRANSACTION_LOG_FILE}.${timestamp}.bac`,
+    );
+
+    const moveResult = tryCatch(() =>
+      renameSync(backupPath, timestampedBackup),
+    );
+    if (isErr(moveResult))
+      return err(
+        createError(
+          "backup-rename-failed",
+          "Failed to rename existing backup",
+          { error: moveResult.error },
+        ),
+      );
+    renamedBackup = timestampedBackup;
+  }
+
+  const copyResult = await tryCatch(async () => {
+    await Bun.write(backupPath, Bun.file(transactionLogPath));
   }, errorToObject);
 
-  if (isErr(removeResult)) return removeResult;
+  if (isErr(copyResult))
+    return err(
+      createError("backup-copy-failed", "Failed to create backup", {
+        error: copyResult.error,
+      }),
+    );
 
-  ui.println(".binder directory removed");
+  const items: string[] = [];
+  items.push(`Backed up to ${TRANSACTION_LOG_FILE}.bac`);
+  if (renamedBackup) {
+    items.push(`Previous backup moved to ${renamedBackup.split("/").pop()}`);
+  }
+  if (!isErr(verifyResult)) {
+    items.push(`Verified ${verifyResult.data.count} transactions`);
+  }
+
+  ui.block(() => {
+    ui.success("Backup created");
+    ui.list(items);
+  });
+
   return ok(undefined);
 };
 
-export const setupHandler: CommandHandlerWithDbWrite = async ({ kg }) => {
-  const docSchemaResult = await kg.update(documentSchemaTransactionInput);
-  if (isErr(docSchemaResult)) return docSchemaResult;
+export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
+  ui,
+  fs,
+  config,
+  log,
+  args,
+}) => {
+  const binderPath = config.paths.binder;
+  const backupPath = join(binderPath, `${TRANSACTION_LOG_FILE}.bac`);
+  const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
 
-  const docResult = await kg.update(mockDocumentTransactionInput);
-  if (isErr(docResult)) return docResult;
+  if (!fs.exists(backupPath))
+    return err(
+      createError(
+        "backup-not-found",
+        `Backup file ${TRANSACTION_LOG_FILE}.bac is required. Run 'binder dev backup' first.`,
+      ),
+    );
 
-  return ok("Mock data created successfully");
+  const verifyResult = await verifyLog(fs, backupPath, {
+    verifyIntegrity: true,
+  });
+  if (isErr(verifyResult))
+    return err(
+      createError(
+        "backup-verification-failed",
+        "Backup file verification failed",
+        { error: verifyResult.error },
+      ),
+    );
+
+  const { count } = verifyResult.data;
+
+  if (!args.yes) {
+    ui.block(() => {
+      ui.warning("About to reset workspace:");
+      ui.list([
+        `Restore ${count} transactions from backup`,
+        `Delete database (${DB_FILE})`,
+        `Delete undo log (${UNDO_LOG_FILE})`,
+        `Delete CLI log (cli.log)`,
+        `Delete lock file (${LOCK_FILE})`,
+      ]);
+    });
+
+    if (!(await ui.confirm("Proceed with reset? (yes/no): "))) {
+      ui.info("Reset cancelled");
+      return ok(undefined);
+    }
+  }
+
+  const copyResult = await tryCatch(async () => {
+    await Bun.write(transactionLogPath, Bun.file(backupPath));
+  }, errorToObject);
+
+  if (isErr(copyResult))
+    return err(
+      createError(
+        "restore-failed",
+        "Failed to restore backup to transaction log",
+        { error: copyResult.error },
+      ),
+    );
+
+  const filesToRemove = [UNDO_LOG_FILE, DB_FILE, "cli.log", LOCK_FILE];
+
+  for (const fileName of filesToRemove) {
+    const filePath = join(binderPath, fileName);
+    if (fs.exists(filePath)) {
+      const removeResult = fs.rm(filePath, { force: true });
+      if (isErr(removeResult)) {
+        log.warn("Failed to remove file during reset", {
+          path: filePath,
+          error: removeResult.error,
+        });
+      }
+    }
+  }
+
+  const dbResult = openDb({ path: join(binderPath, DB_FILE), migrate: true });
+  if (isErr(dbResult))
+    return err(
+      createError("db-open-failed", "Failed to open database after reset", {
+        error: dbResult.error,
+      }),
+    );
+  const repairResult = await repairDbFromLog(fs, dbResult.data, binderPath);
+  if (isErr(repairResult))
+    return err(
+      createError(
+        "db-repair-failed",
+        "Failed to rebuild database from transaction log",
+        { error: repairResult.error },
+      ),
+    );
+
+  ui.block(() => {
+    ui.success("Reset complete");
+    ui.list([
+      `Restored ${count} transactions from backup`,
+      "Database rebuilt successfully",
+    ]);
+  });
+
+  return ok(undefined);
 };
 
 const DevCommand = types({
@@ -39,16 +213,30 @@ const DevCommand = types({
     return yargs
       .command(
         types({
-          command: "setup",
-          describe: "remove .binder directory and initialize with mock data",
-          handler: async () => {
-            await bootstrap(cleanupHandler)({});
-            // bootstrap again, to initialize new database instance
-            return bootstrapWithDbWrite(setupHandler)({});
-          },
+          command: "backup",
+          describe: "create a backup of the transaction log",
+          handler: bootstrap(backupHandler),
         }),
       )
-      .demandCommand(1, "You need to specify a subcommand: setup");
+      .command(
+        types({
+          command: "reset",
+          describe: "restore from backup and rebuild workspace",
+          builder: (yargs: Argv) => {
+            return yargs.option("yes", {
+              alias: "y",
+              describe: "auto-confirm all prompts",
+              type: "boolean",
+              default: false,
+            });
+          },
+          handler: bootstrap(resetHandler),
+        }),
+      )
+      .demandCommand(
+        1,
+        "You need to specify a subcommand: setup, backup, reset",
+      );
   },
   handler: async () => {},
 });

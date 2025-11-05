@@ -10,8 +10,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun run build.ts",
-    "build:prod": "bun run build.ts --prod",
+    "build": "NODE_ENV=development bun run build.ts",
+    "build:prod": "NODE_ENV=production bun run build.ts --prod",
     "format": "bun prettier --write --ignore-path ../../.prettierignore .",
     "lint": "bun eslint . --fix",
     "typecheck": "tsc --noEmit",
