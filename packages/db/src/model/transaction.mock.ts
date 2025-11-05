@@ -92,3 +92,46 @@ export const mockTransactionInputUpdate: TransactionInput = {
   ],
   configurations: [],
 };
+
+export const mockTransaction3Id = 3 as TransactionId;
+export const mockTransaction3Hash =
+  "a123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" as TransactionHash;
+
+export const mockTransaction3: Transaction = {
+  id: mockTransaction3Id,
+  previous: mockTransactionUpdateHash,
+  hash: mockTransaction3Hash,
+  nodes: {
+    [mockTask2Node.uid]: {
+      status: {
+        op: "set",
+        previous: "todo",
+        value: "in_progress",
+      },
+    },
+  },
+  configurations: {},
+  author: mockAuthor,
+  createdAt: newIsoTimestamp("2024-01-03"),
+};
+
+export const mockTransaction4Id = 4 as TransactionId;
+export const mockTransaction4Hash =
+  "b234567890abcdef0123456789abcdef0123456789abcdef0123456789abcdef" as TransactionHash;
+export const mockTransaction4: Transaction = {
+  id: mockTransaction4Id,
+  previous: mockTransaction3Hash,
+  hash: mockTransaction4Hash,
+  nodes: {
+    [mockProjectNode.uid]: {
+      status: {
+        op: "set",
+        previous: "in_progress",
+        value: "completed",
+      },
+    },
+  },
+  configurations: {},
+  author: mockAuthor,
+  createdAt: newIsoTimestamp("2024-01-04"),
+};

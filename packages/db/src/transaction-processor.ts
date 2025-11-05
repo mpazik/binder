@@ -15,12 +15,12 @@ import {
   type ConfigUid,
   type FieldChangeset,
   incrementEntityId,
-  inverseChangeset,
   type NodeSchema,
   type NodeUid,
   type Transaction,
   type TransactionId,
   type TransactionInput,
+  invertTransaction,
   withHashTransaction,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
@@ -123,17 +123,23 @@ export const applyTransaction = async (
     if (isErr(result)) return result;
   }
 
-  const saveResult = await saveTransaction(tx, transaction);
-  if (isErr(saveResult)) return saveResult;
-
   return ok(undefined);
+};
+
+export const applyAndSaveTransaction = async (
+  tx: DbTransaction,
+  transaction: Transaction,
+): ResultAsync<void> => {
+  const applyResult = await applyTransaction(tx, transaction);
+  if (isErr(applyResult)) return applyResult;
+  return saveTransaction(tx, transaction);
 };
 
 export const rollbackTransaction = async (
   tx: DbTransaction,
   count: number,
   version: TransactionId,
-): ResultAsync<void> => {
+): ResultAsync<Transaction[]> => {
   if (count < 1)
     return err(
       createError("invalid-rollback", `Count must be at least 1, got ${count}`),
@@ -152,19 +158,11 @@ export const rollbackTransaction = async (
       ),
     );
 
-  if (currentId === 1)
+  if (count > currentId)
     return err(
       createError(
         "invalid-rollback",
-        "Cannot rollback the genesis transaction",
-      ),
-    );
-
-  if (count > currentId - 1)
-    return err(
-      createError(
-        "invalid-rollback",
-        `Cannot rollback ${count} transactions, only ${currentId - 1} available`,
+        `Cannot rollback ${count} transactions, only ${currentId} available`,
       ),
     );
 
@@ -186,59 +184,12 @@ export const rollbackTransaction = async (
   );
   if (isErr(transactionsToRevertResult)) return transactionsToRevertResult;
 
-  const transactionsToRevert: Transaction[] =
-    transactionsToRevertResult.data.map((row) => ({
-      id: row.id,
-      hash: row.hash,
-      previous: row.previous,
-      nodes: row.nodes,
-      configurations: row.configurations,
-      author: row.author ?? undefined,
-      createdAt: row.createdAt,
-    }));
+  const transactionsToRevert: Transaction[] = transactionsToRevertResult.data;
 
   for (const transaction of transactionsToRevert) {
-    const inverseNodes = Object.fromEntries(
-      Object.entries(transaction.nodes).map(([uid, changeset]) => [
-        uid,
-        inverseChangeset(changeset),
-      ]),
-    );
-
-    const inverseConfigurations = Object.fromEntries(
-      Object.entries(transaction.configurations).map(([uid, changeset]) => [
-        uid,
-        inverseChangeset(changeset),
-      ]),
-    );
-
-    for (const [entityUid, changeset] of Object.entries(inverseNodes)) {
-      const result = await tryCatch(
-        applyChangeset(
-          tx,
-          "node",
-          entityUid as NodeUid,
-          addTxIdsToChangeset(changeset, transaction.id, "remove"),
-        ),
-        errorToObject,
-      );
-      if (isErr(result)) return result;
-    }
-
-    for (const [entityUid, changeset] of Object.entries(
-      inverseConfigurations,
-    )) {
-      const result = await tryCatch(
-        applyChangeset(
-          tx,
-          "config",
-          entityUid as ConfigUid,
-          addTxIdsToChangeset(changeset, transaction.id, "remove"),
-        ),
-        errorToObject,
-      );
-      if (isErr(result)) return result;
-    }
+    const inverted = invertTransaction(transaction);
+    const result = await applyTransaction(tx, inverted);
+    if (isErr(result)) return result;
   }
 
   const deleteTransactionsResult = await tryCatch(
@@ -255,5 +206,5 @@ export const rollbackTransaction = async (
   );
   if (isErr(deleteTransactionsResult)) return deleteTransactionsResult;
 
-  return ok(undefined);
+  return ok(transactionsToRevert);
 };

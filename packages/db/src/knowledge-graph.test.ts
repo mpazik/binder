@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { throwIfError } from "@binder/utils";
+import { okVoid, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { getTestDatabase } from "./db.mock";
 import { openKnowledgeGraph } from "./knowledge-graph.ts";
@@ -27,7 +27,7 @@ import {
   type Transaction,
   versionFromTransaction,
 } from "./model";
-import { applyTransaction } from "./transaction-processor.ts";
+import { applyAndSaveTransaction } from "./transaction-processor.ts";
 
 describe("knowledge-graph-setup", () => {
   let db: Database;
@@ -67,7 +67,7 @@ describe("knowledge graph", () => {
   describe("with data", () => {
     beforeEach(async () => {
       await db.transaction(async (tx) => {
-        throwIfError(await applyTransaction(tx, mockTransactionInit));
+        throwIfError(await applyAndSaveTransaction(tx, mockTransactionInit));
       });
     });
 
@@ -123,8 +123,9 @@ describe("knowledge graph", () => {
       it("processes and applies transaction", async () => {
         let savedTransaction: Transaction | undefined;
         const kgWithCallback = openKnowledgeGraph(db, {
-          onTransactionSaved: (tx: Transaction) => {
+          beforeCommit: async (tx: Transaction) => {
             savedTransaction = tx;
+            return okVoid;
           },
         });
 

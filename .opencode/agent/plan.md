@@ -34,9 +34,7 @@ When creating implementation plan:
 ## References
 
 ### Project description
-@README.md 
-
-### Technical Stack
+@README.md
 @.opencode/docs/tech-stack.md
 
 ### Directory Structure

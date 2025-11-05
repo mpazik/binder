@@ -2,6 +2,7 @@ import {
   type Brand,
   type BrandDerived,
   type IsoTimestamp,
+  mapObjectValues,
   pick,
 } from "@binder/utils";
 import { z } from "zod";
@@ -12,7 +13,7 @@ import type {
   ConfigurationsChangeset,
   NodesChangeset,
 } from "./changeset.ts";
-import squashChangesets from "./changeset.ts";
+import squashChangesets, { inverseChangeset } from "./changeset.ts";
 
 export type TransactionId = BrandDerived<EntityId, "TransactionId">;
 export type TransactionHash = Brand<string, "TransactionHash">;
@@ -88,7 +89,7 @@ export const withHashTransaction = async (
   return {
     id,
     hash: await hashTransaction(canonical),
-    ...tx,
+    ...pick(tx, ["previous", "author", "createdAt", "nodes", "configurations"]),
   };
 };
 
@@ -111,6 +112,12 @@ export const GENESIS_VERSION: GraphVersion = {
   hash: "0".repeat(64) as TransactionHash,
   updatedAt: "2025-10-01T00:00:00.000Z" as IsoTimestamp,
 };
+
+export const invertTransaction = (transaction: Transaction): Transaction => ({
+  ...transaction,
+  nodes: mapObjectValues(transaction.nodes, inverseChangeset),
+  configurations: mapObjectValues(transaction.configurations, inverseChangeset),
+});
 
 export const squashTransactions = async (
   transactions: Transaction[],

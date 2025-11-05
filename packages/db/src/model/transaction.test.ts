@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   squashTransactions,
-  type Transaction,
+  invertTransaction,
   type TransactionId,
 } from "./transaction.ts";
 import {
@@ -101,5 +101,23 @@ describe("squashTransactions", () => {
         },
       },
     });
+  });
+});
+
+describe("transactionInvert", () => {
+  it("inverts transaction nodes and configurations", () => {
+    const result = invertTransaction(mockTransactionUpdate);
+
+    expect(result.nodes[mockTask1Uid]).toEqual(
+      inverseChangeset(mockTransactionUpdate.nodes[mockTask1Uid]),
+    );
+    expect(result.configurations).toEqual({});
+  });
+
+  it("double inversion returns original changesets", () => {
+    const inverted = invertTransaction(mockTransactionInit);
+    const doubleInverted = invertTransaction(inverted);
+
+    expect(doubleInverted).toStrictEqual(mockTransactionInit);
   });
 });

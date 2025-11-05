@@ -1,12 +1,10 @@
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
-import type { Transaction, TransactionRef } from "@binder/db";
 import {
   bootstrapWithDbWrite,
   type CommandHandlerWithDbWrite,
 } from "../bootstrap.ts";
-import { logTransaction } from "../transaction-log.ts";
-import { UNDO_LOG_FILE } from "../config.ts";
+import { undoTransactions } from "../lib/orchestrator.ts";
 import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
@@ -21,43 +19,21 @@ export const undoHandler: CommandHandlerWithDbWrite<{
       ),
     );
 
-  const versionResult = await kg.version();
-  if (isErr(versionResult)) return versionResult;
+  const undoResult = await undoTransactions(
+    fs,
+    kg,
+    config.paths.binder,
+    args.steps,
+  );
+  if (isErr(undoResult)) return undoResult;
 
-  const currentId = versionResult.data.id;
-  if (currentId === 1)
-    return err(
-      createError("invalid-undo", "Cannot undo the genesis transaction"),
-    );
-
-  if (args.steps > currentId - 1)
-    return err(
-      createError(
-        "invalid-undo",
-        `Cannot undo ${args.steps} transactions, only ${currentId - 1} available`,
-      ),
-    );
-
-  const transactionsToUndo: Transaction[] = [];
-  for (let i = 0; i < args.steps; i++) {
-    const txId = (currentId - i) as TransactionRef;
-    const txResult = await kg.fetchTransaction(txId);
-    if (isErr(txResult)) return txResult;
-    transactionsToUndo.push(txResult.data);
-  }
+  const transactionsToUndo = undoResult.data;
 
   ui.heading(`Undoing ${args.steps} transaction(s)`);
 
   for (const tx of transactionsToUndo) {
     ui.printTransaction(tx);
     ui.println("");
-  }
-
-  const rollbackResult = await kg.rollback(args.steps, currentId);
-  if (isErr(rollbackResult)) return rollbackResult;
-
-  for (const tx of transactionsToUndo) {
-    await logTransaction(fs, config.paths.binder, tx, UNDO_LOG_FILE);
   }
 
   const renderResult = await renderDocs(

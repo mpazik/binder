@@ -4,8 +4,7 @@ import {
   bootstrapWithDbWrite,
   type CommandHandlerWithDbWrite,
 } from "../bootstrap.ts";
-import { readLastTransactions, removeLastFromLog } from "../transaction-log.ts";
-import { UNDO_LOG_FILE } from "../config.ts";
+import { redoTransactions } from "../lib/orchestrator.ts";
 import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
@@ -20,64 +19,22 @@ export const redoHandler: CommandHandlerWithDbWrite<{
       ),
     );
 
-  const undoLogResult = await readLastTransactions(
+  const redoResult = await redoTransactions(
     fs,
+    kg,
     config.paths.binder,
     args.steps,
-    UNDO_LOG_FILE,
   );
+  if (isErr(redoResult)) return redoResult;
 
-  if (isErr(undoLogResult)) return undoLogResult;
-
-  const undoLog = undoLogResult.data;
-  if (undoLog.length === 0)
-    return err(
-      createError("empty-undo-log", "Nothing to redo: undo log is empty"),
-    );
-
-  if (args.steps > undoLog.length)
-    return err(
-      createError(
-        "invalid-redo",
-        `Cannot redo ${args.steps} transactions, only ${undoLog.length} available in undo log`,
-      ),
-    );
-
-  const transactionsToRedo = undoLog.reverse();
-
-  const versionResult = await kg.version();
-  if (isErr(versionResult)) return versionResult;
-
-  const currentVersion = versionResult.data;
-  const firstTxToRedo = transactionsToRedo[0];
-
-  if (currentVersion.hash !== firstTxToRedo.previous)
-    return err(
-      createError(
-        "version-mismatch",
-        "Cannot redo: repository state has changed since undo",
-      ),
-    );
+  const originalTransactions = redoResult.data;
 
   ui.heading(`Redoing ${args.steps} transaction(s)`);
 
-  for (const tx of transactionsToRedo) {
+  for (const tx of originalTransactions) {
     ui.printTransaction(tx);
     ui.println("");
   }
-
-  for (const tx of transactionsToRedo) {
-    const applyResult = await kg.apply(tx);
-    if (isErr(applyResult)) return applyResult;
-  }
-
-  const removeResult = await removeLastFromLog(
-    fs,
-    config.paths.binder,
-    args.steps,
-    UNDO_LOG_FILE,
-  );
-  if (isErr(removeResult)) return removeResult;
 
   const renderResult = await renderDocs(
     kg,

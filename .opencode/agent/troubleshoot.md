@@ -17,6 +17,8 @@ tools:
   websearch: true
   fetch: true
   runcli: true
+  bash: false
+  sqlite: true
   "*": false
 ---
 
@@ -72,5 +74,8 @@ Reference: tech-stack.md
 - MUST keep changes minimal and reversible
 
 ## References
-- @.opencode/docs/tech-stack.md
-- @.opencode/docs/coding-style.md
+@.opencode/docs/tech-stack.md
+@.opencode/docs/coding-style.md
+
+### Database Schema
+!`sqlite3 .binder/binder.db "SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name"`

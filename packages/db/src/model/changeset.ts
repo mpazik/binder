@@ -71,6 +71,11 @@ export const normalizeValueChange = (
 ): ValueChange =>
   isValueChange(change) ? change : { op: "set", value: change };
 
+export const compactValueChange = (
+  change: ValueChange,
+): ValueChange | FieldValue =>
+  change.op === "set" && change.previous === undefined ? change.value! : change;
+
 export const inverseChange = (change: ValueChange): ValueChange => {
   switch (change.op) {
     case "set":
@@ -97,8 +102,8 @@ export const inverseChange = (change: ValueChange): ValueChange => {
 
 export const inverseChangeset = (changeset: FieldChangeset): FieldChangeset =>
   mapObjectValues(changeset, (value) =>
-    inverseChange(normalizeValueChange(value)),
-  ) as Record<FieldKey, ValueChange>;
+    compactValueChange(inverseChange(normalizeValueChange(value))),
+  ) as FieldChangeset;
 
 const rebaseChange = (
   baseChange: ValueChange,

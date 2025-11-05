@@ -1,16 +1,18 @@
-import { join } from "path";
+/**
+ * Facilitates writing to log files
+ */
+
 import type { Transaction } from "@binder/db";
 import {
   createError,
   err,
   isErr,
   ok,
+  okVoid,
   type Result,
   type ResultAsync,
-  okVoid,
 } from "@binder/utils";
-import type { FileSystem } from "./lib/filesystem.ts";
-import { TRANSACTION_LOG_FILE } from "./config.ts";
+import type { FileSystem } from "./filesystem.ts";
 
 const CHUNK_SIZE = 65536;
 
@@ -23,15 +25,7 @@ const readLinesFromEnd = async function* (
   unknown
 > {
   const statResult = await fs.stat(path);
-  if (isErr(statResult)) {
-    yield err(
-      createError("file-read-error", "Failed to stat transaction log", {
-        path,
-        error: statResult.error,
-      }),
-    );
-    return;
-  }
+  if (isErr(statResult)) return;
 
   const fileSize = statResult.data.size;
   if (fileSize === 0) return;
@@ -69,45 +63,50 @@ const readLinesFromEnd = async function* (
     let bytesProcessed = 0;
     for (let i = chunkLines.length - 1; i >= 0; i--) {
       const line = chunkLines[i]!;
-      const lineBytes = encoder.encode(line + "\n");
       const trimmedLine = line.trim();
 
       if (trimmedLine.length > 0) {
+        const lineBytes = encoder.encode(line + "\n");
         const bytePositionBefore = position - bytesProcessed - lineBytes.length;
         yield ok({ line: trimmedLine, bytePositionBefore });
+        bytesProcessed += lineBytes.length;
       }
-      bytesProcessed += lineBytes.length;
     }
 
     position = readStart;
   }
 };
 
+const readTransactionsFromEnd = async function* (
+  fs: FileSystem,
+  path: string,
+): AsyncGenerator<Result<Transaction>, void, unknown> {
+  for await (const result of readLinesFromEnd(fs, path)) {
+    if (isErr(result)) yield result;
+    else yield ok(JSON.parse(result.data.line) as Transaction);
+  }
+};
+
 export const logTransaction = async (
   fs: FileSystem,
-  root: string,
+  path: string,
   transaction: Transaction,
-  file: string = TRANSACTION_LOG_FILE,
 ): ResultAsync<void> => {
   const json = JSON.stringify(transaction);
-  return fs.appendFile(join(root, file), json + "\n");
+  return fs.appendFile(path, json + "\n");
 };
 
 export const readLastTransactions = async (
   fs: FileSystem,
-  root: string,
+  path: string,
   count: number,
-  file: string = TRANSACTION_LOG_FILE,
 ): ResultAsync<Transaction[]> => {
-  const path = join(root, file);
-  if (!fs.exists(path)) return ok([]);
   if (count === 0) return ok([]);
 
   const transactions: Transaction[] = [];
-  for await (const result of readLinesFromEnd(fs, path)) {
+  for await (const result of readTransactionsFromEnd(fs, path)) {
     if (isErr(result)) return result;
-    const transaction = JSON.parse(result.data.line) as Transaction;
-    transactions.push(transaction);
+    transactions.push(result.data);
     if (transactions.length >= count) break;
   }
 
@@ -116,13 +115,9 @@ export const readLastTransactions = async (
 
 export const removeLastFromLog = async (
   fs: FileSystem,
-  root: string,
+  path: string,
   count: number,
-  file: string = TRANSACTION_LOG_FILE,
 ): ResultAsync<void> => {
-  const path = join(root, file);
-  if (!fs.exists(path)) return okVoid;
-
   let truncatePosition = 0;
   let transactionsFound = 0;
 
@@ -147,14 +142,10 @@ export const removeLastFromLog = async (
   return await fs.truncate(path, truncatePosition);
 };
 
-export const clearTransactionLog = async (
+export const clearLog = async (
   fs: FileSystem,
-  root: string,
-  file: string = TRANSACTION_LOG_FILE,
+  path: string,
 ): ResultAsync<void> => {
-  const path = join(root, file);
-  if (!fs.exists(path)) return okVoid;
-
   const result = fs.writeFile(path, "");
 
   if (isErr(result))

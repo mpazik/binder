@@ -21,7 +21,7 @@ import {
 import { getTestDatabase } from "./db.mock.ts";
 import { type Database } from "./db.ts";
 import {
-  applyTransaction,
+  applyAndSaveTransaction,
   processTransactionInput,
   rollbackTransaction,
 } from "./transaction-processor";
@@ -82,7 +82,7 @@ describe("transaction processor", () => {
       });
 
       await db.transaction(async (tx) =>
-        throwIfError(await applyTransaction(tx, mockTransactionUpdate)),
+        throwIfError(await applyAndSaveTransaction(tx, mockTransactionUpdate)),
       );
 
       const [updatedNode, transaction] = await db.transaction(async (tx) => [
@@ -163,7 +163,7 @@ describe("transaction processor", () => {
         const transaction = throwIfError(
           await processTransactionInput(tx, input, mockNodeSchema),
         );
-        throwIfError(await applyTransaction(tx, transaction));
+        throwIfError(await applyAndSaveTransaction(tx, transaction));
       });
 
     it("rolls back ;", async () => {
@@ -226,6 +226,19 @@ describe("transaction processor", () => {
           }),
         }),
       );
+    });
+
+    it("can rollback transaction 1 to genesis state", async () => {
+      await applyTransactionInput(mockTransactionInitInput);
+      expect((await getCurrentVersion()).id).toBe(1 as TransactionId);
+
+      await db.transaction(async (tx) => {
+        const version = throwIfError(await getVersion(tx));
+        return throwIfError(await rollbackTransaction(tx, 1, version.id));
+      });
+
+      const version = await getCurrentVersion();
+      expect(version.id).toBe(0 as TransactionId);
     });
   });
 });

@@ -5,7 +5,6 @@ import {
   errorToObject,
   isErr,
   ok,
-  okVoid,
   type Result,
   type ResultAsync,
   tryCatch,
@@ -15,9 +14,7 @@ import {
   type KnowledgeGraph,
   openDb,
   openKnowledgeGraph,
-  type Transaction,
 } from "@binder/db";
-import { Log } from "./log.ts";
 import {
   BINDER_DIR,
   type BinderConfig,
@@ -25,14 +22,12 @@ import {
   CONFIG_FILE,
   DB_FILE,
   findBinderRoot,
-  TRANSACTION_LOG_FILE,
-  UNDO_LOG_FILE,
 } from "./config.ts";
 import * as ui from "./ui.ts";
-import { clearTransactionLog, logTransaction } from "./transaction-log.ts";
-import { renderDocs } from "./document/repository.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 import { setupCleanupHandlers, withLock } from "./lib/lock.ts";
+import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
+import { Log, type Logger } from "./log.ts";
 
 export type Config = Omit<BinderConfig, "docsPath"> & {
   paths: {
@@ -76,7 +71,7 @@ const loadConfig = async (root: string): ResultAsync<Config> => {
 
 export type CommandContext = {
   config: Config;
-  log: typeof Log;
+  log: Logger;
   ui: typeof ui;
   fs: FileSystem;
 };
@@ -187,37 +182,7 @@ export const bootstrapWithDbWrite = <TArgs>(
     }
 
     const db = dbResult.data;
-
-    const kg = openKnowledgeGraph(db, {
-      onTransactionSaved: (transaction: Transaction) => {
-        logTransaction(fs, paths.binder, transaction, TRANSACTION_LOG_FILE)
-          .then((result) => {
-            if (isErr(result)) {
-              Log.error("Failed to log transaction", {
-                error: result.error,
-              });
-              return okVoid;
-            }
-            return clearTransactionLog(fs, paths.binder, UNDO_LOG_FILE);
-          })
-          .then((result) => {
-            if (isErr(result)) {
-              Log.error("Failed to clear undo log", {
-                error: result.error,
-              });
-            }
-          });
-        renderDocs(kg, config.paths.docs, config.dynamicDirectories).then(
-          (renderResult) => {
-            if (isErr(renderResult)) {
-              Log.error("Failed to re-render docs after transaction", {
-                error: renderResult.error,
-              });
-            }
-          },
-        );
-      },
-    });
+    const kg = openKnowledgeGraph(db);
 
     return withLock(fs, paths.binder, async () =>
       handler({

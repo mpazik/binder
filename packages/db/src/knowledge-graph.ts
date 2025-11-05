@@ -34,7 +34,7 @@ import {
 } from "./entity-store.ts";
 import { fetchTransaction, getVersion } from "./transaction-store.ts";
 import {
-  applyTransaction,
+  applyAndSaveTransaction,
   processTransactionInput,
   rollbackTransaction,
 } from "./transaction-processor";
@@ -55,8 +55,15 @@ export type KnowledgeGraph = {
   getNodeSchema: () => ResultAsync<NodeSchema>;
 };
 
+export type TransactionRollback = () => ResultAsync<void>;
+
 export type KnowledgeGraphCallbacks = {
-  onTransactionSaved?: (transaction: Transaction) => void;
+  beforeTransaction?: (
+    transaction: Transaction,
+  ) => ResultAsync<TransactionRollback>;
+  beforeCommit?: (transaction: Transaction) => ResultAsync<void>;
+  afterCommit?: (transaction: Transaction) => Promise<void>;
+  afterRollback?: (transactions: Transaction[], count: number) => Promise<void>;
 };
 
 export const openKnowledgeGraph = (
@@ -104,8 +111,16 @@ export const openKnowledgeGraph = (
   };
 
   const applyAndNotify = async (transaction: Transaction) => {
-    return db.transaction(async (tx) => {
-      const applyResult = await applyTransaction(tx, transaction);
+    let rollbackBeforeHook: TransactionRollback | null = null;
+
+    if (callbacks?.beforeTransaction) {
+      const beforeResult = await callbacks.beforeTransaction(transaction);
+      if (isErr(beforeResult)) return beforeResult;
+      rollbackBeforeHook = beforeResult.data;
+    }
+
+    const dbResult = await db.transaction(async (tx) => {
+      const applyResult = await applyAndSaveTransaction(tx, transaction);
       if (isErr(applyResult)) return applyResult;
 
       const hasConfigChanges =
@@ -114,10 +129,23 @@ export const openKnowledgeGraph = (
         nodeSchemaCache = null;
       }
 
-      callbacks?.onTransactionSaved?.(transaction);
+      if (callbacks?.beforeCommit) {
+        const commitResult = await callbacks.beforeCommit(transaction);
+        if (isErr(commitResult)) return commitResult;
+      }
 
       return ok(transaction);
     });
+
+    if (isErr(dbResult)) {
+      if (rollbackBeforeHook) await rollbackBeforeHook();
+      return dbResult;
+    }
+
+    if (callbacks?.afterCommit)
+      callbacks.afterCommit(transaction).catch(() => {});
+
+    return ok(transaction);
   };
 
   return {
@@ -231,7 +259,7 @@ export const openKnowledgeGraph = (
       return applyAndNotify(transaction);
     },
     rollback: async (count, version) => {
-      return db.transaction(async (dbTx) => {
+      const dbResult = await db.transaction(async (dbTx) => {
         const versionResult = await getVersion(dbTx);
         if (isErr(versionResult)) return versionResult;
         const txId = version ?? versionResult.data.id;
@@ -240,6 +268,12 @@ export const openKnowledgeGraph = (
 
         return rollbackTransaction(dbTx, count, txId);
       });
+      if (isErr(dbResult)) return dbResult;
+
+      if (callbacks?.afterRollback) {
+        callbacks.afterRollback(dbResult.data, count).catch(() => {});
+      }
+      return ok(undefined);
     },
     getNodeSchema,
   };

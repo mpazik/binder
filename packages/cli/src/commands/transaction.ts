@@ -10,7 +10,6 @@ import {
 } from "@binder/utils";
 import {
   normalizeEntityRef,
-  type KnowledgeGraph,
   type Transaction,
   TransactionInput,
   type TransactionRef,
@@ -22,6 +21,7 @@ import {
   type CommandHandlerWithDbRead,
   type CommandHandlerWithDbWrite,
 } from "../bootstrap.ts";
+import { verifySync, repairDbFromLog } from "../lib/orchestrator.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -79,17 +79,6 @@ export const loadTransactionFromFile = async (
     );
 
   return ok(validationResult.data);
-};
-
-export const importTransactionFromFile = async (
-  path: string,
-  defaultAuthor: string,
-  kg: KnowledgeGraph,
-): ResultAsync<Transaction> => {
-  const transactionResult = await loadTransactionFromFile(path, defaultAuthor);
-  if (isErr(transactionResult)) return transactionResult;
-
-  return kg.update(transactionResult.data);
 };
 
 export const transactionCreateHandler: CommandHandlerWithDbWrite<{
@@ -177,6 +166,123 @@ export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
   return ok(undefined);
 };
 
+export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
+  kg,
+  config,
+  ui,
+  fs,
+}) => {
+  const verifyResult = await verifySync(fs, kg, config.paths.binder);
+
+  if (isErr(verifyResult)) return verifyResult;
+
+  const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
+
+  if (dbOnlyTransactions.length === 0 && logOnlyTransactions.length === 0) {
+    ui.block(() => {
+      ui.success("Database and log are in sync");
+    });
+    return ok(undefined);
+  }
+
+  ui.block(() => {
+    if (logOnlyTransactions.length > 0 && dbOnlyTransactions.length === 0) {
+      ui.warning(
+        `Database is behind by ${logOnlyTransactions.length} transaction(s)`,
+      );
+      ui.info("Run 'binder tx repair' to apply missing transactions");
+    } else if (
+      dbOnlyTransactions.length > 0 &&
+      logOnlyTransactions.length === 0
+    ) {
+      ui.warning(
+        `Database has ${dbOnlyTransactions.length} extra transaction(s) not in log`,
+      );
+      ui.info("Run 'binder tx repair' to rollback and sync");
+    } else {
+      ui.warning("Database and log have diverged");
+      ui.info(`Database has ${dbOnlyTransactions.length} extra transaction(s)`);
+      ui.info(`Log has ${logOnlyTransactions.length} new transaction(s)`);
+      ui.println("");
+      ui.info("Run 'binder tx repair' to rollback and sync");
+    }
+  });
+
+  return err(
+    createError("sync-verification-failed", "Database and log are out of sync"),
+  );
+};
+
+export const transactionRepairHandler: CommandHandlerWithDbWrite<{
+  dryRun?: boolean;
+  yes?: boolean;
+}> = async ({ kg, db, config, ui, log, fs, args }) => {
+  const verifyResult = await verifySync(fs, kg, config.paths.binder);
+
+  if (isErr(verifyResult)) return verifyResult;
+
+  const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
+
+  if (dbOnlyTransactions.length === 0 && logOnlyTransactions.length === 0) {
+    ui.block(() => {
+      ui.success("Database and log are in sync");
+    });
+    return ok(undefined);
+  }
+
+  if (dbOnlyTransactions.length > 0) {
+    ui.printTransactions(
+      dbOnlyTransactions,
+      `Rolling back ${dbOnlyTransactions.length} transaction(s) from database`,
+    );
+  }
+
+  if (logOnlyTransactions.length > 0) {
+    ui.printTransactions(
+      logOnlyTransactions,
+      `Applying ${logOnlyTransactions.length} transaction(s) from log`,
+    );
+  }
+
+  if (args.dryRun) {
+    ui.block(() => {
+      ui.info("Dry run complete - no changes made");
+    });
+    return ok(undefined);
+  }
+
+  if (!args.yes) {
+    ui.println("");
+    if (!(await ui.confirm("Do you want to proceed with repair? (yes/no): "))) {
+      ui.info("Repair cancelled");
+      return ok(undefined);
+    }
+  }
+
+  const repairResult = await repairDbFromLog(fs, db, config.paths.binder);
+  if (isErr(repairResult)) {
+    log.error("Failed to repair sync", { error: repairResult.error });
+    return repairResult;
+  }
+
+  log.info("Repair completed successfully", {
+    rolledBack: dbOnlyTransactions.length,
+    applied: logOnlyTransactions.length,
+  });
+
+  ui.block(() => {
+    ui.success("Repair completed successfully");
+    if (dbOnlyTransactions.length > 0) {
+      ui.info(`Rolled back ${dbOnlyTransactions.length} transaction(s)`);
+    }
+    if (logOnlyTransactions.length > 0) {
+      ui.info(`Applied ${logOnlyTransactions.length} transaction(s)`);
+    }
+  });
+
+  return ok(undefined);
+};
+
 const TransactionCommand = types({
   command: "transaction <command>",
   aliases: ["tx"],
@@ -229,9 +335,39 @@ const TransactionCommand = types({
           handler: bootstrapWithDbWrite(transactionRollbackHandler),
         }),
       )
+      .command(
+        types({
+          command: "verify",
+          describe: "verify database and log are in sync",
+          handler: bootstrapWithDbRead(transactionVerifyHandler),
+        }),
+      )
+      .command(
+        types({
+          command: "repair",
+          describe:
+            "repair database and log sync by applying missing transactions",
+          builder: (yargs: Argv) => {
+            return yargs
+              .option("dry-run", {
+                alias: "d",
+                describe: "show what would be done without making changes",
+                type: "boolean",
+                default: false,
+              })
+              .option("yes", {
+                alias: "y",
+                describe: "auto-confirm all prompts",
+                type: "boolean",
+                default: false,
+              });
+          },
+          handler: bootstrapWithDbWrite(transactionRepairHandler),
+        }),
+      )
       .demandCommand(
         1,
-        "You need to specify a subcommand: create, read, rollback",
+        "You need to specify a subcommand: create, read, rollback, verify, repair",
       );
   },
   handler: async () => {},

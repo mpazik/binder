@@ -69,6 +69,6 @@ Reference: error-handling.md
 - Suggest troubleshoot agent for difficult problems
 
 ## References
-- @.opencode/docs/tech-stack.md
-- @.opencode/docs/coding-style.md
-- @.opencode/docs/testing-style.md
+@.opencode/docs/tech-stack.md
+@.opencode/docs/coding-style.md
+@.opencode/docs/testing-style.md
