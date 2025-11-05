@@ -27,7 +27,7 @@ import {
   repairDbFromLog,
   squashTransactions,
 } from "../lib/orchestrator.ts";
-import { readLastTransactions } from "../lib/journal.ts";
+import { readLastTransactions, verifyLog } from "../lib/journal.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -246,6 +246,12 @@ export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
   ui,
   fs,
 }) => {
+  const transactionLogPath = join(config.paths.binder, "transactions.jsonl");
+  const logIntegrityResult = await verifyLog(fs, transactionLogPath, {
+    verifyIntegrity: true,
+  });
+  if (isErr(logIntegrityResult)) return logIntegrityResult;
+
   const verifyResult = await verifySync(fs, kg, config.paths.binder);
   if (isErr(verifyResult)) return verifyResult;
 

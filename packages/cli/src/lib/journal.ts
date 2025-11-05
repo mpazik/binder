@@ -2,13 +2,20 @@
  * Facilitates writing to log files
  */
 
-import type { Transaction } from "@binder/db";
+import {
+  GENESIS_VERSION,
+  hashTransaction,
+  transactionToCanonical,
+  type Transaction,
+  type TransactionHash,
+} from "@binder/db";
 import {
   createError,
   err,
   isErr,
   ok,
   okVoid,
+  parseJson,
   type Result,
   type ResultAsync,
 } from "@binder/utils";
@@ -77,13 +84,83 @@ const readLinesFromEnd = async function* (
   }
 };
 
+const readLinesFromBeginning = async function* (
+  fs: FileSystem,
+  path: string,
+): AsyncGenerator<Result<string>, void, unknown> {
+  const statResult = await fs.stat(path);
+  if (isErr(statResult)) return;
+
+  const fileSize = statResult.data.size;
+  if (fileSize === 0) return;
+
+  let position = 0;
+  let partialLine = "";
+
+  while (position < fileSize) {
+    const readEnd = Math.min(position + CHUNK_SIZE, fileSize);
+    const sliceResult = await fs.slice(path, position, readEnd);
+    if (isErr(sliceResult)) {
+      yield err(
+        createError("file-read-error", "Failed to read transaction log", {
+          path,
+          error: sliceResult.error,
+        }),
+      );
+      return;
+    }
+
+    const chunk = new TextDecoder().decode(sliceResult.data);
+    const chunkLines = (partialLine + chunk).split("\n");
+
+    if (readEnd < fileSize) {
+      partialLine = chunkLines.pop()!;
+    } else {
+      partialLine = "";
+    }
+
+    for (const line of chunkLines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.length > 0) {
+        yield ok(trimmedLine);
+      }
+    }
+
+    position = readEnd;
+  }
+
+  if (partialLine.trim().length > 0) {
+    yield ok(partialLine.trim());
+  }
+};
+
+const parseTransaction = (line: string): Result<Transaction> => {
+  return parseJson<Transaction>(line, "Failed to parse transaction from log");
+};
+
 const readTransactionsFromEnd = async function* (
   fs: FileSystem,
   path: string,
 ): AsyncGenerator<Result<Transaction>, void, unknown> {
   for await (const result of readLinesFromEnd(fs, path)) {
-    if (isErr(result)) yield result;
-    else yield ok(JSON.parse(result.data.line) as Transaction);
+    if (isErr(result)) {
+      yield result;
+    } else {
+      yield parseTransaction(result.data.line);
+    }
+  }
+};
+
+const readTransactionsFromBeginning = async function* (
+  fs: FileSystem,
+  path: string,
+): AsyncGenerator<Result<Transaction>, void, unknown> {
+  for await (const result of readLinesFromBeginning(fs, path)) {
+    if (isErr(result)) {
+      yield result;
+    } else {
+      yield parseTransaction(result.data);
+    }
   }
 };
 
@@ -157,4 +234,74 @@ export const clearLog = async (
     );
 
   return okVoid;
+};
+
+export const verifyLog = async (
+  fs: FileSystem,
+  path: string,
+  options?: { verifyIntegrity?: boolean },
+): ResultAsync<{ count: number }> => {
+  if (!fs.exists(path))
+    return err(
+      createError("file-not-found", "Transaction log file not found", {
+        path,
+      }),
+    );
+
+  let count = 0;
+  let lineNumber = 0;
+  let previousHash: TransactionHash = GENESIS_VERSION.hash;
+
+  for await (const result of readTransactionsFromBeginning(fs, path)) {
+    lineNumber++;
+
+    if (isErr(result))
+      return err(
+        createError(
+          "parse-error",
+          `Failed to parse transaction at line ${lineNumber}`,
+          {
+            line: lineNumber,
+            error: result.error,
+          },
+        ),
+      );
+
+    const transaction = result.data;
+    if (transaction.previous !== previousHash)
+      return err(
+        createError(
+          "chain-error",
+          `Transaction chain broken at transaction ${lineNumber}`,
+          {
+            transactionId: transaction.id,
+            expectedPrevious: previousHash,
+            actualPrevious: transaction.previous,
+          },
+        ),
+      );
+
+    if (options?.verifyIntegrity) {
+      const canonical = transactionToCanonical(transaction);
+      const expectedHash = await hashTransaction(canonical);
+
+      if (expectedHash !== transaction.hash)
+        return err(
+          createError(
+            "hash-mismatch",
+            `Transaction hash mismatch at transaction ${lineNumber}`,
+            {
+              transactionId: transaction.id,
+              expectedHash,
+              actualHash: transaction.hash,
+            },
+          ),
+        );
+    }
+
+    previousHash = transaction.hash;
+    count++;
+  }
+
+  return ok({ count });
 };
