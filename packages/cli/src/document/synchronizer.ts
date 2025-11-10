@@ -7,14 +7,14 @@ import type {
 } from "@binder/db";
 import { createError, err, isErr, ok, type ResultAsync } from "@binder/utils";
 import type { Config } from "../bootstrap.ts";
-import { parseMarkdown } from "./markdown.ts";
+import { parseMarkdown, parseView } from "./markdown.ts";
 import {
-  DEFAULT_DYNAMIC_TEMPLATE_STRING,
-  extractFieldsFromRendered,
-} from "./template.ts";
-import { extractFieldsFromPath } from "./dynamic-dir.ts";
+  extractFieldsFromPath,
+  DEFAULT_DYNAMIC_VIEW_STRING,
+} from "./dynamic-dir.ts";
 import { deconstructAstDocument, fetchDocumentNodes } from "./doc-builder.ts";
 import { diffNodeTrees } from "./tree-diff.ts";
+import { extractFields } from "./view.ts";
 
 export { diffNodeTrees } from "./tree-diff.ts";
 
@@ -32,6 +32,10 @@ export const parseFile = async (
   if (isErr(searchResult)) return searchResult;
 
   if (searchResult.data.items.length === 0) {
+    const schemaResult = await kg.getNodeSchema();
+    if (isErr(schemaResult)) return schemaResult;
+    const schema = schemaResult.data;
+
     for (const dynamicDir of config.dynamicDirectories) {
       const pathFieldsResult = extractFieldsFromPath(
         relativePath,
@@ -40,10 +44,10 @@ export const parseFile = async (
       if (isErr(pathFieldsResult)) continue;
       const pathFields = pathFieldsResult.data;
 
-      const fileFieldsResult = extractFieldsFromRendered(
-        dynamicDir.template ?? DEFAULT_DYNAMIC_TEMPLATE_STRING,
-        markdown,
-      );
+      const templateString = dynamicDir.template ?? DEFAULT_DYNAMIC_VIEW_STRING;
+      const viewAst = parseView(templateString);
+      const markdownAst = parseMarkdown(markdown);
+      const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
       if (isErr(fileFieldsResult)) return fileFieldsResult;
 
       const kgSearchResult = await kg.search({
@@ -90,7 +94,11 @@ export const parseFile = async (
 
   const ast = parseMarkdown(markdown);
 
-  const fileRepresentationResult = deconstructAstDocument(ast);
+  const schemaResult = await kg.getNodeSchema();
+  if (isErr(schemaResult)) return schemaResult;
+  const schema = schemaResult.data;
+
+  const fileRepresentationResult = deconstructAstDocument(schema, ast);
   if (isErr(fileRepresentationResult)) return fileRepresentationResult;
 
   const kgRepresentationResult = await fetchDocumentNodes(kg, documentRef);

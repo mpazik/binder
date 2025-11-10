@@ -80,7 +80,7 @@ export const mockDocumentTransactionInput = {
       uid: mockDataviewUid,
       type: "Dataview",
       query: { filters: { type: "Task" } },
-      template: "**{{title}}**: {{description}}",
+      template: "**{title}**: {description}",
     },
     {
       uid: mockSection3Uid,

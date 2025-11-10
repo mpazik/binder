@@ -100,7 +100,7 @@
       "name": "dataview",
       "attributes": {
         "query": "type=Task",
-        "template": "**{{title}}**: {{description}}"
+        "template": "**{title}**: {description}"
       },
       "children": [
         {

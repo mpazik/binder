@@ -13,9 +13,23 @@ import { type Options } from "remark-stringify";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { directiveToMarkdown } from "mdast-util-directive";
 import { type Brand } from "@binder/utils";
-import type { PhrasingContent, Root, RootContent, Text } from "mdast";
+import type {
+  Nodes,
+  Parent,
+  PhrasingContent,
+  Root,
+  RootContent,
+  Text,
+} from "mdast";
 import type { Data, Literal, Node } from "unist";
 import { remarkViewSlot, type ViewSlot } from "./remark-view-slot.ts";
+
+type ExtendedNode = Nodes | ViewSlot;
+
+interface SimplifiedViewRoot extends Node {
+  type: "root";
+  children: Array<ViewSlot | Text>;
+}
 
 type SimplifiedNode<T> = T extends { children: infer C }
   ? Omit<T, "children" | "position"> & {
@@ -41,9 +55,14 @@ export const defaultRenderOptions: Options = {
   bullet: "-",
 };
 
-const extractTextFromInline = (node: any): string => {
+const SLOT_PLACEHOLDER = "\u0000SLOT\u0000";
+
+const extractTextFromInline = (node: ExtendedNode): string => {
   if (node.type === "text") {
     return node.value || "";
+  }
+  if (node.type === "viewSlot") {
+    return SLOT_PLACEHOLDER;
   }
   if (node.type === "strong") {
     const innerText = node.children.map(extractTextFromInline).join("");
@@ -89,80 +108,130 @@ export const renderAstToMarkdown = (ast: FullAST | BlockAST): string => {
     .replace(/\\(~)/g, "$1");
 };
 
-const isInline = (type: string): boolean =>
-  ["strong", "emphasis", "link", "inlineCode", "delete", "html"].includes(type);
+const inlineTypes = [
+  "strong",
+  "emphasis",
+  "link",
+  "inlineCode",
+  "delete",
+  "html",
+  "viewSlot",
+] as const;
 
-const hasInlineChildren = (node: any): boolean =>
+type InlineType = (typeof inlineTypes)[number];
+
+const isInline = (type: string): type is InlineType =>
+  inlineTypes.includes(type as InlineType);
+
+const hasInlineChildren = (node: ExtendedNode): boolean =>
   "children" in node &&
-  node.children.some((child: any) => isInline(child.type));
+  node.children.some((child: ExtendedNode) => isInline(child.type));
 
-export const removePosition = (obj: any): any => {
+export const removePosition = <T>(obj: T): T => {
   if (Array.isArray(obj)) {
-    return obj.map(removePosition);
+    return obj.map(removePosition) as T;
   }
   if (obj && typeof obj === "object") {
-    const { position, ...rest } = obj;
+    const { position, ...rest } = obj as Record<string, unknown>;
     for (const key in rest) {
       rest[key] = removePosition(rest[key]);
     }
-    return rest;
+    return rest as T;
   }
   return obj;
 };
 
-const flattenInline = (value: PhrasingContent): any => {
+const flattenInline = (value: RootContent): SimplifiedNode<RootContent> => {
   if ("children" in value && hasInlineChildren(value)) {
     const flattenedValue = renderInlineToMarkdown(value);
-    return { ...value, children: [{ type: "text", value: flattenedValue }] };
+    return {
+      ...value,
+      children: [{ type: "text", value: flattenedValue }],
+    } as SimplifiedNode<RootContent>;
   }
   if ("children" in value) {
-    return { ...value, children: value.children.map(flattenInline) };
+    return {
+      ...value,
+      children: value.children.map((c) => flattenInline(c as RootContent)),
+    } as SimplifiedNode<RootContent>;
   }
   return value;
 };
 
-const flattenInlinePreservingSlots = (value: any): any => {
+const splitByPlaceholder = (
+  text: string,
+  slots: ViewSlot[],
+): Array<ViewSlot | Text> => {
+  const parts = text.split(SLOT_PLACEHOLDER);
+  const result: Array<ViewSlot | Text> = [];
+
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i]) {
+      result.push({ type: "text", value: parts[i] });
+    }
+    if (i < slots.length) {
+      result.push(slots[i]!);
+    }
+  }
+
+  return result;
+};
+
+const extractSlots = (children: ExtendedNode[]): ViewSlot[] => {
+  const slots: ViewSlot[] = [];
+
+  const traverse = (node: ExtendedNode): void => {
+    if (node.type === "viewSlot") {
+      slots.push(node);
+    } else if ("children" in node && Array.isArray(node.children)) {
+      for (const child of node.children) {
+        traverse(child);
+      }
+    }
+  };
+
+  for (const child of children) {
+    traverse(child);
+  }
+
+  return slots;
+};
+
+const flattenInlinePreservingSlots = (value: ExtendedNode): ExtendedNode => {
   if (value.type === "viewSlot") return value;
 
   if ("children" in value && hasInlineChildren(value)) {
-    const flattenedChildren: any[] = [];
-    let textBuffer = "";
+    const textWithPlaceholders = value.children
+      .map((child: ExtendedNode) => extractTextFromInline(child))
+      .join("");
+    const slots = extractSlots(value.children);
 
-    for (const child of value.children) {
-      if (child.type === "viewSlot") {
-        if (textBuffer) {
-          flattenedChildren.push({ type: "text", value: textBuffer });
-          textBuffer = "";
-        }
-        flattenedChildren.push(child);
-      } else {
-        textBuffer += extractTextFromInline(child);
-      }
-    }
-
-    if (textBuffer) {
-      flattenedChildren.push({ type: "text", value: textBuffer });
-    }
-
-    return { ...value, children: flattenedChildren };
+    return {
+      ...value,
+      children: splitByPlaceholder(textWithPlaceholders, slots),
+    } as ExtendedNode;
   }
 
   if ("children" in value && Array.isArray(value.children)) {
     return {
       ...value,
-      children: value.children.map(flattenInlinePreservingSlots),
-    };
+      children: value.children.map((child: ExtendedNode) =>
+        flattenInlinePreservingSlots(child),
+      ),
+    } as ExtendedNode;
   }
 
   return value;
 };
 
-export const simplifyViewAst = (ast: ViewAST): any => {
+export const simplifyViewAst = (ast: ViewAST): SimplifiedViewRoot => {
   const cleaned = removePosition(ast);
   return {
     ...cleaned,
-    children: cleaned.children.map(flattenInlinePreservingSlots),
-  };
+    children: cleaned.children.map((child) =>
+      flattenInlinePreservingSlots(child),
+    ) as Array<ViewSlot | Text>,
+  } as SimplifiedViewRoot;
 };
 
 export const parseAst = (content: string): FullAST => {
@@ -179,7 +248,7 @@ export const simplifyAst = (ast: FullAST): BlockAST => {
   return {
     ...cleaned,
     children: cleaned.children.map(flattenInline),
-  };
+  } as unknown as BlockAST;
 };
 
 export const parseMarkdown = (content: string): BlockAST => {
@@ -203,11 +272,12 @@ export const astNode = (
   type: string,
   argsOrChildren?: Record<string, unknown> | Node[],
   children?: Node[],
-): any => {
-  if (Array.isArray(argsOrChildren)) return { type, children: argsOrChildren };
-  if (children) return { type, ...argsOrChildren, children };
-  if (argsOrChildren) return { type, ...argsOrChildren };
-  return { type };
+): Node => {
+  if (Array.isArray(argsOrChildren))
+    return { type, children: argsOrChildren } as Node;
+  if (children) return { type, ...argsOrChildren, children } as Node;
+  if (argsOrChildren) return { type, ...argsOrChildren } as Node;
+  return { type } as Node;
 };
 
 export const astTextNode = (text: string): Literal => ({

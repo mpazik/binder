@@ -13,16 +13,29 @@ import type {
   FieldsetNested,
   KnowledgeGraph,
   NodeRef,
+  NodeSchema,
 } from "@binder/db";
-import { type BlockAST } from "./markdown.ts";
-import { parseStringQuery, stringifyQuery } from "./query.ts";
+import type {
+  Heading,
+  List,
+  ListItem,
+  Nodes,
+  Paragraph,
+  RootContent,
+  Text,
+} from "mdast";
+import type { ContainerDirective } from "mdast-util-directive";
 import {
-  compileTemplate,
-  DEFAULT_DATAVIEW_TEMPLATE,
-  DEFAULT_DATAVIEW_TEMPLATE_STRING,
-  extractFieldsFromRenderedItems,
-  renderTemplateForItems,
-} from "./template.ts";
+  type BlockAST,
+  parseView,
+  type ViewAST,
+  parseMarkdown,
+} from "./markdown.ts";
+import { parseStringQuery, stringifyQuery } from "./query.ts";
+import { renderView, extractFields } from "./view.ts";
+
+export const DEFAULT_DATAVIEW_VIEW_STRING =
+  "title: {title}\n  description: {description}";
 
 export const fetchDocumentNodes = async (
   kg: KnowledgeGraph,
@@ -72,10 +85,30 @@ export const fetchDocumentNodes = async (
   return ok(nestedDocument);
 };
 
+export const renderViewForItems = (
+  schema: NodeSchema,
+  view: ViewAST,
+  items: FieldsetNested[],
+): Result<string> => {
+  const renderedItems: string[] = [];
+
+  for (const item of items) {
+    const renderResult = renderView(schema, view, item);
+    if (isErr(renderResult)) return renderResult;
+    const rendered = renderResult.data.trim();
+    renderedItems.push(`- ${rendered}`);
+  }
+
+  return ok(renderedItems.join("\n"));
+};
 export const buildAstDoc = async (
   kg: KnowledgeGraph,
   documentRef: NodeRef,
 ): ResultAsync<BlockAST> => {
+  const schemaResult = await kg.getNodeSchema();
+  if (isErr(schemaResult)) return schemaResult;
+  const schema = schemaResult.data;
+
   const documentResult = await fetchDocumentNodes(kg, documentRef);
   if (isErr(documentResult)) return documentResult;
 
@@ -84,12 +117,12 @@ export const buildAstDoc = async (
   const renderNodeFlat = async (
     node: FieldsetNested,
     depth: number,
-  ): Promise<any[]> => {
+  ): Promise<RootContent[]> => {
     const nodeType = node.type as string;
 
     switch (nodeType) {
       case "Document": {
-        const children: any[] = [];
+        const children: RootContent[] = [];
         let sectionDepth = 1;
         const blockContent = (node.blockContent as FieldsetNested[]) || [];
         for (const child of blockContent) {
@@ -111,9 +144,9 @@ export const buildAstDoc = async (
         return [
           {
             type: "heading",
-            depth,
+            depth: depth as 1 | 2 | 3 | 4 | 5 | 6,
             children: [{ type: "text", value: node.title as string }],
-          },
+          } as Heading,
           ...childrenArrays.flat(),
         ];
       }
@@ -140,8 +173,8 @@ export const buildAstDoc = async (
             ordered: false,
             start: null,
             spread: false,
-            children: childrenArrays.flat(),
-          },
+            children: childrenArrays.flat() as ListItem[],
+          } as List,
         ];
       }
       case "ListItem":
@@ -185,17 +218,11 @@ export const buildAstDoc = async (
           ];
         }
 
-        const template = (() => {
-          if (node.template) {
-            const compileResult = compileTemplate(node.template as string);
-            if (isErr(compileResult)) {
-              return DEFAULT_DATAVIEW_TEMPLATE;
-            }
-            return compileResult.data;
-          }
-          return DEFAULT_DATAVIEW_TEMPLATE;
-        })();
-        const renderResult = renderTemplateForItems(template, data);
+        const viewString = node.template
+          ? (node.template as string)
+          : DEFAULT_DATAVIEW_VIEW_STRING;
+        const view = parseView(viewString);
+        const renderResult = renderViewForItems(schema, view, data);
 
         if (isErr(renderResult)) {
           const yamlContent = YAML.stringify(
@@ -217,16 +244,18 @@ export const buildAstDoc = async (
         }
 
         const content = renderResult.data || "";
-        let children: any[] = [];
+        let children: RootContent[] = [];
         if (content) {
-          const lines = content.split("\n").filter((line) => line.trim());
+          const lines = content
+            .split("\n")
+            .filter((line: string) => line.trim());
           children = [
             {
               type: "list",
               ordered: false,
               start: null,
               spread: false,
-              children: lines.map((line) => {
+              children: lines.map((line: string) => {
                 const text = line.startsWith("- ") ? line.slice(2) : line;
                 return {
                   type: "listItem",
@@ -236,11 +265,11 @@ export const buildAstDoc = async (
                     {
                       type: "paragraph",
                       children: [{ type: "text", value: text }],
-                    },
+                    } as Paragraph,
                   ],
-                };
+                } as ListItem;
               }),
-            },
+            } as List,
           ];
         }
 
@@ -249,8 +278,8 @@ export const buildAstDoc = async (
             type: "containerDirective",
             name: "dataview",
             attributes,
-            children,
-          },
+            children: children as ContainerDirective["children"],
+          } as ContainerDirective,
         ];
       }
       default:
@@ -266,34 +295,43 @@ export const buildAstDoc = async (
   } as BlockAST);
 };
 
-const extractTextValue = (node: any): string => {
-  if (!node.children || node.children.length === 0) return "";
-  return node.children[0].value || "";
+const extractTextValue = (node: Nodes): string => {
+  if (!("children" in node) || node.children.length === 0) return "";
+  const firstChild = node.children[0] as Text;
+  return firstChild.value || "";
 };
 
-const extractDirectiveContent = (node: any): string => {
+const extractDirectiveContent = (node: ContainerDirective): string => {
   if (!node.children || node.children.length === 0) return "";
 
-  const extractText = (n: any): string[] => {
+  const extractText = (n: Nodes): string[] => {
     if (n.type === "text") return [n.value || ""];
-    if (n.type === "listItem" && n.children) {
-      const text = n.children.flatMap(extractText).join("");
+    if (n.type === "listItem" && "children" in n) {
+      const text = n.children
+        .flatMap((child) => extractText(child as Nodes))
+        .join("");
       return [`- ${text}`];
     }
-    if (n.children) {
-      return n.children.flatMap(extractText);
+    if ("children" in n) {
+      return n.children.flatMap((child) => extractText(child as Nodes));
     }
     return [];
   };
 
-  return node.children.flatMap(extractText).join("\n").trim();
+  return node.children
+    .flatMap((child) => extractText(child as Nodes))
+    .join("\n")
+    .trim();
 };
 
-export const deconstructAstDocument = (ast: BlockAST): Result<Fieldset> => {
+export const deconstructAstDocument = (
+  schema: NodeSchema,
+  ast: BlockAST,
+): Result<Fieldset> => {
   const document: Fieldset = { type: "Document", blockContent: [] };
   let currentSection: Fieldset | null = null;
 
-  for (const node of ast.children as any[]) {
+  for (const node of ast.children as Nodes[]) {
     const currentParent = currentSection || document;
 
     switch (node.type) {
@@ -318,34 +356,48 @@ export const deconstructAstDocument = (ast: BlockAST): Result<Fieldset> => {
       case "list": {
         const list: Fieldset = {
           type: "List",
-          blockContent: (node.children || []).map((listItemNode: any) => ({
-            type: "ListItem",
-            textContent: extractTextValue(listItemNode.children?.[0] || {}),
-          })),
+          blockContent: (node.children || []).map((listItemNode) => {
+            const firstChild =
+              "children" in listItemNode && listItemNode.children.length > 0
+                ? (listItemNode.children[0] as Nodes)
+                : ({ type: "text", value: "" } as Text);
+            return {
+              type: "ListItem",
+              textContent: extractTextValue(firstChild),
+            };
+          }),
         };
         (currentParent.blockContent as Fieldset[]).push(list);
         break;
       }
       case "containerDirective": {
-        if (node.name === "dataview") {
-          const queryString = node.attributes?.query;
+        const directive = node as ContainerDirective;
+        if (directive.name === "dataview") {
+          const queryString = directive.attributes?.query;
           if (queryString) {
             const query = parseStringQuery(queryString);
             const dataview: Fieldset = { type: "Dataview", query };
-            const template = node.attributes?.template;
+            const template = directive.attributes?.template;
             if (template) {
               dataview.template = template;
             }
-            const content = extractDirectiveContent(node);
+            const content = extractDirectiveContent(directive);
             if (content) {
-              const templateString =
-                template || DEFAULT_DATAVIEW_TEMPLATE_STRING;
-              const extractResult = extractFieldsFromRenderedItems(
-                templateString,
-                content,
-              );
-              if (!isErr(extractResult)) {
-                dataview.data = extractResult.data;
+              const viewString = template || DEFAULT_DATAVIEW_VIEW_STRING;
+              const view = parseView(viewString);
+              const contentLines = content.split("\n");
+              const extractedItems: Fieldset[] = [];
+              for (const line of contentLines) {
+                if (!line.trim()) continue;
+                const lineText = line.startsWith("- ") ? line.slice(2) : line;
+                const lineAst = parseMarkdown(`${lineText}\n`);
+                const extractResult = extractFields(schema, view, lineAst);
+                if (!isErr(extractResult)) {
+                  extractedItems.push(extractResult.data as Fieldset);
+                }
+              }
+              if (extractedItems.length > 0) {
+                dataview.data = extractedItems;
               }
             }
             (currentParent.blockContent as Fieldset[]).push(dataview);

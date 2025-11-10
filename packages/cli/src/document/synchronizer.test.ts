@@ -88,7 +88,7 @@ describe("synchronizer", () => {
               {
                 type: "Dataview",
                 query: { filters: { type: "Task" } },
-                template: "**{{title}}**: {{description}}",
+                template: "**{title}**: {description}",
                 data: [
                   {
                     title: "Implement user authentication",
@@ -323,7 +323,7 @@ ${mockTask1Node.description}`;
     it("applies all query fields to new dataview items with AND separator", async () => {
       const markdownWithMultipleFields = `# Document with Multi-Field Query
 
-:::dataview{query="type=Idea AND ideaStatus=exploring" template="{{title}}"}
+:::dataview{query="type=Idea AND ideaStatus=exploring" template="{title}"}
 - Implement real-time collaboration
 - Add something extra
 :::

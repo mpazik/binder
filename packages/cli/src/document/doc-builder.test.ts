@@ -1,16 +1,19 @@
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { beforeEach, describe, expect, it } from "bun:test";
-import { throwIfError } from "@binder/utils";
+import { isErr, ok, type Result, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import {
   changesetInputForNewEntity,
   type Fieldset,
+  type FieldsetNested,
   type KnowledgeGraph,
+  type NodeSchema,
   openKnowledgeGraph,
 } from "@binder/db";
 import {
   getTestDatabase,
+  mockNodeSchema,
   mockTask1Node,
   mockTask2Node,
 } from "@binder/db/mocks";
@@ -26,7 +29,8 @@ import {
   mockDocumentTransactionInput,
   mockDocumentUid,
 } from "./document.mock.ts";
-import { parseMarkdown } from "./markdown.ts";
+import { parseMarkdown, type ViewAST } from "./markdown.ts";
+import { extractFields } from "./view.ts";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -132,7 +136,7 @@ describe("DocumentBuilder", () => {
         ...mockDocumentTransactionInput,
         nodes: mockDocumentTransactionInput.nodes?.map((node: any) =>
           node.type === "Dataview"
-            ? { ...node, template: "**{{title}}** - {{description}}" }
+            ? { ...node, template: "**{title}** - {description}" }
             : node,
         ),
       };
@@ -195,7 +199,9 @@ describe("DocumentBuilder", () => {
   describe("deconstructAstDocument", () => {
     const check = (markdown: string, expected: Fieldset) => {
       const ast = parseMarkdown(markdown);
-      const document = throwIfError(deconstructAstDocument(ast));
+      const document = throwIfError(
+        deconstructAstDocument(mockNodeSchema, ast),
+      );
       expect(document).toEqual(expected);
     };
 
@@ -244,7 +250,7 @@ describe("DocumentBuilder", () => {
               {
                 type: "Dataview",
                 query: { filters: { type: "Task" } },
-                template: "**{{title}}**: {{description}}",
+                template: "**{title}**: {description}",
                 data: [
                   {
                     title: "Implement user authentication",
@@ -412,3 +418,28 @@ After directive`,
     });
   });
 });
+
+export const extractFieldsFromItems = (
+  schema: NodeSchema,
+  view: ViewAST,
+  renderedContent: string,
+): Result<FieldsetNested[]> => {
+  if (renderedContent.trim().length === 0) {
+    return ok([]);
+  }
+
+  const lines = renderedContent.split("\n").filter((line) => line.trim());
+  const items: FieldsetNested[] = [];
+
+  for (const line of lines) {
+    const itemText = line.startsWith("- ") ? line.slice(2) : line;
+    const itemMarkdown = `${itemText}\n`;
+    const snapshotAst = parseMarkdown(itemMarkdown);
+
+    const extractResult = extractFields(schema, view, snapshotAst);
+    if (isErr(extractResult)) return extractResult;
+    items.push(extractResult.data);
+  }
+
+  return ok(items);
+};

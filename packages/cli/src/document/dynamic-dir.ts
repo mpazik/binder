@@ -15,12 +15,8 @@ import { sanitizeFilename } from "../utils/file.ts";
 import type { Logger } from "../log.ts";
 import { parseStringQuery } from "./query.ts";
 import { buildAstDoc } from "./doc-builder.ts";
-import { renderAstToMarkdown } from "./markdown.ts";
-import {
-  compileTemplate,
-  DEFAULT_DYNAMIC_TEMPLATE,
-  renderTemplate,
-} from "./template.ts";
+import { parseView, renderAstToMarkdown } from "./markdown.ts";
+import { renderView } from "./view.ts";
 
 export const resolvePath = (template: string, item: Fieldset): string => {
   return template.replace(/\{(\w+)}/g, (match, fieldName) => {
@@ -72,22 +68,36 @@ export const extractFieldsFromPath = (
   return ok(fieldSet);
 };
 
+export const DEFAULT_DYNAMIC_VIEW_STRING = `# {title}
+
+**Type:** {type}
+**UID:** {uid}
+**Key:** {key}
+
+## Description
+
+{description}`;
+
 export const renderItem = async (
   kg: KnowledgeGraph,
   item: Fieldset,
   log: Logger,
   template?: string,
 ): ResultAsync<string> => {
+  const schemaResult = await kg.getNodeSchema();
+  if (isErr(schemaResult)) return schemaResult;
+  const schema = schemaResult.data;
+
   if (template) {
-    const templateResult = compileTemplate(template);
-    if (isErr(templateResult)) return templateResult;
-    return renderTemplate(templateResult.data, item);
+    const viewAst = parseView(template);
+    return renderView(schema, viewAst, item);
   } else if (item.type === "Document") {
     const astResult = await buildAstDoc(kg, item.uid as NodeUid);
     if (isErr(astResult)) return astResult;
     return ok(renderAstToMarkdown(astResult.data));
   } else {
-    return renderTemplate(DEFAULT_DYNAMIC_TEMPLATE, item);
+    const viewAst = parseView(DEFAULT_DYNAMIC_VIEW_STRING);
+    return renderView(schema, viewAst, item);
   }
 };
 export const renderDynamicDirectory = async (
