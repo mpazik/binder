@@ -1,3 +1,9 @@
+/**
+ * Markdown parsing functions do not return Result types because the CommonMark spec
+ * guarantees that any character sequence is valid markdown. Parsers never throw errors
+ * on malformed syntax - they simply parse it as literal text nodes.
+ */
+
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkFrontmatter from "remark-frontmatter";
@@ -6,18 +12,11 @@ import remarkDirective from "remark-directive";
 import { type Options } from "remark-stringify";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { directiveToMarkdown } from "mdast-util-directive";
-import {
-  type Brand,
-  createError,
-  isErr,
-  ok,
-  type Result,
-  tryCatch,
-} from "@binder/utils";
+import { type Brand } from "@binder/utils";
 import type { Root, RootContent } from "mdast";
 
 export type FullAST = Brand<Root, "FullAST">;
-export type SlimAST = Brand<Root, "SimplifiedAST">;
+export type BlockAST = Brand<Root, "BlockAST">;
 
 export const defaultRenderOptions: Options = {
   emphasis: "_",
@@ -53,14 +52,11 @@ const extractTextFromInline = (node: any): string => {
   return "";
 };
 
-const renderInlineToMarkdown = (
-  node: RootContent,
-  options: Options = defaultRenderOptions,
-): string => {
+const renderInlineToMarkdown = (node: RootContent): string => {
   return extractTextFromInline(node);
 };
 
-export const renderAstToMarkdown = (ast: FullAST | SlimAST): string => {
+export const renderAstToMarkdown = (ast: FullAST | BlockAST): string => {
   const markdown = toMarkdown(ast, {
     ...defaultRenderOptions,
     extensions: [directiveToMarkdown()],
@@ -82,7 +78,7 @@ const hasInlineChildren = (node: any): boolean =>
   "children" in node &&
   node.children.some((child: any) => isInline(child.type));
 
-const removePosition = (obj: any): any => {
+export const removePosition = (obj: any): any => {
   if (Array.isArray(obj)) {
     return obj.map(removePosition);
   }
@@ -107,21 +103,16 @@ const flattenInline = (node: RootContent): any => {
   return node;
 };
 
-export const parseAst = (content: string): Result<any> =>
-  tryCatch(
-    () => {
-      const processor = unified()
-        .use(remarkParse)
-        .use(remarkDirective)
-        .use(remarkFrontmatter)
-        .use(remarkParseFrontmatter);
-      return processor.parse(content);
-    },
-    (error) =>
-      createError("parse_error", "Failed to parse markdown", { error }),
-  );
+export const parseAst = (content: string): FullAST => {
+  const processor = unified()
+    .use(remarkParse)
+    .use(remarkDirective)
+    .use(remarkFrontmatter)
+    .use(remarkParseFrontmatter);
+  return processor.parse(content) as FullAST;
+};
 
-export const simplifyAst = (ast: FullAST): SlimAST => {
+export const simplifyAst = (ast: FullAST): BlockAST => {
   const cleaned = removePosition(ast);
   return {
     ...cleaned,
@@ -129,8 +120,7 @@ export const simplifyAst = (ast: FullAST): SlimAST => {
   };
 };
 
-export const parseMarkdown = (content: string): Result<SlimAST> => {
-  const astResult = parseAst(content);
-  if (isErr(astResult)) return astResult;
-  return ok(simplifyAst(astResult.data));
+export const parseMarkdown = (content: string): BlockAST => {
+  const ast = parseAst(content);
+  return simplifyAst(ast);
 };

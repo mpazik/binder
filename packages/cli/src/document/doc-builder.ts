@@ -14,7 +14,7 @@ import type {
   KnowledgeGraph,
   NodeRef,
 } from "@binder/db";
-import { type SlimAST } from "./markdown.ts";
+import { type BlockAST } from "./markdown.ts";
 import { parseStringQuery, stringifyQuery } from "./query.ts";
 import {
   compileTemplate,
@@ -75,7 +75,7 @@ export const fetchDocumentNodes = async (
 export const buildAstDoc = async (
   kg: KnowledgeGraph,
   documentRef: NodeRef,
-): ResultAsync<SlimAST> => {
+): ResultAsync<BlockAST> => {
   const documentResult = await fetchDocumentNodes(kg, documentRef);
   if (isErr(documentResult)) return documentResult;
 
@@ -263,7 +263,7 @@ export const buildAstDoc = async (
   return ok({
     type: "root",
     children,
-  } as SlimAST);
+  } as BlockAST);
 };
 
 const extractTextValue = (node: any): string => {
@@ -289,7 +289,7 @@ const extractDirectiveContent = (node: any): string => {
   return node.children.flatMap(extractText).join("\n").trim();
 };
 
-export const deconstructAstDocument = (ast: SlimAST): Result<Fieldset> => {
+export const deconstructAstDocument = (ast: BlockAST): Result<Fieldset> => {
   const document: Fieldset = { type: "Document", blockContent: [] };
   let currentSection: Fieldset | null = null;
 

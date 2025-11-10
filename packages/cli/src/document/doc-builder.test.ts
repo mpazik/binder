@@ -122,7 +122,7 @@ describe("DocumentBuilder", () => {
 
       const ast = throwIfError(await buildAstDoc(kg, mockDocumentUid));
       const expected = await Bun.file(
-        join(__dirname, "../../test/data/ast.json"),
+        join(__dirname, "../../test/data/document-ast.json"),
       ).json();
       expect(ast).toEqual(expected);
     });
@@ -194,13 +194,13 @@ describe("DocumentBuilder", () => {
 
   describe("deconstructAstDocument", () => {
     const check = (markdown: string, expected: Fieldset) => {
-      const ast = throwIfError(parseMarkdown(markdown));
+      const ast = parseMarkdown(markdown);
       const document = throwIfError(deconstructAstDocument(ast));
       expect(document).toEqual(expected);
     };
 
     it("deconstructs markdown to nested document structure", async () => {
-      const mdPath = join(__dirname, "../../test/data/simple.md");
+      const mdPath = join(__dirname, "../../test/data/document.md");
       const markdown = await Bun.file(mdPath).text();
 
       check(markdown, {

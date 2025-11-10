@@ -88,10 +88,9 @@ export const parseFile = async (
     );
   }
 
-  const astResult = parseMarkdown(markdown);
-  if (isErr(astResult)) return astResult;
+  const ast = parseMarkdown(markdown);
 
-  const fileRepresentationResult = deconstructAstDocument(astResult.data);
+  const fileRepresentationResult = deconstructAstDocument(ast);
   if (isErr(fileRepresentationResult)) return fileRepresentationResult;
 
   const kgRepresentationResult = await fetchDocumentNodes(kg, documentRef);

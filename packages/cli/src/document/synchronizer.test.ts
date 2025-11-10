@@ -40,7 +40,7 @@ describe("synchronizer", () => {
 
   describe("parseFile", () => {
     it("parses file and returns file and kg representations", async () => {
-      const filePath = join(config.paths.docs, "simple.md");
+      const filePath = join(config.paths.docs, "document.md");
       const markdown = await Bun.file(filePath).text();
 
       const result = throwIfError(
@@ -173,7 +173,7 @@ ${mockTask1Node.description}`;
   });
 
   describe("synchronizeFile", async () => {
-    const filePath = join(config.paths.docs, "simple.md");
+    const filePath = join(config.paths.docs, "document.md");
     const originalMarkdown = await Bun.file(filePath).text();
 
     it("generates no changesets when dataview items match query results", async () => {
