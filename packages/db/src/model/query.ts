@@ -40,20 +40,17 @@ export const FiltersSchema = z.record(z.string(), FilterSchema);
 export type Filters = z.infer<typeof FiltersSchema>;
 
 const IncludesBaseSchema: z.ZodType<any> = z.lazy(() =>
-  z.union([
-    z.boolean(),
-    z.record(
-      z.string(),
-      z.union([
-        z.boolean(),
-        IncludesBaseSchema,
-        z.object({
-          includes: IncludesBaseSchema.optional(),
-          filters: FiltersSchema.optional(),
-        }),
-      ]),
-    ),
-  ]),
+  z.record(
+    z.string(),
+    z.union([
+      z.boolean(),
+      IncludesBaseSchema,
+      z.object({
+        includes: IncludesBaseSchema.optional(),
+        filters: FiltersSchema.optional(),
+      }),
+    ]),
+  ),
 );
 
 const IncludesSchema = IncludesBaseSchema;

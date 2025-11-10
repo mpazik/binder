@@ -1,4 +1,3 @@
-import { newIsoTimestamp } from "@binder/utils";
 import type { NodeId, NodeKey, NodeUid } from "./node.ts";
 import { type Fieldset } from "./entity.ts";
 import {
@@ -57,6 +56,7 @@ export const mockTask2Node = {
   title: "Implement schema generator",
   description: "Create a dynamic schema generator",
   status: "todo",
+  project: mockProjectUid,
 } as const satisfies Fieldset;
 
 export const mockTask3Node = {
@@ -67,6 +67,7 @@ export const mockTask3Node = {
   title: "Add relationship fields",
   description: "Enable querying related entities through API",
   status: "in_progress",
+  project: mockProjectUid,
 } as const satisfies Fieldset;
 
 export const mockUserNode = {

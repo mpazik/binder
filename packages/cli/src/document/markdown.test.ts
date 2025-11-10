@@ -1,12 +1,19 @@
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "bun:test";
-import { parseMarkdown, renderAstToMarkdown } from "./markdown.ts";
+import {
+  parseMarkdown,
+  parseView,
+  removePosition,
+  renderAstToMarkdown,
+} from "./markdown.ts";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const mdPath = join(__dirname, "../../test/data/document.md");
 const astPath = join(__dirname, "../../test/data/document-ast.json");
 const mdContent = await Bun.file(mdPath).text();
+const taskViewPath = join(__dirname, "../../test/data/task-view.md");
+const taskViewAstPath = join(__dirname, "../../test/data/task-view-ast.json");
 
 describe("parseMarkdown", () => {
   it("parses markdown with simplified AST", async () => {
@@ -28,5 +35,13 @@ describe("renderAstToMarkdown", () => {
   it("preserves literal markdown characters in text nodes", async () => {
     expect(rendered).toContain("**Implement user authentication**");
     expect(rendered).not.toContain("\\*\\*");
+  });
+});
+
+describe("parseViewAst", () => {
+  it("parses task view template with slots", async () => {
+    const expected = JSON.parse(await Bun.file(taskViewAstPath).text());
+    const ast = parseView(await Bun.file(taskViewPath).text());
+    expect(removePosition(ast)).toEqual(expected);
   });
 });

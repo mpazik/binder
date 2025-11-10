@@ -21,7 +21,7 @@
       "name": "@binder/cli",
       "version": "0.0.0",
       "bin": {
-        "binder": "./src/index.ts",
+        "binder": "./dist/index.js",
       },
       "dependencies": {
         "@binder/db": "workspace:*",
@@ -31,7 +31,9 @@
         "handlebars": "^4.7.8",
         "mdast": "^3.0.0",
         "mdast-util-directive": "^3.1.0",
+        "mdast-util-from-markdown": "^2.0.2",
         "mdast-util-to-markdown": "^2.1.2",
+        "micromark-util-types": "^2.0.2",
         "remark-directive": "^4.0.0",
         "remark-frontmatter": "^5.0.0",
         "remark-parse": "^11.0.0",
