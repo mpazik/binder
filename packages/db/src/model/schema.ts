@@ -324,6 +324,7 @@ export type ConfigTypeBuilder<
   O extends ConfigFieldKey,
 > = EntityTypeBuilder<ConfigFieldDefinitions, M | SystemFieldKeys, O> & {};
 
+export type NodeDataType = keyof typeof nodeDataTypes;
 export type NodeFieldDefinition = ConfigTypeBuilder<
   "name",
   | "description"
@@ -334,7 +335,7 @@ export type NodeFieldDefinition = ConfigTypeBuilder<
   | "inverseOf"
   | "unique"
 > & {
-  dataType: keyof typeof nodeDataTypes;
+  dataType: NodeDataType;
 };
 export type NodeFieldDefinitions = Record<NodeFieldKey, NodeFieldDefinition>;
 

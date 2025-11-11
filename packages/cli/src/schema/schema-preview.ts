@@ -14,12 +14,16 @@ const formatFieldType = (field: NodeFieldDefinition): string => {
     return targetTypes;
   }
 
-  if (dataType === "option" && options && options.length > 0) {
-    const optionValues = options.map((opt) => opt.key).join("|");
-    if (allowMultiple) {
-      return options.length > 1 ? `(${optionValues})[]` : `${optionValues}[]`;
+  if (dataType === "option") {
+    if (options && options.length > 0) {
+      const optionValues = options.map((opt) => opt.key).join("|");
+      if (allowMultiple) {
+        return options.length > 1 ? `(${optionValues})[]` : `${optionValues}[]`;
+      }
+      return optionValues;
     }
-    return optionValues;
+    // Show option without defined options
+    return allowMultiple ? "option[]" : "option";
   }
 
   return allowMultiple ? `${dataType}[]` : dataType;
