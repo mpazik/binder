@@ -22,8 +22,19 @@ type ArrayOperation = {
   value: string;
 };
 
+const trimSingleQuotes = (str: string): string => {
+  if (str.startsWith("'") && str.endsWith("'")) {
+    return str.slice(1, -1);
+  }
+  return str;
+};
+
 const parseArrayOperation = (patch: string): ArrayOperation | null => {
-  const match = patch.match(/^([\w]+)(?:\[([^\]]+)\])?([-+]*=|--)(.*)$/);
+  const patchHasOuterQuotes =
+    (patch.startsWith("'") && patch.endsWith("'")) ||
+    (patch.startsWith('"') && patch.endsWith('"'));
+  const trimmedPatch = patchHasOuterQuotes ? patch.slice(1, -1) : patch;
+  const match = trimmedPatch.match(/^([\w]+)(?:\[([^\]]+)\])?([-+]*=|--)(.*)$/);
   if (!match) return null;
 
   const [, field, index, operator, value] = match;
@@ -31,7 +42,7 @@ const parseArrayOperation = (patch: string): ArrayOperation | null => {
     field: field!,
     index: index,
     operator: operator as ArrayOperation["operator"],
-    value: value!,
+    value: trimSingleQuotes(value!),
   };
 };
 
@@ -72,17 +83,28 @@ const parseSimpleValue = (value: string): string => {
   return value;
 };
 
+const createPatchFormatError = (patch: string) => {
+  const missingOperator = !patch.includes("=");
+  const hasQuote = patch.includes('"') || patch.includes("'");
+
+  if (missingOperator && hasQuote) {
+    return createError(
+      "invalid-patch-format",
+      "Invalid patch format. If your value contains spaces, quote the entire patch: 'field=value with spaces'",
+      { patch },
+    );
+  }
+
+  return createError("invalid-patch-format", "Invalid patch format", {
+    patch,
+  });
+};
+
 export const parseFieldChange = (
   fieldChange: string,
 ): Result<FieldChangeInput> => {
   const arrayOp = parseArrayOperation(fieldChange);
-  if (!arrayOp) {
-    return err(
-      createError("invalid-patch-format", "Invalid patch format", {
-        patch: fieldChange,
-      }),
-    );
-  }
+  if (!arrayOp) return err(createPatchFormatError(fieldChange));
 
   const { field, index, operator, value } = arrayOp;
 
@@ -201,11 +223,8 @@ export const parsePatches = (
   const result: Record<string, FieldChangeInput> = {};
   for (const patch of patches) {
     const arrayOp = parseArrayOperation(patch);
-    if (!arrayOp) {
-      return err(
-        createError("invalid-patch-format", "Invalid patch format", { patch }),
-      );
-    }
+    if (!arrayOp) return err(createPatchFormatError(patch));
+
     const fieldKey = arrayOp.field as FieldKey;
     const fieldChangeResult = parseFieldChange(patch);
     if (isErr(fieldChangeResult)) return fieldChangeResult;

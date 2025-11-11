@@ -1,6 +1,7 @@
 import { expect, it, describe } from "bun:test";
 import "@binder/utils/tests";
 import type { FieldChangeInput } from "@binder/db";
+import { isErr } from "@binder/utils";
 import { parseFieldChange, parsePatches } from "./patch-parser.ts";
 
 describe("patch-parser", () => {
@@ -64,6 +65,16 @@ describe("patch-parser", () => {
       check("field=[]", []);
       check("field=[1,2,3]", [1, 2, 3]);
       check("field=[true,false,null]", [true, false, null]);
+    });
+
+    it("sets array of objects", () => {
+      check(
+        'options=[{"key":"draft","name":"Draft"},{"key":"active","name":"Active"}]',
+        [
+          { key: "draft", name: "Draft" },
+          { key: "active", name: "Active" },
+        ],
+      );
     });
 
     it("sets array with comma-separated values", () => {
@@ -177,23 +188,50 @@ describe("patch-parser", () => {
     );
   });
 
-  it("returns error for invalid patch format", () => {
-    expect(parseFieldChange("invalid")).toBeErrWithKey("invalid-patch-format");
+  describe("error handling", () => {
+    it("returns error for invalid patch format", () => {
+      expect(parseFieldChange("invalid")).toBeErrWithKey(
+        "invalid-patch-format",
+      );
+    });
+
+    it("returns error for invalid array index", () => {
+      expect(parseFieldChange("tags[abc]+=urgent")).toBeErrWithKey(
+        "invalid-array-index",
+      );
+    });
+
+    it("returns error for remove by position without index", () => {
+      expect(parseFieldChange("tags--")).toBeErrWithKey("missing-index");
+    });
+
+    it("returns error for invalid JSON", () => {
+      expect(parseFieldChange("field={invalid json}")).toBeErrWithKey(
+        "invalid-json-format",
+      );
+    });
+
+    it("provides helpful hint for shell quoting issues", () => {
+      const result = parsePatches([`Solutions"`]);
+      expect(result).toBeErrWithKey("invalid-patch-format");
+      if (isErr(result)) {
+        expect(result.error.message).toContain("quote the entire patch");
+      }
+    });
   });
 
-  it("returns error for invalid array index", () => {
-    expect(parseFieldChange("tags[abc]+=urgent")).toBeErrWithKey(
-      "invalid-array-index",
-    );
+  it("handles patches with surrounding single quotes", () => {
+    check(`'field=value'`, "value");
+    check(`'field=123'`, 123);
+    check(`'field=true'`, true);
+    check(`'tags=a,b,c'`, ["a", "b", "c"]);
+    check(`'options=[{"key":"draft","name":"Draft"}]'`, [
+      { key: "draft", name: "Draft" },
+    ]);
   });
 
-  it("returns error for remove by position without index", () => {
-    expect(parseFieldChange("tags--")).toBeErrWithKey("missing-index");
-  });
-
-  it("returns error for invalid JSON", () => {
-    expect(parseFieldChange("field={invalid json}")).toBeErrWithKey(
-      "invalid-json-format",
-    );
+  it("handles value with surrounding quotes when patch has quotes", () => {
+    check(`'field="value"'`, "value");
+    check(`"field='value'"`, "value");
   });
 });
