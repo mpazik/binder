@@ -143,8 +143,8 @@ describe("journal", () => {
       }
     };
 
-    it("returns error when file does not exist", async () => {
-      await checkVerify(undefined, "file-not-found");
+    it("returns count 0 when file does not exist", async () => {
+      await checkVerify(undefined, 0);
     });
 
     it("returns valid for empty file", async () => {

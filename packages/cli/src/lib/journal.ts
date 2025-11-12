@@ -138,7 +138,7 @@ const parseTransaction = (line: string): Result<Transaction> => {
   return parseJson<Transaction>(line, "Failed to parse transaction from log");
 };
 
-const readTransactionsFromEnd = async function* (
+export const readTransactionsFromEnd = async function* (
   fs: FileSystem,
   path: string,
 ): AsyncGenerator<Result<Transaction>, void, unknown> {
@@ -268,12 +268,7 @@ export const verifyLog = async (
   path: string,
   options?: { verifyIntegrity?: boolean },
 ): ResultAsync<{ count: number }> => {
-  if (!fs.exists(path))
-    return err(
-      createError("file-not-found", "Transaction log file not found", {
-        path,
-      }),
-    );
+  if (!fs.exists(path)) return ok({ count: 0 });
 
   let count = 0;
   let lineNumber = 0;

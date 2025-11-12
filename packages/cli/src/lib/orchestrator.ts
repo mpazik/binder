@@ -27,7 +27,9 @@ import {
   clearLog,
   logTransaction,
   readLastTransactions,
+  readTransactionsFromEnd,
   removeLastFromLog,
+  verifyLog,
 } from "./journal.ts";
 import type { FileSystem } from "./filesystem.ts";
 
@@ -43,6 +45,8 @@ export const verifySync = async (
   binderPath: string,
 ): ResultAsync<VerifySync> => {
   const logPath = join(binderPath, TRANSACTION_LOG_FILE);
+  const logVerifyResult = await verifyLog(fs, logPath);
+  if (isErr(logVerifyResult)) return logVerifyResult;
 
   const versionResult = await kg.version();
   if (isErr(versionResult))
@@ -51,56 +55,52 @@ export const verifySync = async (
         error: versionResult.error,
       }),
     );
+
+  const logTransactionCount = logVerifyResult.data.count;
   const dbTransactionCount = versionResult.data.id;
+  const dbOnlyTransactions: Transaction[] = [];
+  const logOnlyTransactions: Transaction[] = [];
 
-  const logTransactionsResult = await readLastTransactions(
-    fs,
-    logPath,
-    dbTransactionCount + 100,
-  );
-  if (isErr(logTransactionsResult)) {
-    return ok({
-      dbOnlyTransactions: [],
-      logOnlyTransactions: [],
-      lastSyncedId: 0 as TransactionId,
-    });
-  }
-
-  const logTransactions = logTransactionsResult.data;
-  let divergenceId: TransactionId | null = null;
-
-  for (let i = logTransactions.length - 1; i >= 0; i--) {
-    const logTransaction = logTransactions[i]!;
-
-    if (divergenceId !== null) continue;
-    if (logTransaction.id > dbTransactionCount) continue;
-
-    const dbTransactionResult = await kg.fetchTransaction(logTransaction.id);
-    if (isErr(dbTransactionResult)) return dbTransactionResult;
-
-    if (dbTransactionResult.data.hash !== logTransaction.hash) {
-      divergenceId = logTransaction.id;
-    }
-  }
-
-  const lastSyncedId = (
-    divergenceId === null
-      ? Math.min(dbTransactionCount, logTransactions.length)
-      : divergenceId - 1
+  let lastSyncedId = Math.min(
+    dbTransactionCount,
+    logTransactionCount,
   ) as TransactionId;
 
-  const dbOnlyTransactions: Transaction[] = [];
-  for (let i = lastSyncedId + 1; i <= dbTransactionCount; i++) {
+  for (let i = dbTransactionCount; i > lastSyncedId; i--) {
     const txResult = await kg.fetchTransaction(i as TransactionId);
     if (isErr(txResult)) return txResult;
     dbOnlyTransactions.push(txResult.data);
   }
 
-  const logOnlyTransactions = logTransactions.slice(lastSyncedId);
+  const logIterator = readTransactionsFromEnd(fs, logPath);
+
+  for (let i = logTransactionCount; i > lastSyncedId; i--) {
+    const result = await logIterator.next();
+    if (result.done) break;
+    if (isErr(result.value)) return result.value;
+    logOnlyTransactions.push(result.value.data);
+  }
+
+  for (let i = lastSyncedId; i >= 1; i--) {
+    const result = await logIterator.next();
+    if (result.done) break;
+    if (isErr(result.value)) return result.value;
+    const logTx = result.value.data;
+
+    const dbTxResult = await kg.fetchTransaction(i as TransactionId);
+    if (isErr(dbTxResult)) return dbTxResult;
+    const dbTx = dbTxResult.data;
+
+    if (dbTx.hash === logTx.hash) break;
+
+    dbOnlyTransactions.push(dbTx);
+    logOnlyTransactions.push(logTx);
+    lastSyncedId = (i - 1) as TransactionId;
+  }
 
   return ok({
-    dbOnlyTransactions,
-    logOnlyTransactions,
+    dbOnlyTransactions: dbOnlyTransactions.reverse(),
+    logOnlyTransactions: logOnlyTransactions.reverse(),
     lastSyncedId,
   });
 };
@@ -251,7 +251,7 @@ export const setupKnowledgeGraph = (
   fs: FileSystem,
   binderPath: string,
   docsPath: string,
-  dynamicDirectories: Array<{ path: string; query: string; template?: string }>,
+  dynamicDirectories: Array<{ path: string; query: string }>,
   log: Logger,
 ): KnowledgeGraph => {
   const knowledgeGraph = openKnowledgeGraph(db, {
