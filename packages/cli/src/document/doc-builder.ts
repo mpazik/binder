@@ -14,7 +14,6 @@ import type {
   KnowledgeGraph,
   NodeRef,
 } from "@binder/db";
-import { Log } from "../log.ts";
 import { type SlimAST } from "./markdown.ts";
 import { parseStringQuery, stringifyQuery } from "./query.ts";
 import {
@@ -190,9 +189,6 @@ export const buildAstDoc = async (
           if (node.template) {
             const compileResult = compileTemplate(node.template as string);
             if (isErr(compileResult)) {
-              Log.error(
-                `Dataview template compile failed: ${compileResult.error.message}`,
-              );
               return DEFAULT_DATAVIEW_TEMPLATE;
             }
             return compileResult.data;

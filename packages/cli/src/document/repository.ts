@@ -8,7 +8,7 @@ import {
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
-import { Log } from "../log.ts";
+import type { Logger } from "../log.ts";
 import { buildAstDoc } from "./doc-builder.ts";
 import { renderAstToMarkdown } from "./markdown.ts";
 import { renderDynamicDirectory } from "./dynamic-dir.ts";
@@ -56,6 +56,7 @@ const removeMarkdownFiles = (dir: string): void => {
 
 export const renderDocs = async (
   kg: KnowledgeGraph,
+  log: Logger,
   docsPath: string,
   dynamicDirectories: Array<{ path: string; query: string }> = [],
 ): ResultAsync<undefined> => {
@@ -73,7 +74,7 @@ export const renderDocs = async (
   for (const doc of docs) {
     const astResult = await buildAstDoc(kg, doc.uid);
     if (isErr(astResult)) {
-      Log.error(`Failed to build AST for ${doc.path}`, {
+      log.error(`Failed to build AST for ${doc.path}`, {
         error: astResult.error,
       });
       continue;
@@ -88,12 +89,12 @@ export const renderDocs = async (
     }, errorToObject);
 
     if (isErr(writeResult)) {
-      Log.error(`Failed to write ${filePath}`, { error: writeResult.error });
+      log.error(`Failed to write ${filePath}`, { error: writeResult.error });
     }
   }
 
   for (const dynamicDir of dynamicDirectories) {
-    await renderDynamicDirectory(kg, docsPath, dynamicDir);
+    await renderDynamicDirectory(kg, docsPath, log, dynamicDir);
   }
 
   return ok(undefined);

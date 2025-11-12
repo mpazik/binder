@@ -115,15 +115,21 @@ export const printTransactions = (
   }
 };
 
-export function error(message: string) {
+export const error = (message: string, showLogHint = false) => {
   println(Style.TEXT_DANGER_BOLD + "Error: " + Style.TEXT_NORMAL + message);
-}
+  if (showLogHint) {
+    println(Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL);
+  }
+};
 
-export const printError = (error: {
-  key: string;
-  message?: string;
-  data?: object;
-}) => {
+export const printError = (
+  error: {
+    key: string;
+    message?: string;
+    data?: object;
+  },
+  showLogHint = true,
+) => {
   println(
     Style.TEXT_DANGER_BOLD +
       "Error: " +
@@ -131,7 +137,14 @@ export const printError = (error: {
       (error.message || error.key),
   );
 
-  if (!error.data || Object.keys(error.data).length === 0) return;
+  if (!error.data || Object.keys(error.data).length === 0) {
+    if (showLogHint) {
+      println(
+        Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL,
+      );
+    }
+    return;
+  }
 
   const formatValue = (value: unknown, indent: string): string => {
     if (typeof value === "string") return value;
@@ -181,6 +194,12 @@ export const printError = (error: {
             : formatValue(validationError, "    ");
         println(`  - ${message})}`);
       }
+      if (showLogHint) {
+        println("");
+        println(
+          Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL,
+        );
+      }
       return;
     }
   }
@@ -188,6 +207,11 @@ export const printError = (error: {
   println(Style.TEXT_DIM + "Error details:" + Style.TEXT_NORMAL);
   const formatted = formatValue(error.data, "");
   println(formatted);
+
+  if (showLogHint) {
+    println("");
+    println(Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL);
+  }
 };
 
 export const printData = (data: unknown) => {

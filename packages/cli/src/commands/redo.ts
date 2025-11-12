@@ -38,6 +38,7 @@ export const redoHandler: CommandHandlerWithDbWrite<{
 
   const renderResult = await renderDocs(
     kg,
+    log,
     config.paths.docs,
     config.dynamicDirectories,
   );

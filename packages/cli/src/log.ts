@@ -8,19 +8,11 @@ const levelPriority: Record<Level, number> = {
   ERROR: 3,
 };
 
-const level: Level = "INFO";
-
-function shouldLog(input: Level): boolean {
-  return levelPriority[input] >= levelPriority[level];
-}
-
 export type Logger = {
   debug(message?: any, extra?: Record<string, any>): void;
   info(message?: any, extra?: Record<string, any>): void;
   error(message?: any, extra?: Record<string, any>): void;
   warn(message?: any, extra?: Record<string, any>): void;
-  tag(key: string, value: string): Logger;
-  clone(): Logger;
   time(
     message: string,
     extra?: Record<string, any>,
@@ -30,100 +22,132 @@ export type Logger = {
   };
 };
 
-const loggers = new Map<string, Logger>();
+const rotateLogFile = async (logFilePath: string): Promise<void> => {
+  const file = Bun.file(logFilePath);
+  if (!(await file.exists())) return;
 
-export const Log = create({ service: "default" });
+  const stats = await Bun.file(logFilePath)
+    .stat()
+    .catch(() => null);
+  if (!stats) return;
 
-export interface Options {
-  print: boolean;
-  dev?: boolean;
-  level?: Level;
-}
+  const maxSize = 10 * 1024 * 1024;
+  if (stats.size < maxSize) return;
 
-const logpath = "";
-export function file() {
-  return logpath;
-}
+  const timestamp = new Date().toISOString().split(".")[0].replace(/:/g, "");
+  const archivePath = logFilePath.replace(".log", `.${timestamp}.log`);
+  await Bun.$`mv ${logFilePath} ${archivePath}`.quiet().catch(() => {});
+};
 
-function formatError(error: Error, depth = 0): string {
+const formatError = (error: Error, depth = 0): string => {
   const result = error.message;
   return error.cause instanceof Error && depth < 10
     ? result + " Caused by: " + formatError(error.cause, depth + 1)
     : result;
-}
+};
 
-let last = Date.now();
-export function create(tags?: Record<string, any>) {
-  tags = tags || {};
+export const createLogger = async (options: {
+  logDir?: string;
+  level?: Level;
+  printLogs?: boolean;
+}): Promise<Logger> => {
+  let logFilePath: string | null = null;
 
-  const service = tags["service"];
-  if (service && typeof service === "string") {
-    const cached = loggers.get(service);
-    if (cached) {
-      return cached;
-    }
+  if (options.logDir && !options.printLogs) {
+    await Bun.$`mkdir -p ${options.logDir}`.quiet().catch(() => {});
+
+    logFilePath = `${options.logDir}/cli.log`;
+    await rotateLogFile(logFilePath);
+
+    const logfile = Bun.file(logFilePath);
+    const writer = logfile.writer();
+
+    process.stderr.write = (msg) => {
+      writer.write(msg);
+      writer.flush();
+      return true;
+    };
   }
 
-  function build(message: any, extra?: Record<string, any>) {
-    const prefix = Object.entries({
-      ...tags,
+  const currentLevel = options.level ?? "INFO";
+  let last = Date.now();
+
+  const shouldLog = (input: Level): boolean => {
+    return levelPriority[input] >= levelPriority[currentLevel];
+  };
+
+  const build = (
+    level: Level,
+    message: any,
+    extra?: Record<string, any>,
+  ): string => {
+    const metadata = {
+      pid: process.pid,
       ...extra,
-    })
+    };
+
+    const prefix = Object.entries(metadata)
       .filter(([_, value]) => value !== undefined && value !== null)
       .map(([key, value]) => {
-        const prefix = `${key}=`;
-        if (value instanceof Error) return prefix + formatError(value);
-        if (typeof value === "object") return prefix + JSON.stringify(value);
-        return prefix + value;
+        const pfx = `${key}=`;
+        if (value && typeof value === "object" && "message" in value) {
+          return pfx + formatError(value as Error);
+        }
+        if (typeof value === "object") return pfx + JSON.stringify(value);
+        return pfx + value;
       })
       .join(" ");
+
     const next = new Date();
     const diff = next.getTime() - last;
     last = next.getTime();
+
     return (
-      [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, message]
+      [
+        next.toISOString().split(".")[0],
+        "+" + diff + "ms",
+        `level=${level}`,
+        prefix,
+        message,
+      ]
         .filter(Boolean)
         .join(" ") + "\n"
     );
-  }
-  const result: Logger = {
+  };
+
+  const info = (message?: any, extra?: Record<string, any>) => {
+    if (shouldLog("INFO")) {
+      process.stderr.write("INFO  " + build("INFO", message, extra));
+    }
+  };
+
+  return {
     debug(message?: any, extra?: Record<string, any>) {
       if (shouldLog("DEBUG")) {
-        process.stderr.write("DEBUG " + build(message, extra));
+        process.stderr.write("DEBUG " + build("DEBUG", message, extra));
       }
     },
-    info(message?: any, extra?: Record<string, any>) {
-      if (shouldLog("INFO")) {
-        process.stderr.write("INFO  " + build(message, extra));
-      }
-    },
+    info,
     error(message?: any, extra?: Record<string, any>) {
       if (shouldLog("ERROR")) {
-        process.stderr.write("ERROR " + build(message, extra));
+        process.stderr.write("ERROR " + build("ERROR", message, extra));
       }
     },
     warn(message?: any, extra?: Record<string, any>) {
       if (shouldLog("WARN")) {
-        process.stderr.write("WARN  " + build(message, extra));
+        process.stderr.write("WARN  " + build("WARN", message, extra));
       }
-    },
-    tag(key: string, value: string) {
-      if (tags) tags[key] = value;
-      return result;
-    },
-    clone() {
-      return create({ ...tags });
     },
     time(message: string, extra?: Record<string, any>) {
       const now = Date.now();
-      result.info(message, { status: "started", ...extra });
-      function stop() {
-        result.info(message, {
+      info(message, { status: "started", ...extra });
+      const stop = () => {
+        info(message, {
           status: "completed",
           duration: Date.now() - now,
           ...extra,
         });
-      }
+      };
       return {
         stop,
         [Symbol.dispose]() {
@@ -132,10 +156,4 @@ export function create(tags?: Record<string, any>) {
       };
     },
   };
-
-  if (service && typeof service === "string") {
-    loggers.set(service, result);
-  }
-
-  return result;
-}
+};

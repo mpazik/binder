@@ -10,7 +10,6 @@ import {
   type NodeType,
   normalizeEntityRef,
 } from "@binder/db";
-import { Log } from "../log.ts";
 import {
   bootstrapWithDbRead,
   bootstrapWithDbWrite,
@@ -27,14 +26,16 @@ export const configCreateHandler: CommandHandlerWithDbWrite<{
   type: ConfigType;
   patches: string[];
 }> = async ({ kg, config, args }) => {
-  const fields = parsePatches(args.patches);
+  const fieldsResult = parsePatches(args.patches);
+  if (isErr(fieldsResult)) return fieldsResult;
+
   const result = await kg.update({
     author: config.author,
     nodes: [],
     configurations: [
       {
         type: args.type,
-        ...fields,
+        ...fieldsResult.data,
       },
     ],
   });
@@ -57,8 +58,9 @@ export const configReadHandler: CommandHandlerWithDbRead<{
 export const configUpdateHandler: CommandHandlerWithDbWrite<{
   ref: ConfigRef;
   patches: string[];
-}> = async ({ kg, config, ui, args }) => {
-  const fields = parsePatches(args.patches);
+}> = async ({ kg, config, args }) => {
+  const fieldsResult = parsePatches(args.patches);
+  if (isErr(fieldsResult)) return fieldsResult;
 
   const result = await kg.update({
     author: config.author,
@@ -66,7 +68,7 @@ export const configUpdateHandler: CommandHandlerWithDbWrite<{
     configurations: [
       {
         $ref: args.ref,
-        ...fields,
+        ...fieldsResult.data,
       },
     ],
   });
@@ -78,12 +80,12 @@ export const configUpdateHandler: CommandHandlerWithDbWrite<{
 
 export const configListHandler: CommandHandlerWithDbRead<{
   type?: ConfigType;
-}> = async ({ args }) => {
+}> = async ({ log, args }) => {
   const filters = args.type ? { type: args.type } : {};
 
   // TODO: This will need a dedicated search implementation for config namespace
   // For now, return a placeholder message
-  Log.info("config list not yet implemented", { filters });
+  log.info("config list not yet implemented", { filters });
   return ok("Config list not yet implemented");
 };
 
@@ -202,9 +204,7 @@ const ConfigCommand = types({
               coerce: (value: string) => normalizeEntityRef<"config">(value),
             });
           },
-          handler: async (args) => {
-            Log.info(`config delete: ref=${args.ref}`);
-          },
+          handler: async () => {},
         }),
       )
       .command(

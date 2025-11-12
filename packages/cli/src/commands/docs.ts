@@ -12,9 +12,11 @@ export const docsRenderHandler: CommandHandlerWithDbWrite = async ({
   kg,
   ui,
   config,
+  log,
 }) => {
   const result = await renderDocs(
     kg,
+    log,
     config.paths.docs,
     config.dynamicDirectories,
   );

@@ -11,20 +11,22 @@ import DocsCommand from "./commands/docs.ts";
 import DevCommand from "./commands/dev.ts";
 import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
-import { Log } from "./log";
+import { createLogger } from "./log";
 import * as UI from "./ui";
 import { BINDER_VERSION } from "./build-time";
 
 const cancel = new AbortController();
 
+const log = await createLogger({ printLogs: true });
+
 process.on("unhandledRejection", (e) => {
-  Log.error("rejection", {
+  log.error("rejection", {
     e: e instanceof Error ? e.message : e,
   });
 });
 
 process.on("uncaughtException", (e) => {
-  Log.error("exception", {
+  log.error("exception", {
     e: e.message,
   });
 });
@@ -69,14 +71,14 @@ const result = tryCatch<void, any>(() => cli.parse());
 if (isErr(result)) {
   const e = result.error;
   if (e instanceof Error) {
-    Log.error("fatal", {
+    log.error("fatal", {
       name: e.name,
       message: e.message,
       cause: e.cause?.toString(),
       stack: e.stack,
     });
   } else if (e instanceof ResolveMessage) {
-    Log.error("fatal", {
+    log.error("fatal", {
       name: e.name,
       message: e.message,
       code: e.code,
@@ -86,7 +88,7 @@ if (isErr(result)) {
       importKind: e.importKind,
     });
   } else {
-    Log.error("fatal", { error: e });
+    log.error("fatal", { error: e });
   }
   process.exitCode = 1;
 }

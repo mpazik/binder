@@ -12,7 +12,7 @@ import {
   tryCatch,
 } from "@binder/utils";
 import { sanitizeFilename } from "../utils/file.ts";
-import { Log } from "../log.ts";
+import type { Logger } from "../log.ts";
 import { parseStringQuery } from "./query.ts";
 import { buildAstDoc } from "./doc-builder.ts";
 import { renderAstToMarkdown } from "./markdown.ts";
@@ -75,6 +75,7 @@ export const extractFieldsFromPath = (
 export const renderItem = async (
   kg: KnowledgeGraph,
   item: Fieldset,
+  log: Logger,
   template?: string,
 ): ResultAsync<string> => {
   if (template) {
@@ -92,13 +93,14 @@ export const renderItem = async (
 export const renderDynamicDirectory = async (
   kg: KnowledgeGraph,
   docsPath: string,
+  log: Logger,
   dynamicDir: { path: string; query: string; template?: string },
 ): ResultAsync<void> => {
   const queryParams = parseStringQuery(dynamicDir.query);
   const searchResult = await kg.search(queryParams);
 
   if (isErr(searchResult)) {
-    Log.error(`Failed to execute query for dynamic directory`, {
+    log.error(`Failed to execute query for dynamic directory`, {
       query: dynamicDir.query,
       error: searchResult.error,
     });
@@ -108,10 +110,10 @@ export const renderDynamicDirectory = async (
   const items = searchResult.data.items;
 
   for (const item of items) {
-    const markdownResult = await renderItem(kg, item, dynamicDir.template);
+    const markdownResult = await renderItem(kg, item, log, dynamicDir.template);
 
     if (isErr(markdownResult)) {
-      Log.error(`Failed to render item`, {
+      log.error(`Failed to render item`, {
         uid: item.uid,
         error: markdownResult.error,
       });
@@ -128,7 +130,7 @@ export const renderDynamicDirectory = async (
     }, errorToObject);
 
     if (isErr(writeResult)) {
-      Log.error(`Failed to write dynamic document`, {
+      log.error(`Failed to write dynamic document`, {
         path: filePath,
         error: writeResult.error,
       });

@@ -268,7 +268,7 @@ export const setupKnowledgeGraph = (
       return okVoid;
     },
     afterCommit: async () => {
-      renderDocs(knowledgeGraph, docsPath, dynamicDirectories).then(
+      renderDocs(knowledgeGraph, log, docsPath, dynamicDirectories).then(
         (renderResult) => {
           if (isErr(renderResult)) {
             log.error("Failed to re-render docs after transaction", {

@@ -27,7 +27,7 @@ import * as ui from "./ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 import { setupCleanupHandlers, withLock } from "./lib/lock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
-import { Log, type Logger } from "./log.ts";
+import { createLogger, type Logger } from "./log.ts";
 
 export type Config = Omit<BinderConfig, "docsPath"> & {
   paths: {
@@ -124,15 +124,41 @@ export const bootstrap = <TArgs>(
       process.exit(1);
     }
 
-    const result = await handler({
-      config: configResult.data,
-      log: Log,
-      ui,
-      args,
-      fs,
+    const printLogs = process.argv.includes("--print-logs");
+    const logLevelArg = process.argv.find((arg) =>
+      arg.startsWith("--log-level="),
+    );
+    const logLevel = logLevelArg?.split("=")[1] as
+      | "DEBUG"
+      | "INFO"
+      | "WARN"
+      | "ERROR"
+      | undefined;
+
+    const log = await createLogger({
+      logDir: configResult.data.paths.binder,
+      printLogs,
+      level: logLevel,
     });
 
+    let result;
+    // eslint-disable-next-line no-restricted-syntax
+    try {
+      result = await handler({
+        config: configResult.data,
+        log,
+        ui,
+        args,
+        fs,
+      });
+    } catch (e) {
+      log.error("Command failed with exception", { error: e });
+      ui.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+
     if (isErr(result)) {
+      log.error("Command failed", { error: result.error });
       ui.printError(result.error);
       process.exit(1);
     }
@@ -147,14 +173,15 @@ export const bootstrapWithDbRead = <TArgs>(
   handler: CommandHandlerWithDbRead<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
-    const { fs, config } = context;
+    const { fs, config, log } = context;
     const binderPath = config.paths.binder;
     mkdirSync(binderPath, { recursive: true });
     setupCleanupHandlers(fs, binderPath);
 
     const dbResult = openDb({ path: join(binderPath, DB_FILE), migrate: true });
     if (isErr(dbResult)) {
-      Log.error("Failed to open database", { error: dbResult.error });
+      log.error("Failed to open database", { error: dbResult.error });
+      ui.printError(dbResult.error);
       process.exit(1);
     }
 
@@ -169,7 +196,7 @@ export const bootstrapWithDbWrite = <TArgs>(
   handler: CommandHandlerWithDbWrite<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
-    const { fs, config } = context;
+    const { fs, config, log } = context;
     const { paths } = config;
     mkdirSync(paths.binder, { recursive: true });
     setupCleanupHandlers(fs, paths.binder);
@@ -177,7 +204,8 @@ export const bootstrapWithDbWrite = <TArgs>(
     const dbPath = join(paths.binder, DB_FILE);
     const dbResult = openDb({ path: dbPath, migrate: true });
     if (isErr(dbResult)) {
-      Log.error("Failed to open database", { error: dbResult.error });
+      log.error("Failed to open database", { error: dbResult.error });
+      ui.printError(dbResult.error);
       process.exit(1);
     }
 

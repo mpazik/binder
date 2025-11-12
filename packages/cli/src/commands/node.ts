@@ -1,7 +1,6 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import { type NodeRef, type NodeType, normalizeEntityRef } from "@binder/db";
-import { Log } from "../log.ts";
 import {
   bootstrapWithDbRead,
   bootstrapWithDbWrite,
@@ -15,13 +14,15 @@ export const nodeCreateHandler: CommandHandlerWithDbWrite<{
   type: NodeType;
   patches: string[];
 }> = async ({ kg, config, ui, args }) => {
-  const fields = parsePatches(args.patches);
+  const fieldsResult = parsePatches(args.patches);
+  if (isErr(fieldsResult)) return fieldsResult;
+
   const result = await kg.update({
     author: config.author,
     nodes: [
       {
         type: args.type,
-        ...fields,
+        ...fieldsResult.data,
       },
     ],
     configurations: [],
@@ -46,14 +47,15 @@ export const nodeUpdateHandler: CommandHandlerWithDbWrite<{
   ref: NodeRef;
   patches: string[];
 }> = async ({ kg, config, ui, args }) => {
-  const fields = parsePatches(args.patches);
+  const fieldsResult = parsePatches(args.patches);
+  if (isErr(fieldsResult)) return fieldsResult;
 
   const result = await kg.update({
     author: config.author,
     nodes: [
       {
         $ref: args.ref,
-        ...fields,
+        ...fieldsResult.data,
       },
     ],
     configurations: [],
@@ -143,9 +145,7 @@ const NodeCommand = types({
               coerce: (value: string) => normalizeEntityRef<"node">(value),
             });
           },
-          handler: async (args) => {
-            Log.info(`node delete: ref=${args.ref}`);
-          },
+          handler: async () => {},
         }),
       )
       .demandCommand(

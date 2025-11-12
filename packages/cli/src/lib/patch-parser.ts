@@ -3,8 +3,14 @@ import type {
   FieldChangesetInput,
   FieldKey,
 } from "@binder/db";
-import { isErr, parseJson } from "@binder/utils";
-import { Log } from "../log.ts";
+import {
+  createError,
+  err,
+  isErr,
+  ok,
+  parseJson,
+  type Result,
+} from "@binder/utils";
 
 export const patchesDescription =
   "field=value patches. Arrays: field=a,b,c | field+=item | field[0]+=item | field[last]-=item | field[all]-=item | field[0]--";
@@ -31,16 +37,17 @@ const parseArrayOperation = (patch: string): ArrayOperation | null => {
 
 const normalizeIndex = (
   index?: string | number,
-): number | "last" | "all" | undefined => {
-  if (index === undefined) return undefined;
-  if (index === "last" || index === "-1") return "last";
-  if (index === "all") return "all";
+): Result<number | "last" | "all" | undefined> => {
+  if (index === undefined) return ok(undefined);
+  if (index === "last" || index === "-1") return ok("last");
+  if (index === "all") return ok("all");
   const num = Number(index);
   if (isNaN(num)) {
-    Log.error("Invalid array index", { index });
-    process.exit(1);
+    return err(
+      createError("invalid-array-index", "Invalid array index", { index }),
+    );
   }
-  return num;
+  return ok(num);
 };
 
 const parseQuotedValue = (value: string): string => {
@@ -65,11 +72,16 @@ const parseSimpleValue = (value: string): string => {
   return value;
 };
 
-export const parseFieldChange = (fieldChange: string): FieldChangeInput => {
+export const parseFieldChange = (
+  fieldChange: string,
+): Result<FieldChangeInput> => {
   const arrayOp = parseArrayOperation(fieldChange);
   if (!arrayOp) {
-    Log.error("Invalid patch format", { patch: fieldChange });
-    process.exit(1);
+    return err(
+      createError("invalid-patch-format", "Invalid patch format", {
+        patch: fieldChange,
+      }),
+    );
   }
 
   const { field, index, operator, value } = arrayOp;
@@ -77,102 +89,127 @@ export const parseFieldChange = (fieldChange: string): FieldChangeInput => {
   if (value.startsWith("[") || value.startsWith("{")) {
     const result = parseJson<FieldChangeInput>(value);
     if (isErr(result)) {
-      Log.error("Invalid JSON format", { patch: fieldChange });
-      process.exit(1);
+      return err(
+        createError("invalid-json-format", "Invalid JSON format", {
+          patch: fieldChange,
+        }),
+      );
     }
-    return result.data;
+    return ok(result.data);
   }
 
   if (operator === "=") {
-    if (value === "[]") return [];
+    if (value === "[]") return ok([]);
 
     const quotedValue = parseQuotedValue(value);
     if (quotedValue !== value) {
-      if (quotedValue === "") return "";
-      if (quotedValue === "true") return true;
-      if (quotedValue === "false") return false;
-      if (/^-?\d+$/.test(quotedValue)) return parseInt(quotedValue, 10);
-      if (/^-?\d+\.\d+$/.test(quotedValue)) return parseFloat(quotedValue);
-      return quotedValue;
+      if (quotedValue === "") return ok("");
+      if (quotedValue === "true") return ok(true);
+      if (quotedValue === "false") return ok(false);
+      if (/^-?\d+$/.test(quotedValue)) return ok(parseInt(quotedValue, 10));
+      if (/^-?\d+\.\d+$/.test(quotedValue)) return ok(parseFloat(quotedValue));
+      return ok(quotedValue);
     }
 
-    if (value === "") return "";
+    if (value === "") return ok("");
     if (value.includes(",")) {
-      return splitCommaSeparated(value);
+      return ok(splitCommaSeparated(value));
     }
 
-    if (value === "true") return true;
-    if (value === "false") return false;
-    if (/^-?\d+$/.test(value)) return parseInt(value, 10);
-    if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value);
-    return value;
+    if (value === "true") return ok(true);
+    if (value === "false") return ok(false);
+    if (/^-?\d+$/.test(value)) return ok(parseInt(value, 10));
+    if (/^-?\d+\.\d+$/.test(value)) return ok(parseFloat(value));
+    return ok(value);
   }
 
   if (operator === "+=") {
     const values = splitCommaSeparated(value);
-    const normalizedIndex = normalizeIndex(index);
+    const normalizedIndexResult = normalizeIndex(index);
+    if (isErr(normalizedIndexResult)) return normalizedIndexResult;
+    const normalizedIndex = normalizedIndexResult.data;
 
     if (values.length === 1) {
       const val = parseSimpleValue(values[0]!);
       if (normalizedIndex === undefined) {
-        return ["insert", val];
+        return ok(["insert", val]);
       }
-      return ["insert", val, normalizedIndex];
+      return ok(["insert", val, normalizedIndex]);
     }
 
-    return values.map((v) => {
-      const val = parseSimpleValue(v);
-      if (normalizedIndex === undefined) {
-        return ["insert", val];
-      }
-      return ["insert", val, normalizedIndex];
-    });
+    return ok(
+      values.map((v) => {
+        const val = parseSimpleValue(v);
+        if (normalizedIndex === undefined) {
+          return ["insert", val];
+        }
+        return ["insert", val, normalizedIndex];
+      }),
+    );
   }
 
   if (operator === "-=") {
     const values = splitCommaSeparated(value);
-    const normalizedIndex = normalizeIndex(index);
+    const normalizedIndexResult = normalizeIndex(index);
+    if (isErr(normalizedIndexResult)) return normalizedIndexResult;
+    const normalizedIndex = normalizedIndexResult.data;
 
     if (values.length === 1) {
       const val = parseSimpleValue(values[0]!);
       if (normalizedIndex === undefined) {
-        return ["remove", val];
+        return ok(["remove", val]);
       }
-      return ["remove", val, normalizedIndex];
+      return ok(["remove", val, normalizedIndex]);
     }
 
-    return values.map((v) => {
-      const val = parseSimpleValue(v);
-      if (normalizedIndex === undefined) {
-        return ["remove", val];
-      }
-      return ["remove", val, normalizedIndex];
-    });
+    return ok(
+      values.map((v) => {
+        const val = parseSimpleValue(v);
+        if (normalizedIndex === undefined) {
+          return ["remove", val];
+        }
+        return ["remove", val, normalizedIndex];
+      }),
+    );
   }
 
   if (operator === "--") {
-    const normalizedIndex = normalizeIndex(index);
+    const normalizedIndexResult = normalizeIndex(index);
+    if (isErr(normalizedIndexResult)) return normalizedIndexResult;
+    const normalizedIndex = normalizedIndexResult.data;
     if (normalizedIndex === undefined) {
-      Log.error("Remove by position requires an index", { patch: fieldChange });
-      process.exit(1);
+      return err(
+        createError("missing-index", "Remove by position requires an index", {
+          patch: fieldChange,
+        }),
+      );
     }
-    return ["remove", null, normalizedIndex];
+    return ok(["remove", null, normalizedIndex]);
   }
 
-  Log.error("Invalid operator", { operator, patch: fieldChange });
-  process.exit(1);
+  return err(
+    createError("invalid-operator", "Invalid operator", {
+      operator,
+      patch: fieldChange,
+    }),
+  );
 };
 
-export const parsePatches = (patches: string[]): FieldChangesetInput => {
+export const parsePatches = (
+  patches: string[],
+): Result<FieldChangesetInput> => {
   const result: Record<string, FieldChangeInput> = {};
   for (const patch of patches) {
     const arrayOp = parseArrayOperation(patch);
     if (!arrayOp) {
-      Log.error("Invalid patch format", { patch });
-      process.exit(1);
+      return err(
+        createError("invalid-patch-format", "Invalid patch format", { patch }),
+      );
     }
     const fieldKey = arrayOp.field as FieldKey;
-    result[fieldKey] = parseFieldChange(patch);
+    const fieldChangeResult = parseFieldChange(patch);
+    if (isErr(fieldChangeResult)) return fieldChangeResult;
+    result[fieldKey] = fieldChangeResult.data;
   }
-  return result;
+  return ok(result);
 };
