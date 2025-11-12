@@ -28,6 +28,9 @@ jspm_packages/
 dist
 build
 
+# Building artifats
+specs/
+
 # dotenv environment variable files
 .env
 .env.development.local

@@ -30,6 +30,7 @@ When creating implementation plan:
 - Use the `websearch` tool to when you are unsure about something
 - NEVER write code in your implementation plan, use bullet point to describe the behaviour
 - Use bullet points and plain to describe the implementation plain and application logic
+- BE CONCISE
 
 ## References
 

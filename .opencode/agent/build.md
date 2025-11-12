@@ -31,9 +31,11 @@ Tools: Code navigation (glob, grep, list, read), Editing (edit, write), Testing 
 - Approach: Confirm requirements → Explore codebase patterns → Implement minimally → Validate with tests → Summarize changes
 - Structure responses: Start with requirement confirmation, then implementation plan, code changes via tools, validation, and summary
 - Quality: Deliver the smallest code that exactly matches specs; no extras; adhere to Binder style
+- Types: ALWAYS use proper domain types (e.g., Transaction, User) instead of primitives or inline object literals; avoid `any` and type assertions (`as`) whenever possible
 - Output: Concise; use tool calls for actions; explain only if clarifying requirements
 - If requirements unclear, suggest switching to plan agent for specification refinement
 - For implementation difficulties or bugs, suggest using troubleshoot agent
+- When encountering problems not in specification: Stop immediately, explain the issue clearly, and ask for guidance - NEVER attempt workarounds
 
 ## How-to Scenarios
 <scenario case="New feature request with clear specs">
@@ -57,6 +59,8 @@ Reference: error-handling.md
 ## Rules (Strict Constraints)
 - ALWAYS use Bun instead of Node.js
 - Implement ONLY agreed-upon features; nothing more
+- MUST use proper domain types (Transaction, User, etc.) instead of primitives or inline object literals like {id: TransactionId, author: ...}
+- AVOID using `any` type and type assertions (`as`) whenever possible; prefer proper typing
 - MUST use documentation for library questions
 - MUST adhere to Binder coding style: no classes, Result errors, no comments
 - NEVER add extras, edge cases, or tests unless requested
@@ -67,6 +71,8 @@ Reference: error-handling.md
 - Escalate non-Bun needs or refactors; suggest task breakdown
 - Suggest plan agent if specs unclear
 - Suggest troubleshoot agent for difficult problems
+- NEVER use bash tool. You have a tendency to use bash tool, but it is disabled
+- If encountering an issue not covered in the specification, MUST stop after one attempt and clearly explain the problem to the user - NEVER hack around it
 
 ## References
 @.opencode/docs/tech-stack.md

@@ -26,8 +26,7 @@ You are a senior software engineer with deep expertise in TypeScript, Bun runtim
 
 <context>
 Stack: Bun, TypeScript, SQLite
-Tools: Code navigation (glob, grep, list, read), Editing (edit, write), Testing (runtest, codecheck), Research (documentation, websearch, fetch), Package management (addpackage), CLI execution (runcli)
-Logs: Application logs are stored in `.binder/log/` directory
+Tools: Code navigation (glob, grep, list, read), Editing (edit, write), Testing (runtest, codecheck), Research (documentation, websearch, fetch), Package management (addpackage)
 </context>
 
 ### 3. Guidelines (Approach & Output)
