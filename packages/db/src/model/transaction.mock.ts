@@ -21,9 +21,10 @@ import { mockNodeSchema } from "./schema.mock.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
-  "65faca1618039c1cd3396b4a922130920de1c051770deb203662b9966784e9ba" as TransactionHash;
+  "db51c6faa16d75b6245e40dead0691ae6d3707e3b9f1e1600334e7d6da54d72d" as TransactionHash;
 
-const mockAuthor = "test-user";
+export const mockAuthor = "test-user";
+export const mockAuthor2 = "test-user2";
 const mockCreated = newIsoTimestamp("2024-01-01");
 const mockUpdated = newIsoTimestamp("2024-01-02");
 export const mockTransactionInit: Transaction = {
@@ -49,7 +50,7 @@ export const mockTransactionInit: Transaction = {
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "766d85f91233d3a4164397803500650e2478c4e039b68e685721925fee4b89d1" as TransactionHash;
+  "b32ffd80b917a75d786ca55c9a222646373112c020f5fbb6c342520f6cade537" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
   previous: mockTransactionInitHash,
@@ -111,7 +112,7 @@ export const mockTransaction3: Transaction = {
     },
   },
   configurations: {},
-  author: mockAuthor,
+  author: mockAuthor2,
   createdAt: newIsoTimestamp("2024-01-03"),
 };
 
@@ -132,6 +133,6 @@ export const mockTransaction4: Transaction = {
     },
   },
   configurations: {},
-  author: mockAuthor,
+  author: mockAuthor2,
   createdAt: newIsoTimestamp("2024-01-04"),
 };

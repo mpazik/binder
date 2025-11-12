@@ -18,8 +18,7 @@ import * as ui from "../ui.ts";
 import { createRealFileSystem, type FileSystem } from "../lib/filesystem.ts";
 import { types } from "./types.ts";
 
-const GITIGNORE_CONTENT = `# Ignore everything in .binder except transaction log and config
-*
+const GITIGNORE_CONTENT = `*
 !transactions.jsonl
 !config.yaml
 `;

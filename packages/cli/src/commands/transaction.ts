@@ -27,7 +27,12 @@ import {
   repairDbFromLog,
   squashTransactions,
 } from "../lib/orchestrator.ts";
-import { readLastTransactions, verifyLog } from "../lib/journal.ts";
+import {
+  readLastTransactions,
+  readTransactions,
+  verifyLog,
+} from "../lib/journal.ts";
+import { TRANSACTION_LOG_FILE } from "../config.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -362,6 +367,51 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
   return ok(undefined);
 };
 
+export const transactionLogHandler: CommandHandlerWithDbRead<{
+  count: number;
+  format: string;
+  oneline?: boolean;
+  author?: string;
+  chronological?: boolean;
+}> = async ({ config, ui, fs, args }) => {
+  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
+
+  const logResult = await readTransactions(
+    fs,
+    transactionLogPath,
+    args.count,
+    { author: args.author },
+    args.chronological ? "asc" : "desc",
+  );
+  if (isErr(logResult)) return logResult;
+
+  const transactions = logResult.data;
+
+  if (args.format === "json") {
+    ui.println(JSON.stringify(transactions, null, 2));
+    return ok(undefined);
+  }
+
+  if (args.format === "yaml") {
+    ui.printData(transactions);
+    return ok(undefined);
+  }
+
+  const format = args.oneline
+    ? "oneline"
+    : args.format === "full"
+      ? "full"
+      : "concise";
+
+  for (const tx of transactions) {
+    ui.printTransaction(tx, format);
+    if (format !== "oneline") {
+      ui.divider();
+    }
+  }
+  return ok(undefined);
+};
+
 const TransactionCommand = types({
   command: "transaction <command>",
   aliases: ["tx"],
@@ -465,9 +515,48 @@ const TransactionCommand = types({
           handler: bootstrapWithDbWrite(transactionRepairHandler),
         }),
       )
+      .command(
+        types({
+          command: "log",
+          describe: "show recent transactions from the log",
+          builder: (yargs: Argv) => {
+            return yargs
+              .option("count", {
+                alias: "n",
+                describe: "number of transactions to show",
+                type: "number",
+                default: 10,
+              })
+              .option("format", {
+                alias: "f",
+                describe: "output format",
+                type: "string",
+                choices: ["compact", "full", "oneline", "json", "yaml"],
+                default: "compact",
+              })
+              .option("oneline", {
+                describe:
+                  "show one transaction per line (shorthand for --format oneline)",
+                type: "boolean",
+                default: false,
+              })
+              .option("author", {
+                describe: "filter transactions by author",
+                type: "string",
+              })
+              .option("chronological", {
+                describe:
+                  "show transactions in chronological order (oldest first)",
+                type: "boolean",
+                default: false,
+              });
+          },
+          handler: bootstrapWithDbRead(transactionLogHandler),
+        }),
+      )
       .demandCommand(
         1,
-        "You need to specify a subcommand: create, read, rollback, squash, verify, repair",
+        "You need to specify a subcommand: create, read, rollback, squash, verify, repair, log",
       );
   },
   handler: async () => {},

@@ -1,6 +1,15 @@
 import { EOL } from "os";
 import * as readline from "node:readline/promises";
 import * as YAML from "yaml";
+import {
+  type EntitiesChangeset,
+  type FieldChangeset,
+  type FieldValue,
+  normalizeValueChange,
+  shortTransactionHash,
+  type Transaction,
+  type ValueChange,
+} from "@binder/db";
 
 export const Style = {
   TEXT_HIGHLIGHT: "\x1b[95m",
@@ -103,14 +112,15 @@ export const confirm = async (prompt: string): Promise<boolean> => {
 };
 
 export const printTransactions = (
-  transactions: Parameters<typeof printTransaction>[0][],
+  transactions: Transaction[],
   header?: string,
+  format: TransactionFormat = "concise",
 ) => {
   if (header) {
     heading(header);
   }
   for (const tx of transactions) {
-    printTransaction(tx);
+    printTransaction(tx, format);
     println("");
   }
 };
@@ -238,9 +248,9 @@ export const printData = (data: unknown) => {
   println(highlighted);
 };
 
-const getEntityOperation = (changeset: Record<string, any>): string => {
-  if ("createdAt" in changeset) {
-    const createdAtChange = changeset.createdAt;
+const getEntityOperation = (changeset: FieldChangeset): string => {
+  if ("type" in changeset) {
+    const createdAtChange = normalizeValueChange(changeset.type);
     if (createdAtChange.op === "set") {
       if (createdAtChange.previous === undefined) return "created";
       if (createdAtChange.value === undefined) return "deleted";
@@ -249,52 +259,132 @@ const getEntityOperation = (changeset: Record<string, any>): string => {
   return "updated";
 };
 
-const getEntityLabel = (changeset: Record<string, any>): string => {
-  const type = changeset.type?.value ?? changeset.type?.previous;
-  const name = changeset.name?.value ?? changeset.name?.previous;
-  const title = changeset.title?.value ?? changeset.title?.previous;
-
-  const label = type ?? name ?? title;
+const getEntityLabel = (changeset: FieldChangeset): string => {
+  const change = normalizeValueChange(
+    changeset.type ?? changeset.name ?? changeset.label,
+  );
+  if (change.op !== "set") return `DUBIOUS CHANGE OPERATOR: '${change.op}'`;
+  const label = change.value ?? change.previous;
   return label ? ` (${label})` : "";
 };
 
+type EntityChangesFormat = "concise" | "full";
+
 const printEntityChanges = (
   label: string,
-  changes: Record<string, Record<string, any>>,
+  changes: EntitiesChangeset,
+  format: EntityChangesFormat = "concise",
 ) => {
-  const entries = Object.entries(changes);
+  const entries = Object.entries(changes) as [string, FieldChangeset][];
   if (entries.length === 0) return;
 
   println("");
   println(`  ${Style.TEXT_DIM}${label} (${entries.length})`);
+
   for (const [uid, changeset] of entries) {
     const operation = getEntityOperation(changeset);
     const entityLabel = getEntityLabel(changeset);
-    println(`    - ${uid}${entityLabel} ${operation}`);
+    if (format === "concise") {
+      println(`    - ${uid}${entityLabel} ${operation}`);
+    } else {
+      println(
+        `    ${Style.TEXT_INFO}${uid}${entityLabel}${Style.TEXT_NORMAL} ${operation}`,
+      );
+
+      const fields = Object.entries(changeset).filter(
+        ([key]) => key !== "createdAt" && key !== "updatedAt",
+      ) as [string, FieldValue | ValueChange][];
+      for (const [fieldKey, change] of fields) {
+        printFieldChange(fieldKey, normalizeValueChange(change), "      ");
+      }
+    }
   }
 };
 
-export const printTransaction = (transaction: {
-  id: number;
-  hash: string;
-  author: string;
-  createdAt: string;
-  nodes: Record<string, unknown>;
-  configurations: Record<string, unknown>;
-}) => {
+export type TransactionFormat = "oneline" | "concise" | "full";
+export const printTransaction = (
+  transaction: Transaction,
+  format: TransactionFormat = "concise",
+) => {
+  const hash =
+    format === "full" ? transaction.hash : shortTransactionHash(transaction);
+  const timestamp = new Date(transaction.createdAt).toISOString();
+
+  if (format === "oneline") {
+    const nodeCount = Object.keys(transaction.nodes).length;
+    const configCount = Object.keys(transaction.configurations).length;
+
+    const nodeText = nodeCount === 1 ? "node" : "nodes";
+    const configText = configCount === 1 ? "config" : "configs";
+
+    println(
+      `${Style.TEXT_INFO_BOLD}#${transaction.id} ` +
+        `${Style.TEXT_DIM}${hash} (${transaction.author})` +
+        `${Style.TEXT_NORMAL} ${timestamp} - ${nodeCount} ${nodeText}, ${configCount} ${configText}`,
+    );
+    return;
+  }
+
   println(
     Style.TEXT_INFO_BOLD + `Transaction #${transaction.id}` + Style.TEXT_NORMAL,
   );
-  keyValue("Hash", transaction.hash.slice(0, 12) + "...");
+  keyValue("Hash", hash);
   keyValue("Author", transaction.author);
-  keyValue("Created", transaction.createdAt);
+  keyValue("Created", timestamp);
 
-  printEntityChanges(
-    "Node changes",
-    transaction.nodes as Record<string, Record<string, any>>,
-  );
-  printEntityChanges(
-    "Config changes",
-    transaction.configurations as Record<string, Record<string, any>>,
-  );
+  printEntityChanges("Node changes", transaction.nodes, format);
+  printEntityChanges("Config changes", transaction.configurations, format);
+};
+
+const printFieldChange = (
+  fieldKey: string,
+  change: ValueChange,
+  indent: string,
+) => {
+  if (change.op === "set") {
+    const { value, previous } = change;
+    if (previous === undefined && value !== undefined) {
+      println(
+        `${indent}${Style.TEXT_DIM}${fieldKey}:${Style.TEXT_NORMAL} ${formatFieldValue(value)}`,
+      );
+    } else if (previous !== undefined && value === undefined) {
+      println(
+        `${indent}${Style.TEXT_DIM}${fieldKey}: ` +
+          `${Style.TEXT_DANGER}${formatFieldValue(previous)} → (deleted)${Style.TEXT_NORMAL}`,
+      );
+    } else {
+      println(
+        `${indent}${Style.TEXT_DIM}${fieldKey}:${Style.TEXT_NORMAL} ` +
+          `${formatFieldValue(previous)} → ${formatFieldValue(value)}`,
+      );
+    }
+  } else if (change.op === "seq") {
+    const { mutations } = change;
+    println(
+      `${indent}${Style.TEXT_DIM}${fieldKey}:${Style.TEXT_NORMAL} list mutations:`,
+    );
+    for (const mutation of mutations) {
+      const [kind, mutValue, position] = mutation;
+      const posText =
+        position !== undefined ? ` at position ${position}` : " at end";
+      const kindStyle =
+        kind === "insert" ? Style.TEXT_SUCCESS : Style.TEXT_DANGER;
+      println(
+        `${indent}  ${kindStyle}[${kind}]${Style.TEXT_NORMAL} ${formatFieldValue(mutValue)}${Style.TEXT_DIM}${posText}${Style.TEXT_NORMAL}`,
+      );
+    }
+  }
+};
+
+const formatFieldValue = (value: FieldValue | undefined): string => {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === "string") {
+    if (value.length > 50) return `"${value.slice(0, 47)}..."`;
+    return `"${value}"`;
+  }
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
+  if (Array.isArray(value)) return `[${value.length} items]`;
+  if (typeof value === "object") return `{${Object.keys(value).length} fields}`;
+  return String(value);
 };

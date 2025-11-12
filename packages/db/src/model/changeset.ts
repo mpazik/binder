@@ -43,10 +43,8 @@ export const emptyChangeset: FieldChangeset = {};
 export type EntityChangesetRef<N extends NamespaceEditable> = N extends "node"
   ? NodeUid
   : ConfigKey;
-export type EntitiesChangeset<N extends NamespaceEditable> = Record<
-  EntityChangesetRef<N>,
-  FieldChangeset
->; // assumption is that order or entity change application does not matter
+export type EntitiesChangeset<N extends NamespaceEditable = "node" | "config"> =
+  Record<EntityChangesetRef<N>, FieldChangeset>; // assumption is that order or entity change application does not matter
 export type NodesChangeset = EntitiesChangeset<"node">;
 export type ConfigurationsChangeset = EntitiesChangeset<"config">;
 

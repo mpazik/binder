@@ -52,6 +52,7 @@ export type TransactionInput = z.infer<typeof TransactionInput>;
 
 type CanonicalTransaction = {
   previous: TransactionHash;
+  author: string;
   nodes: NodesChangeset;
   configurations: ConfigurationsChangeset;
   createdAt: IsoTimestamp;
@@ -118,6 +119,11 @@ export const invertTransaction = (transaction: Transaction): Transaction => ({
   nodes: mapObjectValues(transaction.nodes, inverseChangeset),
   configurations: mapObjectValues(transaction.configurations, inverseChangeset),
 });
+
+export const shortTransactionHash = (
+  tx: Transaction,
+  length: number = 8,
+): string => tx.hash.slice(0, length);
 
 export const squashTransactions = async (
   transactions: Transaction[],

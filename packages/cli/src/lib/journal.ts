@@ -190,6 +190,33 @@ export const readLastTransactions = async (
   return ok(transactions.reverse());
 };
 
+export const readTransactions = async (
+  fs: FileSystem,
+  path: string,
+  count: number,
+  filter: { author?: string } = {},
+  order: "asc" | "desc" = "desc",
+): ResultAsync<Transaction[]> => {
+  if (count === 0) return ok([]);
+
+  const transactions: Transaction[] = [];
+  const generator =
+    order === "asc"
+      ? readTransactionsFromBeginning(fs, path)
+      : readTransactionsFromEnd(fs, path);
+
+  for await (const result of generator) {
+    if (isErr(result)) return result;
+
+    const transaction = result.data;
+    if (filter.author && transaction.author !== filter.author) continue;
+
+    transactions.push(transaction);
+    if (transactions.length >= count) break;
+  }
+  return ok(transactions);
+};
+
 export const removeLastFromLog = async (
   fs: FileSystem,
   path: string,

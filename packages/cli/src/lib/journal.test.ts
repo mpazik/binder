@@ -6,12 +6,20 @@ import {
   type TransactionHash,
   withHashTransaction,
 } from "@binder/db";
-import { mockTransactionInit, mockTransactionUpdate } from "@binder/db/mocks";
+import {
+  mockAuthor,
+  mockAuthor2,
+  mockTransaction3,
+  mockTransaction4,
+  mockTransactionInit,
+  mockTransactionUpdate,
+} from "@binder/db/mocks";
 import { throwIfError } from "@binder/utils";
 import {
   clearLog,
   logTransaction,
   readLastTransactions,
+  readTransactions,
   removeLastFromLog,
   verifyLog,
 } from "./journal.ts";
@@ -28,77 +36,75 @@ describe("journal", () => {
     }
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     fs.rm(root, { recursive: true, force: true });
     fs.mkdir(root, { recursive: true });
+    await logTransactions(
+      mockTransactionInit,
+      mockTransactionUpdate,
+      mockTransaction3,
+      mockTransaction4,
+    );
   });
 
   it("logTransaction appends transaction as JSON with newline", async () => {
-    await logTransactions(mockTransactionInit);
-
     const content = throwIfError(await fs.readFile(path));
-    expect(content).toBe(JSON.stringify(mockTransactionInit) + "\n");
+    expect(content).toContain(JSON.stringify(mockTransactionInit) + "\n");
   });
 
   it("readLastTransactions returns empty array when file missing", async () => {
-    const result = await readLastTransactions(fs, path, 5);
+    const missingPath = `${root}/missing.txt`;
+    const result = await readLastTransactions(fs, missingPath, 5);
 
     expect(throwIfError(result)).toEqual([]);
   });
 
   it("readLastTransactions reads last N transactions from single chunk", async () => {
-    await logTransactions(mockTransactionInit, mockTransactionUpdate);
-
     const result = await readLastTransactions(fs, path, 1);
 
-    expect(throwIfError(result)).toEqual([mockTransactionUpdate]);
+    expect(throwIfError(result)).toEqual([mockTransaction4]);
   });
 
   it("readLastTransactions reads across multiple chunks", async () => {
-    const transactions = Array.from({ length: 10 }, (_, i) => ({
-      ...mockTransactionInit,
-      id: i as any,
-    }));
+    const result = await readLastTransactions(fs, path, 3);
 
-    await logTransactions(...transactions);
-
-    const result = await readLastTransactions(fs, path, 6);
-
-    expect(throwIfError(result)).toEqual(transactions.slice(-6));
+    expect(throwIfError(result)).toEqual([
+      mockTransactionUpdate,
+      mockTransaction3,
+      mockTransaction4,
+    ]);
   });
 
   it("readLastTransactions returns all when count exceeds available", async () => {
-    await logTransactions(mockTransactionInit, mockTransactionUpdate);
-
-    const result = await readLastTransactions(fs, path, 6);
+    const result = await readLastTransactions(fs, path, 10);
 
     expect(throwIfError(result)).toEqual([
       mockTransactionInit,
       mockTransactionUpdate,
+      mockTransaction3,
+      mockTransaction4,
     ]);
   });
 
   it("removeLastFromLog removes N transactions", async () => {
-    await logTransactions(mockTransactionInit, mockTransactionUpdate);
-
     const result = await removeLastFromLog(fs, path, 1);
 
     expect(result).toBeOk();
     const remaining = throwIfError(await readLastTransactions(fs, path, 10));
-    expect(remaining).toEqual([mockTransactionInit]);
+    expect(remaining).toEqual([
+      mockTransactionInit,
+      mockTransactionUpdate,
+      mockTransaction3,
+    ]);
   });
 
   it("removeLastFromLog errors when count exceeds available", async () => {
-    await logTransactions(mockTransactionInit);
-
     const result = await removeLastFromLog(fs, path, 5);
 
     expect(result).toBeErr();
   });
 
   it("clearLog clears file to empty string", async () => {
-    await logTransactions(mockTransactionInit);
-
     const result = await clearLog(fs, path);
 
     throwIfError(result);
@@ -107,18 +113,22 @@ describe("journal", () => {
   });
 
   describe("verifyLog", () => {
+    const verifyPath = `${root}/verify-log.txt`;
+
     const checkVerify = async (
       txs: Transaction[] | string | undefined,
       expected: number | string,
       options?: { verifyIntegrity?: boolean },
     ) => {
       if (typeof txs === "string") {
-        fs.writeFile(path, txs);
+        fs.writeFile(verifyPath, txs);
       } else if (txs) {
-        await logTransactions(...txs);
+        for (const tx of txs) {
+          throwIfError(await logTransaction(fs, verifyPath, tx));
+        }
       }
 
-      const result = await verifyLog(fs, path, options);
+      const result = await verifyLog(fs, verifyPath, options);
 
       if (typeof expected === "number") {
         expect(result).toBeOk();
@@ -195,6 +205,32 @@ describe("journal", () => {
         "hash-mismatch",
         { verifyIntegrity: true },
       );
+    });
+  });
+
+  describe("readTransactions", () => {
+    it("reads last N transactions in newest-first order by default", async () => {
+      const result = await readTransactions(fs, path, 2);
+
+      expect(throwIfError(result)).toEqual([
+        mockTransaction4,
+        mockTransaction3,
+      ]);
+    });
+
+    it("filters by author and returns in oldest-first order with asc", async () => {
+      const result = await readTransactions(
+        fs,
+        path,
+        10,
+        { author: mockAuthor2 },
+        "asc",
+      );
+
+      expect(throwIfError(result)).toEqual([
+        mockTransaction3,
+        mockTransaction4,
+      ]);
     });
   });
 });
