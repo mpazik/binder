@@ -1,50 +1,81 @@
 import { describe, expect, test } from "bun:test";
-import { extractFieldsetFromQuery, parseStringQuery } from "./query.ts";
+import "@binder/utils/tests";
+import { mockProjectNode, mockUserNode } from "@binder/db/mocks";
+import { throwIfError } from "@binder/utils";
+import {
+  extractFieldsetFromQuery,
+  parseStringQuery,
+  type NavigationContext,
+} from "./query.ts";
 
-const check = (query: string, expected: Record<string, string>) => {
-  const queryParams = parseStringQuery(query);
+const check = (
+  text: string,
+  query: NavigationContext | undefined,
+  expected: Record<string, string>,
+) => {
+  const result = parseStringQuery(text, query);
+  expect(result).toBeOkWith({ filters: expected });
+};
+
+const checkError = (
+  text: string,
+  query: NavigationContext | undefined,
+  errorKey: string,
+) => {
+  const result = parseStringQuery(text, query);
+  expect(result).toBeErrWithKey(errorKey);
+};
+
+const checkLegacy = (query: string, expected: Record<string, string>) => {
+  const queryParams = throwIfError(parseStringQuery(query));
   const result = extractFieldsetFromQuery(queryParams);
   expect(result).toEqual(expected);
 };
 
 describe("extractFieldsetFromQuery", () => {
   test("extracts single field", () => {
-    check("type=Task", { type: "Task" });
+    checkLegacy("type=Task", { type: "Task" });
   });
 
   test("extracts multiple fields", () => {
-    check("type=Task, status=done", { type: "Task", status: "done" });
+    checkLegacy("type=Task, status=done", { type: "Task", status: "done" });
   });
 
   test("handles whitespace", () => {
-    check("  type = Task  ,  status = done  ", {
+    checkLegacy("  type = Task  ,  status = done  ", {
       type: "Task",
       status: "done",
     });
   });
 
   test("ignores invalid pairs", () => {
-    check("type=Task, invalid, status=done", { type: "Task", status: "done" });
-  });
-
-  test("returns empty object for empty string", () => {
-    check("", {});
-  });
-
-  test("extracts fields separated by AND", () => {
-    check("type=Task AND status=done", { type: "Task", status: "done" });
-  });
-
-  test("extracts multiple fields separated by AND", () => {
-    check("type=Task AND project=pX9_kR2mQvL AND taskStatus=in-progress", {
+    checkLegacy("type=Task, invalid, status=done", {
       type: "Task",
-      project: "pX9_kR2mQvL",
-      taskStatus: "in-progress",
+      status: "done",
     });
   });
 
+  test("returns empty object for empty string", () => {
+    checkLegacy("", {});
+  });
+
+  test("extracts fields separated by AND", () => {
+    checkLegacy("type=Task AND status=done", { type: "Task", status: "done" });
+  });
+
+  test("extracts multiple fields separated by AND", () => {
+    checkLegacy(
+      "type=Task AND project=pX9_kR2mQvL AND taskStatus=in-progress",
+      {
+        type: "Task",
+        project: "pX9_kR2mQvL",
+        taskStatus: "in-progress",
+      },
+    );
+  });
+
   test("handles mixed comma and AND separators", () => {
-    check("type=Task, status=done AND priority=high", {
+    checkLegacy("type=Task, status=done AND priority=high", {
       type: "Task",
       status: "done",
       priority: "high",
@@ -54,25 +85,67 @@ describe("extractFieldsetFromQuery", () => {
 
 describe("parseStringQuery", () => {
   test("parses query with AND separator", () => {
-    const result = parseStringQuery(
+    check(
       "type=Task AND project=pX9_kR2mQvL AND taskStatus=in-progress",
-    );
-    expect(result).toEqual({
-      filters: {
+      undefined,
+      {
         type: "Task",
         project: "pX9_kR2mQvL",
         taskStatus: "in-progress",
       },
-    });
+    );
   });
 
   test("parses query with comma separator", () => {
-    const result = parseStringQuery("type=Task, status=done");
-    expect(result).toEqual({
-      filters: {
-        type: "Task",
-        status: "done",
-      },
+    check("type=Task, status=done", undefined, {
+      type: "Task",
+      status: "done",
     });
+  });
+
+  test("resolves {parent.key} with parent context", () => {
+    check("type=Task AND project={parent.key}", [mockProjectNode], {
+      type: "Task",
+      project: "project-binder-system",
+    });
+  });
+
+  test("resolves multiple placeholders in single query", () => {
+    check(
+      "type=Task AND project={parent.key} AND projectTitle={parent.title}",
+      [mockProjectNode],
+      {
+        type: "Task",
+        project: "project-binder-system",
+        projectTitle: "Binder System",
+      },
+    );
+  });
+
+  test("resolves {parent2.key} with grandparent context", () => {
+    check(
+      "type=Milestone AND owner={parent2.name}",
+      [mockProjectNode, mockUserNode],
+      {
+        type: "Milestone",
+        owner: "Rick",
+      },
+    );
+  });
+
+  test("returns error when field doesn't exist in parent", () => {
+    checkError(
+      "type=Task AND milestone={parent.nonexistent}",
+      [mockProjectNode],
+      "field-not-found",
+    );
+  });
+
+  test("returns error when unrecognized placeholder syntax", () => {
+    checkError(
+      "type=Task AND project={parent9.key}",
+      [mockProjectNode],
+      "context-not-found",
+    );
   });
 });

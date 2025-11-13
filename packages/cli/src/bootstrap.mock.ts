@@ -16,7 +16,6 @@ export const mockConfig: Config = {
     binder: "/test/.binder",
     docs: "/test/docs",
   },
-  dynamicDirectories: [],
 };
 
 export const mockUi: typeof ui = {

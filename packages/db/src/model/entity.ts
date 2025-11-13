@@ -43,3 +43,14 @@ export const systemFields = [
   "createdAt",
   "updatedAt",
 ] as const;
+
+export const formatValue = (value: FieldValue): string => {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "";
+    return value.map(String).join(", ");
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};

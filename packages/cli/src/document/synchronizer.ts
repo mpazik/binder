@@ -1,4 +1,5 @@
 import { relative } from "path";
+import * as fs from "node:fs";
 import type {
   FieldsetNested,
   KnowledgeGraph,
@@ -7,22 +8,25 @@ import type {
 } from "@binder/db";
 import { createError, err, isErr, ok, type ResultAsync } from "@binder/utils";
 import type { Config } from "../bootstrap.ts";
+import type { FileSystem } from "../lib/filesystem.ts";
 import { parseMarkdown, parseView } from "./markdown.ts";
-import {
-  extractFieldsFromPath,
-  DEFAULT_DYNAMIC_VIEW_STRING,
-} from "./dynamic-dir.ts";
 import { deconstructAstDocument, fetchDocumentNodes } from "./doc-builder.ts";
 import { diffNodeTrees } from "./tree-diff.ts";
 import { extractFields } from "./view.ts";
+import {
+  DEFAULT_DYNAMIC_VIEW,
+  extractFieldsFromPath,
+  loadNavigation,
+} from "./navigation.ts";
 
 export { diffNodeTrees } from "./tree-diff.ts";
 
 export const parseFile = async (
+  kg: KnowledgeGraph,
+  config: Config,
+  fs: FileSystem,
   markdown: string,
   filePath: string,
-  config: Config,
-  kg: KnowledgeGraph,
 ): ResultAsync<{ file: FieldsetNested; kg: FieldsetNested }> => {
   const relativePath = relative(config.paths.docs, filePath);
 
@@ -36,15 +40,35 @@ export const parseFile = async (
     if (isErr(schemaResult)) return schemaResult;
     const schema = schemaResult.data;
 
-    for (const dynamicDir of config.dynamicDirectories) {
+    const navigationResult = await loadNavigation(fs, config.paths.binder);
+    if (isErr(navigationResult)) return navigationResult;
+
+    const collectNavigationItems = (
+      items: typeof navigationResult.data,
+    ): typeof navigationResult.data => {
+      const collected: typeof navigationResult.data = [];
+      for (const item of items) {
+        collected.push(item);
+        if (item.children) {
+          collected.push(...collectNavigationItems(item.children));
+        }
+      }
+      return collected;
+    };
+
+    const allNavigationItems = collectNavigationItems(navigationResult.data);
+
+    for (const navItem of allNavigationItems) {
+      if (!navItem.query) continue;
+
       const pathFieldsResult = extractFieldsFromPath(
         relativePath,
-        dynamicDir.path,
+        navItem.path,
       );
       if (isErr(pathFieldsResult)) continue;
       const pathFields = pathFieldsResult.data;
 
-      const templateString = dynamicDir.template ?? DEFAULT_DYNAMIC_VIEW_STRING;
+      const templateString = navItem.view ?? DEFAULT_DYNAMIC_VIEW;
       const viewAst = parseView(templateString);
       const markdownAst = parseMarkdown(markdown);
       const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
@@ -77,7 +101,7 @@ export const parseFile = async (
     return err(
       createError(
         "document_not_found",
-        "Document not found in knowledge graph or dynamic directories",
+        "Document not found in knowledge graph or navigation config",
         { path: relativePath },
       ),
     );
@@ -111,12 +135,13 @@ export const parseFile = async (
 };
 
 export const synchronizeFile = async (
+  kg: KnowledgeGraph,
+  config: Config,
+  fs: FileSystem,
   markdown: string,
   filePath: string,
-  config: Config,
-  kg: KnowledgeGraph,
 ): ResultAsync<TransactionInput | null> => {
-  const parseResult = await parseFile(markdown, filePath, config, kg);
+  const parseResult = await parseFile(kg, config, fs, markdown, filePath);
   if (isErr(parseResult)) return parseResult;
 
   const diffResult = diffNodeTrees(parseResult.data.file, parseResult.data.kg);

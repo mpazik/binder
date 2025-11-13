@@ -6,7 +6,9 @@ type FileEntry = {
   isDirectory: boolean;
 };
 
-export const createInMemoryFileSystem = (): FileSystem => {
+export type MockFileSystem = FileSystem & { files: Map<string, FileEntry> };
+
+export const createInMemoryFileSystem = (): MockFileSystem => {
   const files = new Map<string, FileEntry>();
 
   const normalizePath = (path: string): string => {
@@ -47,6 +49,7 @@ export const createInMemoryFileSystem = (): FileSystem => {
   };
 
   return {
+    files,
     exists: (path: string) => {
       return files.has(normalizePath(path));
     },

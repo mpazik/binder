@@ -9,9 +9,10 @@ import {
   tryCatch,
 } from "@binder/utils";
 import type { Logger } from "../log.ts";
+import type { FileSystem } from "../lib/filesystem.ts";
 import { buildAstDoc } from "./doc-builder.ts";
 import { renderAstToMarkdown } from "./markdown.ts";
-import { renderDynamicDirectory } from "./dynamic-dir.ts";
+import { loadNavigation, renderNavigation } from "./navigation.ts";
 
 export type DocumentWithPath = {
   uid: NodeUid;
@@ -56,9 +57,10 @@ const removeMarkdownFiles = (dir: string): void => {
 
 export const renderDocs = async (
   kg: KnowledgeGraph,
+  fs: FileSystem,
   log: Logger,
   docsPath: string,
-  dynamicDirectories: Array<{ path: string; query: string }> = [],
+  binderPath: string,
 ): ResultAsync<undefined> => {
   const removeResult = tryCatch(() => {
     removeMarkdownFiles(docsPath);
@@ -93,8 +95,30 @@ export const renderDocs = async (
     }
   }
 
-  for (const dynamicDir of dynamicDirectories) {
-    await renderDynamicDirectory(kg, docsPath, log, dynamicDir);
+  const navigationResult = await loadNavigation(fs, binderPath);
+  if (isErr(navigationResult)) {
+    log.error(`Failed to load navigation config`, {
+      error: navigationResult.error,
+    });
+  } else if (navigationResult.data.length > 0) {
+    const navResult = await renderNavigation(
+      kg,
+      fs,
+      docsPath,
+      navigationResult.data,
+    );
+    if (isErr(navResult)) {
+      log.error(`Failed to render navigation`, { error: navResult.error });
+      return navResult;
+    } else if (navResult.data.length > 0) {
+      for (const navError of navResult.data) {
+        log.error(`Failed to render navigation item`, {
+          path: navError.path,
+          error: navError.error,
+          ...navError.context,
+        });
+      }
+    }
   }
 
   return ok(undefined);

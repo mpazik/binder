@@ -265,7 +265,6 @@ export const setupKnowledgeGraph = (
   fs: FileSystem,
   binderPath: string,
   docsPath: string,
-  dynamicDirectories: Array<{ path: string; query: string }>,
   log: Logger,
 ): KnowledgeGraph => {
   const knowledgeGraph = openKnowledgeGraph(db, {
@@ -279,7 +278,7 @@ export const setupKnowledgeGraph = (
       return okVoid;
     },
     afterCommit: async () => {
-      renderDocs(knowledgeGraph, log, docsPath, dynamicDirectories).then(
+      renderDocs(knowledgeGraph, fs, log, docsPath, binderPath).then(
         (renderResult) => {
           if (isErr(renderResult)) {
             log.error("Failed to re-render docs after transaction", {
@@ -298,7 +297,6 @@ export const squashTransactions = async (
   db: Database,
   binderPath: string,
   docsPath: string,
-  dynamicDirectories: Array<{ path: string; query: string; template?: string }>,
   log: Logger,
   count: number,
 ): ResultAsync<Transaction> => {
@@ -374,7 +372,6 @@ export const squashTransactions = async (
     fs,
     binderPath,
     docsPath,
-    dynamicDirectories,
     log,
   );
   const applyResult = await applyTransactions(kgWithCallbacks, [

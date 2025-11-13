@@ -375,8 +375,20 @@ export const deconstructAstDocument = (
         if (directive.name === "dataview") {
           const queryString = directive.attributes?.query;
           if (queryString) {
-            const query = parseStringQuery(queryString);
-            const dataview: Fieldset = { type: "Dataview", query };
+            const queryResult = parseStringQuery(queryString);
+            if (isErr(queryResult)) {
+              return err(
+                createError(
+                  "invalid-query",
+                  `Failed to parse query: ${queryResult.error.message}`,
+                  queryResult.error,
+                ),
+              );
+            }
+            const dataview: Fieldset = {
+              type: "Dataview",
+              query: queryResult.data,
+            };
             const template = directive.attributes?.template;
             if (template) {
               dataview.template = template;

@@ -10,15 +10,17 @@ import { types } from "./types.ts";
 
 export const docsRenderHandler: CommandHandlerWithDbWrite = async ({
   kg,
+  fs,
   ui,
   config,
   log,
 }) => {
   const result = await renderDocs(
     kg,
+    fs,
     log,
     config.paths.docs,
-    config.dynamicDirectories,
+    config.paths.binder,
   );
   if (isErr(result)) return result;
 
@@ -28,7 +30,7 @@ export const docsRenderHandler: CommandHandlerWithDbWrite = async ({
 
 export const docsSyncHandler: CommandHandlerWithDbWrite<{
   filePath: string;
-}> = async ({ kg, ui, config, args }) => {
+}> = async ({ kg, fs, ui, config, args }) => {
   const fileResult = await tryCatch(async () => {
     const bunFile = Bun.file(args.filePath);
     if (!(await bunFile.exists())) {
@@ -45,10 +47,11 @@ export const docsSyncHandler: CommandHandlerWithDbWrite<{
   }
 
   const syncResult = await synchronizeFile(
+    kg,
+    config,
+    fs,
     fileResult.data,
     args.filePath,
-    config,
-    kg,
   );
   if (isErr(syncResult)) return syncResult;
 

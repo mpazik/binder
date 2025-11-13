@@ -7,6 +7,7 @@ const DEFAULT_DOCS_DIR = "./docs";
 const DEFAULT_AUTHOR = "cli-user";
 export const DEFAULT_DOCS_PATH = "docs";
 export const CONFIG_FILE = "config.yaml";
+export const NAVIGATION_FILE = "navigation.yaml";
 export const BINDER_DIR = ".binder";
 export const DB_FILE = "binder.db";
 export const TRANSACTION_LOG_FILE = "transactions.jsonl";
@@ -18,16 +19,6 @@ export const LOCK_MAX_RETRIES = 3;
 export const BinderConfigSchema = z.object({
   author: z.string().default(DEFAULT_AUTHOR),
   docsPath: z.string().default(DEFAULT_DOCS_DIR),
-  dynamicDirectories: z
-    .array(
-      z.object({
-        path: z.string(),
-        query: z.string(),
-        template: z.string().optional(),
-      }),
-    )
-    .optional()
-    .default([]),
 });
 
 export type BinderConfig = z.infer<typeof BinderConfigSchema>;

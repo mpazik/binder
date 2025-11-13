@@ -7,6 +7,8 @@ import { type KnowledgeGraph, openKnowledgeGraph } from "@binder/db";
 import { getTestDatabase, mockTask1Node, mockTask1Uid } from "@binder/db/mocks";
 import { BINDER_DIR } from "../config.ts";
 import type { Config } from "../bootstrap.ts";
+import type { FileSystem } from "../lib/filesystem.ts";
+import { createInMemoryFileSystem } from "../lib/filesystem.mock.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
   mockCoreTransactionInputForDocs,
@@ -19,10 +21,10 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 describe("synchronizer", () => {
   let kg: KnowledgeGraph;
+  let fs: FileSystem;
   const docsPath = join(__dirname, "../../test/data");
   const config: Config = {
     author: "test",
-    dynamicDirectories: [],
     paths: {
       root: join(__dirname, "../../test"),
       binder: join(__dirname, "../../test", BINDER_DIR),
@@ -33,6 +35,7 @@ describe("synchronizer", () => {
   beforeEach(async () => {
     const db = getTestDatabase();
     kg = openKnowledgeGraph(db);
+    fs = createInMemoryFileSystem();
     throwIfError(await kg.update(documentSchemaTransactionInput));
     throwIfError(await kg.update(mockCoreTransactionInputForDocs));
     throwIfError(await kg.update(mockDocumentTransactionInput));
@@ -44,7 +47,7 @@ describe("synchronizer", () => {
       const markdown = await Bun.file(filePath).text();
 
       const result = throwIfError(
-        await parseFile(markdown, filePath, config, kg),
+        await parseFile(kg, config, fs, markdown, filePath),
       );
 
       expect(result.file).toEqual({
@@ -124,26 +127,27 @@ describe("synchronizer", () => {
       expect(result.kg).toMatchObject(result.file);
     });
 
-    it("parses task from dynamic directory", async () => {
-      const configWithDynamicDir: Config = {
-        ...config,
-        dynamicDirectories: [
-          {
-            path: "tasks/{key}.md",
-            query: "type=Task",
-          },
-        ],
-      };
+    it("parses task from navigation config", async () => {
+      const navigationYaml = `navigation:
+  - path: "tasks/{key}.md"
+    query: "type=Task"`;
+
+      throwIfError(fs.mkdir(config.paths.binder, { recursive: true }));
+      throwIfError(
+        fs.writeFile(
+          join(config.paths.binder, "navigation.yaml"),
+          navigationYaml,
+        ),
+      );
 
       const filePath = join(
-        configWithDynamicDir.paths.docs,
+        config.paths.docs,
         "tasks",
         "task-implement-user-auth.md",
       );
       const markdown = `# ${mockTask1Node.title}
 
-**Type:** Task
-**UID:** ${mockTask1Node.uid}
+**Type:** ${mockTask1Node.type}
 **Key:** ${mockTask1Node.key}
 
 ## Description
@@ -151,12 +155,11 @@ describe("synchronizer", () => {
 ${mockTask1Node.description}`;
 
       const result = throwIfError(
-        await parseFile(markdown, filePath, configWithDynamicDir, kg),
+        await parseFile(kg, config, fs, markdown, filePath),
       );
 
       expect(result.file).toEqual({
         type: "Task",
-        uid: mockTask1Node.uid,
         key: mockTask1Node.key,
         title: mockTask1Node.title,
         description: mockTask1Node.description,
@@ -178,7 +181,7 @@ ${mockTask1Node.description}`;
 
     it("generates no changesets when dataview items match query results", async () => {
       const parseResult = throwIfError(
-        await parseFile(originalMarkdown, filePath, config, kg),
+        await parseFile(kg, config, fs, originalMarkdown, filePath),
       );
 
       const diffResult = throwIfError(
@@ -190,7 +193,7 @@ ${mockTask1Node.description}`;
 
     it("detects changes when document is modified", async () => {
       const parseResult = throwIfError(
-        await parseFile(originalMarkdown, filePath, config, kg),
+        await parseFile(kg, config, fs, originalMarkdown, filePath),
       );
 
       const modifiedMarkdown = originalMarkdown.replace(
@@ -199,7 +202,7 @@ ${mockTask1Node.description}`;
       );
 
       const modifiedParseResult = throwIfError(
-        await parseFile(modifiedMarkdown, filePath, config, kg),
+        await parseFile(kg, config, fs, modifiedMarkdown, filePath),
       );
 
       const diffResult = throwIfError(
@@ -217,14 +220,14 @@ ${mockTask1Node.description}`;
 
     it("detects new sections added to document", async () => {
       const parseResult = throwIfError(
-        await parseFile(originalMarkdown, filePath, config, kg),
+        await parseFile(kg, config, fs, originalMarkdown, filePath),
       );
 
       const modifiedMarkdown =
         originalMarkdown + "\n## New Section\nNew content here.";
 
       const modifiedParseResult = throwIfError(
-        await parseFile(modifiedMarkdown, filePath, config, kg),
+        await parseFile(kg, config, fs, modifiedMarkdown, filePath),
       );
 
       const diffResult = throwIfError(
@@ -245,7 +248,7 @@ ${mockTask1Node.description}`;
 
     it("detects paragraph content changes", async () => {
       const parseResult = throwIfError(
-        await parseFile(originalMarkdown, filePath, config, kg),
+        await parseFile(kg, config, fs, originalMarkdown, filePath),
       );
 
       const modifiedMarkdown = originalMarkdown.replace(
@@ -254,7 +257,7 @@ ${mockTask1Node.description}`;
       );
 
       const modifiedParseResult = throwIfError(
-        await parseFile(modifiedMarkdown, filePath, config, kg),
+        await parseFile(kg, config, fs, modifiedMarkdown, filePath),
       );
 
       const diffResult = throwIfError(
@@ -280,7 +283,7 @@ ${mockTask1Node.description}`;
       );
 
       const transaction = throwIfError(
-        await synchronizeFile(modifiedMarkdown, filePath, config, kg),
+        await synchronizeFile(kg, config, fs, modifiedMarkdown, filePath),
       );
 
       expect(transaction).toMatchObject({
@@ -301,10 +304,11 @@ ${mockTask1Node.description}`;
       );
 
       const result = await synchronizeFile(
+        kg,
+        config,
+        fs,
         modifiedMarkdown,
         filePath,
-        config,
-        kg,
       );
 
       expect(result).toBeOk();
@@ -330,7 +334,7 @@ ${mockTask1Node.description}`;
 `;
 
       const parseResult = throwIfError(
-        await parseFile(markdownWithMultipleFields, filePath, config, kg),
+        await parseFile(kg, config, fs, markdownWithMultipleFields, filePath),
       );
 
       const diffResult = throwIfError(

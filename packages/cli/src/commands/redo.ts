@@ -38,9 +38,10 @@ export const redoHandler: CommandHandlerWithDbWrite<{
 
   const renderResult = await renderDocs(
     kg,
+    fs,
     log,
     config.paths.docs,
-    config.dynamicDirectories,
+    config.paths.binder,
   );
   if (isErr(renderResult)) {
     log.error("Failed to re-render docs after redo", {

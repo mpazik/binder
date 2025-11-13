@@ -50,7 +50,7 @@ describe("orchestrator", () => {
     fs.rm(root, { recursive: true, force: true });
     fs.mkdir(root, { recursive: true });
     db = getTestDatabase();
-    kg = setupKnowledgeGraph(db, fs, root, "", [], mockLog);
+    kg = setupKnowledgeGraph(db, fs, root, "", mockLog);
   });
 
   const checkVersion = async (logTxId: TransactionId, kgTxId = logTxId) => {
@@ -393,7 +393,7 @@ describe("orchestrator", () => {
       );
 
       const squashed = throwIfError(
-        await squashTransactions(fs, db, root, "", [], mockLog, 2),
+        await squashTransactions(fs, db, root, "", mockLog, 2),
       );
 
       await checkVersion(mockTransactionUpdate.id);
@@ -415,7 +415,7 @@ describe("orchestrator", () => {
       );
 
       const squashed = throwIfError(
-        await squashTransactions(fs, db, root, "", [], mockLog, 3),
+        await squashTransactions(fs, db, root, "", mockLog, 3),
       );
 
       await checkVersion(mockTransactionUpdate.id);
@@ -432,7 +432,6 @@ describe("orchestrator", () => {
         db,
         root,
         "",
-        [],
         mockLog,
         1,
       );
@@ -451,7 +450,6 @@ describe("orchestrator", () => {
         db,
         root,
         "",
-        [],
         mockLog,
         5,
       );
@@ -469,7 +467,7 @@ describe("orchestrator", () => {
 
       throwIfError(await removeLastFromLog(fs, transactionLogPath, 1));
 
-      const result = await squashTransactions(fs, db, root, "", [], mockLog, 2);
+      const result = await squashTransactions(fs, db, root, "", mockLog, 2);
       expect(result).toBeErr();
       await checkVersion(mockTransactionInit.id, mockTransactionUpdate.id);
     });

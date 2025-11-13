@@ -219,7 +219,6 @@ export const transactionSquashHandler: CommandHandlerWithDbWrite<{
     db,
     config.paths.binder,
     config.paths.docs,
-    config.dynamicDirectories,
     log,
     args.count,
   );

@@ -210,14 +210,7 @@ export const bootstrapWithDbWrite = <TArgs>(
     }
 
     const db = dbResult.data;
-    const kg = setupKnowledgeGraph(
-      db,
-      fs,
-      paths.binder,
-      paths.docs,
-      config.dynamicDirectories,
-      log,
-    );
+    const kg = setupKnowledgeGraph(db, fs, paths.binder, paths.docs, log);
 
     return withLock(fs, paths.binder, async () =>
       handler({
