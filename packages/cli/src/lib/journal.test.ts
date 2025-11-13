@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
+import { type Transaction, type TransactionHash } from "@binder/db";
 import {
-  GENESIS_VERSION,
-  type Transaction,
-  type TransactionHash,
-  withHashTransaction,
-} from "@binder/db";
-import {
-  mockAuthor,
   mockAuthor2,
   mockTransaction3,
   mockTransaction4,
@@ -17,7 +11,7 @@ import {
 import { throwIfError } from "@binder/utils";
 import {
   clearLog,
-  logTransaction,
+  logTransactions,
   readLastTransactions,
   readTransactions,
   removeLastFromLog,
@@ -30,20 +24,16 @@ describe("journal", () => {
   const root = "/test-root";
   const path = `${root}/test-log.txt`;
 
-  const logTransactions = async (...txs: Transaction[]) => {
-    for (const tx of txs) {
-      throwIfError(await logTransaction(fs, path, tx));
-    }
-  };
-
   beforeEach(async () => {
     fs.rm(root, { recursive: true, force: true });
     fs.mkdir(root, { recursive: true });
-    await logTransactions(
-      mockTransactionInit,
-      mockTransactionUpdate,
-      mockTransaction3,
-      mockTransaction4,
+    throwIfError(
+      logTransactions(fs, path, [
+        mockTransactionInit,
+        mockTransactionUpdate,
+        mockTransaction3,
+        mockTransaction4,
+      ]),
     );
   });
 
@@ -123,9 +113,7 @@ describe("journal", () => {
       if (typeof txs === "string") {
         fs.writeFile(verifyPath, txs);
       } else if (txs) {
-        for (const tx of txs) {
-          throwIfError(await logTransaction(fs, verifyPath, tx));
-        }
+        throwIfError(logTransactions(fs, verifyPath, txs));
       }
 
       const result = await verifyLog(fs, verifyPath, options);

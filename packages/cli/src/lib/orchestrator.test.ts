@@ -32,7 +32,7 @@ import {
   verifySync,
 } from "./orchestrator.ts";
 import {
-  logTransaction,
+  logTransactions,
   readLastTransactions,
   removeLastFromLog,
 } from "./journal.ts";
@@ -71,8 +71,7 @@ describe("orchestrator", () => {
     ) => {
       const kg = openKnowledgeGraph(db);
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
-      for (const tx of logTxs)
-        throwIfError(await logTransaction(fs, transactionLogPath, tx));
+      throwIfError(logTransactions(fs, transactionLogPath, logTxs));
 
       const result = await verifySync(fs, kg, root);
       const sync = throwIfError(result);
@@ -141,18 +140,38 @@ describe("orchestrator", () => {
   });
 
   describe("repairSync", () => {
-    const checkRepair = async (logTxs: Transaction[], dbTxs: Transaction[]) => {
+    const checkRepair = async (
+      logTxs: Transaction[],
+      dbTxs: Transaction[],
+      loggedDbTxs: Transaction[] = [],
+    ) => {
       const kg = openKnowledgeGraph(db);
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
-      for (const tx of logTxs)
-        throwIfError(await logTransaction(fs, transactionLogPath, tx));
+      throwIfError(logTransactions(fs, transactionLogPath, logTxs));
 
       const result = await repairDbFromLog(fs, db, root);
       expect(result).toBeOk();
 
-      // ensure that db is at the version of the log
+      const { dbTransactionsPath } = throwIfError(result);
+
       const version = throwIfError(await kg.version());
-      expect(version.id).toBe(logTxs.at(-1)?.id ?? GENESIS_VERSION.id);
+      expect(version.hash).toBe(logTxs.at(-1)?.hash ?? GENESIS_VERSION.hash);
+
+      if (loggedDbTxs.length === 0) {
+        expect(dbTransactionsPath).toBeUndefined();
+      } else {
+        expect(dbTransactionsPath).toMatch(
+          /repair-db-transactions-.*\.jsonl\.bac$/,
+        );
+        const snapshotTxs = throwIfError(
+          await readLastTransactions(
+            fs,
+            dbTransactionsPath!,
+            loggedDbTxs.length,
+          ),
+        );
+        expect(snapshotTxs).toEqual(loggedDbTxs);
+      }
     };
 
     it("does nothing when db and log are in sync", async () => {
@@ -173,6 +192,7 @@ describe("orchestrator", () => {
       await checkRepair(
         [mockTransactionInit],
         [mockTransactionInit, mockTransactionUpdate],
+        [mockTransactionUpdate],
       );
     });
 
@@ -189,6 +209,7 @@ describe("orchestrator", () => {
           ),
         ],
         [mockTransactionInit, mockTransactionUpdate],
+        [mockTransactionUpdate],
       );
     });
   });

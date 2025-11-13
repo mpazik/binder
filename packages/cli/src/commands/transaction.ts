@@ -282,13 +282,13 @@ export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
       ui.warning(
         `Database has ${dbOnlyTransactions.length} extra transaction(s) not in log`,
       );
-      ui.info("Run 'binder tx repair' to rollback and sync");
+      ui.info("Run 'binder tx repair' to sync");
     } else {
       ui.warning("Database and log have diverged");
       ui.info(`Database has ${dbOnlyTransactions.length} extra transaction(s)`);
       ui.info(`Log has ${logOnlyTransactions.length} new transaction(s)`);
       ui.println("");
-      ui.info("Run 'binder tx repair' to rollback and sync");
+      ui.info("Run 'binder tx repair' to sync");
     }
   });
 
@@ -314,17 +314,44 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
     return ok(undefined);
   }
 
+  ui.block(() => {
+    if (dbOnlyTransactions.length > 0 && logOnlyTransactions.length === 0) {
+      ui.warning(
+        `Will rollback ${dbOnlyTransactions.length} transaction(s) from database`,
+      );
+      ui.info("Backup will be created in .binder");
+    } else if (
+      logOnlyTransactions.length > 0 &&
+      dbOnlyTransactions.length === 0
+    ) {
+      ui.info(
+        `Will apply ${logOnlyTransactions.length} transaction(s) from log`,
+      );
+    } else {
+      ui.warning("Database and log have diverged");
+      ui.info(
+        `Will rollback ${dbOnlyTransactions.length} transaction(s) from database`,
+      );
+      ui.info(
+        `Will apply ${logOnlyTransactions.length} transaction(s) from log`,
+      );
+      ui.info("Backup will be created in .binder");
+    }
+  });
+
   if (dbOnlyTransactions.length > 0) {
     ui.printTransactions(
       dbOnlyTransactions,
-      `Rolling back ${dbOnlyTransactions.length} transaction(s) from database`,
+      "Transactions to rollback:",
+      "oneline",
     );
   }
 
   if (logOnlyTransactions.length > 0) {
     ui.printTransactions(
       logOnlyTransactions,
-      `Applying ${logOnlyTransactions.length} transaction(s) from log`,
+      "Transactions to apply:",
+      "oneline",
     );
   }
 
@@ -349,6 +376,8 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
     return repairResult;
   }
 
+  const { dbTransactionsPath } = repairResult.data;
+
   log.info("Repair completed successfully", {
     rolledBack: dbOnlyTransactions.length,
     applied: logOnlyTransactions.length,
@@ -361,6 +390,9 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
     }
     if (logOnlyTransactions.length > 0) {
       ui.info(`Applied ${logOnlyTransactions.length} transaction(s)`);
+    }
+    if (dbTransactionsPath) {
+      ui.info(`Backup created: ${dbTransactionsPath}`);
     }
   });
 

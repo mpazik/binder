@@ -7,13 +7,14 @@ import {
   type Database,
   type KnowledgeGraph,
   openKnowledgeGraph,
+  squashTransactions as mergeTransactions,
   type Transaction,
   type TransactionId,
 } from "@binder/db";
-import { squashTransactions as mergeTransactions } from "@binder/db";
 import {
   createError,
   err,
+  getTimestampForFileName,
   isErr,
   ok,
   okVoid,
@@ -26,6 +27,7 @@ import type { Logger } from "../log.ts";
 import {
   clearLog,
   logTransaction,
+  logTransactions,
   readLastTransactions,
   readTransactionsFromEnd,
   removeLastFromLog,
@@ -109,7 +111,7 @@ export const repairDbFromLog = async (
   fs: FileSystem,
   db: Database,
   binderPath: string,
-): ResultAsync<void> => {
+): ResultAsync<{ dbTransactionsPath?: string }> => {
   const kg = openKnowledgeGraph(db);
   const verifyResult = await verifySync(fs, kg, binderPath);
   if (isErr(verifyResult)) return verifyResult;
@@ -117,9 +119,21 @@ export const repairDbFromLog = async (
   const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
 
   if (dbOnlyTransactions.length === 0 && logOnlyTransactions.length === 0)
-    return okVoid;
+    return ok({ dbTransactionsPath: undefined });
+
+  let dbTransactionsPath: string | undefined;
 
   if (dbOnlyTransactions.length > 0) {
+    const filename = `repair-db-transactions-${getTimestampForFileName()}.jsonl.bac`;
+    dbTransactionsPath = join(binderPath, filename);
+
+    const snapshotResult = logTransactions(
+      fs,
+      dbTransactionsPath,
+      dbOnlyTransactions,
+    );
+    if (isErr(snapshotResult)) return snapshotResult;
+
     const versionResult = await kg.version();
     if (isErr(versionResult)) return versionResult;
 
@@ -135,7 +149,7 @@ export const repairDbFromLog = async (
     if (isErr(applyResult)) return applyResult;
   }
 
-  return okVoid;
+  return ok({ dbTransactionsPath });
 };
 
 export const applyTransactions = async (
@@ -186,7 +200,7 @@ export const undoTransactions = async (
 
   const undoLogPath = join(binderPath, UNDO_LOG_FILE);
   for (const tx of transactionsToUndo) {
-    const logResult = await logTransaction(fs, undoLogPath, tx);
+    const logResult = logTransaction(fs, undoLogPath, tx);
     if (isErr(logResult)) return logResult;
   }
 
@@ -257,11 +271,7 @@ export const setupKnowledgeGraph = (
   const knowledgeGraph = openKnowledgeGraph(db, {
     beforeCommit: async (transaction: Transaction) => {
       const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
-      const logResult = await logTransaction(
-        fs,
-        transactionLogPath,
-        transaction,
-      );
+      const logResult = logTransaction(fs, transactionLogPath, transaction);
       if (isErr(logResult)) return logResult;
       const undoLogPath = join(binderPath, UNDO_LOG_FILE);
       const clearResult = await clearLog(fs, undoLogPath);

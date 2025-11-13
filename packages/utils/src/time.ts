@@ -271,3 +271,7 @@ export const getDateRangeFromDate = (date: string): DateRange | undefined => {
 export type DurationSeconds = Brand<number, "DurationSeconds">;
 export const createDurationSeconds = (seconds: number): DurationSeconds =>
   seconds as DurationSeconds;
+
+export function getTimestampForFileName(date: Date = new Date()): string {
+  return date.toISOString().split(".")[0]!.replace(/:/g, "").replace(/-/g, "");
+}

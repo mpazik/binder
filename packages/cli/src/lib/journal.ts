@@ -164,13 +164,25 @@ const readTransactionsFromBeginning = async function* (
   }
 };
 
-export const logTransaction = async (
+export const logTransaction = (
   fs: FileSystem,
   path: string,
   transaction: Transaction,
-): ResultAsync<void> => {
+): Result<void> => {
   const json = JSON.stringify(transaction);
   return fs.appendFile(path, json + "\n");
+};
+
+export const logTransactions = (
+  fs: FileSystem,
+  path: string,
+  transactions: Transaction[],
+): Result<void> => {
+  for (const tx of transactions) {
+    const result = logTransaction(fs, path, tx);
+    if (isErr(result)) return result;
+  }
+  return okVoid;
 };
 
 export const readLastTransactions = async (

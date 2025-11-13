@@ -5,6 +5,7 @@ import {
   createError,
   err,
   errorToObject,
+  getTimestampForFileName,
   isErr,
   ok,
   tryCatch,
@@ -48,13 +49,9 @@ export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
 
   let renamedBackup: string | null = null;
   if (fs.exists(backupPath)) {
-    const timestamp = new Date()
-      .toISOString()
-      .split(".")[0]!
-      .replace(/:/g, "-");
     const timestampedBackup = join(
       binderPath,
-      `${TRANSACTION_LOG_FILE}.${timestamp}.bac`,
+      `${TRANSACTION_LOG_FILE}.${getTimestampForFileName()}.bac`,
     );
 
     const moveResult = tryCatch(() =>
