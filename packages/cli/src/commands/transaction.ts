@@ -33,6 +33,7 @@ import {
   verifyLog,
 } from "../lib/journal.ts";
 import { TRANSACTION_LOG_FILE } from "../config.ts";
+import { heading } from "../ui.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -164,10 +165,8 @@ export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
     transactionsToRollback.push(txResult.data);
   }
 
-  ui.printTransactions(
-    transactionsToRollback,
-    `Rolling back ${args.count} transaction(s)`,
-  );
+  ui.heading(`Rolling back ${args.count} transaction(s)`);
+  ui.printTransactions(transactionsToRollback, "concise");
 
   const rollbackResult = await kg.rollback(args.count, currentId);
   if (isErr(rollbackResult)) return rollbackResult;
@@ -192,10 +191,8 @@ export const transactionSquashHandler: CommandHandlerWithDbWrite<{
   const transactionsToSquash = logResult.data;
 
   if (!args.yes) {
-    ui.printTransactions(
-      transactionsToSquash,
-      `Squashing ${args.count} transaction(s)`,
-    );
+    ui.heading(`Squashing ${args.count} transaction(s)`);
+    ui.printTransactions(transactionsToSquash, "oneline");
 
     const uniqueAuthors = Array.from(
       new Set(transactionsToSquash.map((tx) => tx.author)),
@@ -340,19 +337,13 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
   });
 
   if (dbOnlyTransactions.length > 0) {
-    ui.printTransactions(
-      dbOnlyTransactions,
-      "Transactions to rollback:",
-      "oneline",
-    );
+    ui.heading("Transactions to rollback:");
+    ui.printTransactions(dbOnlyTransactions, "concise");
   }
 
   if (logOnlyTransactions.length > 0) {
-    ui.printTransactions(
-      logOnlyTransactions,
-      "Transactions to apply:",
-      "oneline",
-    );
+    ui.heading("Transactions to apply:");
+    ui.printTransactions(logOnlyTransactions, "concise");
   }
 
   if (args.dryRun) {

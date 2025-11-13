@@ -99,6 +99,15 @@ export const keyValue = (key: string, value: string) => {
   println(`  ${Style.TEXT_DIM}${key}:${Style.TEXT_NORMAL} ${value}`);
 };
 
+export const keyValuesInline = (...pairs: [string, string][]) => {
+  const formatted = pairs
+    .map(
+      ([key, value]) => `${Style.TEXT_DIM}${key}:${Style.TEXT_NORMAL} ${value}`,
+    )
+    .join("  ");
+  println(`  ${formatted}`);
+};
+
 export const list = (items: string[], indent: number = 2) => {
   const prefix = " ".repeat(indent);
   for (const item of items) {
@@ -113,15 +122,11 @@ export const confirm = async (prompt: string): Promise<boolean> => {
 
 export const printTransactions = (
   transactions: Transaction[],
-  header?: string,
   format: TransactionFormat = "concise",
 ) => {
-  if (header) {
-    heading(header);
-  }
   for (const tx of transactions) {
     printTransaction(tx, format);
-    println("");
+    if (format === "full") println("");
   }
 };
 
@@ -278,12 +283,16 @@ const printEntityChanges = (
   const entries = Object.entries(changes) as [string, FieldChangeset][];
   if (entries.length === 0) return;
 
-  println("");
+  if (format === "full") println("");
   println(`  ${Style.TEXT_DIM}${label} (${entries.length})`);
 
   for (const [uid, changeset] of entries) {
     const operation = getEntityOperation(changeset);
     const entityLabel = getEntityLabel(changeset);
+    const fields = Object.entries(changeset).filter(
+      ([key]) => key !== "createdAt" && key !== "updatedAt",
+    ) as [string, FieldValue | ValueChange][];
+
     if (format === "concise") {
       println(`    - ${uid}${entityLabel} ${operation}`);
     } else {
@@ -291,9 +300,6 @@ const printEntityChanges = (
         `    ${Style.TEXT_INFO}${uid}${entityLabel}${Style.TEXT_NORMAL} ${operation}`,
       );
 
-      const fields = Object.entries(changeset).filter(
-        ([key]) => key !== "createdAt" && key !== "updatedAt",
-      ) as [string, FieldValue | ValueChange][];
       for (const [fieldKey, change] of fields) {
         printFieldChange(fieldKey, normalizeValueChange(change), "      ");
       }
@@ -328,9 +334,11 @@ export const printTransaction = (
   println(
     Style.TEXT_INFO_BOLD + `Transaction #${transaction.id}` + Style.TEXT_NORMAL,
   );
-  keyValue("Hash", hash);
-  keyValue("Author", transaction.author);
-  keyValue("Created", timestamp);
+  keyValuesInline(
+    ["Hash", hash],
+    ["Author", transaction.author],
+    ["Created", timestamp],
+  );
 
   printEntityChanges("Node changes", transaction.nodes, format);
   printEntityChanges("Config changes", transaction.configurations, format);
