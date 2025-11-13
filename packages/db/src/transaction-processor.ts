@@ -73,11 +73,11 @@ export const processTransactionInput = async (
   return ok(
     await withHashTransaction(
       {
-        nodes: nodesResult.data,
-        configurations,
+        previous: versionResult.data.hash,
         author: input.author ?? "",
         createdAt,
-        previous: versionResult.data.hash,
+        nodes: nodesResult.data,
+        configurations,
       },
       incrementEntityId(versionResult.data.id) as TransactionId,
     ),

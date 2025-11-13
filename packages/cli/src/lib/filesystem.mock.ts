@@ -244,5 +244,23 @@ export const createInMemoryFileSystem = (): FileSystem => {
 
       return ok(entries);
     },
+
+    renameFile: (oldPath: string, newPath: string) => {
+      const normalizedOld = normalizePath(oldPath);
+      const normalizedNew = normalizePath(newPath);
+
+      const oldEntry = files.get(normalizedOld);
+      if (!oldEntry) {
+        return err(createError("file-not-found", `File not found: ${oldPath}`));
+      }
+
+      const parentCheck = ensureParentExists(normalizedNew);
+      if (isErr(parentCheck)) return parentCheck;
+
+      files.set(normalizedNew, oldEntry);
+      files.delete(normalizedOld);
+
+      return ok(undefined);
+    },
   };
 };

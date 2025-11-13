@@ -510,10 +510,10 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
       }
 
       const entityData = {
+        id: newEntityId,
         ...input,
         ...fieldsWithValues,
         uid: (input["uid"] ?? createUid()) as EntityUid,
-        id: newEntityId,
       };
       const keys = Object.keys(entityData) as FieldKey[];
       for (const key of keys) {

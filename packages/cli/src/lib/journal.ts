@@ -8,10 +8,12 @@ import {
   transactionToCanonical,
   type Transaction,
   type TransactionHash,
+  withHashTransaction,
 } from "@binder/db";
 import {
   createError,
   err,
+  getTimestampForFileName,
   isErr,
   ok,
   okVoid,
@@ -261,19 +263,7 @@ export const removeLastFromLog = async (
 export const clearLog = async (
   fs: FileSystem,
   path: string,
-): ResultAsync<void> => {
-  const result = fs.writeFile(path, "");
-
-  if (isErr(result))
-    return err(
-      createError("file-write-error", "Failed to clear transaction log", {
-        path,
-        error: result.error,
-      }),
-    );
-
-  return okVoid;
-};
+): ResultAsync<void> => fs.writeFile(path, "");
 
 export const verifyLog = async (
   fs: FileSystem,
@@ -338,4 +328,41 @@ export const verifyLog = async (
   }
 
   return ok({ count });
+};
+
+export const rehashLog = async (
+  fs: FileSystem,
+  path: string,
+): ResultAsync<{ transactionsRehashed: number; backupPath: string }> => {
+  if (!fs.exists(path))
+    return err(
+      createError("file-not-found", "Transaction log file does not exist", {
+        path,
+      }),
+    );
+
+  const timestamp = getTimestampForFileName();
+  const backupPath = path.replace(/\.jsonl$/, `-${timestamp}.jsonl.bac`);
+
+  const renameResult = fs.renameFile(path, backupPath);
+  if (isErr(renameResult)) return renameResult;
+
+  const clearResult = await clearLog(fs, path);
+  if (isErr(clearResult)) return clearResult;
+
+  let previousHash: TransactionHash = GENESIS_VERSION.hash;
+  let transactionsRehashed = 0;
+
+  for await (const result of readTransactionsFromBeginning(fs, backupPath)) {
+    if (isErr(result)) return result;
+
+    const tx = { ...result.data, previous: previousHash };
+    const rehashedTx = await withHashTransaction(tx, tx.id);
+    const logResult = logTransaction(fs, path, rehashedTx);
+    if (isErr(logResult)) return logResult;
+    previousHash = rehashedTx.hash;
+    transactionsRehashed++;
+  }
+
+  return ok({ transactionsRehashed, backupPath });
 };

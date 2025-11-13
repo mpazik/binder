@@ -21,7 +21,7 @@ import { mockNodeSchema } from "./schema.mock.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
-  "db51c6faa16d75b6245e40dead0691ae6d3707e3b9f1e1600334e7d6da54d72d" as TransactionHash;
+  "52f57d28141fbfeb30924525bfbdeda52caaf7af6634377f0701ca62982dab3e" as TransactionHash;
 
 export const mockAuthor = "test-user";
 export const mockAuthor2 = "test-user2";
@@ -29,8 +29,10 @@ const mockCreated = newIsoTimestamp("2024-01-01");
 const mockUpdated = newIsoTimestamp("2024-01-02");
 export const mockTransactionInit: Transaction = {
   id: mockTransactionInitId,
-  previous: GENESIS_VERSION.hash,
   hash: mockTransactionInitHash,
+  previous: GENESIS_VERSION.hash,
+  createdAt: mockCreated,
+  author: mockAuthor,
   nodes: {
     [mockTask1Uid]: mockChangesetCreateTask1,
     [mockProjectNode.uid]: mockProjectNode,
@@ -44,23 +46,21 @@ export const mockTransactionInit: Transaction = {
       Object.values(mockNodeSchema.types).map((type) => [type.key, type]),
     ),
   },
-  author: mockAuthor,
-  createdAt: mockCreated,
 };
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "b32ffd80b917a75d786ca55c9a222646373112c020f5fbb6c342520f6cade537" as TransactionHash;
+  "4777981cfea53fd0977297a3b9f1c6a3031a834131557ce9c9f6a3a7209d5fb8" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
-  previous: mockTransactionInitHash,
   hash: mockTransactionUpdateHash,
+  previous: mockTransactionInitHash,
+  createdAt: mockUpdated,
+  author: mockAuthor,
   nodes: {
     [mockTask1Uid]: mockChangesetUpdateTask1,
   },
   configurations: {},
-  author: mockAuthor,
-  createdAt: mockUpdated,
 };
 
 export const mockTransactionInitInput: TransactionInput = {
@@ -100,20 +100,20 @@ export const mockTransaction3Hash =
 
 export const mockTransaction3: Transaction = {
   id: mockTransaction3Id,
-  previous: mockTransactionUpdateHash,
   hash: mockTransaction3Hash,
+  previous: mockTransactionUpdateHash,
+  createdAt: newIsoTimestamp("2024-01-03"),
+  author: mockAuthor2,
   nodes: {
     [mockTask2Node.uid]: {
       status: {
         op: "set",
-        previous: "todo",
         value: "in_progress",
+        previous: "todo",
       },
     },
   },
   configurations: {},
-  author: mockAuthor2,
-  createdAt: newIsoTimestamp("2024-01-03"),
 };
 
 export const mockTransaction4Id = 4 as TransactionId;
@@ -121,18 +121,18 @@ export const mockTransaction4Hash =
   "b234567890abcdef0123456789abcdef0123456789abcdef0123456789abcdef" as TransactionHash;
 export const mockTransaction4: Transaction = {
   id: mockTransaction4Id,
-  previous: mockTransaction3Hash,
   hash: mockTransaction4Hash,
+  previous: mockTransaction3Hash,
+  createdAt: newIsoTimestamp("2024-01-04"),
+  author: mockAuthor2,
   nodes: {
     [mockProjectNode.uid]: {
       status: {
         op: "set",
-        previous: "in_progress",
         value: "completed",
+        previous: "in_progress",
       },
     },
   },
   configurations: {},
-  author: mockAuthor2,
-  createdAt: newIsoTimestamp("2024-01-04"),
 };

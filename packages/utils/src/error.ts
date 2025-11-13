@@ -1,5 +1,5 @@
 // Error keys are used to identify the type of error that occurred. They are in kebab-case.
-import { err } from "./result.ts";
+import { err, type Err } from "./result.ts";
 
 export type ErrorKey = string;
 
@@ -58,6 +58,21 @@ export const errorToObject = (error: unknown, name?: string): ErrorObject => {
   }
   return createError(name ?? "unknown", String(error));
 };
+
+const rewrapError = <T extends object>(
+  error: Err<ErrorObject<T>>,
+  key = error.error.key,
+  message = error.error.message,
+  data?: T,
+): Err<ErrorObject<T>> =>
+  err(
+    createError(key, message, {
+      ...error.error.data,
+      data,
+    }),
+  );
+
+export default rewrapError;
 
 export const stringifyErrorObject = (error: ErrorObject): string =>
   `${error.key}: ${error.message}`;

@@ -52,11 +52,19 @@ export type TransactionInput = z.infer<typeof TransactionInput>;
 
 type CanonicalTransaction = {
   previous: TransactionHash;
+  createdAt: IsoTimestamp;
   author: string;
   nodes: NodesChangeset;
   configurations: ConfigurationsChangeset;
-  createdAt: IsoTimestamp;
 };
+
+const canonicalTxKeysOrder: (keyof CanonicalTransaction)[] = [
+  "previous",
+  "createdAt",
+  "author",
+  "nodes",
+  "configurations",
+];
 
 export const transactionToCanonical = (
   tx: Pick<
@@ -65,13 +73,7 @@ export const transactionToCanonical = (
   >,
 ): CanonicalTransaction => {
   // we assume that changeset is always in succinct form, later perhaps we should do something here
-  return pick(tx, [
-    "previous",
-    "author",
-    "createdAt",
-    "nodes",
-    "configurations",
-  ]);
+  return pick(tx, canonicalTxKeysOrder);
 };
 
 export const hashTransaction = async (
@@ -90,7 +92,7 @@ export const withHashTransaction = async (
   return {
     id,
     hash: await hashTransaction(canonical),
-    ...pick(tx, ["previous", "author", "createdAt", "nodes", "configurations"]),
+    ...canonical,
   };
 };
 

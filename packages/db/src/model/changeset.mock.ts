@@ -13,8 +13,8 @@ export const mockChangesetCreateTask1 = mockTask1Node;
 export const mockChangesetUpdateTask1 = {
   title: {
     op: "set",
-    previous: mockTask1Node.title,
     value: mockTaskNode1Updated.title,
+    previous: mockTask1Node.title,
   },
   tags: {
     op: "seq",
@@ -30,8 +30,8 @@ export const mockRemoveChange = {
 export const mockChangesetInvert = {
   title: {
     op: "set",
-    previous: mockTaskNode1Updated.title,
     value: mockTask1Node.title,
+    previous: mockTaskNode1Updated.title,
   },
   tags: mockRemoveChange,
 } as const satisfies FieldChangeset;

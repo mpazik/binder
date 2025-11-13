@@ -6,6 +6,7 @@ import {
   openSync,
   closeSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "fs";
@@ -40,6 +41,7 @@ export type FileSystem = {
     options?: { recursive?: boolean; force?: boolean },
   ) => Result<void>;
   readdir: (path: string) => Result<DirEntry[]>;
+  renameFile: (oldPath: string, newPath: string) => Result<void>;
 };
 
 export const createRealFileSystem = (): FileSystem => {
@@ -108,6 +110,12 @@ export const createRealFileSystem = (): FileSystem => {
           isFile: entry.isFile(),
           isDirectory: entry.isDirectory(),
         }));
+      }, errorToObject);
+    },
+
+    renameFile: (oldPath: string, newPath: string) => {
+      return tryCatch(() => {
+        renameSync(oldPath, newPath);
       }, errorToObject);
     },
   };

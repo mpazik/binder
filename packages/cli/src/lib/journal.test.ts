@@ -14,6 +14,7 @@ import {
   logTransactions,
   readLastTransactions,
   readTransactions,
+  rehashLog,
   removeLastFromLog,
   verifyLog,
 } from "./journal.ts";
@@ -218,6 +219,42 @@ describe("journal", () => {
       expect(throwIfError(result)).toEqual([
         mockTransaction3,
         mockTransaction4,
+      ]);
+    });
+  });
+
+  describe("rehashLog", () => {
+    const rehashPath = `${root}/rehash-log.jsonl`;
+
+    it("rehashes all transactions with correct chain", async () => {
+      const badHash1 = "bad-hash-1" as TransactionHash;
+      const transactionsWithBadHashes: Transaction[] = [
+        {
+          ...mockTransactionInit,
+          hash: badHash1,
+          previous: "bad-previous-1" as TransactionHash,
+        },
+        {
+          ...mockTransactionUpdate,
+          hash: "bad-hash-2" as TransactionHash,
+          previous: badHash1,
+        },
+      ];
+      throwIfError(logTransactions(fs, rehashPath, transactionsWithBadHashes));
+
+      const result = await rehashLog(fs, rehashPath);
+
+      expect(result).toBeOkWith({
+        transactionsRehashed: 2,
+        backupPath: expect.stringMatching(/rehash-log-.*\.jsonl\.bac$/),
+      });
+
+      const rehashedTransactions = throwIfError(
+        await readTransactions(fs, rehashPath, 10, undefined, "asc"),
+      );
+      expect(rehashedTransactions).toEqual([
+        mockTransactionInit,
+        mockTransactionUpdate,
       ]);
     });
   });

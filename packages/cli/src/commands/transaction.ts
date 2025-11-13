@@ -30,10 +30,10 @@ import {
 import {
   readLastTransactions,
   readTransactions,
+  rehashLog,
   verifyLog,
 } from "../lib/journal.ts";
 import { TRANSACTION_LOG_FILE } from "../config.ts";
-import { heading } from "../ui.ts";
 import { types } from "./types.ts";
 
 type RawTransactionData = {
@@ -252,7 +252,27 @@ export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
   const logIntegrityResult = await verifyLog(fs, transactionLogPath, {
     verifyIntegrity: true,
   });
-  if (isErr(logIntegrityResult)) return logIntegrityResult;
+  if (isErr(logIntegrityResult)) {
+    if (logIntegrityResult.error.key === "hash-mismatch") {
+      ui.block(() => {
+        ui.danger("Transaction hash integrity check failed");
+        ui.info("One or more transactions have incorrect hashes");
+        ui.println("");
+        ui.info("This may be caused by:");
+        ui.list(
+          [
+            "Migration to a new hash algorithm",
+            "Data corruption",
+            "Manual modification of transaction log",
+          ],
+          2,
+        );
+        ui.println("");
+        ui.info("Run 'binder tx repair --rehash' to recompute all hashes");
+      });
+    }
+    return logIntegrityResult;
+  }
 
   const verifyResult = await verifySync(fs, kg, config.paths.binder);
   if (isErr(verifyResult)) return verifyResult;
@@ -297,9 +317,73 @@ export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
 export const transactionRepairHandler: CommandHandlerWithDbWrite<{
   dryRun?: boolean;
   yes?: boolean;
+  rehash?: boolean;
 }> = async ({ kg, db, config, ui, log, fs, args }) => {
-  const verifyResult = await verifySync(fs, kg, config.paths.binder);
+  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
 
+  if (args.rehash) {
+    ui.heading("Rehash transactions");
+
+    ui.warning("This will recompute all transaction hashes");
+    ui.println("");
+
+    ui.info("This operation:");
+    ui.list(
+      [
+        "Rewrites the entire transaction chain",
+        "Updates all transactions with new hashes",
+        "Syncs database with rehashed log",
+        "Creates backup in .binder/",
+      ],
+      2,
+    );
+    ui.info(
+      "This should only be used only for disaster recovery after corruption",
+    );
+    ui.println("");
+
+    if (!args.yes) {
+      if (!(await ui.confirm("Continue with rehash? (yes/no): "))) {
+        ui.info("Rehash cancelled");
+        return ok(undefined);
+      }
+    }
+
+    ui.info("Reading transaction log...");
+
+    const rehashResult = await rehashLog(fs, transactionLogPath);
+    if (isErr(rehashResult)) {
+      log.error("Failed to rehash log", { error: rehashResult.error });
+      return rehashResult;
+    }
+
+    const { transactionsRehashed, backupPath } = rehashResult.data;
+
+    ui.info("Syncing database with rehashed log...");
+
+    const repairResult = await repairDbFromLog(fs, db, config.paths.binder);
+    if (isErr(repairResult)) {
+      log.error("Failed to sync database with rehashed log", {
+        error: repairResult.error,
+      });
+      return repairResult;
+    }
+
+    const { dbTransactionsPath } = repairResult.data;
+
+    ui.block(() => {
+      ui.success("Rehash completed successfully");
+      ui.keyValue("Transactions rehashed", transactionsRehashed.toString());
+      ui.keyValue("Log backup", backupPath);
+      if (dbTransactionsPath) {
+        ui.keyValue("Database backup", dbTransactionsPath);
+      }
+    });
+
+    return ok(undefined);
+  }
+
+  const verifyResult = await verifySync(fs, kg, config.paths.binder);
   if (isErr(verifyResult)) return verifyResult;
 
   const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
@@ -531,6 +615,12 @@ const TransactionCommand = types({
               .option("yes", {
                 alias: "y",
                 describe: "auto-confirm all prompts",
+                type: "boolean",
+                default: false,
+              })
+              .option("rehash", {
+                describe:
+                  "recompute all transaction hashes (use for algorithm migration)",
                 type: "boolean",
                 default: false,
               });
