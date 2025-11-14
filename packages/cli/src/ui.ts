@@ -133,7 +133,9 @@ export const printTransactions = (
 export const error = (message: string, showLogHint = false) => {
   println(Style.TEXT_DANGER_BOLD + "Error: " + Style.TEXT_NORMAL + message);
   if (showLogHint) {
-    println(Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL);
+    println(
+      Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
+    );
   }
 };
 
@@ -155,7 +157,7 @@ export const printError = (
   if (!error.data || Object.keys(error.data).length === 0) {
     if (showLogHint) {
       println(
-        Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL,
+        Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
       );
     }
     return;
@@ -212,7 +214,7 @@ export const printError = (
       if (showLogHint) {
         println("");
         println(
-          Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL,
+          Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
         );
       }
       return;
@@ -225,7 +227,9 @@ export const printError = (
 
   if (showLogHint) {
     println("");
-    println(Style.TEXT_DIM + "🔍 Debug logs: .binder/log/" + Style.TEXT_NORMAL);
+    println(
+      Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
+    );
   }
 };
 

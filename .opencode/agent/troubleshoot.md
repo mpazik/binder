@@ -55,7 +55,7 @@ Reference: tech-stack.md
 
 <scenario case="CLI behavior or runtime issue">
 - Use runcli to execute Binder CLI commands for reproduction
-- Check `.binder/logs/` directory for application logs to diagnose runtime behavior
+- Check `.binder/cli.log` for application logs to diagnose runtime behavior
 - Use sqlite tool to inspect database state and verify data integrity
 - Isolate the issue with minimal command variations
 - Apply fix and re-run with runcli to validate

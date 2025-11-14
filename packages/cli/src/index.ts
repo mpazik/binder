@@ -12,22 +12,19 @@ import DevCommand from "./commands/dev.ts";
 import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
 import McpCommand from "./commands/mcp.ts";
-import { createLogger } from "./log";
 import * as UI from "./ui";
 import { BINDER_VERSION, isDev } from "./build-time";
 
 const cancel = new AbortController();
 
-const log = await createLogger({ printLogs: true });
-
 process.on("unhandledRejection", (e) => {
-  log.error("rejection", {
+  console.error("rejection", {
     e: e instanceof Error ? e.message : e,
   });
 });
 
 process.on("uncaughtException", (e) => {
-  log.error("exception", {
+  console.error("exception", {
     e: e.message,
   });
 });
@@ -42,11 +39,12 @@ let cli = yargs(hideBin(process.argv))
   .option("print-logs", {
     describe: "print logs to stderr",
     type: "boolean",
+    default: false,
   })
   .option("log-level", {
     describe: "log level",
     type: "string",
-    choices: ["DEBUG", "INFO", "WARN", "ERROR"],
+    choices: ["DEBUG", "INFO", "WARN", "ERROR"] as const,
   })
   .usage(UI.logo())
   .wrap(null)
@@ -79,14 +77,14 @@ const result = tryCatch<void, any>(() => cli.parse());
 if (isErr(result)) {
   const e = result.error;
   if (e instanceof Error) {
-    log.error("fatal", {
+    console.error("fatal", {
       name: e.name,
       message: e.message,
       cause: e.cause?.toString(),
       stack: e.stack,
     });
   } else if (e instanceof ResolveMessage) {
-    log.error("fatal", {
+    console.error("fatal", {
       name: e.name,
       message: e.message,
       code: e.code,
@@ -96,7 +94,7 @@ if (isErr(result)) {
       importKind: e.importKind,
     });
   } else {
-    log.error("fatal", { error: e });
+    console.error("fatal", { error: e });
   }
   process.exitCode = 1;
 }

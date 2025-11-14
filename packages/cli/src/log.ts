@@ -47,27 +47,23 @@ const formatError = (error: Error, depth = 0): string => {
 };
 
 export const createLogger = async (options: {
-  logDir?: string;
+  rootDir: string;
   level?: Level;
   printLogs?: boolean;
 }): Promise<Logger> => {
-  let logFilePath: string | null = null;
+  const logFilePath = `${options.rootDir}/cli.log`;
+  await rotateLogFile(logFilePath);
 
-  if (options.logDir && !options.printLogs) {
-    await Bun.$`mkdir -p ${options.logDir}`.quiet().catch(() => {});
+  const logfile = Bun.file(logFilePath);
+  const writer = logfile.writer();
 
-    logFilePath = `${options.logDir}/cli.log`;
-    await rotateLogFile(logFilePath);
-
-    const logfile = Bun.file(logFilePath);
-    const writer = logfile.writer();
-
-    process.stderr.write = (msg) => {
-      writer.write(msg);
-      writer.flush();
-      return true;
-    };
-  }
+  const writeLog = (message: string) => {
+    writer.write(message);
+    writer.flush();
+    if (options.printLogs) {
+      process.stderr.write(message);
+    }
+  };
 
   const currentLevel = options.level ?? "INFO";
   let last = Date.now();
@@ -117,25 +113,25 @@ export const createLogger = async (options: {
 
   const info = (message?: any, extra?: Record<string, any>) => {
     if (shouldLog("INFO")) {
-      process.stderr.write("INFO  " + build("INFO", message, extra));
+      writeLog("INFO  " + build("INFO", message, extra));
     }
   };
 
   return {
     debug(message?: any, extra?: Record<string, any>) {
       if (shouldLog("DEBUG")) {
-        process.stderr.write("DEBUG " + build("DEBUG", message, extra));
+        writeLog("DEBUG " + build("DEBUG", message, extra));
       }
     },
     info,
     error(message?: any, extra?: Record<string, any>) {
       if (shouldLog("ERROR")) {
-        process.stderr.write("ERROR " + build("ERROR", message, extra));
+        writeLog("ERROR " + build("ERROR", message, extra));
       }
     },
     warn(message?: any, extra?: Record<string, any>) {
       if (shouldLog("WARN")) {
-        process.stderr.write("WARN  " + build("WARN", message, extra));
+        writeLog("WARN  " + build("WARN", message, extra));
       }
     },
     time(message: string, extra?: Record<string, any>) {

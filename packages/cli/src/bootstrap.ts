@@ -27,6 +27,7 @@ import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 import { setupCleanupHandlers, withLock } from "./lib/lock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { createLogger, type Logger } from "./log.ts";
+import { isDev } from "./build-time.ts";
 
 export type Config = Omit<BinderConfig, "docsPath"> & {
   paths: {
@@ -68,6 +69,11 @@ const loadConfig = async (root: string): ResultAsync<Config> => {
   });
 };
 
+export type GlobalOptions = {
+  printLogs?: boolean;
+  logLevel?: "DEBUG" | "INFO" | "WARN" | "ERROR";
+};
+
 export type CommandContext = {
   config: Config;
   log: Logger;
@@ -87,22 +93,22 @@ export type CommandContextWithDbWrite = CommandContext & {
   kg: KnowledgeGraph;
 };
 
-export type CommandHandler<TArgs = unknown> = (
-  context: CommandContext & { args: TArgs },
+export type CommandHandler<TArgs = object> = (
+  context: CommandContext & { args: TArgs & GlobalOptions },
 ) => ResultAsync<string | undefined>;
 
-export type CommandHandlerWithDbWrite<TArgs = unknown> = (
-  context: CommandContextWithDbWrite & { args: TArgs },
+export type CommandHandlerWithDbWrite<TArgs = object> = (
+  context: CommandContextWithDbWrite & { args: TArgs & GlobalOptions },
 ) => ResultAsync<string | undefined>;
 
-export type CommandHandlerWithDbRead<TArgs = unknown> = (
-  context: CommandContextWithDbRead & { args: TArgs },
+export type CommandHandlerWithDbRead<TArgs = object> = (
+  context: CommandContextWithDbRead & { args: TArgs & GlobalOptions },
 ) => ResultAsync<string | undefined>;
 
-export const bootstrap = <TArgs>(
+export const bootstrap = <TArgs extends object = object>(
   handler: CommandHandler<TArgs>,
-): ((args: TArgs) => Promise<void>) => {
-  return async (args: TArgs) => {
+): ((args: TArgs & GlobalOptions) => Promise<void>) => {
+  return async (args: TArgs & GlobalOptions) => {
     const fs = createRealFileSystem();
     const rootResult = findBinderRoot(fs);
     if (isErr(rootResult)) {
@@ -123,21 +129,10 @@ export const bootstrap = <TArgs>(
       process.exit(1);
     }
 
-    const printLogs = process.argv.includes("--print-logs");
-    const logLevelArg = process.argv.find((arg) =>
-      arg.startsWith("--log-level="),
-    );
-    const logLevel = logLevelArg?.split("=")[1] as
-      | "DEBUG"
-      | "INFO"
-      | "WARN"
-      | "ERROR"
-      | undefined;
-
     const log = await createLogger({
-      logDir: configResult.data.paths.binder,
-      printLogs,
-      level: logLevel,
+      rootDir: configResult.data.paths.binder,
+      printLogs: isDev() ? true : (args.printLogs ?? false),
+      level: args.logLevel ?? (isDev() ? "DEBUG" : "INFO"),
     });
 
     let result;
@@ -168,9 +163,9 @@ export const bootstrap = <TArgs>(
   };
 };
 
-export const bootstrapWithDbRead = <TArgs>(
+export const bootstrapWithDbRead = <TArgs extends object = object>(
   handler: CommandHandlerWithDbRead<TArgs>,
-): ((args: TArgs) => Promise<void>) => {
+): ((args: TArgs & GlobalOptions) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
     const { fs, config, log } = context;
     const binderPath = config.paths.binder;
@@ -211,9 +206,9 @@ export const openDbWrite = <T = void>(
   return withLock(fs, paths.binder, async () => handler(kg, db));
 };
 
-export const bootstrapWithDbWrite = <TArgs>(
+export const bootstrapWithDbWrite = <TArgs extends object = object>(
   handler: CommandHandlerWithDbWrite<TArgs>,
-): ((args: TArgs) => Promise<void>) => {
+): ((args: TArgs & GlobalOptions) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
     const { fs, config, log } = context;
     const { paths } = config;
