@@ -103,7 +103,7 @@ export const acquireLock = async (
 export const withLock = async <T>(
   fs: FileSystem,
   root: string,
-  operation: () => Promise<Result<T>>,
+  operation: () => ResultAsync<T>,
 ): ResultAsync<T> => {
   const lockResult = await acquireLock(fs, root);
   if (isErr(lockResult)) return lockResult;

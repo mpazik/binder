@@ -11,6 +11,7 @@ import DocsCommand from "./commands/docs.ts";
 import DevCommand from "./commands/dev.ts";
 import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
+import McpCommand from "./commands/mcp.ts";
 import { createLogger } from "./log";
 import * as UI from "./ui";
 import { BINDER_VERSION, isDev } from "./build-time";
@@ -56,7 +57,8 @@ let cli = yargs(hideBin(process.argv))
   .command(SearchCommand)
   .command(DocsCommand)
   .command(UndoCommand)
-  .command(RedoCommand);
+  .command(RedoCommand)
+  .command(McpCommand);
 
 if (isDev()) {
   cli = cli.command(DevCommand);

@@ -5,7 +5,6 @@ import {
   errorToObject,
   isErr,
   ok,
-  type Result,
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
@@ -90,15 +89,15 @@ export type CommandContextWithDbWrite = CommandContext & {
 
 export type CommandHandler<TArgs = unknown> = (
   context: CommandContext & { args: TArgs },
-) => Promise<Result<string | undefined>>;
+) => ResultAsync<string | undefined>;
 
 export type CommandHandlerWithDbWrite<TArgs = unknown> = (
   context: CommandContextWithDbWrite & { args: TArgs },
-) => Promise<Result<string | undefined>>;
+) => ResultAsync<string | undefined>;
 
 export type CommandHandlerWithDbRead<TArgs = unknown> = (
   context: CommandContextWithDbRead & { args: TArgs },
-) => Promise<Result<string | undefined>>;
+) => ResultAsync<string | undefined>;
 
 export const bootstrap = <TArgs>(
   handler: CommandHandler<TArgs>,
@@ -192,6 +191,26 @@ export const bootstrapWithDbRead = <TArgs>(
   });
 };
 
+export const openDbWrite = <T = void>(
+  fs: FileSystem,
+  log: Logger,
+  { paths }: Config,
+  handler: (kg: KnowledgeGraph, db: Database) => ResultAsync<T>,
+): ResultAsync<T> => {
+  const dbPath = join(paths.binder, DB_FILE);
+  const dbResult = openDb({ path: dbPath, migrate: true });
+  if (isErr(dbResult)) {
+    log.error("Failed to open database", { error: dbResult.error });
+    ui.printError(dbResult.error);
+    process.exit(1);
+  }
+
+  const db = dbResult.data;
+  const kg = setupKnowledgeGraph(db, fs, paths.binder, paths.docs, log);
+
+  return withLock(fs, paths.binder, async () => handler(kg, db));
+};
+
 export const bootstrapWithDbWrite = <TArgs>(
   handler: CommandHandlerWithDbWrite<TArgs>,
 ): ((args: TArgs) => Promise<void>) => {
@@ -201,18 +220,7 @@ export const bootstrapWithDbWrite = <TArgs>(
     mkdirSync(paths.binder, { recursive: true });
     setupCleanupHandlers(fs, paths.binder);
 
-    const dbPath = join(paths.binder, DB_FILE);
-    const dbResult = openDb({ path: dbPath, migrate: true });
-    if (isErr(dbResult)) {
-      log.error("Failed to open database", { error: dbResult.error });
-      ui.printError(dbResult.error);
-      process.exit(1);
-    }
-
-    const db = dbResult.data;
-    const kg = setupKnowledgeGraph(db, fs, paths.binder, paths.docs, log);
-
-    return withLock(fs, paths.binder, async () =>
+    return openDbWrite(fs, log, config, (kg, db) =>
       handler({
         ...context,
         db,

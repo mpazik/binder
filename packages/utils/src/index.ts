@@ -12,3 +12,5 @@ export * from "./assert.ts";
 export * from "./object.ts";
 export type * from "./encoding.ts";
 export * from "./encoding.ts";
+export * from "./json-rpc.ts";
+export type * from "./json-rpc.ts";

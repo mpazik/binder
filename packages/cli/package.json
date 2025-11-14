@@ -21,6 +21,7 @@
   "dependencies": {
     "@binder/db": "workspace:*",
     "@binder/utils": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.22.0",
     "@types/mdast": "^4.0.4",
     "@types/yargs": "^17.0.33",
     "handlebars": "^4.7.8",

@@ -18,7 +18,8 @@
     "typecheck": "bun --filter '*' typecheck",
     "test": "bun --filter '*' test",
     "check": "bun typecheck && bun test && bun lint &&  bun format",
-    "check:verify": "prettier --check && eslint . && bun typecheck && bun  test"
+    "check:verify": "prettier --check && eslint . && bun typecheck && bun  test",
+    "mcp:inspect": "bunx @modelcontextprotocol/inspector bun run dev mcp"
   },
   "private": true,
   "devDependencies": {
