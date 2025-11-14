@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { okVoid, throwIfError } from "@binder/utils";
+import { isErr, okVoid, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { getTestDatabase } from "./db.mock";
 import { openKnowledgeGraph } from "./knowledge-graph.ts";
@@ -184,6 +184,13 @@ describe("knowledge graph", () => {
 
         expect(result.items.length).toBe(2);
         expect(result.pagination.hasNext).toBe(true);
+      });
+
+      it("rejects filters with invalid field names", async () => {
+        const result = await kg.search({
+          filters: { InvalidField: "value" },
+        });
+        expect(result).toBeErrWithKey("invalid_filter_field");
       });
     });
 

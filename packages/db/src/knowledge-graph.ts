@@ -1,4 +1,6 @@
 import {
+  createError,
+  err,
   errorToObject,
   groupByToObject,
   isErr,
@@ -13,6 +15,7 @@ import {
   fieldNodeTypes,
   type Fieldset,
   type GraphVersion,
+  isFieldInSchema,
   type NodeFieldDefinition,
   type NodeRef,
   type NodeSchema,
@@ -170,10 +173,24 @@ export const openKnowledgeGraph = (
     },
     search: async (query: QueryParams) => {
       return db.transaction(async (tx) => {
-        const { filters, pagination } = query;
+        const { filters = {}, pagination } = query;
         const limit = pagination?.limit ?? 50;
         const after = pagination?.after;
         const before = pagination?.before;
+        const schemaResult = await getNodeSchema();
+        if (isErr(schemaResult)) return schemaResult;
+        const schema = schemaResult.data;
+
+        for (const fieldKey of Object.keys(filters)) {
+          if (isFieldInSchema(fieldKey, schema)) continue;
+          return err(
+            createError(
+              "invalid_filter_field",
+              `Filter field '${fieldKey}' is not defined in schema`,
+              { fieldKey },
+            ),
+          );
+        }
 
         const filterClause = buildWhereClause(nodeTable, filters);
 

@@ -91,10 +91,8 @@ const buildFilterCondition = (
 
 export const buildWhereClause = (
   table: NodeTable,
-  filters?: Filters,
+  filters: Filters,
 ): SQL | undefined => {
-  if (!filters || Object.keys(filters).length === 0) return undefined;
-
   const conditions: SQL[] = [];
 
   for (const [fieldKey, filter] of Object.entries(filters)) {

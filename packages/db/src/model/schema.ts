@@ -1,3 +1,4 @@
+import { tableStoredFields } from "../schema.ts";
 import type { EntityId, EntityKey, EntityUid, FieldKey } from "./entity.ts";
 import {
   type CoreDataType,
@@ -356,3 +357,8 @@ export const emptyNodeSchema: NodeSchema = {
   fields: {},
   types: {},
 };
+
+export const isFieldInSchema = (
+  fieldKey: string,
+  schema: NodeSchema,
+): boolean => tableStoredFields.includes(fieldKey) || fieldKey in schema.fields;
