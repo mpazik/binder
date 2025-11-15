@@ -43,8 +43,12 @@ const isLockStale = async (
   return parseResult.data;
 };
 
-const tryAcquireLock = (fs: FileSystem, lockPath: string): Result<void> => {
-  if (fs.exists(lockPath)) {
+const tryAcquireLock = async (
+  fs: FileSystem,
+  lockPath: string,
+): ResultAsync<void> => {
+  const exists = await fs.exists(lockPath);
+  if (exists) {
     return err(
       createError("lock-exists", "Lock file already exists", {
         path: lockPath,
@@ -67,12 +71,12 @@ export const acquireLock = async (
   const lockPath = join(root, LOCK_FILE);
 
   for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
-    const lockResult = tryAcquireLock(fs, lockPath);
+    const lockResult = await tryAcquireLock(fs, lockPath);
     if (!isErr(lockResult)) return lockResult;
 
     const stale = await isLockStale(fs, lockPath);
     if (stale) {
-      const cleanResult = fs.rm(lockPath, { force: true });
+      const cleanResult = await fs.rm(lockPath, { force: true });
       if (isErr(cleanResult)) {
         return err(
           createError(
@@ -108,13 +112,17 @@ export const withLock = async <T>(
   if (isErr(lockResult)) return lockResult;
 
   const result = await operation();
-  releaseLock(fs, root);
+  const releaseResult = await releaseLock(fs, root);
+  if (isErr(releaseResult)) return releaseResult;
   return result;
 };
 
-export const releaseLock = (fs: FileSystem, root: string): Result<void> => {
+export const releaseLock = async (
+  fs: FileSystem,
+  root: string,
+): ResultAsync<void> => {
   const lockPath = join(root, LOCK_FILE);
-  const unlinkResult = fs.rm(lockPath, { force: true });
+  const unlinkResult = await fs.rm(lockPath, { force: true });
 
   if (isErr(unlinkResult))
     return err(
@@ -129,12 +137,22 @@ export const releaseLock = (fs: FileSystem, root: string): Result<void> => {
 
 export const setupCleanupHandlers = (fs: FileSystem, root: string): void => {
   process.on("SIGINT", () => {
-    releaseLock(fs, root);
-    process.exit(130);
+    releaseLock(fs, root)
+      .catch((e) => {
+        console.error(e);
+      })
+      .finally(() => {
+        process.exit(130);
+      });
   });
 
   process.on("SIGTERM", () => {
-    releaseLock(fs, root);
-    process.exit(143);
+    releaseLock(fs, root)
+      .catch((e) => {
+        console.error(e);
+      })
+      .finally(() => {
+        process.exit(143);
+      });
   });
 };

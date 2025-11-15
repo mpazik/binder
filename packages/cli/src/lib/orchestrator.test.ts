@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import {
   getTestDatabase,
+  mockTransaction3,
   mockTransaction4,
   mockTransactionInit,
-  mockTransaction3,
   mockTransactionUpdate,
 } from "@binder/db/mocks";
 import {
@@ -20,15 +20,13 @@ import { throwIfError } from "@binder/utils";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
 import { mockLog } from "../bootstrap.mock.ts";
 import {
-  setupKnowledgeGraph,
-  squashTransactions,
-  type VerifySync,
-} from "./orchestrator.ts";
-import {
   applyTransactions,
   redoTransactions,
   repairDbFromLog,
+  setupKnowledgeGraph,
+  squashTransactions,
   undoTransactions,
+  type VerifySync,
   verifySync,
 } from "./orchestrator.ts";
 import {
@@ -47,8 +45,8 @@ describe("orchestrator", () => {
   let kg: KnowledgeGraph;
 
   beforeEach(async () => {
-    fs.rm(root, { recursive: true, force: true });
-    fs.mkdir(root, { recursive: true });
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.mkdir(root, { recursive: true });
     db = getTestDatabase();
     kg = setupKnowledgeGraph(db, fs, root, "", mockLog);
   });
@@ -71,7 +69,7 @@ describe("orchestrator", () => {
     ) => {
       const kg = openKnowledgeGraph(db);
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
-      throwIfError(logTransactions(fs, transactionLogPath, logTxs));
+      throwIfError(await logTransactions(fs, transactionLogPath, logTxs));
 
       const result = await verifySync(fs, kg, root);
       const sync = throwIfError(result);
@@ -147,7 +145,7 @@ describe("orchestrator", () => {
     ) => {
       const kg = openKnowledgeGraph(db);
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
-      throwIfError(logTransactions(fs, transactionLogPath, logTxs));
+      throwIfError(await logTransactions(fs, transactionLogPath, logTxs));
 
       const result = await repairDbFromLog(fs, db, root);
       expect(result).toBeOk();

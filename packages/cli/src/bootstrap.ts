@@ -101,7 +101,7 @@ export const bootstrap = <TArgs extends object = object>(
 ): ((args: TArgs & GlobalOptions) => Promise<void>) => {
   return async (args: TArgs & GlobalOptions) => {
     const fs = createRealFileSystem();
-    const rootResult = findBinderRoot(fs);
+    const rootResult = await findBinderRoot(fs);
     if (isErr(rootResult)) {
       ui.error(`Failed to load binder workspace: ${rootResult.error.message}`);
       process.exit(1);

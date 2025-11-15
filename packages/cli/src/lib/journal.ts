@@ -5,9 +5,9 @@
 import {
   GENESIS_VERSION,
   hashTransaction,
-  transactionToCanonical,
   type Transaction,
   type TransactionHash,
+  transactionToCanonical,
   withHashTransaction,
 } from "@binder/db";
 import {
@@ -33,7 +33,7 @@ const readLinesFromEnd = async function* (
   void,
   unknown
 > {
-  const statResult = await fs.stat(path);
+  const statResult = fs.stat(path);
   if (isErr(statResult)) return;
 
   const fileSize = statResult.data.size;
@@ -90,7 +90,7 @@ const readLinesFromBeginning = async function* (
   fs: FileSystem,
   path: string,
 ): AsyncGenerator<Result<string>, void, unknown> {
-  const statResult = await fs.stat(path);
+  const statResult = fs.stat(path);
   if (isErr(statResult)) return;
 
   const fileSize = statResult.data.size;
@@ -170,18 +170,18 @@ export const logTransaction = (
   fs: FileSystem,
   path: string,
   transaction: Transaction,
-): Result<void> => {
+): ResultAsync<void> => {
   const json = JSON.stringify(transaction);
   return fs.appendFile(path, json + "\n");
 };
 
-export const logTransactions = (
+export const logTransactions = async (
   fs: FileSystem,
   path: string,
   transactions: Transaction[],
-): Result<void> => {
+): ResultAsync<void> => {
   for (const tx of transactions) {
-    const result = logTransaction(fs, path, tx);
+    const result = await logTransaction(fs, path, tx);
     if (isErr(result)) return result;
   }
   return okVoid;
@@ -263,14 +263,14 @@ export const removeLastFromLog = async (
 export const clearLog = async (
   fs: FileSystem,
   path: string,
-): ResultAsync<void> => fs.writeFile(path, "");
+): ResultAsync<void> => await fs.writeFile(path, "");
 
 export const verifyLog = async (
   fs: FileSystem,
   path: string,
   options?: { verifyIntegrity?: boolean },
 ): ResultAsync<{ count: number }> => {
-  if (!fs.exists(path)) return ok({ count: 0 });
+  if (!(await fs.exists(path))) return ok({ count: 0 });
 
   let count = 0;
   let lineNumber = 0;
@@ -334,7 +334,7 @@ export const rehashLog = async (
   fs: FileSystem,
   path: string,
 ): ResultAsync<{ transactionsRehashed: number; backupPath: string }> => {
-  if (!fs.exists(path))
+  if (!(await fs.exists(path)))
     return err(
       createError("file-not-found", "Transaction log file does not exist", {
         path,
@@ -344,7 +344,7 @@ export const rehashLog = async (
   const timestamp = getTimestampForFileName();
   const backupPath = path.replace(/\.jsonl$/, `-${timestamp}.jsonl.bac`);
 
-  const renameResult = fs.renameFile(path, backupPath);
+  const renameResult = await fs.renameFile(path, backupPath);
   if (isErr(renameResult)) return renameResult;
 
   const clearResult = await clearLog(fs, path);
@@ -358,7 +358,7 @@ export const rehashLog = async (
 
     const tx = { ...result.data, previous: previousHash };
     const rehashedTx = await withHashTransaction(tx, tx.id);
-    const logResult = logTransaction(fs, path, rehashedTx);
+    const logResult = await logTransaction(fs, path, rehashedTx);
     if (isErr(logResult)) return logResult;
     previousHash = rehashedTx.hash;
     transactionsRehashed++;

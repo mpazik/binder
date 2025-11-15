@@ -113,19 +113,19 @@ export const DEFAULT_DYNAMIC_VIEW = `# {title}
 
 {description}`;
 
-const renderToFile = (
+const renderToFile = async (
   fs: FileSystem,
   schema: NodeSchema,
   filePath: string,
   viewAst: ViewAST,
   entity: Fieldset,
-) => {
+): ResultAsync<void> => {
   const markdownResult = renderView(schema, viewAst, entity);
   if (isErr(markdownResult)) return markdownResult;
   const markdown = markdownResult.data;
-  const mkdirResult = fs.mkdir(dirname(filePath), { recursive: true });
+  const mkdirResult = await fs.mkdir(dirname(filePath), { recursive: true });
   if (isErr(mkdirResult)) return mkdirResult;
-  return fs.writeFile(filePath, markdown);
+  return await fs.writeFile(filePath, markdown);
 };
 
 const renderNavigationItem = async (
@@ -167,7 +167,7 @@ const renderNavigationItem = async (
 
     if (!isDirectory) {
       const filePath = join(docsPath, fullPath);
-      const result = renderToFile(fs, schema, filePath, viewAst, entity);
+      const result = await renderToFile(fs, schema, filePath, viewAst, entity);
       if (isErr(result)) {
         errors.push({
           path: fullPath,

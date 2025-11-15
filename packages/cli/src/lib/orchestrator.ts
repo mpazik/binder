@@ -127,7 +127,7 @@ export const repairDbFromLog = async (
     const filename = `repair-db-transactions-${getTimestampForFileName()}.jsonl.bac`;
     dbTransactionsPath = join(binderPath, filename);
 
-    const snapshotResult = logTransactions(
+    const snapshotResult = await logTransactions(
       fs,
       dbTransactionsPath,
       dbOnlyTransactions,
@@ -200,7 +200,7 @@ export const undoTransactions = async (
 
   const undoLogPath = join(binderPath, UNDO_LOG_FILE);
   for (const tx of transactionsToUndo) {
-    const logResult = logTransaction(fs, undoLogPath, tx);
+    const logResult = await logTransaction(fs, undoLogPath, tx);
     if (isErr(logResult)) return logResult;
   }
 
@@ -270,7 +270,11 @@ export const setupKnowledgeGraph = (
   const knowledgeGraph = openKnowledgeGraph(db, {
     beforeCommit: async (transaction: Transaction) => {
       const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
-      const logResult = logTransaction(fs, transactionLogPath, transaction);
+      const logResult = await logTransaction(
+        fs,
+        transactionLogPath,
+        transaction,
+      );
       if (isErr(logResult)) return logResult;
       const undoLogPath = join(binderPath, UNDO_LOG_FILE);
       const clearResult = await clearLog(fs, undoLogPath);

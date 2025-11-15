@@ -50,7 +50,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
 
   return {
     files,
-    exists: (path: string) => {
+    exists: async (path: string) => {
       return files.has(normalizePath(path));
     },
 
@@ -67,7 +67,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(entry.content);
     },
 
-    writeFile: (path: string, content: string) => {
+    writeFile: async (path: string, content: string) => {
       const normalized = normalizePath(path);
       const parentCheck = ensureParentExists(normalized);
       if (isErr(parentCheck)) return parentCheck;
@@ -76,7 +76,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(undefined);
     },
 
-    appendFile: (path: string, content: string) => {
+    appendFile: async (path: string, content: string) => {
       const normalized = normalizePath(path);
       const entry = files.get(normalized);
 
@@ -89,7 +89,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(undefined);
     },
 
-    stat: async (path: string) => {
+    stat: (path: string) => {
       const entry = files.get(normalizePath(path));
       if (!entry) {
         return err(createError("file-not-found", `File not found: ${path}`));
@@ -141,7 +141,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(undefined);
     },
 
-    mkdir: (path: string, options?: { recursive?: boolean }) => {
+    mkdir: async (path: string, options?: { recursive?: boolean }) => {
       const normalized = normalizePath(path);
 
       if (files.has(normalized)) {
@@ -173,7 +173,10 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(undefined);
     },
 
-    rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => {
+    rm: async (
+      path: string,
+      options?: { recursive?: boolean; force?: boolean },
+    ) => {
       const normalized = normalizePath(path);
 
       if (!files.has(normalized)) {
@@ -213,7 +216,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(undefined);
     },
 
-    readdir: (path: string) => {
+    readdir: async (path: string) => {
       const normalized = normalizePath(path);
       const entry = files.get(normalized);
 
@@ -248,7 +251,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(entries);
     },
 
-    renameFile: (oldPath: string, newPath: string) => {
+    renameFile: async (oldPath: string, newPath: string) => {
       const normalizedOld = normalizePath(oldPath);
       const normalizedNew = normalizePath(newPath);
 

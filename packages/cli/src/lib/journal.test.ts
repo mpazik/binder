@@ -26,10 +26,10 @@ describe("journal", () => {
   const path = `${root}/test-log.txt`;
 
   beforeEach(async () => {
-    fs.rm(root, { recursive: true, force: true });
-    fs.mkdir(root, { recursive: true });
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.mkdir(root, { recursive: true });
     throwIfError(
-      logTransactions(fs, path, [
+      await logTransactions(fs, path, [
         mockTransactionInit,
         mockTransactionUpdate,
         mockTransaction3,
@@ -112,9 +112,9 @@ describe("journal", () => {
       options?: { verifyIntegrity?: boolean },
     ) => {
       if (typeof txs === "string") {
-        fs.writeFile(verifyPath, txs);
+        await fs.writeFile(verifyPath, txs);
       } else if (txs) {
-        throwIfError(logTransactions(fs, verifyPath, txs));
+        throwIfError(await logTransactions(fs, verifyPath, txs));
       }
 
       const result = await verifyLog(fs, verifyPath, options);
@@ -240,7 +240,9 @@ describe("journal", () => {
           previous: badHash1,
         },
       ];
-      throwIfError(logTransactions(fs, rehashPath, transactionsWithBadHashes));
+      throwIfError(
+        await logTransactions(fs, rehashPath, transactionsWithBadHashes),
+      );
 
       const result = await rehashLog(fs, rehashPath);
 

@@ -2,7 +2,7 @@ import { join } from "path";
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
-import { isErr, isOk, ok, tryCatch } from "@binder/utils";
+import { isErr, isOk, ok, type ResultAsync, tryCatch } from "@binder/utils";
 import {
   bootstrapWithDbWrite,
   type CommandHandlerWithDbWrite,
@@ -32,11 +32,15 @@ const getAuthorNameFromGit = async (): Promise<string | undefined> => {
   if (isOk(gitResult)) return gitResult.data ?? undefined;
 };
 
-const isDirectoryEmpty = (fs: FileSystem, path: string): boolean => {
-  if (!fs.exists(path)) return true;
-  const filesResult = fs.readdir(path);
-  if (isErr(filesResult)) return false;
-  return filesResult.data.length === 0;
+const isDirectoryEmpty = async (
+  fs: FileSystem,
+  path: string,
+): ResultAsync<boolean> => {
+  const exists = await fs.exists(path);
+  if (!exists) return ok(true);
+  const filesResult = await fs.readdir(path);
+  if (isErr(filesResult)) return filesResult;
+  return ok(filesResult.data.length === 0);
 };
 
 const initSetupHandler = async (args: {
@@ -46,7 +50,7 @@ const initSetupHandler = async (args: {
   const currentDir = process.cwd();
   const fs = createRealFileSystem();
 
-  const existingRootResult = findBinderRoot(fs, currentDir);
+  const existingRootResult = await findBinderRoot(fs, currentDir);
   if (isErr(existingRootResult)) {
     ui.error(
       `Failed to check for existing workspace: ${existingRootResult.error.message}`,
@@ -83,7 +87,13 @@ const initSetupHandler = async (args: {
       docsPath = input.trim() || DEFAULT_DOCS_PATH;
 
       const fullPath = join(currentDir, docsPath);
-      if (isDirectoryEmpty(fs, fullPath)) break;
+      const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
+      if (isErr(isEmptyResult)) {
+        ui.error(
+          `Failed to read directory status: ${isEmptyResult.error.message}`,
+        );
+      }
+      if (isEmptyResult) break;
 
       ui.error(
         `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
@@ -105,7 +115,7 @@ const initSetupHandler = async (args: {
   };
 
   const binderDirPath = join(currentDir, BINDER_DIR);
-  const mkdirResult = fs.mkdir(binderDirPath, { recursive: true });
+  const mkdirResult = await fs.mkdir(binderDirPath, { recursive: true });
   if (isErr(mkdirResult)) {
     ui.error(
       `Failed to create .binder directory: ${mkdirResult.error.message}`,
@@ -120,7 +130,7 @@ const initSetupHandler = async (args: {
     defaultStringType: "PLAIN",
   });
 
-  const writeConfigResult = fs.writeFile(configPath, configYaml);
+  const writeConfigResult = await fs.writeFile(configPath, configYaml);
 
   if (isErr(writeConfigResult)) {
     ui.error(`Failed to write config file: ${writeConfigResult.error.message}`);
@@ -128,7 +138,10 @@ const initSetupHandler = async (args: {
   }
 
   const gitignorePath = join(binderDirPath, ".gitignore");
-  const writeGitignoreResult = fs.writeFile(gitignorePath, GITIGNORE_CONTENT);
+  const writeGitignoreResult = await fs.writeFile(
+    gitignorePath,
+    GITIGNORE_CONTENT,
+  );
 
   if (isErr(writeGitignoreResult)) {
     ui.error(
@@ -139,8 +152,8 @@ const initSetupHandler = async (args: {
 
   if (docsPath !== ".") {
     const docsDirPath = join(currentDir, docsPath);
-    if (!fs.exists(docsDirPath)) {
-      const mkdirDocsResult = fs.mkdir(docsDirPath, { recursive: true });
+    if (!(await fs.exists(docsDirPath))) {
+      const mkdirDocsResult = await fs.mkdir(docsDirPath, { recursive: true });
 
       if (isErr(mkdirDocsResult)) {
         ui.error(
@@ -164,7 +177,7 @@ const initSchemaHandler: CommandHandlerWithDbWrite = async ({
   if (isErr(schemaResult)) return schemaResult;
 
   if (config.paths.docs !== config.paths.root) {
-    const mkdirResult = fs.mkdir(config.paths.docs, { recursive: true });
+    const mkdirResult = await fs.mkdir(config.paths.docs, { recursive: true });
     if (isErr(mkdirResult)) {
       ui.error(`Failed to create docs directory: ${mkdirResult.error.message}`);
       return mkdirResult;

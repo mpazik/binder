@@ -1,15 +1,4 @@
-import {
-  appendFileSync,
-  existsSync,
-  ftruncateSync,
-  mkdirSync,
-  openSync,
-  closeSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "fs";
+import { mkdir, readdir, rename, rm, truncate, access } from "fs/promises";
 import { type Result, type ResultAsync, tryCatch } from "@binder/utils";
 
 export type FileStat = {
@@ -23,95 +12,85 @@ export type DirEntry = {
 };
 
 export type FileSystem = {
-  exists: (path: string) => boolean;
+  exists: (path: string) => Promise<boolean>;
   readFile: (path: string) => ResultAsync<string>;
-  writeFile: (path: string, content: string) => Result<void>;
-  appendFile: (path: string, content: string) => Result<void>;
-  stat: (path: string) => ResultAsync<FileStat>;
+  writeFile: (path: string, content: string) => ResultAsync<void>;
+  appendFile: (path: string, content: string) => ResultAsync<void>;
+  stat: (path: string) => Result<FileStat>;
   slice: (path: string, start: number, end: number) => ResultAsync<ArrayBuffer>;
   truncate: (path: string, size: number) => ResultAsync<void>;
-  mkdir: (path: string, options?: { recursive?: boolean }) => Result<void>;
+  mkdir: (path: string, options?: { recursive?: boolean }) => ResultAsync<void>;
   rm: (
     path: string,
     options?: { recursive?: boolean; force?: boolean },
-  ) => Result<void>;
-  readdir: (path: string) => Result<DirEntry[]>;
-  renameFile: (oldPath: string, newPath: string) => Result<void>;
+  ) => ResultAsync<void>;
+  readdir: (path: string) => ResultAsync<DirEntry[]>;
+  renameFile: (oldPath: string, newPath: string) => ResultAsync<void>;
 };
 
 export const createRealFileSystem = (): FileSystem => {
   return {
-    exists: (path: string) => existsSync(path),
+    exists: async (path: string) => {
+      // apparently checking is usser has access is a correct way that also does directory check
+      // eslint-disable-next-line no-restricted-syntax
+      try {
+        await access(path);
+        return true;
+      } catch {
+        return false;
+      }
+    },
 
-    readFile: async (path: string) => {
-      return tryCatch(async () => {
+    readFile: async (path: string) =>
+      tryCatch(async () => await Bun.file(path).text()),
+
+    writeFile: async (path: string, content: string) =>
+      tryCatch(async () => {
+        await Bun.write(path, content);
+      }),
+
+    appendFile: async (path: string, content: string) =>
+      tryCatch(async () => {
         const file = Bun.file(path);
-        return await file.text();
-      });
-    },
+        const existingContent = (await file.exists()) ? await file.text() : "";
+        await Bun.write(path, existingContent + content);
+      }),
 
-    writeFile: (path: string, content: string) => {
-      return tryCatch(() => {
-        writeFileSync(path, content, "utf-8");
-      });
-    },
-
-    appendFile: (path: string, content: string) => {
-      return tryCatch(() => {
-        appendFileSync(path, content, "utf-8");
-      });
-    },
-
-    stat: async (path: string) => {
-      return tryCatch(async () => {
+    stat: (path: string) =>
+      tryCatch(() => {
         const file = Bun.file(path);
-        const stats = await file.stat();
-        return { size: stats.size };
-      });
-    },
+        return { size: file.size };
+      }),
 
-    slice: async (path: string, start: number, end: number) => {
-      return tryCatch(async () => {
-        const file = Bun.file(path);
-        return await file.slice(start, end).arrayBuffer();
-      });
-    },
+    slice: async (path: string, start: number, end: number) =>
+      tryCatch(
+        async () => await Bun.file(path).slice(start, end).arrayBuffer(),
+      ),
 
-    truncate: async (path: string, size: number) => {
-      return tryCatch(() => {
-        const fd = openSync(path, "r+");
-        ftruncateSync(fd, size);
-        closeSync(fd);
-      });
-    },
+    truncate: async (path: string, size: number) =>
+      tryCatch(() => truncate(path, size)),
 
-    mkdir: (path: string, options?: { recursive?: boolean }) => {
-      return tryCatch(() => {
-        mkdirSync(path, options);
-      });
-    },
+    mkdir: async (path: string, options?: { recursive?: boolean }) =>
+      tryCatch(async () => {
+        await mkdir(path, options);
+      }),
 
-    rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => {
-      return tryCatch(() => {
-        rmSync(path, options);
-      });
-    },
+    rm: async (
+      path: string,
+      options?: { recursive?: boolean; force?: boolean },
+    ) => tryCatch(async () => await rm(path, options)),
 
-    readdir: (path: string) => {
-      return tryCatch(() => {
-        const entries = readdirSync(path, { withFileTypes: true });
+    readdir: async (path: string) =>
+      tryCatch(async () => {
+        const entries = await readdir(path, { withFileTypes: true });
         return entries.map((entry) => ({
           name: entry.name,
           isFile: entry.isFile(),
           isDirectory: entry.isDirectory(),
         }));
-      });
-    },
+      }),
 
-    renameFile: (oldPath: string, newPath: string) => {
-      return tryCatch(() => {
-        renameSync(oldPath, newPath);
-      });
-    },
+    renameFile: async (oldPath: string, newPath: string) =>
+      tryCatch(async () => await rename(oldPath, newPath)),
   };
 };

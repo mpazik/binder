@@ -12,23 +12,23 @@ const LOCK_PATH = join(ROOT_DIR, LOCK_FILE);
 describe("workspace lock", () => {
   const fs = createInMemoryFileSystem();
 
-  beforeEach(() => {
-    fs.rm(ROOT_DIR, { recursive: true, force: true });
-    fs.mkdir(ROOT_DIR, { recursive: true });
+  beforeEach(async () => {
+    await fs.rm(ROOT_DIR, { recursive: true, force: true });
+    await fs.mkdir(ROOT_DIR, { recursive: true });
   });
 
-  afterEach(() => {
-    fs.rm(ROOT_DIR, { recursive: true, force: true });
+  afterEach(async () => {
+    await fs.rm(ROOT_DIR, { recursive: true, force: true });
   });
 
   it("acquires and releases lock successfully", async () => {
     const lockResult = await acquireLock(fs, ROOT_DIR);
     expect(lockResult).toBeOk();
 
-    expect(fs.exists(LOCK_PATH)).toBe(true);
+    expect(await fs.exists(LOCK_PATH)).toBe(true);
 
-    expect(releaseLock(fs, ROOT_DIR)).toBeOk();
-    expect(fs.exists(LOCK_PATH)).toBe(false);
+    expect(await releaseLock(fs, ROOT_DIR)).toBeOk();
+    expect(await fs.exists(LOCK_PATH)).toBe(false);
   });
 
   it("fails to acquire lock when already held", async () => {
@@ -40,7 +40,7 @@ describe("workspace lock", () => {
   it("can acquire lock after release", async () => {
     expect(await acquireLock(fs, ROOT_DIR)).toBeOk();
 
-    expect(releaseLock(fs, ROOT_DIR)).toBeOk();
+    expect(await releaseLock(fs, ROOT_DIR)).toBeOk();
 
     expect(await acquireLock(fs, ROOT_DIR)).toBeOk();
   });
@@ -58,9 +58,9 @@ describe("workspace lock", () => {
   it("handles multiple release calls gracefully", async () => {
     expect(await acquireLock(fs, ROOT_DIR)).toBeOk();
 
-    expect(releaseLock(fs, ROOT_DIR)).toBeOk();
-    expect(releaseLock(fs, ROOT_DIR)).toBeOk();
-    expect(releaseLock(fs, ROOT_DIR)).toBeOk();
+    expect(await releaseLock(fs, ROOT_DIR)).toBeOk();
+    expect(await releaseLock(fs, ROOT_DIR)).toBeOk();
+    expect(await releaseLock(fs, ROOT_DIR)).toBeOk();
   });
 
   it("cleans lock from dead process", async () => {
@@ -68,9 +68,9 @@ describe("workspace lock", () => {
       pid: 999999,
       timestamp: Date.now(),
     };
-    fs.writeFile(LOCK_PATH, JSON.stringify(staleLockData));
+    await fs.writeFile(LOCK_PATH, JSON.stringify(staleLockData));
 
     expect(await acquireLock(fs, ROOT_DIR)).toBeOk();
-    expect(fs.exists(LOCK_PATH)).toBe(true);
+    expect(await fs.exists(LOCK_PATH)).toBe(true);
   });
 });

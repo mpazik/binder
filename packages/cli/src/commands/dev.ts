@@ -26,7 +26,7 @@ export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
   const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
   const backupPath = join(binderPath, `${TRANSACTION_LOG_FILE}.bac`);
 
-  if (!fs.exists(transactionLogPath))
+  if (!(await fs.exists(transactionLogPath)))
     return err(
       createError("no-transaction-log", "No transaction log to backup", {
         path: transactionLogPath,
@@ -47,7 +47,7 @@ export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
   }
 
   let renamedBackup: string | null = null;
-  if (fs.exists(backupPath)) {
+  if (await fs.exists(backupPath)) {
     const timestampedBackup = join(
       binderPath,
       `${TRANSACTION_LOG_FILE}.${getTimestampForFileName()}.bac`,
@@ -106,7 +106,7 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
   const backupPath = join(binderPath, `${TRANSACTION_LOG_FILE}.bac`);
   const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
 
-  if (!fs.exists(backupPath))
+  if (!(await fs.exists(backupPath)))
     return err(
       createError(
         "backup-not-found",
@@ -163,8 +163,8 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
 
   for (const fileName of filesToRemove) {
     const filePath = join(binderPath, fileName);
-    if (fs.exists(filePath)) {
-      const removeResult = fs.rm(filePath, { force: true });
+    if (await fs.exists(filePath)) {
+      const removeResult = await fs.rm(filePath, { force: true });
       if (isErr(removeResult)) {
         log.warn("Failed to remove file during reset", {
           path: filePath,

@@ -132,9 +132,9 @@ describe("synchronizer", () => {
   - path: "tasks/{key}.md"
     query: "type=Task"`;
 
-      throwIfError(fs.mkdir(config.paths.binder, { recursive: true }));
+      throwIfError(await fs.mkdir(config.paths.binder, { recursive: true }));
       throwIfError(
-        fs.writeFile(
+        await fs.writeFile(
           join(config.paths.binder, "navigation.yaml"),
           navigationYaml,
         ),
