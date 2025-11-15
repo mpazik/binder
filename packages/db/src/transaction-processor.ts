@@ -1,7 +1,6 @@
 import {
   createError,
   err,
-  errorToObject,
   isErr,
   newIsoTimestamp,
   ok,
@@ -180,7 +179,6 @@ export const rollbackTransaction = async (
       )
       .orderBy(desc(transactionTable.id))
       .then((rows) => rows),
-    errorToObject,
   );
   if (isErr(transactionsToRevertResult)) return transactionsToRevertResult;
 
@@ -202,7 +200,6 @@ export const rollbackTransaction = async (
         ),
       )
       .then(() => undefined),
-    errorToObject,
   );
   if (isErr(deleteTransactionsResult)) return deleteTransactionsResult;
 

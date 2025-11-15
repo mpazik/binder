@@ -4,7 +4,6 @@ import type { Argv } from "yargs";
 import {
   createError,
   err,
-  errorToObject,
   getTimestampForFileName,
   isErr,
   ok,
@@ -70,7 +69,7 @@ export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
 
   const copyResult = await tryCatch(async () => {
     await Bun.write(backupPath, Bun.file(transactionLogPath));
-  }, errorToObject);
+  });
 
   if (isErr(copyResult))
     return err(
@@ -149,7 +148,7 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
 
   const copyResult = await tryCatch(async () => {
     await Bun.write(transactionLogPath, Bun.file(backupPath));
-  }, errorToObject);
+  });
 
   if (isErr(copyResult))
     return err(

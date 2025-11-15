@@ -1,8 +1,8 @@
 import {
   type ErrorObject,
+  errorToObject,
   isErrorObject,
   reportErrorObject,
-  serializeErrorData,
 } from "./error.ts";
 
 export type Ok<T> = {
@@ -28,42 +28,47 @@ export const isErr = <T, E>(result: Result<T, E>): result is Err<E> => {
 
 export type ResultAsync<T, E = ErrorObject> = Promise<Result<T, E>>;
 
-export function tryCatch<T, E = ErrorObject>(
+export function tryCatch<T, E>(
   promise: Promise<T>,
-  mapError?: (err: unknown) => E,
+  mapError: (err: unknown) => E,
 ): ResultAsync<T, E>;
-export function tryCatch<T, E = ErrorObject>(
+export function tryCatch<T, E>(
   fn: () => Promise<T>,
-  mapError?: (err: unknown) => E,
+  mapError: (err: unknown) => E,
 ): ResultAsync<T, E>;
-export function tryCatch<T, E = ErrorObject>(
+export function tryCatch<T, E>(
   fn: () => T,
-  mapError?: (err: unknown) => E,
+  mapError: (err: unknown) => E,
 ): Result<T, E>;
+export function tryCatch<T>(
+  promise: Promise<T>,
+  mapError?: (err: unknown) => ErrorObject,
+): ResultAsync<T>;
+export function tryCatch<T>(
+  fn: () => Promise<T>,
+  mapError?: (err: unknown) => ErrorObject,
+): ResultAsync<T>;
+export function tryCatch<T>(
+  fn: () => T,
+  mapError?: (err: unknown) => ErrorObject,
+): Result<T>;
 export function tryCatch<T, E = ErrorObject>(
   fnOrPromise: Promise<T> | (() => T) | (() => Promise<T>),
   mapError?: (err: unknown) => E,
 ): Result<T, E> | ResultAsync<T, E> {
+  mapError = mapError ?? (errorToObject as (err: unknown) => E);
   if (fnOrPromise instanceof Promise) {
-    return fnOrPromise
-      .then(ok)
-      .catch((error) =>
-        err(mapError ? mapError(error) : (serializeErrorData(error) as E)),
-      );
+    return fnOrPromise.then(ok).catch((error) => err(mapError(error)));
   }
 
   // eslint-disable-next-line no-restricted-syntax
   try {
     const result = fnOrPromise();
     return result instanceof Promise
-      ? result
-          .then(ok)
-          .catch((error) =>
-            err(mapError ? mapError(error) : (serializeErrorData(error) as E)),
-          )
+      ? result.then(ok).catch((error) => err(mapError(error)))
       : ok(result);
   } catch (error) {
-    return err(mapError ? mapError(error) : (serializeErrorData(error) as E));
+    return err(mapError(error));
   }
 }
 

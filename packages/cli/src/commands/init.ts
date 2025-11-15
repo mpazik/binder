@@ -2,7 +2,7 @@ import { join } from "path";
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
-import { errorToObject, isErr, isOk, ok, tryCatch } from "@binder/utils";
+import { isErr, isOk, ok, tryCatch } from "@binder/utils";
 import {
   bootstrapWithDbWrite,
   type CommandHandlerWithDbWrite,
@@ -27,7 +27,7 @@ const getAuthorNameFromGit = async (): Promise<string | undefined> => {
   const gitResult = await tryCatch(async () => {
     const result = await $`git config user.name`.text();
     return result.trim();
-  }, errorToObject);
+  });
 
   if (isOk(gitResult)) return gitResult.data ?? undefined;
 };

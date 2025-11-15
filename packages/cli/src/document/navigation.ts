@@ -12,7 +12,6 @@ import {
   createError,
   err,
   type ErrorObject,
-  errorToObject,
   isErr,
   ok,
   type Result,
@@ -64,9 +63,8 @@ export const loadNavigation = async (
   const fileResult = await fs.readFile(navigationPath);
   if (isErr(fileResult)) return fileResult;
 
-  const parseResult = tryCatch(
-    () => NavigationConfigSchema.parse(YAML.parse(fileResult.data)),
-    errorToObject,
+  const parseResult = tryCatch(() =>
+    NavigationConfigSchema.parse(YAML.parse(fileResult.data)),
   );
   if (isErr(parseResult)) return parseResult;
 

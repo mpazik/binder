@@ -2,7 +2,6 @@ import { join } from "path";
 import {
   createError,
   err,
-  errorToObject,
   isErr,
   ok,
   type Result,
@@ -24,7 +23,7 @@ const isProcessRunning = (pid: number): boolean => {
   const result = tryCatch(() => {
     process.kill(pid, 0); // it is not a real kill, just check if process is running
     return true;
-  }, errorToObject);
+  });
   return !isErr(result);
 };
 
@@ -38,7 +37,7 @@ const isLockStale = async (
   const parseResult = tryCatch(() => {
     const data = JSON.parse(readResult.data) as LockData;
     return !isProcessRunning(data.pid);
-  }, errorToObject);
+  });
 
   if (isErr(parseResult)) return true;
   return parseResult.data;

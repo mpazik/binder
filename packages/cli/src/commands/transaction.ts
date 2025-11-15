@@ -3,7 +3,6 @@ import type { Argv } from "yargs";
 import {
   createError,
   err,
-  errorToObject,
   isErr,
   ok,
   type ResultAsync,
@@ -61,7 +60,7 @@ export const loadTransactionFromFile = async (
     const bunFile = Bun.file(path);
     const text = await bunFile.text();
     return YAML.parse(text);
-  }, errorToObject);
+  });
 
   if (isErr(fileResult))
     return err(
@@ -78,9 +77,8 @@ export const loadTransactionFromFile = async (
     configurations: transformToArray(rawData.configurations),
   };
 
-  const validationResult = tryCatch(
-    () => TransactionInput.parse(transactionInput),
-    errorToObject,
+  const validationResult = tryCatch(() =>
+    TransactionInput.parse(transactionInput),
   );
 
   if (isErr(validationResult))

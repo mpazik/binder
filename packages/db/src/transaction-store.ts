@@ -1,9 +1,4 @@
-import {
-  assertNotEmpty,
-  errorToObject,
-  type ResultAsync,
-  tryCatch,
-} from "@binder/utils";
+import { assertNotEmpty, type ResultAsync, tryCatch } from "@binder/utils";
 import { desc, eq } from "drizzle-orm";
 import {
   GENESIS_VERSION,
@@ -34,7 +29,6 @@ export const getVersion = async (
         }
         return result[0];
       }),
-    errorToObject,
   );
 };
 
@@ -65,7 +59,6 @@ export const fetchTransaction = async (
           createdAt: row.createdAt,
         };
       }),
-    errorToObject,
   );
 };
 
@@ -85,6 +78,5 @@ export const saveTransaction = async (
         fields: {},
         createdAt: transaction.createdAt,
       }),
-    errorToObject,
   );
 };

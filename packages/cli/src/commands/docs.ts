@@ -1,5 +1,5 @@
 import type { Argv } from "yargs";
-import { errorToObject, isErr, ok, tryCatch } from "@binder/utils";
+import { isErr, ok, tryCatch } from "@binder/utils";
 import {
   bootstrapWithDbWrite,
   type CommandHandlerWithDbWrite,
@@ -37,7 +37,7 @@ export const docsSyncHandler: CommandHandlerWithDbWrite<{
       return null;
     }
     return bunFile.text();
-  }, errorToObject);
+  });
 
   if (isErr(fileResult)) return fileResult;
 

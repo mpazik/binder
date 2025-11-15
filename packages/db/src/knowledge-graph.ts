@@ -1,7 +1,6 @@
 import {
   createError,
   err,
-  errorToObject,
   groupByToObject,
   isErr,
   ok,
@@ -89,7 +88,6 @@ export const openKnowledgeGraph = (
             or(inArray(configTable.type, [...fieldNodeTypes, typeConfigType])),
           )
           .then((rows) => rows.map((row) => dbModelToEntity(row))),
-        errorToObject,
       );
 
       if (isErr(configsResult)) return configsResult;
@@ -210,7 +208,6 @@ export const openKnowledgeGraph = (
             .orderBy(orderClause)
             .limit(limit + 1)
             .then((rows) => rows),
-          errorToObject,
         );
         if (isErr(results)) return results;
 
@@ -235,7 +232,6 @@ export const openKnowledgeGraph = (
               .where(and(filterClause, sql`${nodeTable.id} < ${firstItem.id}`))
               .limit(1)
               .then((rows) => rows),
-            errorToObject,
           );
           if (isErr(prevCheck)) return prevCheck;
           hasPrevious = prevCheck.data.length > 0;

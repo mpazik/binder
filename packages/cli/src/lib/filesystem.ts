@@ -10,12 +10,7 @@ import {
   rmSync,
   writeFileSync,
 } from "fs";
-import {
-  errorToObject,
-  type Result,
-  type ResultAsync,
-  tryCatch,
-} from "@binder/utils";
+import { type Result, type ResultAsync, tryCatch } from "@binder/utils";
 
 export type FileStat = {
   size: number;
@@ -52,19 +47,19 @@ export const createRealFileSystem = (): FileSystem => {
       return tryCatch(async () => {
         const file = Bun.file(path);
         return await file.text();
-      }, errorToObject);
+      });
     },
 
     writeFile: (path: string, content: string) => {
       return tryCatch(() => {
         writeFileSync(path, content, "utf-8");
-      }, errorToObject);
+      });
     },
 
     appendFile: (path: string, content: string) => {
       return tryCatch(() => {
         appendFileSync(path, content, "utf-8");
-      }, errorToObject);
+      });
     },
 
     stat: async (path: string) => {
@@ -72,14 +67,14 @@ export const createRealFileSystem = (): FileSystem => {
         const file = Bun.file(path);
         const stats = await file.stat();
         return { size: stats.size };
-      }, errorToObject);
+      });
     },
 
     slice: async (path: string, start: number, end: number) => {
       return tryCatch(async () => {
         const file = Bun.file(path);
         return await file.slice(start, end).arrayBuffer();
-      }, errorToObject);
+      });
     },
 
     truncate: async (path: string, size: number) => {
@@ -87,19 +82,19 @@ export const createRealFileSystem = (): FileSystem => {
         const fd = openSync(path, "r+");
         ftruncateSync(fd, size);
         closeSync(fd);
-      }, errorToObject);
+      });
     },
 
     mkdir: (path: string, options?: { recursive?: boolean }) => {
       return tryCatch(() => {
         mkdirSync(path, options);
-      }, errorToObject);
+      });
     },
 
     rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => {
       return tryCatch(() => {
         rmSync(path, options);
-      }, errorToObject);
+      });
     },
 
     readdir: (path: string) => {
@@ -110,13 +105,13 @@ export const createRealFileSystem = (): FileSystem => {
           isFile: entry.isFile(),
           isDirectory: entry.isDirectory(),
         }));
-      }, errorToObject);
+      });
     },
 
     renameFile: (oldPath: string, newPath: string) => {
       return tryCatch(() => {
         renameSync(oldPath, newPath);
-      }, errorToObject);
+      });
     },
   };
 };

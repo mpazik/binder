@@ -144,7 +144,7 @@ export const createUserId = (): UserId => createUid(7, "u") as UserId;
 // ✅ Always
 import { tryCatch, isErr, createError } from "@binder/utils";
 
-const result = await tryCatch(operation(), errorToObject);
+const result = await tryCatch(operation());
 if (isErr(result)) return result;
 
 // ❌ Never

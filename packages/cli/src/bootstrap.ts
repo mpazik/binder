@@ -1,13 +1,7 @@
 import { mkdirSync } from "fs";
 import { join } from "path";
 import * as YAML from "yaml";
-import {
-  errorToObject,
-  isErr,
-  ok,
-  type ResultAsync,
-  tryCatch,
-} from "@binder/utils";
+import { isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
 import {
   type Database,
   type KnowledgeGraph,
@@ -46,16 +40,13 @@ const loadConfig = async (root: string): ResultAsync<Config> => {
     }
     const text = await bunFile.text();
     return YAML.parse(text);
-  }, errorToObject);
+  });
 
   if (isErr(fileResult)) return fileResult;
 
   const rawConfig = fileResult.data ?? {};
 
-  const loadedConfig = tryCatch(
-    () => BinderConfigSchema.parse(rawConfig),
-    errorToObject,
-  );
+  const loadedConfig = tryCatch(() => BinderConfigSchema.parse(rawConfig));
   if (isErr(loadedConfig)) return loadedConfig;
 
   const { docsPath, ...rest } = loadedConfig.data;

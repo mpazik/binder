@@ -1,7 +1,6 @@
 import {
   assertDefinedPass,
   assertNotEmpty,
-  errorToObject,
   type JsonObject,
   objectFromKeys,
   ok,
@@ -114,7 +113,6 @@ export const fetchEntityFieldset = async <N extends NamespaceEditable>(
           return parsedFields[key];
         }) as Fieldset;
       }),
-    errorToObject,
   );
 };
 
@@ -134,7 +132,6 @@ export const fetchEntity = async <N extends NamespaceEditable>(
         assertNotEmpty(result);
         return dbModelToEntity(result[0]);
       }),
-    errorToObject,
   );
 };
 
@@ -159,7 +156,6 @@ export const updateEntity = async <N extends NamespaceEditable>(
         .update(table)
         .set(updateObj as any)
         .where(entityRefClause(namespace, ref)),
-    errorToObject,
   );
 };
 
@@ -173,7 +169,6 @@ export const createEntity = async <N extends NamespaceEditable>(
       await tx
         .insert(editableEntityTables[namespace])
         .values(entityToDbModel(patch) as any),
-    errorToObject,
   );
 };
 
@@ -185,7 +180,6 @@ export const deleteEntity = async <N extends Namespace>(
   const table = entityTables[namespace];
   return tryCatch(
     async () => await tx.delete(table).where(entityRefClause(namespace, ref)),
-    errorToObject,
   );
 };
 
@@ -202,7 +196,6 @@ export const entityExists = async <N extends Namespace>(
       .where(entityRefClause(namespace, ref))
       .limit(1)
       .then((result) => result.length > 0),
-    errorToObject,
   );
 };
 
@@ -251,7 +244,6 @@ export const resolveEntityRefs = async (
           ).uid;
         }),
       ),
-    errorToObject,
   );
 };
 
@@ -270,6 +262,5 @@ export const getLastEntityId = async <N extends NamespaceEditable>(
         if (result.length === 0) return GENESIS_ENTITY_ID;
         return result[0].id;
       }),
-    errorToObject,
   ) as ResultAsync<EntityNsId[N]>;
 };

@@ -6,7 +6,6 @@ import {
   assertNotEmpty,
   createError,
   err,
-  errorToObject,
   isErr,
   ok,
   type Result,
@@ -311,7 +310,6 @@ const validateUniquenessConstraints = async <N extends NamespaceEditable>(
         )
         .limit(1)
         .then((rows) => rows),
-      errorToObject,
     );
 
     if (isErr(existingResult)) return existingResult;

@@ -1,13 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import type { KnowledgeGraph, NodeUid } from "@binder/db";
-import {
-  errorToObject,
-  isErr,
-  ok,
-  type ResultAsync,
-  tryCatch,
-} from "@binder/utils";
+import { isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import { buildAstDoc } from "./doc-builder.ts";
@@ -65,7 +59,7 @@ export const renderDocs = async (
   const removeResult = tryCatch(() => {
     removeMarkdownFiles(docsPath);
     mkdirSync(docsPath, { recursive: true });
-  }, errorToObject);
+  });
   if (isErr(removeResult)) return removeResult;
 
   const docsResult = await fetchDocumentsWithPath(kg);
@@ -88,7 +82,7 @@ export const renderDocs = async (
     const writeResult = tryCatch(() => {
       mkdirSync(dirname(filePath), { recursive: true });
       writeFileSync(filePath, markdown, "utf-8");
-    }, errorToObject);
+    });
 
     if (isErr(writeResult)) {
       log.error(`Failed to write ${filePath}`, { error: writeResult.error });

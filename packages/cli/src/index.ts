@@ -73,29 +73,9 @@ cli = cli
   })
   .strict();
 
-const result = tryCatch<void, any>(() => cli.parse());
+const result = tryCatch(() => cli.parse());
 if (isErr(result)) {
-  const e = result.error;
-  if (e instanceof Error) {
-    console.error("fatal", {
-      name: e.name,
-      message: e.message,
-      cause: e.cause?.toString(),
-      stack: e.stack,
-    });
-  } else if (e instanceof ResolveMessage) {
-    console.error("fatal", {
-      name: e.name,
-      message: e.message,
-      code: e.code,
-      specifier: e.specifier,
-      referrer: e.referrer,
-      position: e.position,
-      importKind: e.importKind,
-    });
-  } else {
-    console.error("fatal", { error: e });
-  }
+  console.error("fatal", result.error);
   process.exitCode = 1;
 }
 
