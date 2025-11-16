@@ -3,6 +3,7 @@ import { type Result, type ResultAsync, tryCatch } from "@binder/utils";
 
 export type FileStat = {
   size: number;
+  mtime: number;
 };
 
 export type DirEntry = {
@@ -14,6 +15,7 @@ export type DirEntry = {
 export type FileSystem = {
   exists: (path: string) => Promise<boolean>;
   readFile: (path: string) => ResultAsync<string>;
+  readFileStream: (path: string) => AsyncIterable<Uint8Array>;
   writeFile: (path: string, content: string) => ResultAsync<void>;
   appendFile: (path: string, content: string) => ResultAsync<void>;
   stat: (path: string) => Result<FileStat>;
@@ -44,6 +46,8 @@ export const createRealFileSystem = (): FileSystem => {
     readFile: async (path: string) =>
       tryCatch(async () => await Bun.file(path).text()),
 
+    readFileStream: (path: string) => Bun.file(path).stream(),
+
     writeFile: async (path: string, content: string) =>
       tryCatch(async () => {
         await Bun.write(path, content);
@@ -59,7 +63,10 @@ export const createRealFileSystem = (): FileSystem => {
     stat: (path: string) =>
       tryCatch(() => {
         const file = Bun.file(path);
-        return { size: file.size };
+        return {
+          size: file.size,
+          mtime: file.lastModified,
+        };
       }),
 
     slice: async (path: string, start: number, end: number) =>

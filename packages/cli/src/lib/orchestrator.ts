@@ -21,9 +21,10 @@ import {
   type ResultAsync,
 } from "@binder/utils";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
-import type { KnowledgeGraphReadonly } from "../bootstrap.ts";
+import type { Config, KnowledgeGraphReadonly } from "../bootstrap.ts";
 import { renderDocs } from "../document/repository.ts";
 import type { Logger } from "../log.ts";
+import type { DatabaseCli } from "../db";
 import {
   clearLog,
   logTransaction,
@@ -260,50 +261,66 @@ export const redoTransactions = async (
   return ok(originalTransactions);
 };
 
-export const setupKnowledgeGraph = (
-  db: Database,
-  fs: FileSystem,
-  binderPath: string,
-  docsPath: string,
-  log: Logger,
-): KnowledgeGraph => {
+type Services = {
+  db: DatabaseCli;
+  fs: FileSystem;
+  log: Logger;
+  config: Config;
+};
+
+export const setupKnowledgeGraph = (services: Services): KnowledgeGraph => {
+  const {
+    db,
+    fs,
+    log,
+    config: { paths },
+  } = services;
   const knowledgeGraph = openKnowledgeGraph(db, {
     beforeCommit: async (transaction: Transaction) => {
-      const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
+      const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
       const logResult = await logTransaction(
         fs,
         transactionLogPath,
         transaction,
       );
       if (isErr(logResult)) return logResult;
-      const undoLogPath = join(binderPath, UNDO_LOG_FILE);
+      const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
       const clearResult = await clearLog(fs, undoLogPath);
       if (isErr(clearResult)) return clearResult;
       return okVoid;
     },
     afterCommit: async () => {
-      renderDocs(knowledgeGraph, fs, log, docsPath, binderPath).then(
-        (renderResult) => {
-          if (isErr(renderResult)) {
-            log.error("Failed to re-render docs after transaction", {
-              error: renderResult.error,
-            });
-          }
-        },
-      );
+      renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
+        if (isErr(renderResult)) {
+          log.error("Failed to re-render docs after transaction", {
+            error: renderResult.error,
+          });
+        }
+      });
+    },
+    afterRollback: async () => {
+      renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
+        if (isErr(renderResult)) {
+          log.error("Failed to re-render docs after transaction", {
+            error: renderResult.error,
+          });
+        }
+      });
     },
   });
   return knowledgeGraph;
 };
 
 export const squashTransactions = async (
-  fs: FileSystem,
-  db: Database,
-  binderPath: string,
-  docsPath: string,
-  log: Logger,
+  services: Services,
   count: number,
 ): ResultAsync<Transaction> => {
+  const {
+    db,
+    fs,
+    config: { paths },
+  } = services;
+
   if (count < 2)
     return err(
       createError(
@@ -331,7 +348,7 @@ export const squashTransactions = async (
       ),
     );
 
-  const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
+  const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
   const logResult = await readLastTransactions(fs, transactionLogPath, count);
   if (isErr(logResult)) return logResult;
 
@@ -371,13 +388,7 @@ export const squashTransactions = async (
   const rollbackResult = await plainKg.rollback(count, currentId);
   if (isErr(rollbackResult)) return rollbackResult;
 
-  const kgWithCallbacks = setupKnowledgeGraph(
-    db,
-    fs,
-    binderPath,
-    docsPath,
-    log,
-  );
+  const kgWithCallbacks = setupKnowledgeGraph(services);
   const applyResult = await applyTransactions(kgWithCallbacks, [
     squashedTransaction,
   ]);

@@ -8,20 +8,9 @@ import { renderDocs } from "../document/repository.ts";
 import { synchronizeFile } from "../document/synchronizer.ts";
 import { types } from "./types.ts";
 
-export const docsRenderHandler: CommandHandlerWithDbWrite = async ({
-  kg,
-  fs,
-  ui,
-  config,
-  log,
-}) => {
-  const result = await renderDocs(
-    kg,
-    fs,
-    log,
-    config.paths.docs,
-    config.paths.binder,
-  );
+export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
+  const { ui } = context;
+  const result = await renderDocs(context);
   if (isErr(result)) return result;
 
   ui.println("Documentation rendered successfully");

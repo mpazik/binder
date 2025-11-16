@@ -1,5 +1,3 @@
-import { openKnowledgeGraph } from "@binder/db";
-import { getTestDatabase } from "@binder/db/mocks";
 import type {
   Config,
   CommandContext,
@@ -8,6 +6,8 @@ import type {
 import { type Logger } from "./log.ts";
 import * as ui from "./ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
+import { getTestDatabaseCli } from "./db/db.mock.ts";
+import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 
 export const mockConfig: Config = {
   author: "test-user",
@@ -39,18 +39,26 @@ export const mockLog: Logger = {
   }),
 };
 
-export const mockCommandContext: CommandContext = {
-  config: mockConfig,
-  log: mockLog,
-  ui: mockUi,
-  fs: createInMemoryFileSystem(),
-};
-
-export const createMockCommandContextWithDb = (): CommandContextWithDbWrite => {
-  const db = getTestDatabase();
+export const createMockCommandContext = async (): Promise<CommandContext> => {
+  const fs = createInMemoryFileSystem();
+  await fs.mkdir(mockConfig.paths.root);
+  await fs.mkdir(mockConfig.paths.binder);
+  await fs.mkdir(mockConfig.paths.docs);
   return {
-    ...mockCommandContext,
-    db,
-    kg: openKnowledgeGraph(db),
+    config: mockConfig,
+    log: mockLog,
+    ui: mockUi,
+    fs,
   };
 };
+
+export const createMockCommandContextWithDb =
+  async (): Promise<CommandContextWithDbWrite> => {
+    const context = await createMockCommandContext();
+    const db = getTestDatabaseCli();
+    return {
+      ...context,
+      db,
+      kg: setupKnowledgeGraph({ ...context, db }),
+    };
+  };

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import {
-  getTestDatabase,
   mockTransaction3,
   mockTransaction4,
   mockTransactionInit,
@@ -18,12 +17,15 @@ import {
 } from "@binder/db";
 import { throwIfError } from "@binder/utils";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
-import { mockLog } from "../bootstrap.mock.ts";
+import {
+  createMockCommandContextWithDb,
+  mockConfig,
+} from "../bootstrap.mock.ts";
+import type { CommandContextWithDbWrite } from "../bootstrap.ts";
 import {
   applyTransactions,
   redoTransactions,
   repairDbFromLog,
-  setupKnowledgeGraph,
   squashTransactions,
   undoTransactions,
   type VerifySync,
@@ -34,21 +36,22 @@ import {
   readLastTransactions,
   removeLastFromLog,
 } from "./journal.ts";
-import { createInMemoryFileSystem } from "./filesystem.mock.ts";
+import type { FileSystem } from "./filesystem.ts";
 
 describe("orchestrator", () => {
-  const fs = createInMemoryFileSystem();
-  const root = "/test-root";
-  const transactionLogPath = `${root}/${TRANSACTION_LOG_FILE}`;
-  const undoLogPath = `${root}/${UNDO_LOG_FILE}`;
+  const binderPath = mockConfig.paths.binder;
+  const transactionLogPath = `${mockConfig.paths.binder}/${TRANSACTION_LOG_FILE}`;
+  const undoLogPath = `${mockConfig.paths.binder}/${UNDO_LOG_FILE}`;
+  let fs: FileSystem;
   let db: Database;
   let kg: KnowledgeGraph;
+  let context: CommandContextWithDbWrite;
 
   beforeEach(async () => {
-    await fs.rm(root, { recursive: true, force: true });
-    await fs.mkdir(root, { recursive: true });
-    db = getTestDatabase();
-    kg = setupKnowledgeGraph(db, fs, root, "", mockLog);
+    context = await createMockCommandContextWithDb();
+    fs = context.fs;
+    db = context.db;
+    kg = context.kg;
   });
 
   const checkVersion = async (logTxId: TransactionId, kgTxId = logTxId) => {
@@ -71,7 +74,7 @@ describe("orchestrator", () => {
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
       throwIfError(await logTransactions(fs, transactionLogPath, logTxs));
 
-      const result = await verifySync(fs, kg, root);
+      const result = await verifySync(fs, kg, binderPath);
       const sync = throwIfError(result);
       expect(sync).toEqual(expected);
     };
@@ -147,7 +150,7 @@ describe("orchestrator", () => {
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
       throwIfError(await logTransactions(fs, transactionLogPath, logTxs));
 
-      const result = await repairDbFromLog(fs, db, root);
+      const result = await repairDbFromLog(fs, db, binderPath);
       expect(result).toBeOk();
 
       const { dbTransactionsPath } = throwIfError(result);
@@ -241,7 +244,7 @@ describe("orchestrator", () => {
           mockTransactionUpdate,
         ]),
       );
-      throwIfError(await undoTransactions(fs, kg, root, 1));
+      throwIfError(await undoTransactions(fs, kg, binderPath, 1));
 
       const undoLogBefore = throwIfError(
         await readLastTransactions(fs, undoLogPath, 10),
@@ -268,7 +271,7 @@ describe("orchestrator", () => {
         ]),
       );
 
-      const result = await undoTransactions(fs, kg, root, 2);
+      const result = await undoTransactions(fs, kg, binderPath, 2);
 
       expect(result).toBeOk();
       expect(throwIfError(result)).toEqual([
@@ -291,7 +294,7 @@ describe("orchestrator", () => {
     });
 
     it("errors on invalid count", async () => {
-      const resultGenesis = await undoTransactions(fs, kg, root, 1);
+      const resultGenesis = await undoTransactions(fs, kg, binderPath, 1);
       expect(resultGenesis).toBeErr();
       await checkVersion(GENESIS_VERSION.id);
 
@@ -302,7 +305,7 @@ describe("orchestrator", () => {
         ]),
       );
 
-      const resultOverflow = await undoTransactions(fs, kg, root, 5);
+      const resultOverflow = await undoTransactions(fs, kg, binderPath, 5);
       expect(resultOverflow).toBeErr();
       await checkVersion(mockTransactionUpdate.id);
     });
@@ -318,9 +321,9 @@ describe("orchestrator", () => {
           mockTransaction4,
         ]),
       );
-      throwIfError(await undoTransactions(fs, kg, root, 2));
+      throwIfError(await undoTransactions(fs, kg, binderPath, 2));
 
-      const result = await redoTransactions(fs, kg, root, 2);
+      const result = await redoTransactions(fs, kg, binderPath, 2);
 
       expect(result).toBeOk();
       expect(throwIfError(result)).toEqual([
@@ -348,7 +351,7 @@ describe("orchestrator", () => {
     });
 
     it("errors when insufficient undo history", async () => {
-      const resultEmpty = await redoTransactions(fs, kg, root, 1);
+      const resultEmpty = await redoTransactions(fs, kg, binderPath, 1);
       expect(resultEmpty).toBeErr();
       await checkVersion(GENESIS_VERSION.id);
 
@@ -358,9 +361,9 @@ describe("orchestrator", () => {
           mockTransactionUpdate,
         ]),
       );
-      throwIfError(await undoTransactions(fs, kg, root, 1));
+      throwIfError(await undoTransactions(fs, kg, binderPath, 1));
 
-      const resultOverflow = await redoTransactions(fs, kg, root, 5);
+      const resultOverflow = await redoTransactions(fs, kg, binderPath, 5);
       expect(resultOverflow).toBeErr();
       await checkVersion(mockTransactionInit.id);
     });
@@ -372,10 +375,10 @@ describe("orchestrator", () => {
           mockTransactionUpdate,
         ]),
       );
-      throwIfError(await undoTransactions(fs, kg, root, 1));
+      throwIfError(await undoTransactions(fs, kg, binderPath, 1));
       throwIfError(await applyTransactions(kg, [mockTransaction3]));
 
-      const result = await redoTransactions(fs, kg, root, 1);
+      const result = await redoTransactions(fs, kg, binderPath, 1);
       expect(result).toBeErr();
       await checkVersion(mockTransaction3.id);
     });
@@ -390,9 +393,7 @@ describe("orchestrator", () => {
         ]),
       );
 
-      const squashed = throwIfError(
-        await squashTransactions(fs, db, root, "", mockLog, 2),
-      );
+      const squashed = throwIfError(await squashTransactions(context, 2));
 
       await checkVersion(mockTransactionUpdate.id);
 
@@ -412,9 +413,7 @@ describe("orchestrator", () => {
         ]),
       );
 
-      const squashed = throwIfError(
-        await squashTransactions(fs, db, root, "", mockLog, 3),
-      );
+      const squashed = throwIfError(await squashTransactions(context, 3));
 
       await checkVersion(mockTransactionUpdate.id);
 
@@ -425,14 +424,7 @@ describe("orchestrator", () => {
     });
 
     it("errors on invalid count", async () => {
-      const resultLessThan2 = await squashTransactions(
-        fs,
-        db,
-        root,
-        "",
-        mockLog,
-        1,
-      );
+      const resultLessThan2 = await squashTransactions(context, 1);
       expect(resultLessThan2).toBeErr();
       await checkVersion(GENESIS_VERSION.id);
 
@@ -443,14 +435,7 @@ describe("orchestrator", () => {
         ]),
       );
 
-      const resultOverflow = await squashTransactions(
-        fs,
-        db,
-        root,
-        "",
-        mockLog,
-        5,
-      );
+      const resultOverflow = await squashTransactions(context, 5);
       expect(resultOverflow).toBeErr();
       await checkVersion(mockTransactionUpdate.id);
     });
@@ -465,7 +450,7 @@ describe("orchestrator", () => {
 
       throwIfError(await removeLastFromLog(fs, transactionLogPath, 1));
 
-      const result = await squashTransactions(fs, db, root, "", mockLog, 2);
+      const result = await squashTransactions(context, 2);
       expect(result).toBeErr();
       await checkVersion(mockTransactionInit.id, mockTransactionUpdate.id);
     });

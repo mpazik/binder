@@ -20,7 +20,7 @@ describe("node commands", () => {
   beforeEach(async () => {
     printedData = [];
     context = {
-      ...createMockCommandContextWithDb(),
+      ...(await createMockCommandContextWithDb()),
       ui: {
         ...baseMockUi,
         printData: (data: unknown) => {

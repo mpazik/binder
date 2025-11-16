@@ -12,6 +12,10 @@
     "./mocks": {
       "types": "./src/mocks.ts",
       "default": "./src/mocks.ts"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "default": "./src/schema.ts"
     }
   },
   "scripts": {

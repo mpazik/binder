@@ -1,0 +1,92 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "b8284ec5-1c97-493d-9eb2-e6c782e47b0a",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "cli_snapshot_metadata": {
+      "name": "cli_snapshot_metadata",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tx_id": {
+          "name": "tx_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mtime": {
+          "name": "mtime",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cli_snapshot_metadata_path_unique": {
+          "name": "cli_snapshot_metadata_path_unique",
+          "columns": [
+            "path"
+          ],
+          "isUnique": true
+        },
+        "cli_snapshot_path_idx": {
+          "name": "cli_snapshot_path_idx",
+          "columns": [
+            "path"
+          ],
+          "isUnique": false
+        },
+        "cli_snapshot_tx_idx": {
+          "name": "cli_snapshot_tx_idx",
+          "columns": [
+            "tx_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

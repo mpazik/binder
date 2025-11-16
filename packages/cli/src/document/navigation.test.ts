@@ -7,7 +7,6 @@ import {
   openKnowledgeGraph,
 } from "@binder/db";
 import {
-  getTestDatabase,
   mockNodeSchema,
   mockProjectNode,
   mockTask1Node,
@@ -18,6 +17,8 @@ import {
   createInMemoryFileSystem,
   type MockFileSystem,
 } from "../lib/filesystem.mock.ts";
+import type { DatabaseCli } from "../db";
+import { getTestDatabaseCli } from "../db/db.mock.ts";
 import {
   DEFAULT_DYNAMIC_VIEW,
   extractFieldsFromPath,
@@ -77,13 +78,14 @@ describe("navigation", () => {
   });
 
   describe("renderNavigation", () => {
+    let db: DatabaseCli;
     let kg: KnowledgeGraph;
     let fs: MockFileSystem;
     const docsPath = "/docs";
     const defaultViewAst = parseView(DEFAULT_DYNAMIC_VIEW);
 
     beforeEach(async () => {
-      const db = getTestDatabase();
+      db = getTestDatabaseCli();
       kg = openKnowledgeGraph(db);
       fs = createInMemoryFileSystem();
       throwIfError(await kg.apply(mockTransactionInit));
@@ -94,7 +96,7 @@ describe("navigation", () => {
       files: { path: string; view?: string; data: Fieldset }[],
     ) => {
       const errors = throwIfError(
-        await renderNavigation(kg, fs, docsPath, navigationItems),
+        await renderNavigation(db, kg, fs, docsPath, navigationItems),
       );
       expect(errors).toEqual([]);
 

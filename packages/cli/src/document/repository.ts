@@ -4,6 +4,8 @@ import type { KnowledgeGraph, NodeUid } from "@binder/db";
 import { isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
+import type { DatabaseCli } from "../db";
+import type { Config } from "../bootstrap.ts";
 import { buildAstDoc } from "./doc-builder.ts";
 import { renderAstToMarkdown } from "./markdown.ts";
 import { loadNavigation, renderNavigation } from "./navigation.ts";
@@ -49,16 +51,24 @@ const removeMarkdownFiles = (dir: string): void => {
   }
 };
 
-export const renderDocs = async (
-  kg: KnowledgeGraph,
-  fs: FileSystem,
-  log: Logger,
-  docsPath: string,
-  binderPath: string,
-): ResultAsync<undefined> => {
+export const renderDocs = async (services: {
+  db: DatabaseCli;
+  kg: KnowledgeGraph;
+  fs: FileSystem;
+  log: Logger;
+  config: Config;
+}): ResultAsync<undefined> => {
+  const {
+    db,
+    kg,
+    fs,
+    log,
+    config: { paths },
+  } = services;
+
   const removeResult = tryCatch(() => {
-    removeMarkdownFiles(docsPath);
-    mkdirSync(docsPath, { recursive: true });
+    removeMarkdownFiles(paths.docs);
+    mkdirSync(paths.docs, { recursive: true });
   });
   if (isErr(removeResult)) return removeResult;
 
@@ -77,7 +87,7 @@ export const renderDocs = async (
     }
 
     const markdown = renderAstToMarkdown(astResult.data);
-    const filePath = join(docsPath, doc.path);
+    const filePath = join(paths.docs, doc.path);
 
     const writeResult = tryCatch(() => {
       mkdirSync(dirname(filePath), { recursive: true });
@@ -89,16 +99,17 @@ export const renderDocs = async (
     }
   }
 
-  const navigationResult = await loadNavigation(fs, binderPath);
+  const navigationResult = await loadNavigation(fs, paths.binder);
   if (isErr(navigationResult)) {
     log.error(`Failed to load navigation config`, {
       error: navigationResult.error,
     });
   } else if (navigationResult.data.length > 0) {
     const navResult = await renderNavigation(
+      db,
       kg,
       fs,
-      docsPath,
+      paths.docs,
       navigationResult.data,
     );
     if (isErr(navResult)) {

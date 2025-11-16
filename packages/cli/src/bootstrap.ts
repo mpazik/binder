@@ -2,12 +2,8 @@ import { mkdirSync } from "fs";
 import { join } from "path";
 import * as YAML from "yaml";
 import { isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
-import {
-  type Database,
-  type KnowledgeGraph,
-  openDb,
-  openKnowledgeGraph,
-} from "@binder/db";
+import { type KnowledgeGraph, openKnowledgeGraph } from "@binder/db";
+import { openCliDb, type DatabaseCli } from "./db";
 import {
   BINDER_DIR,
   type BinderConfig,
@@ -21,7 +17,7 @@ import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 import { setupCleanupHandlers, withLock } from "./lib/lock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { createLogger, type Logger } from "./log.ts";
-import { isDev } from "./build-time.ts";
+import { isDevMode } from "./build-time.ts";
 
 export type Config = Omit<BinderConfig, "docsPath"> & {
   paths: {
@@ -80,7 +76,7 @@ export type CommandContextWithDbRead = CommandContext & {
   kg: KnowledgeGraphReadonly;
 };
 export type CommandContextWithDbWrite = CommandContext & {
-  db: Database;
+  db: DatabaseCli;
   kg: KnowledgeGraph;
 };
 
@@ -122,8 +118,8 @@ export const bootstrap = <TArgs extends object = object>(
 
     const log = await createLogger({
       rootDir: configResult.data.paths.binder,
-      printLogs: isDev() ? true : (args.printLogs ?? false),
-      level: args.logLevel ?? (isDev() ? "DEBUG" : "INFO"),
+      printLogs: isDevMode() ? true : (args.printLogs ?? false),
+      level: args.logLevel ?? (isDevMode() ? "DEBUG" : "INFO"),
     });
 
     let result;
@@ -163,7 +159,10 @@ export const bootstrapWithDbRead = <TArgs extends object = object>(
     mkdirSync(binderPath, { recursive: true });
     setupCleanupHandlers(fs, binderPath);
 
-    const dbResult = openDb({ path: join(binderPath, DB_FILE), migrate: true });
+    const dbResult = openCliDb({
+      path: join(binderPath, DB_FILE),
+      migrate: true,
+    });
     if (isErr(dbResult)) {
       log.error("Failed to open database", { error: dbResult.error });
       ui.printError(dbResult.error);
@@ -180,11 +179,12 @@ export const bootstrapWithDbRead = <TArgs extends object = object>(
 export const openDbWrite = <T = void>(
   fs: FileSystem,
   log: Logger,
-  { paths }: Config,
-  handler: (kg: KnowledgeGraph, db: Database) => ResultAsync<T>,
+  config: Config,
+  handler: (kg: KnowledgeGraph, db: DatabaseCli) => ResultAsync<T>,
 ): ResultAsync<T> => {
+  const { paths } = config;
   const dbPath = join(paths.binder, DB_FILE);
-  const dbResult = openDb({ path: dbPath, migrate: true });
+  const dbResult = openCliDb({ path: dbPath, migrate: true });
   if (isErr(dbResult)) {
     log.error("Failed to open database", { error: dbResult.error });
     ui.printError(dbResult.error);
@@ -192,7 +192,7 @@ export const openDbWrite = <T = void>(
   }
 
   const db = dbResult.data;
-  const kg = setupKnowledgeGraph(db, fs, paths.binder, paths.docs, log);
+  const kg = setupKnowledgeGraph({ fs, log, config, db });
 
   return withLock(fs, paths.binder, async () => handler(kg, db));
 };

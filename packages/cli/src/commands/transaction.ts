@@ -177,7 +177,8 @@ export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
 export const transactionSquashHandler: CommandHandlerWithDbWrite<{
   count: number;
   yes?: boolean;
-}> = async ({ db, ui, log, config, fs, args }) => {
+}> = async (context) => {
+  const { ui, log, config, fs, args } = context;
   const transactionLogPath = join(config.paths.binder, "transactions.jsonl");
   const logResult = await readLastTransactions(
     fs,
@@ -212,14 +213,7 @@ export const transactionSquashHandler: CommandHandlerWithDbWrite<{
     }
   }
 
-  const squashResult = await squashTransactions(
-    fs,
-    db,
-    config.paths.binder,
-    config.paths.docs,
-    log,
-    args.count,
-  );
+  const squashResult = await squashTransactions(context, args.count);
   if (isErr(squashResult)) {
     log.error("Failed to squash transactions", {
       error: squashResult.error,

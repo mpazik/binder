@@ -37,10 +37,18 @@ if (!result.success) {
 
 console.log(`✓ Built successfully: dist/index.js`);
 
-const migrationsSource = join(import.meta.dir, "../db/src/migrations");
-const migrationsTarget = join(import.meta.dir, "dist/migrations");
+const coreMigrationsSource = join(import.meta.dir, "../db/src/migrations");
+const coreMigrationsTarget = join(import.meta.dir, "dist/migrations-core");
 
-mkdirSync(migrationsTarget, { recursive: true });
-cpSync(migrationsSource, migrationsTarget, { recursive: true });
+mkdirSync(coreMigrationsTarget, { recursive: true });
+cpSync(coreMigrationsSource, coreMigrationsTarget, { recursive: true });
 
-console.log(`✓ Copied migrations to dist/migrations`);
+console.log(`✓ Copied core migrations to dist/migrations-core`);
+
+const cliMigrationsSource = join(import.meta.dir, "src/db/migrations");
+const cliMigrationsTarget = join(import.meta.dir, "dist/migrations-cli");
+
+mkdirSync(cliMigrationsTarget, { recursive: true });
+cpSync(cliMigrationsSource, cliMigrationsTarget, { recursive: true });
+
+console.log(`✓ Copied CLI migrations to dist/migrations-cli`);

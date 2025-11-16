@@ -36,19 +36,6 @@ export const redoHandler: CommandHandlerWithDbWrite<{
     ui.println("");
   }
 
-  const renderResult = await renderDocs(
-    kg,
-    fs,
-    log,
-    config.paths.docs,
-    config.paths.binder,
-  );
-  if (isErr(renderResult)) {
-    log.error("Failed to re-render docs after redo", {
-      error: renderResult.error,
-    });
-  }
-
   log.info("Redone successfully", { steps: args.steps });
   ui.block(() => {
     ui.success("Redone successfully");

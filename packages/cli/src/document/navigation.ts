@@ -1,10 +1,11 @@
-import { dirname, join } from "path";
+import { join } from "path";
 import { z } from "zod";
 import * as YAML from "yaml";
 import {
   emptyFieldset,
   type Fieldset,
   formatValue,
+  type GraphVersion,
   type KnowledgeGraph,
   type NodeSchema,
 } from "@binder/db";
@@ -24,8 +25,10 @@ import {
   extractFieldNames,
   interpolateFields,
 } from "../utils/interpolate-fields.ts";
+import { saveSnapshot } from "../lib/snapshot.ts";
+import type { DatabaseCli } from "../db";
 import { parseStringQuery } from "./query.ts";
-import { parseView, type ViewAST } from "./markdown.ts";
+import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 
 const NavigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
@@ -113,26 +116,13 @@ export const DEFAULT_DYNAMIC_VIEW = `# {title}
 
 {description}`;
 
-const renderToFile = async (
-  fs: FileSystem,
-  schema: NodeSchema,
-  filePath: string,
-  viewAst: ViewAST,
-  entity: Fieldset,
-): ResultAsync<void> => {
-  const markdownResult = renderView(schema, viewAst, entity);
-  if (isErr(markdownResult)) return markdownResult;
-  const markdown = markdownResult.data;
-  const mkdirResult = await fs.mkdir(dirname(filePath), { recursive: true });
-  if (isErr(mkdirResult)) return mkdirResult;
-  return await fs.writeFile(filePath, markdown);
-};
-
 const renderNavigationItem = async (
+  db: DatabaseCli,
   kg: KnowledgeGraph,
   fs: FileSystem,
   docsPath: string,
   schema: NodeSchema,
+  version: GraphVersion,
   item: NavigationItem,
   parentPath: string,
   parentEntities: Fieldset[],
@@ -167,11 +157,27 @@ const renderNavigationItem = async (
 
     if (!isDirectory) {
       const filePath = join(docsPath, fullPath);
-      const result = await renderToFile(fs, schema, filePath, viewAst, entity);
-      if (isErr(result)) {
+      const renderResult = renderView(schema, viewAst, entity);
+      if (isErr(renderResult)) {
         errors.push({
           path: fullPath,
-          error: result.error,
+          error: renderResult.error,
+          context: { uid: entity.uid },
+        });
+        continue;
+      }
+
+      const saveResult = await saveSnapshot(
+        db,
+        fs,
+        filePath,
+        renderResult.data,
+        version,
+      );
+      if (isErr(saveResult)) {
+        errors.push({
+          path: fullPath,
+          error: saveResult.error,
           context: { uid: entity.uid },
         });
         continue;
@@ -186,10 +192,12 @@ const renderNavigationItem = async (
 
       for (const child of item.children) {
         const result = await renderNavigationItem(
+          db,
           kg,
           fs,
           docsPath,
           schema,
+          version,
           child,
           itemDir,
           childParentEntities,
@@ -209,6 +217,7 @@ const renderNavigationItem = async (
 };
 
 export const renderNavigation = async (
+  db: DatabaseCli,
   kg: KnowledgeGraph,
   fs: FileSystem,
   docsPath: string,
@@ -216,15 +225,18 @@ export const renderNavigation = async (
 ): ResultAsync<NavigationError[]> => {
   const schemaResult = await kg.getNodeSchema();
   if (isErr(schemaResult)) return schemaResult;
-  const schema = schemaResult.data;
+  const versionResult = await kg.version();
+  if (isErr(versionResult)) return versionResult;
 
   const errors: NavigationError[] = [];
   for (const item of navigationItems) {
     const result = await renderNavigationItem(
+      db,
       kg,
       fs,
       docsPath,
-      schema,
+      schemaResult.data,
+      versionResult.data,
       item,
       "",
       [],

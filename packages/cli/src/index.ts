@@ -13,7 +13,7 @@ import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
 import McpCommand from "./commands/mcp.ts";
 import * as UI from "./ui";
-import { BINDER_VERSION, isDev } from "./build-time";
+import { BINDER_VERSION, isDevMode } from "./build-time";
 
 const cancel = new AbortController();
 
@@ -58,7 +58,7 @@ let cli = yargs(hideBin(process.argv))
   .command(RedoCommand)
   .command(McpCommand);
 
-if (isDev()) {
+if (isDevMode()) {
   cli = cli.command(DevCommand);
 }
 

@@ -4,6 +4,7 @@ import type { FileSystem } from "./filesystem.ts";
 type FileEntry = {
   content: string;
   isDirectory: boolean;
+  mtime: number;
 };
 
 export type MockFileSystem = FileSystem & { files: Map<string, FileEntry> };
@@ -67,12 +68,25 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(entry.content);
     },
 
+    readFileStream: (path: string) => {
+      const entry = files.get(normalizePath(path));
+      const encoder = new TextEncoder();
+      return (async function* (): AsyncGenerator<Uint8Array> {
+        if (!entry || entry.isDirectory) return;
+        yield encoder.encode(entry.content);
+      })();
+    },
+
     writeFile: async (path: string, content: string) => {
       const normalized = normalizePath(path);
       const parentCheck = ensureParentExists(normalized);
       if (isErr(parentCheck)) return parentCheck;
 
-      files.set(normalized, { content, isDirectory: false });
+      files.set(normalized, {
+        content,
+        isDirectory: false,
+        mtime: Date.now(),
+      });
       return ok(undefined);
     },
 
@@ -85,7 +99,11 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       }
 
       const newContent = entry ? entry.content + content : content;
-      files.set(normalized, { content: newContent, isDirectory: false });
+      files.set(normalized, {
+        content: newContent,
+        isDirectory: false,
+        mtime: Date.now(),
+      });
       return ok(undefined);
     },
 
@@ -101,7 +119,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
 
       const encoder = new TextEncoder();
       const size = encoder.encode(entry.content).length;
-      return ok({ size });
+      return ok({ size, mtime: entry.mtime });
     },
 
     slice: async (path: string, start: number, end: number) => {
@@ -137,7 +155,11 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       const truncated = fullBuffer.slice(0, size);
       const newContent = decoder.decode(truncated);
 
-      files.set(normalized, { content: newContent, isDirectory: false });
+      files.set(normalized, {
+        content: newContent,
+        isDirectory: false,
+        mtime: Date.now(),
+      });
       return ok(undefined);
     },
 
@@ -160,7 +182,11 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
         for (const part of parts) {
           current += "/" + part;
           if (!files.has(current)) {
-            files.set(current, { content: "", isDirectory: true });
+            files.set(current, {
+              content: "",
+              isDirectory: true,
+              mtime: Date.now(),
+            });
           }
         }
         return ok(undefined);
@@ -169,7 +195,11 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       const parentCheck = ensureParentExists(normalized);
       if (isErr(parentCheck)) return parentCheck;
 
-      files.set(normalized, { content: "", isDirectory: true });
+      files.set(normalized, {
+        content: "",
+        isDirectory: true,
+        mtime: Date.now(),
+      });
       return ok(undefined);
     },
 

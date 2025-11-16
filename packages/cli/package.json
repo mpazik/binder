@@ -16,7 +16,9 @@
     "lint": "bun eslint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "check": "bun lint && bun format && bun typecheck && bun test"
+    "check": "bun lint && bun format && bun typecheck && bun test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@binder/db": "workspace:*",
@@ -24,6 +26,8 @@
     "@modelcontextprotocol/sdk": "^1.22.0",
     "@types/mdast": "^4.0.4",
     "@types/yargs": "^17.0.33",
+    "drizzle-kit": "^0.31.5",
+    "drizzle-orm": "^0.44.5",
     "handlebars": "^4.7.8",
     "mdast": "^3.0.0",
     "mdast-util-directive": "^3.1.0",
