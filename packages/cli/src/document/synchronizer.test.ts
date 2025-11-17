@@ -9,13 +9,13 @@ import { BINDER_DIR } from "../config.ts";
 import type { Config } from "../bootstrap.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import { createInMemoryFileSystem } from "../lib/filesystem.mock.ts";
+import { diffNodeTrees } from "../utils/node-diff.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
   mockCoreTransactionInputForDocs,
   mockDocumentTransactionInput,
 } from "./document.mock.ts";
 import { parseFile, synchronizeFile } from "./synchronizer.ts";
-import { diffNodeTrees } from "./tree-diff.ts";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 

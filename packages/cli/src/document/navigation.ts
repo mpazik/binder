@@ -27,7 +27,7 @@ import {
 } from "../utils/interpolate-fields.ts";
 import { saveSnapshot } from "../lib/snapshot.ts";
 import type { DatabaseCli } from "../db";
-import { parseStringQuery } from "./query.ts";
+import { parseStringQuery } from "../utils/query.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 

@@ -9,9 +9,9 @@ import type {
 import { createError, err, isErr, ok, type ResultAsync } from "@binder/utils";
 import type { Config } from "../bootstrap.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
+import { diffNodeTrees } from "../utils/node-diff.ts";
 import { parseMarkdown, parseView } from "./markdown.ts";
 import { deconstructAstDocument, fetchDocumentNodes } from "./doc-builder.ts";
-import { diffNodeTrees } from "./tree-diff.ts";
 import { extractFields } from "./view.ts";
 import {
   DEFAULT_DYNAMIC_VIEW,
@@ -19,7 +19,7 @@ import {
   loadNavigation,
 } from "./navigation.ts";
 
-export { diffNodeTrees } from "./tree-diff.ts";
+export { diffNodeTrees } from "../utils/node-diff.ts";
 
 export const parseFile = async (
   kg: KnowledgeGraph,

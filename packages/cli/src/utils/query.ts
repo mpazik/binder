@@ -1,9 +1,6 @@
 import type { Fieldset, QueryParams } from "@binder/db";
 import { createError, err, isErr, ok, type Result } from "@binder/utils";
-import {
-  extractFieldNames,
-  interpolateFields,
-} from "../utils/interpolate-fields.ts";
+import { extractFieldNames, interpolateFields } from "./interpolate-fields.ts";
 
 export type NavigationContext = Fieldset[];
 

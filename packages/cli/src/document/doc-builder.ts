@@ -25,13 +25,13 @@ import type {
   Text,
 } from "mdast";
 import type { ContainerDirective } from "mdast-util-directive";
+import { parseStringQuery, stringifyQuery } from "../utils/query.ts";
 import {
   type BlockAST,
   parseView,
   type ViewAST,
   parseMarkdown,
 } from "./markdown.ts";
-import { parseStringQuery, stringifyQuery } from "./query.ts";
 import { renderView, extractFields } from "./view.ts";
 
 export const DEFAULT_DATAVIEW_VIEW_STRING =
