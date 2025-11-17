@@ -19,6 +19,7 @@ tools:
   runcli: true
   bash: false
   sqlite: true
+  readgit: true
   "*": false
 ---
 
@@ -88,3 +89,6 @@ Reference: tech-stack.md
 
 ### Database Schema
 !`sqlite3 .binder/binder.db "SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name"`
+
+### Uncommited files
+!`git status`
