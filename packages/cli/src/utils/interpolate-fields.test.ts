@@ -2,7 +2,12 @@ import { describe, it, expect } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import type { Fieldset } from "@binder/db";
-import { extractFieldNames, interpolateFields } from "./interpolate-fields.ts";
+import { resolvePath } from "../document/navigation.ts";
+import {
+  extractFieldNames,
+  extractFieldValues,
+  interpolateFields,
+} from "./interpolate-fields.ts";
 
 describe("interpolateFields", () => {
   const check = (template: string, fieldset: Fieldset, expected: string) => {
@@ -214,4 +219,75 @@ describe("extractFieldNames", () => {
     const result = extractFieldNames("# {title}\n\n**Type:** {type}\n");
     expect(result).toEqual(["title", "type"]);
   });
+});
+
+describe("extractFieldValues", () => {
+  const check = (template: string, data: string, expected: Fieldset) => {
+    const result = throwIfError(extractFieldValues(template, data));
+    expect(result).toEqual(expected);
+  };
+
+  const checkError = (template: string, data: string, errorKey: string) => {
+    const result = extractFieldValues(template, data);
+    expect(result).toBeErrWithKey(errorKey);
+  };
+
+  it("success case - single variable", () => {
+    check("tasks/{title}.md", "tasks/my-task.md", { title: "my-task" });
+  });
+
+  it("success case - two variables", () => {
+    check(
+      "projects/{project}/tasks/{key}.md",
+      "projects/binder/tasks/feature-123.md",
+      { project: "binder", key: "feature-123" },
+    );
+  });
+
+  it("fail if doesn't match", () => {
+    checkError(
+      "tasks/{title}.md",
+      "projects/binder/tasks/feature-123.md",
+      "path_template_mismatch",
+    );
+  });
+
+  it("handles empty value", () => {
+    check("/{key}/something", "//something", { key: "" });
+  });
+
+  it("handles escaping like \\{key\\}/{key}", () => {
+    check("\\{literal\\}/{key}", "{literal}/value", { key: "value" });
+  });
+
+  it("handles multiple escaped braces", () => {
+    check("\\{prefix\\}_{key}_\\{suffix\\}", "{prefix}_my-key_{suffix}", {
+      key: "my-key",
+    });
+  });
+
+  it("handles unclosed bracket in template", () => {
+    checkError("{name", "value", "unclosed-bracket");
+  });
+
+  it("handles extra data at end", () => {
+    checkError(
+      "tasks/{title}.md",
+      "tasks/my-task.md/extra",
+      "path_template_mismatch",
+    );
+  });
+
+  it("handles missing data at end", () => {
+    checkError("tasks/{title}.md", "tasks/my-task", "path_template_mismatch");
+  });
+});
+
+it("round-trips with resolvePath", () => {
+  const item: Fieldset = { project: "binder-cli", title: "My Task" };
+  const template = "projects/{project}/{title}.md";
+  const path = throwIfError(resolvePath(template, item));
+  expect(path).toBe("projects/binder-cli/My Task.md");
+  const result = throwIfError(extractFieldValues(template, path));
+  expect(result).toEqual({ project: "binder-cli", title: "My Task" });
 });

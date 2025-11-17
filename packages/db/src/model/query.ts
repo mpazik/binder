@@ -53,7 +53,7 @@ const IncludesBaseSchema: z.ZodType<any> = z.lazy(() =>
   ),
 );
 
-const IncludesSchema = IncludesBaseSchema;
+export const IncludesSchema = IncludesBaseSchema;
 export type Includes = z.infer<typeof IncludesSchema>;
 
 const PaginationSchema = z.object({

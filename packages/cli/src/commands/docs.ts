@@ -1,11 +1,12 @@
 import type { Argv } from "yargs";
-import { isErr, ok, tryCatch } from "@binder/utils";
+import { isErr, ok } from "@binder/utils";
 import {
   bootstrapWithDbWrite,
   type CommandHandlerWithDbWrite,
 } from "../bootstrap.ts";
 import { renderDocs } from "../document/repository.ts";
 import { synchronizeFile } from "../document/synchronizer.ts";
+import { loadNavigation } from "../document/navigation.ts";
 import { types } from "./types.ts";
 
 export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
@@ -20,26 +21,15 @@ export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
 export const docsSyncHandler: CommandHandlerWithDbWrite<{
   filePath: string;
 }> = async ({ kg, fs, ui, config, args }) => {
-  const fileResult = await tryCatch(async () => {
-    const bunFile = Bun.file(args.filePath);
-    if (!(await bunFile.exists())) {
-      return null;
-    }
-    return bunFile.text();
-  });
-
-  if (isErr(fileResult)) return fileResult;
-
-  if (fileResult.data === null) {
-    ui.error(`File not found: ${args.filePath}`);
-    return ok(undefined);
-  }
+  const navigationResult = await loadNavigation(fs, config.paths.binder);
+  if (isErr(navigationResult)) return navigationResult;
 
   const syncResult = await synchronizeFile(
+    fs,
     kg,
     config,
-    fs,
-    fileResult.data,
+    navigationResult.data,
+    { fields: {}, types: {} },
     args.filePath,
   );
   if (isErr(syncResult)) return syncResult;

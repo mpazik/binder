@@ -1,363 +1,182 @@
-import { join } from "path";
-import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { beforeEach, describe, expect, it } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import { type KnowledgeGraph, openKnowledgeGraph } from "@binder/db";
-import { getTestDatabase, mockTask1Node, mockTask1Uid } from "@binder/db/mocks";
-import { BINDER_DIR } from "../config.ts";
-import type { Config } from "../bootstrap.ts";
-import type { FileSystem } from "../lib/filesystem.ts";
-import { createInMemoryFileSystem } from "../lib/filesystem.mock.ts";
-import { diffNodeTrees } from "../utils/node-diff.ts";
+import { type EntityChangesetInput, type KnowledgeGraph } from "@binder/db";
+import {
+  mockNodeSchema,
+  mockTask1Node,
+  mockTask1Uid,
+  mockTask2Node,
+  mockTask2Uid,
+  mockTaskTypeKey,
+} from "@binder/db/mocks";
+import type { CommandContextWithDbWrite } from "../bootstrap.ts";
+import { createMockCommandContextWithDb } from "../bootstrap.mock.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
   mockCoreTransactionInputForDocs,
   mockDocumentTransactionInput,
 } from "./document.mock.ts";
-import { parseFile, synchronizeFile } from "./synchronizer.ts";
+import { synchronizeFile } from "./synchronizer.ts";
+import { renderYamlEntity, renderYamlList } from "./yaml.ts";
+import { type NavigationItem } from "./navigation.ts";
 
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
-
-describe("synchronizer", () => {
+describe("synchronizeFile", () => {
+  let ctx: CommandContextWithDbWrite;
   let kg: KnowledgeGraph;
-  let fs: FileSystem;
-  const docsPath = join(__dirname, "../../test/data");
-  const config: Config = {
-    author: "test",
-    paths: {
-      root: join(__dirname, "../../test"),
-      binder: join(__dirname, "../../test", BINDER_DIR),
-      docs: docsPath,
+
+  const navigationItems: NavigationItem[] = [
+    {
+      path: "tasks/{key}.md",
+      view: `# {title}
+
+**Status:** {status}
+
+## Description
+
+{description}
+`,
     },
-  };
+    {
+      path: "tasks/{key}.yaml",
+      includes: { title: true, status: true, description: true },
+    },
+    {
+      path: "all-tasks.yaml",
+      query: { filters: { type: "Task" } },
+    },
+  ];
 
   beforeEach(async () => {
-    const db = getTestDatabase();
-    kg = openKnowledgeGraph(db);
-    fs = createInMemoryFileSystem();
+    ctx = await createMockCommandContextWithDb();
+    kg = ctx.kg;
     throwIfError(await kg.update(documentSchemaTransactionInput));
     throwIfError(await kg.update(mockCoreTransactionInputForDocs));
     throwIfError(await kg.update(mockDocumentTransactionInput));
   });
 
-  describe("parseFile", () => {
-    it("parses file and returns file and kg representations", async () => {
-      const filePath = join(config.paths.docs, "document.md");
-      const markdown = await Bun.file(filePath).text();
+  const check = async (
+    filePath: string,
+    content: string,
+    expectedNodes: EntityChangesetInput<"node">[] | null,
+  ) => {
+    const fullPath = join(ctx.config.paths.docs, filePath);
+    throwIfError(await ctx.fs.mkdir(dirname(fullPath), { recursive: true }));
+    throwIfError(await ctx.fs.writeFile(fullPath, content));
+    const result = throwIfError(
+      await synchronizeFile(
+        ctx.fs,
+        kg,
+        ctx.config,
+        navigationItems,
+        mockNodeSchema,
+        fullPath,
+      ),
+    );
+    const expected = expectedNodes
+      ? { author: ctx.config.author, nodes: expectedNodes }
+      : null;
+    expect(result).toEqual(expected);
+  };
 
-      const result = throwIfError(
-        await parseFile(kg, config, fs, markdown, filePath),
-      );
+  describe("markdown task", () => {
+    it("returns null when no changes", async () => {
+      await check(
+        `tasks/${mockTask1Node.key}.md`,
+        `# ${mockTask1Node.title}
 
-      expect(result.file).toEqual({
-        type: "Document",
-        blockContent: [
-          {
-            type: "Section",
-            title: "Simple Markdown Document",
-            blockContent: [
-              {
-                type: "Paragraph",
-                textContent: "This is a simple markdown document.",
-              },
-            ],
-          },
-          {
-            type: "Section",
-            title: "Key Features",
-            blockContent: [
-              {
-                type: "Paragraph",
-                textContent: "Supports:",
-              },
-              {
-                type: "List",
-                blockContent: [
-                  {
-                    type: "ListItem",
-                    textContent: "**Bold** text for emphasis",
-                  },
-                  {
-                    type: "ListItem",
-                    textContent: "_Italic_ text for subtle emphasis",
-                  },
-                  {
-                    type: "ListItem",
-                    textContent: "`Code snippets` for technical content",
-                  },
-                ],
-              },
-              {
-                type: "Dataview",
-                query: { filters: { type: "Task" } },
-                template: "**{title}**: {description}",
-                data: [
-                  {
-                    title: "Implement user authentication",
-                    description:
-                      "Add login and registration functionality with JWT tokens",
-                  },
-                  {
-                    title: "Implement schema generator",
-                    description: "Create a dynamic schema generator",
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            type: "Section",
-            title: "Paragraphs",
-            blockContent: [
-              {
-                type: "Paragraph",
-                textContent:
-                  "Paragraphs separated by blank lines for readability.",
-              },
-              {
-                type: "Paragraph",
-                textContent:
-                  "Inline formatting like bold,\nitalics, code possible.",
-              },
-            ],
-          },
-        ],
-      });
-      expect(result.kg).toMatchObject(result.file);
-    });
-
-    it("parses task from navigation config", async () => {
-      const navigationYaml = `navigation:
-  - path: "tasks/{key}.md"
-    query: "type=Task"`;
-
-      throwIfError(await fs.mkdir(config.paths.binder, { recursive: true }));
-      throwIfError(
-        await fs.writeFile(
-          join(config.paths.binder, "navigation.yaml"),
-          navigationYaml,
-        ),
-      );
-
-      const filePath = join(
-        config.paths.docs,
-        "tasks",
-        "task-implement-user-auth.md",
-      );
-      const markdown = `# ${mockTask1Node.title}
-
-**Type:** ${mockTask1Node.type}
-**Key:** ${mockTask1Node.key}
+**Status:** ${mockTask1Node.status}
 
 ## Description
 
-${mockTask1Node.description}`;
-
-      const result = throwIfError(
-        await parseFile(kg, config, fs, markdown, filePath),
+${mockTask1Node.description}
+`,
+        null,
       );
+    });
 
-      expect(result.file).toEqual({
-        type: "Task",
-        key: mockTask1Node.key,
-        title: mockTask1Node.title,
-        description: mockTask1Node.description,
-      });
+    it("detects field changes", async () => {
+      await check(
+        `tasks/${mockTask1Node.key}.md`,
+        `# Updated Task Title
 
-      expect(result.kg).toMatchObject({
-        uid: mockTask1Node.uid,
-        type: "Task",
-        key: mockTask1Node.key,
-        title: mockTask1Node.title,
-        description: mockTask1Node.description,
-      });
+**Status:** done
+
+## Description
+
+New description text
+`,
+        [
+          {
+            $ref: mockTask1Uid,
+            title: "Updated Task Title",
+            status: "done",
+            description: "New description text",
+          },
+        ],
+      );
     });
   });
 
-  describe("synchronizeFile", async () => {
-    const filePath = join(config.paths.docs, "document.md");
-    const originalMarkdown = await Bun.file(filePath).text();
-
-    it("generates no changesets when dataview items match query results", async () => {
-      const parseResult = throwIfError(
-        await parseFile(kg, config, fs, originalMarkdown, filePath),
-      );
-
-      const diffResult = throwIfError(
-        diffNodeTrees(parseResult.file, parseResult.kg),
-      );
-
-      expect(diffResult).toEqual([]);
-    });
-
-    it("detects changes when document is modified", async () => {
-      const parseResult = throwIfError(
-        await parseFile(kg, config, fs, originalMarkdown, filePath),
-      );
-
-      const modifiedMarkdown = originalMarkdown.replace(
-        "Simple Markdown Document",
-        "Modified Markdown Document",
-      );
-
-      const modifiedParseResult = throwIfError(
-        await parseFile(kg, config, fs, modifiedMarkdown, filePath),
-      );
-
-      const diffResult = throwIfError(
-        diffNodeTrees(modifiedParseResult.file, parseResult.kg),
-      );
-
-      expect(diffResult.length).toBeGreaterThan(0);
-      expect(diffResult[0]).toEqual(
-        expect.objectContaining({
-          $ref: expect.any(String),
-          title: "Modified Markdown Document",
+  describe("yaml single entity", () => {
+    it("returns null when no changes", async () => {
+      await check(
+        `tasks/${mockTask1Node.key}.yaml`,
+        renderYamlEntity({
+          title: mockTask1Node.title,
+          status: mockTask1Node.status,
+          description: mockTask1Node.description,
         }),
+        null,
       );
     });
 
-    it("detects new sections added to document", async () => {
-      const parseResult = throwIfError(
-        await parseFile(kg, config, fs, originalMarkdown, filePath),
-      );
-
-      const modifiedMarkdown =
-        originalMarkdown + "\n## New Section\nNew content here.";
-
-      const modifiedParseResult = throwIfError(
-        await parseFile(kg, config, fs, modifiedMarkdown, filePath),
-      );
-
-      const diffResult = throwIfError(
-        diffNodeTrees(modifiedParseResult.file, parseResult.kg),
-      );
-
-      const newSections = diffResult.filter(
-        (change) => !("$ref" in change) && change.type === "Section",
-      );
-      expect(newSections.length).toBeGreaterThan(0);
-      expect(newSections[0]).toEqual(
-        expect.objectContaining({
-          type: "Section",
-          title: "New Section",
+    it("detects field changes", async () => {
+      await check(
+        `tasks/${mockTask1Node.key}.yaml`,
+        renderYamlEntity({
+          title: "Updated Task Title",
+          status: "done",
+          description: mockTask1Node.description,
         }),
+        [{ $ref: mockTask1Uid, title: "Updated Task Title", status: "done" }],
+      );
+    });
+  });
+
+  describe("yaml list", () => {
+    it("returns null when no changes", async () => {
+      await check(
+        "all-tasks.yaml",
+        renderYamlList([mockTask1Node, mockTask2Node]),
+        null,
       );
     });
 
-    it("detects paragraph content changes", async () => {
-      const parseResult = throwIfError(
-        await parseFile(kg, config, fs, originalMarkdown, filePath),
-      );
-
-      const modifiedMarkdown = originalMarkdown.replace(
-        "This is a simple markdown document.",
-        "This is a modified markdown document with new text.",
-      );
-
-      const modifiedParseResult = throwIfError(
-        await parseFile(kg, config, fs, modifiedMarkdown, filePath),
-      );
-
-      const diffResult = throwIfError(
-        diffNodeTrees(modifiedParseResult.file, parseResult.kg),
-      );
-
-      const paragraphUpdates = diffResult.filter(
-        (change) => "$ref" in change && "textContent" in change,
-      );
-      expect(paragraphUpdates.length).toBeGreaterThan(0);
-      expect(paragraphUpdates[0]).toEqual(
-        expect.objectContaining({
-          $ref: expect.any(String),
-          textContent: "This is a modified markdown document with new text.",
-        }),
-      );
-    });
-
-    it("applies changes to knowledge graph", async () => {
-      const modifiedMarkdown = originalMarkdown.replace(
-        "Simple Markdown Document",
-        "Updated Markdown Document",
-      );
-
-      const transaction = throwIfError(
-        await synchronizeFile(kg, config, fs, modifiedMarkdown, filePath),
-      );
-
-      expect(transaction).toMatchObject({
-        author: "test",
-        nodes: expect.arrayContaining([
-          expect.objectContaining({
-            $ref: "n1G4RYLpqCy",
-            title: "Updated Markdown Document",
-          }),
+    it("detects new items in list", async () => {
+      await check(
+        "all-tasks.yaml",
+        renderYamlList([
+          mockTask1Node,
+          mockTask2Node,
+          { type: mockTaskTypeKey, title: "New Task", status: "todo" },
         ]),
-      });
+        [{ type: mockTaskTypeKey, title: "New Task", status: "todo" }],
+      );
     });
 
-    it("detects changes to individual dataview items", async () => {
-      const modifiedMarkdown = originalMarkdown.replace(
-        "Implement user authentication",
-        "Implement user authentication system",
-      );
-
-      const result = await synchronizeFile(
-        kg,
-        config,
-        fs,
-        modifiedMarkdown,
-        filePath,
-      );
-
-      expect(result).toBeOk();
-      const transaction = throwIfError(result);
-      expect(transaction).toMatchObject({
-        author: "test",
-        nodes: [
-          expect.objectContaining({
-            $ref: mockTask1Uid,
-            title: "Implement user authentication system",
-          }),
+    it("detects multiple changes", async () => {
+      await check(
+        "all-tasks.yaml",
+        renderYamlList([
+          { ...mockTask1Node, title: "Modified Task 1" },
+          { ...mockTask2Node, status: "done" },
+        ]),
+        [
+          { $ref: mockTask1Uid, title: "Modified Task 1" },
+          { $ref: mockTask2Uid, status: "done" },
         ],
-      });
-    });
-
-    it("applies all query fields to new dataview items with AND separator", async () => {
-      const markdownWithMultipleFields = `# Document with Multi-Field Query
-
-:::dataview{query="type=Idea AND ideaStatus=exploring" template="{title}"}
-- Implement real-time collaboration
-- Add something extra
-:::
-`;
-
-      const parseResult = throwIfError(
-        await parseFile(kg, config, fs, markdownWithMultipleFields, filePath),
-      );
-
-      const diffResult = throwIfError(
-        diffNodeTrees(parseResult.file, parseResult.kg),
-      );
-
-      const newIdeas = diffResult.filter(
-        (change) => !("$ref" in change) && change.type === "Idea",
-      );
-      expect(newIdeas.length).toBe(2);
-      expect(newIdeas[0]).toEqual(
-        expect.objectContaining({
-          type: "Idea",
-          ideaStatus: "exploring",
-          title: "Implement real-time collaboration",
-        }),
-      );
-      expect(newIdeas[1]).toEqual(
-        expect.objectContaining({
-          type: "Idea",
-          ideaStatus: "exploring",
-          title: "Add something extra",
-        }),
       );
     });
   });

@@ -3,6 +3,7 @@ import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import {
   type Fieldset,
+  type FieldsetNested,
   type KnowledgeGraph,
   openKnowledgeGraph,
 } from "@binder/db";
@@ -13,68 +14,97 @@ import {
   mockTask2Node,
   mockTransactionInit,
 } from "@binder/db/mocks";
+import type { DatabaseCli } from "../db";
+import { getTestDatabaseCli } from "../db/db.mock.ts";
 import {
   createInMemoryFileSystem,
   type MockFileSystem,
 } from "../lib/filesystem.mock.ts";
-import type { DatabaseCli } from "../db";
-import { getTestDatabaseCli } from "../db/db.mock.ts";
-import {
-  DEFAULT_DYNAMIC_VIEW,
-  extractFieldsFromPath,
-  type NavigationItem,
-  renderNavigation,
-  resolvePath,
-} from "./navigation.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
+import { renderYamlEntity, renderYamlList } from "./yaml.ts";
+import {
+  DEFAULT_DYNAMIC_VIEW,
+  findNavigationItemByPath,
+  type NavigationItem,
+  renderNavigation,
+} from "./navigation.ts";
 
 describe("navigation", () => {
-  describe("extractFieldsFromPath", () => {
-    const check = (path: string, pathTemplate: string, expected: Fieldset) => {
-      const result = throwIfError(extractFieldsFromPath(path, pathTemplate));
+  describe("findNavigationItemByPath", () => {
+    const check = (
+      items: NavigationItem[],
+      path: string,
+      expected: NavigationItem | undefined,
+    ) => {
+      const result = findNavigationItemByPath(items, path);
       expect(result).toEqual(expected);
     };
 
-    it("extracts single field from path", () => {
-      check("tasks/my-task.md", "tasks/{title}.md", { title: "my-task" });
+    it("matches markdown file by path template", () => {
+      const item: NavigationItem = {
+        path: "tasks/{title}.md",
+        view: DEFAULT_DYNAMIC_VIEW,
+      };
+      check([item], "tasks/my-task.md", item);
     });
 
-    it("extracts multiple fields from path", () => {
+    it("matches yaml file by path template", () => {
+      const item: NavigationItem = {
+        path: "all-tasks.yaml",
+        query: { filters: { type: "Task" } },
+      };
+      check([item], "all-tasks.yaml", item);
+    });
+
+    it("returns undefined when no match found", () => {
+      const item: NavigationItem = {
+        path: "tasks/{title}.md",
+        view: DEFAULT_DYNAMIC_VIEW,
+      };
+      check([item], "projects/my-project.md", undefined);
+    });
+
+    it("returns first matching item", () => {
+      const first: NavigationItem = {
+        path: "tasks/{title}.md",
+        view: DEFAULT_DYNAMIC_VIEW,
+      };
       check(
-        "projects/binder/tasks/feature-123.md",
-        "projects/{project}/tasks/{key}.md",
-        {
-          project: "binder",
-          key: "feature-123",
-        },
-      );
-    });
-
-    it("extracts fields from path with directories", () => {
-      check("docs/2024/january/report.md", "docs/{year}/{month}/{title}.md", {
-        year: "2024",
-        month: "january",
-        title: "report",
-      });
-    });
-
-    it("returns error when path does not match template", () => {
-      const result = extractFieldsFromPath(
+        [first, { path: "tasks/{key}.md", view: DEFAULT_DYNAMIC_VIEW }],
         "tasks/my-task.md",
-        "projects/{project}/tasks/{key}.md",
+        first,
       );
-      expect(result).toBeErr();
     });
-  });
 
-  it("round-trips with resolvePath", () => {
-    const item: Fieldset = { project: "binder-cli", title: "My Task" };
-    const template = "projects/{project}/{title}.md";
-    const path = throwIfError(resolvePath(template, item));
-    expect(path).toBe("projects/binder-cli/My Task.md");
-    const result = throwIfError(extractFieldsFromPath(path, template));
-    expect(result).toEqual({ project: "binder-cli", title: "My Task" });
+    it("matches nested child item", () => {
+      const childItem: NavigationItem = {
+        path: "info.md",
+        view: DEFAULT_DYNAMIC_VIEW,
+      };
+      check(
+        [{ path: "tasks/{title}/", children: [childItem] }],
+        "tasks/my-task/info.md",
+        childItem,
+      );
+    });
+
+    it("matches deeply nested child", () => {
+      const deepChild: NavigationItem = {
+        path: "details.yaml",
+        query: { filters: { type: "Detail" } },
+      };
+      check(
+        [
+          {
+            path: "projects/",
+            children: [{ path: "tasks/", children: [deepChild] }],
+          },
+        ],
+        "projects/tasks/details.yaml",
+        deepChild,
+      );
+    });
   });
 
   describe("renderNavigation", () => {
@@ -91,37 +121,61 @@ describe("navigation", () => {
       throwIfError(await kg.apply(mockTransactionInit));
     });
 
+    type FileSpec =
+      | { path: string; view?: string; data: Fieldset }
+      | { path: string; content: string }
+      | { path: string; yaml: FieldsetNested }
+      | { path: string; yamlList: FieldsetNested[] };
+
     const check = async (
       navigationItems: NavigationItem[],
-      files: { path: string; view?: string; data: Fieldset }[],
+      files: FileSpec[],
     ) => {
-      const errors = throwIfError(
+      throwIfError(
         await renderNavigation(db, kg, fs, docsPath, navigationItems),
       );
-      expect(errors).toEqual([]);
 
-      for (const { path, view, data } of files) {
-        const content = throwIfError(await fs.readFile(`${docsPath}/${path}`));
-
-        const viewAst = view ? parseView(view) : defaultViewAst;
-        const snapshot = throwIfError(
-          renderView(mockNodeSchema, viewAst, data),
+      for (const file of files) {
+        const fileContent = throwIfError(
+          await fs.readFile(`${docsPath}/${file.path}`),
         );
-        expect(content).toEqual(snapshot);
+
+        if ("yaml" in file) {
+          expect(fileContent).toEqual(renderYamlEntity(file.yaml));
+        } else if ("yamlList" in file) {
+          expect(fileContent).toEqual(renderYamlList(file.yamlList));
+        } else if ("content" in file) {
+          expect(fileContent).toEqual(file.content);
+        } else {
+          const viewAst = file.view ? parseView(file.view) : defaultViewAst;
+          const snapshot = throwIfError(
+            renderView(mockNodeSchema, viewAst, file.data),
+          );
+          expect(fileContent).toEqual(snapshot);
+        }
       }
 
-      const mdFiles = Array.from(fs.files.keys()).filter((f) =>
-        f.endsWith(".md"),
+      const generatedFiles = Array.from(fs.files.keys()).filter(
+        (f) => f.endsWith(".md") || f.endsWith(".yaml"),
       );
-      expect(mdFiles).toEqual(files.map((f) => `${docsPath}/${f.path}`));
+      expect(generatedFiles).toEqual(files.map((f) => `${docsPath}/${f.path}`));
     };
+
+    it("renders simple markdown without iteration", async () => {
+      const staticView = "# Welcome\n\nStatic content\n";
+      await check(
+        [{ path: "README.md", view: staticView }],
+        [{ path: "README.md", content: staticView }],
+      );
+    });
 
     it("renders flat navigation item", async () => {
       await check(
         [
           {
             path: "tasks/{title}.md",
-            query: "type=Task",
+            where: { type: "Task" },
+            view: DEFAULT_DYNAMIC_VIEW,
           },
         ],
         [
@@ -143,7 +197,7 @@ describe("navigation", () => {
         [
           {
             path: "tasks/{title}/",
-            query: "type=Task",
+            where: { type: "Task" },
             children: [
               {
                 path: "info.md",
@@ -172,11 +226,13 @@ describe("navigation", () => {
         [
           {
             path: "projects/{title}.md",
-            query: "type=Project",
+            where: { type: "Project" },
+            view: DEFAULT_DYNAMIC_VIEW,
             children: [
               {
                 path: "tasks/{title}.md",
-                query: "type=Task",
+                where: { type: "Task" },
+                view: DEFAULT_DYNAMIC_VIEW,
               },
             ],
           },
@@ -193,6 +249,63 @@ describe("navigation", () => {
           {
             path: `projects/${mockProjectNode.title}/tasks/${mockTask2Node.title}.md`,
             data: mockTask2Node,
+          },
+        ],
+      );
+    });
+
+    it("renders yaml entity", async () => {
+      await check(
+        [
+          {
+            path: "projects/{title}.yaml",
+            where: { type: "Project" },
+          },
+        ],
+        [
+          {
+            path: `projects/${mockProjectNode.title}.yaml`,
+            yaml: mockProjectNode,
+          },
+        ],
+      );
+    });
+
+    it("renders yaml query results", async () => {
+      await check(
+        [
+          {
+            path: "all-tasks.yaml",
+            query: { filters: { type: "Task" } },
+          },
+        ],
+        [
+          {
+            path: "all-tasks.yaml",
+            yamlList: [mockTask1Node, mockTask2Node],
+          },
+        ],
+      );
+    });
+
+    it("renders nested query with context interpolation", async () => {
+      await check(
+        [
+          {
+            path: "projects/{title}/",
+            where: { type: "Project" },
+            children: [
+              {
+                path: "tasks.yaml",
+                query: { filters: { type: "Task", project: "{uid}" } },
+              },
+            ],
+          },
+        ],
+        [
+          {
+            path: `projects/${mockProjectNode.title}/tasks.yaml`,
+            yamlList: [mockTask2Node],
           },
         ],
       );

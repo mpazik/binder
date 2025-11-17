@@ -93,7 +93,7 @@ const renderInlineToMarkdown = (node: RootContent): string => {
   return extractTextFromInline(node);
 };
 
-export const renderAstToMarkdown = (ast: FullAST | BlockAST): string => {
+export const renderAstToMarkdown = (ast: Nodes): string => {
   const markdown = toMarkdown(ast, {
     ...defaultRenderOptions,
     extensions: [directiveToMarkdown()],

@@ -72,8 +72,8 @@ export const renderView = (
   view: ViewAST,
   fieldset: FieldsetNested,
 ): Result<string> => {
-  const ast = JSON.parse(JSON.stringify(view));
-
+  // we clone the view ast and replace slots with data
+  const ast = structuredClone(view) as Nodes;
   let error: ErrorObject | undefined = undefined;
 
   visit(

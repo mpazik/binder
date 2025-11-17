@@ -25,3 +25,8 @@ export const createPackedIdArray = <
 
   return Object.values(record) as R;
 };
+
+export const includes = <T extends readonly unknown[]>(
+  arr: T,
+  value: unknown,
+): value is T[number] => arr.includes(value as T[number]);

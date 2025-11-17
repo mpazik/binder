@@ -1,8 +1,79 @@
-import type { Fieldset, QueryParams } from "@binder/db";
+import type { Fieldset, Filter, QueryParams } from "@binder/db";
 import { createError, err, isErr, ok, type Result } from "@binder/utils";
 import { extractFieldNames, interpolateFields } from "./interpolate-fields.ts";
 
 export type NavigationContext = Fieldset[];
+
+const interpolateFilterValue = (
+  filter: Filter,
+  context: NavigationContext,
+): Result<Filter> => {
+  if (typeof filter === "string") {
+    const fieldNames = extractFieldNames(filter);
+    if (fieldNames.length === 0) return ok(filter);
+
+    const fieldset: Fieldset = {};
+    for (const fieldName of fieldNames) {
+      const value = context[0]?.[fieldName];
+      if (value === undefined || value === null)
+        return err(
+          createError(
+            "field-not-found",
+            `Field '${fieldName}' not found in context`,
+            { fieldName },
+          ),
+        );
+      fieldset[fieldName] = value;
+    }
+
+    const result = interpolateFields(filter, fieldset);
+    if (isErr(result)) return result;
+    return ok(result.data);
+  }
+
+  if (typeof filter === "object" && !Array.isArray(filter) && "op" in filter) {
+    if (typeof filter.value === "string") {
+      const fieldNames = extractFieldNames(filter.value);
+      if (fieldNames.length === 0) return ok(filter);
+
+      const fieldset: Fieldset = {};
+      for (const fieldName of fieldNames) {
+        const value = context[0]?.[fieldName];
+        if (value === undefined || value === null)
+          return err(
+            createError(
+              "field-not-found",
+              `Field '${fieldName}' not found in context`,
+              { fieldName },
+            ),
+          );
+        fieldset[fieldName] = value;
+      }
+
+      const result = interpolateFields(filter.value, fieldset);
+      if (isErr(result)) return result;
+      return ok({ ...filter, value: result.data });
+    }
+  }
+
+  return ok(filter);
+};
+
+export const interpolateQueryParams = (
+  queryParams: QueryParams,
+  context: NavigationContext,
+): Result<QueryParams> => {
+  if (!queryParams.filters) return ok(queryParams);
+
+  const interpolatedFilters: Record<string, Filter> = {};
+  for (const [key, filter] of Object.entries(queryParams.filters)) {
+    const result = interpolateFilterValue(filter, context);
+    if (isErr(result)) return result;
+    interpolatedFilters[key] = result.data;
+  }
+
+  return ok({ ...queryParams, filters: interpolatedFilters });
+};
 
 const resolvePlaceholders = (
   query: string,

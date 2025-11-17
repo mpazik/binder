@@ -1,14 +1,18 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
-import type { KnowledgeGraph, NodeUid } from "@binder/db";
+import { type KnowledgeGraph, type NodeUid } from "@binder/db";
 import { isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import type { DatabaseCli } from "../db";
 import type { Config } from "../bootstrap.ts";
+import {
+  loadNavigation,
+  renderNavigation,
+  SUPPORTED_SNAPSHOT_EXTS,
+} from "./navigation.ts";
 import { buildAstDoc } from "./doc-builder.ts";
 import { renderAstToMarkdown } from "./markdown.ts";
-import { loadNavigation, renderNavigation } from "./navigation.ts";
 
 export type DocumentWithPath = {
   uid: NodeUid;
@@ -37,15 +41,18 @@ const fetchDocumentsWithPath = async (
   return ok(docsWithPath);
 };
 
-const removeMarkdownFiles = (dir: string): void => {
+const removeSnapshotFiles = (dir: string): void => {
   if (!existsSync(dir)) return;
 
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      removeMarkdownFiles(fullPath);
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      removeSnapshotFiles(fullPath);
+    } else if (
+      entry.isFile() &&
+      SUPPORTED_SNAPSHOT_EXTS.some((ext) => entry.name.endsWith(ext))
+    ) {
       rmSync(fullPath);
     }
   }
@@ -57,7 +64,7 @@ export const renderDocs = async (services: {
   fs: FileSystem;
   log: Logger;
   config: Config;
-}): ResultAsync<undefined> => {
+}): ResultAsync<void> => {
   const {
     db,
     kg,
@@ -65,9 +72,8 @@ export const renderDocs = async (services: {
     log,
     config: { paths },
   } = services;
-
   const removeResult = tryCatch(() => {
-    removeMarkdownFiles(paths.docs);
+    removeSnapshotFiles(paths.docs);
     mkdirSync(paths.docs, { recursive: true });
   });
   if (isErr(removeResult)) return removeResult;
@@ -100,31 +106,7 @@ export const renderDocs = async (services: {
   }
 
   const navigationResult = await loadNavigation(fs, paths.binder);
-  if (isErr(navigationResult)) {
-    log.error(`Failed to load navigation config`, {
-      error: navigationResult.error,
-    });
-  } else if (navigationResult.data.length > 0) {
-    const navResult = await renderNavigation(
-      db,
-      kg,
-      fs,
-      paths.docs,
-      navigationResult.data,
-    );
-    if (isErr(navResult)) {
-      log.error(`Failed to render navigation`, { error: navResult.error });
-      return navResult;
-    } else if (navResult.data.length > 0) {
-      for (const navError of navResult.data) {
-        log.error(`Failed to render navigation item`, {
-          path: navError.path,
-          error: navError.error,
-          ...navError.context,
-        });
-      }
-    }
-  }
+  if (isErr(navigationResult)) return navigationResult;
 
-  return ok(undefined);
+  return renderNavigation(db, kg, fs, paths.docs, navigationResult.data);
 };

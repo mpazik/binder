@@ -1,44 +1,90 @@
-import { join } from "path";
+import { extname, join } from "path";
 import { z } from "zod";
 import * as YAML from "yaml";
 import {
   emptyFieldset,
   type Fieldset,
+  type FieldsetNested,
+  FiltersSchema,
   formatValue,
   type GraphVersion,
+  type Includes,
+  IncludesSchema,
   type KnowledgeGraph,
   type NodeSchema,
+  type QueryParams,
+  QueryParamsSchema,
 } from "@binder/db";
 import {
-  createError,
-  err,
-  type ErrorObject,
+  assertDefined,
+  includes,
   isErr,
   ok,
+  okVoid,
   type Result,
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
-import type { FileSystem } from "../lib/filesystem.ts";
 import { sanitizeFilename } from "../utils/file.ts";
 import {
-  extractFieldNames,
+  extractFieldValues,
   interpolateFields,
 } from "../utils/interpolate-fields.ts";
-import { saveSnapshot } from "../lib/snapshot.ts";
 import type { DatabaseCli } from "../db";
-import { parseStringQuery } from "../utils/query.ts";
+import { interpolateQueryParams } from "../utils/query.ts";
+import { saveSnapshot } from "../lib/snapshot.ts";
+import type { FileSystem } from "../lib/filesystem.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
+import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 
-const NavigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
-  z.object({
-    path: z.string(),
-    query: z.string().optional(),
-    view: z.string().optional(),
+export const SUPPORTED_MARKDOWN_EXTS = [".md", ".mdx"] as const;
+export const SUPPORTED_YAML_EXTS = [".yaml", ".yml"] as const;
+export const SUPPORTED_SNAPSHOT_EXTS = [
+  ...SUPPORTED_MARKDOWN_EXTS,
+  ...SUPPORTED_YAML_EXTS,
+] as const;
+
+type FileType = "directory" | "markdown" | "yaml" | "unknown";
+
+export const getSnapshotFileType = (path: string): FileType => {
+  if (path.endsWith("/")) return "directory";
+  const ext = extname(path);
+  if (!ext) return "directory";
+  if (includes(SUPPORTED_MARKDOWN_EXTS, ext)) return "markdown";
+  if (includes(SUPPORTED_YAML_EXTS, ext)) return "yaml";
+  return "unknown";
+};
+
+const NavigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() => {
+  const base = {
+    where: FiltersSchema.optional(),
     children: z.array(NavigationItemSchema).optional(),
-  }),
-);
+  };
+  return z.union([
+    z.object({
+      ...base,
+      path: z
+        .string()
+        .refine((p) => includes(SUPPORTED_MARKDOWN_EXTS, extname(p))),
+      view: z.string(),
+    }),
+    z.object({
+      ...base,
+      path: z.string().refine((p) => includes(SUPPORTED_YAML_EXTS, extname(p))),
+      includes: IncludesSchema,
+    }),
+    z.object({
+      ...base,
+      path: z.string().refine((p) => includes(SUPPORTED_YAML_EXTS, extname(p))),
+      query: QueryParamsSchema,
+    }),
+    z.object({
+      ...base,
+      path: z.string().refine((p) => getSnapshotFileType(p) === "directory"),
+    }),
+  ]);
+});
 
 const NavigationConfigSchema = z.object({
   navigation: z.array(NavigationItemSchema),
@@ -46,15 +92,11 @@ const NavigationConfigSchema = z.object({
 
 export type NavigationItem = {
   path: string;
-  query?: string;
+  where?: QueryParams["filters"];
   view?: string;
+  includes?: Includes;
+  query?: QueryParams;
   children?: NavigationItem[];
-};
-
-export type NavigationError = {
-  path: string;
-  error: ErrorObject;
-  context?: Record<string, unknown>;
 };
 
 export const loadNavigation = async (
@@ -74,38 +116,43 @@ export const loadNavigation = async (
   return ok(parseResult.data.navigation);
 };
 
+export const findNavigationItemByPath = (
+  items: NavigationItem[],
+  path: string,
+): NavigationItem | undefined => {
+  for (const item of items) {
+    const fileType = getSnapshotFileType(item.path);
+
+    if (fileType === "directory") {
+      if (!item.children) continue;
+
+      const slashCount = (item.path.match(/\//g) || []).length;
+      let slashIndex = -1;
+      for (let i = 0; i < slashCount; i++) {
+        slashIndex = path.indexOf("/", slashIndex + 1);
+        if (slashIndex === -1) break;
+      }
+      if (slashIndex === -1) continue;
+
+      const pathPrefix = path.slice(0, slashIndex + 1);
+      const pathFieldsResult = extractFieldValues(item.path, pathPrefix);
+      if (isErr(pathFieldsResult)) continue;
+
+      const remainingPath = path.slice(slashIndex + 1);
+      const found = findNavigationItemByPath(item.children, remainingPath);
+      if (found) return found;
+    } else {
+      const pathFieldsResult = extractFieldValues(item.path, path);
+      if (isErr(pathFieldsResult)) continue;
+      return item;
+    }
+  }
+};
+
 export const resolvePath = (template: string, item: Fieldset): Result<string> =>
   interpolateFields(template, (key) =>
     sanitizeFilename(formatValue(item[key])),
   );
-
-export const extractFieldsFromPath = (
-  path: string,
-  pathTemplate: string,
-): Result<Fieldset> => {
-  const fieldNames = extractFieldNames(pathTemplate);
-  const regexPattern = pathTemplate.replace(/\{([\w.-]+)}/g, () => "([^/]+)");
-
-  const regex = new RegExp(`^${regexPattern}$`);
-  const match = path.match(regex);
-
-  if (!match) {
-    return err(
-      createError(
-        "path_template_mismatch",
-        "Path does not match the template",
-        { path, pathTemplate },
-      ),
-    );
-  }
-
-  const fieldSet: Fieldset = {};
-  fieldNames.forEach((fieldName, index) => {
-    fieldSet[fieldName] = match[index + 1];
-  });
-
-  return ok(fieldSet);
-};
 
 export const DEFAULT_DYNAMIC_VIEW = `# {title}
 
@@ -115,6 +162,45 @@ export const DEFAULT_DYNAMIC_VIEW = `# {title}
 ## Description
 
 {description}`;
+
+const getParentDir = (filePath: string, fileType: FileType): string => {
+  if (fileType === "directory") return filePath;
+  const ext = extname(filePath);
+  const withoutExt = ext ? filePath.slice(0, -ext.length) : filePath;
+  return withoutExt + "/";
+};
+
+const renderContent = async (
+  kg: KnowledgeGraph,
+  schema: NodeSchema,
+  item: NavigationItem,
+  entity: FieldsetNested,
+  parentEntities: Fieldset[],
+  fileType: FileType,
+): Promise<Result<string> | undefined> => {
+  if (fileType === "markdown") {
+    assertDefined(item.view);
+    const viewAst = parseView(item.view);
+    const viewResult = renderView(schema, viewAst, entity as Fieldset);
+    if (isErr(viewResult)) return viewResult;
+    return ok(viewResult.data);
+  } else if (fileType === "yaml") {
+    if (item.query) {
+      const interpolatedQuery = interpolateQueryParams(item.query, [
+        entity as Fieldset,
+        ...parentEntities,
+      ]);
+      if (isErr(interpolatedQuery)) return interpolatedQuery;
+
+      const queryResult = await kg.search(interpolatedQuery.data);
+      if (isErr(queryResult)) return queryResult;
+
+      return ok(renderYamlList(queryResult.data.items));
+    } else {
+      return ok(renderYamlEntity(entity));
+    }
+  }
+};
 
 const renderNavigationItem = async (
   db: DatabaseCli,
@@ -126,17 +212,24 @@ const renderNavigationItem = async (
   item: NavigationItem,
   parentPath: string,
   parentEntities: Fieldset[],
-  errors: NavigationError[],
 ): ResultAsync<void> => {
-  const viewAst = parseView(item.view ?? DEFAULT_DYNAMIC_VIEW);
+  const fileType = getSnapshotFileType(item.path);
 
-  let entities: Fieldset[] = [];
+  let entities: FieldsetNested[] = [];
   let shouldUpdateParentContext = false;
 
-  if (item.query) {
-    const queryResult = parseStringQuery(item.query, parentEntities);
-    if (isErr(queryResult)) return queryResult;
-    const searchResult = await kg.search(queryResult.data);
+  if (item.where) {
+    const queryParams: QueryParams = {
+      filters: item.where,
+      includes: item.includes,
+    };
+    const interpolatedQuery = interpolateQueryParams(
+      queryParams,
+      parentEntities,
+    );
+    if (isErr(interpolatedQuery)) return interpolatedQuery;
+
+    const searchResult = await kg.search(interpolatedQuery.data);
     if (isErr(searchResult)) return searchResult;
 
     entities = searchResult.data.items;
@@ -150,44 +243,35 @@ const renderNavigationItem = async (
   }
 
   for (const entity of entities) {
-    const resolvedPath = resolvePath(item.path, entity);
+    const resolvedPath = resolvePath(item.path, entity as Fieldset);
     if (isErr(resolvedPath)) return resolvedPath;
-    const fullPath = join(parentPath, resolvedPath.data);
-    const isDirectory = fullPath.endsWith("/");
+    const filePath = join(parentPath, resolvedPath.data);
 
-    if (!isDirectory) {
-      const filePath = join(docsPath, fullPath);
-      const renderResult = renderView(schema, viewAst, entity);
-      if (isErr(renderResult)) {
-        errors.push({
-          path: fullPath,
-          error: renderResult.error,
-          context: { uid: entity.uid },
-        });
-        continue;
-      }
+    const renderResult = await renderContent(
+      kg,
+      schema,
+      item,
+      entity,
+      parentEntities,
+      fileType,
+    );
 
+    if (renderResult) {
+      if (isErr(renderResult)) return renderResult;
       const saveResult = await saveSnapshot(
         db,
         fs,
-        filePath,
+        join(docsPath, filePath),
         renderResult.data,
         version,
       );
-      if (isErr(saveResult)) {
-        errors.push({
-          path: fullPath,
-          error: saveResult.error,
-          context: { uid: entity.uid },
-        });
-        continue;
-      }
+      if (isErr(saveResult)) return saveResult;
     }
 
     if (item.children) {
-      const itemDir = isDirectory ? fullPath : fullPath.slice(0, -3);
+      const itemDir = getParentDir(filePath, fileType);
       const childParentEntities = shouldUpdateParentContext
-        ? [entity, ...parentEntities]
+        ? [entity as Fieldset, ...parentEntities]
         : parentEntities;
 
       for (const child of item.children) {
@@ -201,14 +285,8 @@ const renderNavigationItem = async (
           child,
           itemDir,
           childParentEntities,
-          errors,
         );
-        if (isErr(result)) {
-          errors.push({
-            path: fullPath,
-            error: result.error,
-          });
-        }
+        if (isErr(result)) return result;
       }
     }
   }
@@ -222,13 +300,12 @@ export const renderNavigation = async (
   fs: FileSystem,
   docsPath: string,
   navigationItems: NavigationItem[],
-): ResultAsync<NavigationError[]> => {
+): ResultAsync<void> => {
   const schemaResult = await kg.getNodeSchema();
   if (isErr(schemaResult)) return schemaResult;
   const versionResult = await kg.version();
   if (isErr(versionResult)) return versionResult;
 
-  const errors: NavigationError[] = [];
   for (const item of navigationItems) {
     const result = await renderNavigationItem(
       db,
@@ -240,9 +317,8 @@ export const renderNavigation = async (
       item,
       "",
       [],
-      errors,
     );
     if (isErr(result)) return result;
   }
-  return ok(errors);
+  return okVoid;
 };

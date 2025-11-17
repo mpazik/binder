@@ -1,150 +1,213 @@
 import { relative } from "path";
-import * as fs from "node:fs";
 import type {
+  Fieldset,
   FieldsetNested,
   KnowledgeGraph,
-  NodeRef,
+  NodeSchema,
+  TransactionId,
   TransactionInput,
 } from "@binder/db";
 import { createError, err, isErr, ok, type ResultAsync } from "@binder/utils";
 import type { Config } from "../bootstrap.ts";
+import { extractFieldValues } from "../utils/interpolate-fields.ts";
+import { diffNodeLists, diffNodeTrees } from "../utils/node-diff.ts";
+import { interpolateQueryParams } from "../utils/query.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
-import { diffNodeTrees } from "../utils/node-diff.ts";
-import { parseMarkdown, parseView } from "./markdown.ts";
-import { deconstructAstDocument, fetchDocumentNodes } from "./doc-builder.ts";
-import { extractFields } from "./view.ts";
 import {
   DEFAULT_DYNAMIC_VIEW,
-  extractFieldsFromPath,
-  loadNavigation,
+  findNavigationItemByPath,
+  getSnapshotFileType,
+  type NavigationItem,
 } from "./navigation.ts";
+import { parseMarkdown, parseView } from "./markdown.ts";
+import { extractFields } from "./view.ts";
+import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 
 export { diffNodeTrees } from "../utils/node-diff.ts";
 
-export const parseFile = async (
+type ParsedFileResult =
+  | { kind: "single"; file: FieldsetNested; kg: FieldsetNested }
+  | { kind: "list"; file: FieldsetNested[]; kg: FieldsetNested[] };
+
+const extractFromYamlSingle = async (
   kg: KnowledgeGraph,
-  config: Config,
-  fs: FileSystem,
-  markdown: string,
-  filePath: string,
-): ResultAsync<{ file: FieldsetNested; kg: FieldsetNested }> => {
-  const relativePath = relative(config.paths.docs, filePath);
+  _navItem: NavigationItem,
+  content: string,
+  pathFields: Fieldset,
+): ResultAsync<ParsedFileResult> => {
+  const parseResult = parseYamlEntity(content);
+  if (isErr(parseResult)) return parseResult;
 
-  const searchResult = await kg.search({
-    filters: { path: relativePath },
+  const kgSearchResult = await kg.search({
+    filters: pathFields as Record<string, string>,
   });
-  if (isErr(searchResult)) return searchResult;
+  if (isErr(kgSearchResult)) return kgSearchResult;
 
-  if (searchResult.data.items.length === 0) {
-    const schemaResult = await kg.getNodeSchema();
-    if (isErr(schemaResult)) return schemaResult;
-    const schema = schemaResult.data;
-
-    const navigationResult = await loadNavigation(fs, config.paths.binder);
-    if (isErr(navigationResult)) return navigationResult;
-
-    const collectNavigationItems = (
-      items: typeof navigationResult.data,
-    ): typeof navigationResult.data => {
-      const collected: typeof navigationResult.data = [];
-      for (const item of items) {
-        collected.push(item);
-        if (item.children) {
-          collected.push(...collectNavigationItems(item.children));
-        }
-      }
-      return collected;
-    };
-
-    const allNavigationItems = collectNavigationItems(navigationResult.data);
-
-    for (const navItem of allNavigationItems) {
-      if (!navItem.query) continue;
-
-      const pathFieldsResult = extractFieldsFromPath(
-        relativePath,
-        navItem.path,
-      );
-      if (isErr(pathFieldsResult)) continue;
-      const pathFields = pathFieldsResult.data;
-
-      const templateString = navItem.view ?? DEFAULT_DYNAMIC_VIEW;
-      const viewAst = parseView(templateString);
-      const markdownAst = parseMarkdown(markdown);
-      const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
-      if (isErr(fileFieldsResult)) return fileFieldsResult;
-
-      const kgSearchResult = await kg.search({
-        filters: pathFields as Record<string, string>,
-      });
-      if (isErr(kgSearchResult)) return kgSearchResult;
-
-      if (kgSearchResult.data.items.length !== 1) {
-        return err(
-          createError(
-            "invalid_node_count",
-            "Path fields must resolve to exactly one node",
-            {
-              pathFields,
-              nodeCount: kgSearchResult.data.items.length,
-            },
-          ),
-        );
-      }
-
-      return ok({
-        file: fileFieldsResult.data,
-        kg: kgSearchResult.data.items[0]!,
-      });
-    }
-
+  if (kgSearchResult.data.items.length !== 1) {
     return err(
       createError(
-        "document_not_found",
-        "Document not found in knowledge graph or navigation config",
+        "invalid_node_count",
+        "Path fields must resolve to exactly one node",
+        {
+          pathFields,
+          nodeCount: kgSearchResult.data.items.length,
+        },
+      ),
+    );
+  }
+
+  return ok({
+    kind: "single",
+    file: parseResult.data,
+    kg: kgSearchResult.data.items[0]!,
+  });
+};
+
+const extractFromYamlList = async (
+  kg: KnowledgeGraph,
+  navItem: NavigationItem,
+  content: string,
+  pathFields: Fieldset,
+): ResultAsync<ParsedFileResult> => {
+  const parseResult = parseYamlList(content);
+  if (isErr(parseResult)) return parseResult;
+
+  if (!navItem.query) {
+    return err(
+      createError(
+        "missing_query",
+        "Navigation item with YAML list must have query",
+      ),
+    );
+  }
+
+  const interpolatedQuery = interpolateQueryParams(navItem.query, [pathFields]);
+  if (isErr(interpolatedQuery)) return interpolatedQuery;
+
+  const kgSearchResult = await kg.search(interpolatedQuery.data);
+  if (isErr(kgSearchResult)) return kgSearchResult;
+
+  return ok({
+    kind: "list",
+    file: parseResult.data,
+    kg: kgSearchResult.data.items,
+  });
+};
+
+const extractFromMarkdown = async (
+  kg: KnowledgeGraph,
+  schema: NodeSchema,
+  navItem: NavigationItem,
+  markdown: string,
+  pathFields: Fieldset,
+): ResultAsync<ParsedFileResult> => {
+  const templateString = navItem.view ?? DEFAULT_DYNAMIC_VIEW;
+  const viewAst = parseView(templateString);
+  const markdownAst = parseMarkdown(markdown);
+  const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
+  if (isErr(fileFieldsResult)) return fileFieldsResult;
+
+  const kgSearchResult = await kg.search({
+    filters: pathFields as Record<string, string>,
+  });
+  if (isErr(kgSearchResult)) return kgSearchResult;
+
+  if (kgSearchResult.data.items.length !== 1) {
+    return err(
+      createError(
+        "invalid_node_count",
+        "Path fields must resolve to exactly one node",
+        {
+          pathFields,
+          nodeCount: kgSearchResult.data.items.length,
+        },
+      ),
+    );
+  }
+
+  return ok({
+    kind: "single",
+    file: fileFieldsResult.data,
+    kg: kgSearchResult.data.items[0]!,
+  });
+};
+
+const extractFromFile = async (
+  kg: KnowledgeGraph,
+  schema: NodeSchema,
+  navItem: NavigationItem,
+  content: string,
+  pathFields: Fieldset,
+  filePath: string,
+): ResultAsync<ParsedFileResult> => {
+  const fileType = getSnapshotFileType(filePath);
+
+  if (fileType === "yaml") {
+    if (navItem.includes)
+      return extractFromYamlSingle(kg, navItem, content, pathFields);
+    if (navItem.query)
+      return extractFromYamlList(kg, navItem, content, pathFields);
+    return err(
+      createError(
+        "invalid_yaml_config",
+        "YAML navigation item must have includes or query",
+      ),
+    );
+  }
+  if (fileType === "markdown")
+    return extractFromMarkdown(kg, schema, navItem, content, pathFields);
+
+  return err(
+    createError("unsupported_file_type", "Unsupported file type", {
+      path: filePath,
+      fileType,
+    }),
+  );
+};
+
+export const synchronizeFile = async (
+  fs: FileSystem,
+  kg: KnowledgeGraph,
+  config: Config,
+  navigationItems: NavigationItem[],
+  schema: NodeSchema,
+  filePath: string,
+  _txVersion?: TransactionId, // we should later use it to fetch data for a given version for fair comparison
+): ResultAsync<TransactionInput | null> => {
+  const relativePath = relative(config.paths.docs, filePath);
+  const navItem = findNavigationItemByPath(navigationItems, relativePath);
+  if (!navItem) {
+    return err(
+      createError(
+        "yaml_file_not_found",
+        "YAML file not found in navigation config",
         { path: relativePath },
       ),
     );
   }
 
-  const documentRef = searchResult.data.items[0]?.uid as NodeRef;
-  if (!documentRef) {
-    return err(
-      createError("document_uid_missing", "Document found but has no uid", {
-        path: relativePath,
-      }),
-    );
-  }
+  const pathFieldsResult = extractFieldValues(navItem.path, relativePath);
+  if (isErr(pathFieldsResult)) return pathFieldsResult;
+  const pathFields = pathFieldsResult.data;
 
-  const ast = parseMarkdown(markdown);
+  const contentResult = await fs.readFile(filePath);
+  if (isErr(contentResult)) return contentResult;
 
-  const schemaResult = await kg.getNodeSchema();
-  if (isErr(schemaResult)) return schemaResult;
-  const schema = schemaResult.data;
+  const extractResult = await extractFromFile(
+    kg,
+    schema,
+    navItem,
+    contentResult.data,
+    pathFields,
+    filePath,
+  );
+  if (isErr(extractResult)) return extractResult;
 
-  const fileRepresentationResult = deconstructAstDocument(schema, ast);
-  if (isErr(fileRepresentationResult)) return fileRepresentationResult;
-
-  const kgRepresentationResult = await fetchDocumentNodes(kg, documentRef);
-  if (isErr(kgRepresentationResult)) return kgRepresentationResult;
-
-  return ok({
-    file: fileRepresentationResult.data,
-    kg: kgRepresentationResult.data,
-  });
-};
-
-export const synchronizeFile = async (
-  kg: KnowledgeGraph,
-  config: Config,
-  fs: FileSystem,
-  markdown: string,
-  filePath: string,
-): ResultAsync<TransactionInput | null> => {
-  const parseResult = await parseFile(kg, config, fs, markdown, filePath);
-  if (isErr(parseResult)) return parseResult;
-
-  const diffResult = diffNodeTrees(parseResult.data.file, parseResult.data.kg);
+  const data = extractResult.data;
+  const diffResult =
+    data.kind === "single"
+      ? diffNodeTrees(data.file, data.kg)
+      : diffNodeLists(data.file, data.kg);
   if (isErr(diffResult)) return diffResult;
 
   if (diffResult.data.length === 0) {

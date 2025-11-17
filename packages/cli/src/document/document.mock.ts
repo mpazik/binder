@@ -31,7 +31,6 @@ export const mockDocumentTransactionInput = {
     {
       uid: mockDocumentUid,
       type: "Document",
-      path: "document.md",
       blockContent: [mockSection1Uid, mockSection2Uid, mockSection3Uid],
     },
     {

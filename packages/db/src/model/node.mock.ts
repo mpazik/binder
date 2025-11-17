@@ -18,8 +18,8 @@ export const mockUserUid = "userRick001" as NodeUid;
 export const mockTask1Key = "task-implement-user-auth" as NodeKey;
 export const mockTask1Node = {
   id: 1 as NodeId,
-  key: mockTask1Key,
   uid: mockTask1Uid,
+  key: mockTask1Key,
   type: mockTaskTypeKey,
   title: "Implement user authentication",
   description: "Add login and registration functionality with JWT tokens",
@@ -39,8 +39,8 @@ export const mockTask3Key = "task-create-api" as NodeKey;
 
 export const mockProjectNode = {
   id: 2 as NodeId,
-  key: mockProjectKey,
   uid: mockProjectUid,
+  key: mockProjectKey,
   type: mockProjectTypeKey,
   title: "Binder System",
   description: "Build a robust entity management system with REST API",
@@ -50,8 +50,8 @@ export const mockProjectNode = {
 
 export const mockTask2Node = {
   id: 3 as NodeId,
-  key: mockTask2Key,
   uid: mockTask2Uid,
+  key: mockTask2Key,
   type: mockTaskTypeKey,
   title: "Implement schema generator",
   description: "Create a dynamic schema generator",
@@ -61,8 +61,8 @@ export const mockTask2Node = {
 
 export const mockTask3Node = {
   id: 4 as NodeId,
-  key: mockTask3Key,
   uid: mockTask3Uid,
+  key: mockTask3Key,
   type: mockTaskTypeKey,
   title: "Add relationship fields",
   description: "Enable querying related entities through API",

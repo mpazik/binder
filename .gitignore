@@ -11,6 +11,7 @@ pids
 
 # Binder local data
 .binder/
+docs-test/
 
 # Dependency directories
 node_modules/
