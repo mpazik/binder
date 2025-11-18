@@ -1,9 +1,8 @@
 import { and, sql, type SQL } from "drizzle-orm";
-import { tableStoredFields } from "./schema";
+import { tableStoredFields, type nodeTable, type configTable } from "./schema";
 import type { ComplexFilter, Filter, Filters } from "./model";
-import type { nodeTable } from "./schema";
 
-type NodeTable = typeof nodeTable;
+type EntityTable = typeof nodeTable | typeof configTable;
 
 const isComplexFilter = (filter: Filter): filter is ComplexFilter => {
   return (
@@ -14,16 +13,16 @@ const isComplexFilter = (filter: Filter): filter is ComplexFilter => {
   );
 };
 
-const getFieldSql = (table: NodeTable, fieldKey: string): SQL => {
+const getFieldSql = (table: EntityTable, fieldKey: string): SQL => {
   if (tableStoredFields.includes(fieldKey)) {
-    const column = table[fieldKey as keyof NodeTable];
+    const column = table[fieldKey as keyof EntityTable];
     return sql`${column}`;
   }
   return sql`json_extract(${table.fields}, ${`$.${fieldKey}`})`;
 };
 
 const buildFilterCondition = (
-  table: NodeTable,
+  table: EntityTable,
   fieldKey: string,
   filter: Filter,
 ): SQL | undefined => {
@@ -90,7 +89,7 @@ const buildFilterCondition = (
 };
 
 export const buildWhereClause = (
-  table: NodeTable,
+  table: EntityTable,
   filters: Filters,
 ): SQL | undefined => {
   const conditions: SQL[] = [];

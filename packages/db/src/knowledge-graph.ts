@@ -9,12 +9,15 @@ import {
 } from "@binder/utils";
 import { and, asc, desc, inArray, or, sql } from "drizzle-orm";
 import {
+  configSchema,
   type ConfigRef,
+  type ConfigSchema,
   type ConfigUid,
   fieldNodeTypes,
   type Fieldset,
   type GraphVersion,
   isFieldInSchema,
+  type NamespaceEditable,
   type NodeFieldDefinition,
   type NodeRef,
   type NodeSchema,
@@ -46,7 +49,10 @@ export type KnowledgeGraph = {
   fetchNode: (ref: NodeRef) => ResultAsync<Fieldset>;
   fetchConfig: (ref: ConfigRef) => ResultAsync<Fieldset>;
   fetchTransaction: (ref: TransactionRef) => ResultAsync<Transaction>;
-  search: (query: QueryParams) => ResultAsync<{
+  search: (
+    query: QueryParams,
+    namespace?: NamespaceEditable,
+  ) => ResultAsync<{
     items: Fieldset[];
     pagination: PaginationInfo;
   }>;
@@ -110,6 +116,11 @@ export const openKnowledgeGraph = (
       return ok(schema);
     });
   };
+  const getSchema = async (
+    namespace: NamespaceEditable,
+  ): ResultAsync<NodeSchema | ConfigSchema> => {
+    return namespace === "config" ? ok(configSchema) : getNodeSchema();
+  };
 
   const applyAndNotify = async (transaction: Transaction) => {
     let rollbackBeforeHook: TransactionRollback | null = null;
@@ -169,13 +180,17 @@ export const openKnowledgeGraph = (
         return fetchTransaction(tx, ref);
       });
     },
-    search: async (query: QueryParams) => {
+    search: async (
+      query: QueryParams,
+      namespace: "node" | "config" = "node",
+    ) => {
       return db.transaction(async (tx) => {
         const { filters = {}, pagination } = query;
         const limit = pagination?.limit ?? 50;
         const after = pagination?.after;
         const before = pagination?.before;
-        const schemaResult = await getNodeSchema();
+
+        const schemaResult = await getSchema(namespace);
         if (isErr(schemaResult)) return schemaResult;
         const schema = schemaResult.data;
 
@@ -190,20 +205,21 @@ export const openKnowledgeGraph = (
           );
         }
 
-        const filterClause = buildWhereClause(nodeTable, filters);
+        const table = namespace === "config" ? configTable : nodeTable;
+        const filterClause = buildWhereClause(table, filters);
 
-        const orderClause = before ? desc(nodeTable.id) : asc(nodeTable.id);
+        const orderClause = before ? desc(table.id) : asc(table.id);
         const paginationClause = after
-          ? sql`${nodeTable.id} > ${parseInt(after, 10)}`
+          ? sql`${table.id} > ${parseInt(after, 10)}`
           : before
-            ? sql`${nodeTable.id} < ${parseInt(before, 10)}`
+            ? sql`${table.id} < ${parseInt(before, 10)}`
             : undefined;
         const whereClause = and(filterClause, paginationClause);
 
         const results = await tryCatch(
           tx
             .select()
-            .from(nodeTable)
+            .from(table)
             .where(whereClause)
             .orderBy(orderClause)
             .limit(limit + 1)
@@ -220,30 +236,13 @@ export const openKnowledgeGraph = (
         const firstItem = items[0];
         const lastItem = items[items.length - 1];
 
-        const nextCursor = hasMore && lastItem ? String(lastItem.id) : null;
-        const previousCursor = firstItem && after ? String(firstItem.id) : null;
-
-        let hasPrevious = false;
-        if (after && firstItem) {
-          const prevCheck = await tryCatch(
-            tx
-              .select({ id: nodeTable.id })
-              .from(nodeTable)
-              .where(and(filterClause, sql`${nodeTable.id} < ${firstItem.id}`))
-              .limit(1)
-              .then((rows) => rows),
-          );
-          if (isErr(prevCheck)) return prevCheck;
-          hasPrevious = prevCheck.data.length > 0;
-        }
-
         return ok({
           items,
           pagination: {
             hasNext: hasMore,
-            hasPrevious,
-            nextCursor,
-            previousCursor,
+            hasPrevious: !!after,
+            nextCursor: hasMore && lastItem ? String(lastItem.id) : null,
+            previousCursor: firstItem && after ? String(firstItem.id) : null,
           },
         });
       });

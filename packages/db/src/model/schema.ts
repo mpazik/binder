@@ -358,7 +358,8 @@ export const emptyNodeSchema: NodeSchema = {
   types: {},
 };
 
+export type EntitySchema = NodeSchema | ConfigSchema;
 export const isFieldInSchema = (
   fieldKey: string,
-  schema: NodeSchema,
+  schema: EntitySchema,
 ): boolean => tableStoredFields.includes(fieldKey) || fieldKey in schema.fields;

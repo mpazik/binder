@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { isErr, okVoid, throwIfError } from "@binder/utils";
+import { okVoid, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { getTestDatabase } from "./db.mock";
 import { openKnowledgeGraph } from "./knowledge-graph.ts";
@@ -22,12 +22,14 @@ import {
 } from "./model/transaction.mock.ts";
 import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
 import {
+  configSchema,
   type ConfigUid,
   GENESIS_VERSION,
   type Transaction,
   versionFromTransaction,
 } from "./model";
 import { applyAndSaveTransaction } from "./transaction-processor.ts";
+import { mockNodeSchema } from "./model/schema.mock.ts";
 
 describe("knowledge-graph-setup", () => {
   let db: Database;
@@ -191,6 +193,20 @@ describe("knowledge graph", () => {
           filters: { InvalidField: "value" },
         });
         expect(result).toBeErrWithKey("invalid_filter_field");
+      });
+
+      it("searches config namespace when specified", async () => {
+        const result = throwIfError(
+          await kg.search(
+            {
+              filters: { type: "Type" },
+            },
+            "config",
+          ),
+        );
+
+        const types = Object.keys(mockNodeSchema.types);
+        expect(result.items.map((it) => it.key)).toEqual(types);
       });
     });
 
