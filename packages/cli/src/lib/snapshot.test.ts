@@ -216,21 +216,109 @@ describe("snapshot", () => {
 
       const result = throwIfError(await modifiedFiles(db, fs, rootPath));
 
-      expect(result).toHaveLength(3);
-      expect(result).toContainEqual({
-        type: "untracked",
-        path: untracedPath,
-      });
-      expect(result).toContainEqual({
-        type: "updated",
-        path: updatedPath,
-        txId: 2 as TransactionId,
-      });
-      expect(result).toContainEqual({
-        type: "removed",
-        path: removedPath,
-        txId: 3 as TransactionId,
-      });
+      expect(result).toEqual([
+        {
+          type: "untracked",
+          path: untracedPath,
+        },
+        {
+          type: "updated",
+          path: updatedPath,
+          txId: 2 as TransactionId,
+        },
+        {
+          type: "removed",
+          path: removedPath,
+          txId: 3 as TransactionId,
+        },
+      ]);
+    });
+
+    it("scopes to subdirectory when scopePath provided", async () => {
+      const scopeDir = `${rootPath}/tasks`;
+      await fs.mkdir(scopeDir, { recursive: true });
+
+      const inscopePath = `${scopeDir}/task1.md`;
+      await fs.writeFile(inscopePath, "task content");
+
+      const outscopePath = `${rootPath}/other.md`;
+      await fs.writeFile(outscopePath, "other content");
+
+      const result = throwIfError(
+        await modifiedFiles(db, fs, rootPath, scopeDir),
+      );
+
+      expect(result).toEqual([{ type: "untracked", path: inscopePath }]);
+    });
+
+    it("only detects removed files in scope when scopePath provided", async () => {
+      const scopeDir = `${rootPath}/tasks`;
+      await fs.mkdir(scopeDir, { recursive: true });
+
+      const inscopeRemovedPath = `${scopeDir}/removed1.md`;
+      const outscopeRemovedPath = `${rootPath}/removed2.md`;
+
+      await saveSnapshotMetadata(db, [
+        {
+          path: inscopeRemovedPath,
+          txId: version.id,
+          mtime: Date.now(),
+          size: 50,
+          hash: "hash1",
+        },
+        {
+          path: outscopeRemovedPath,
+          txId: version.id,
+          mtime: Date.now(),
+          size: 50,
+          hash: "hash2",
+        },
+      ]);
+
+      const result = throwIfError(
+        await modifiedFiles(db, fs, rootPath, scopeDir),
+      );
+
+      expect(result).toEqual([
+        {
+          type: "removed",
+          path: inscopeRemovedPath,
+          txId: version.id,
+        },
+      ]);
+    });
+
+    it("handles when scopePath is a file", async () => {
+      const file1Path = `${rootPath}/file1.md`;
+      const file2Path = `${rootPath}/file2.md`;
+      await fs.writeFile(file1Path, "content 1");
+      await fs.writeFile(file2Path, "content 2");
+
+      const file1Stat = throwIfError(fs.stat(file1Path));
+
+      await saveSnapshotMetadata(db, [
+        {
+          path: file1Path,
+          txId: version.id,
+          mtime: file1Stat.mtime - 1000,
+          size: file1Stat.size,
+          hash: await calculateFileHash(fs, file1Path),
+        },
+      ]);
+
+      await fs.writeFile(file1Path, "updated content 1");
+
+      const result = throwIfError(
+        await modifiedFiles(db, fs, rootPath, file1Path),
+      );
+
+      expect(result).toEqual([
+        {
+          type: "updated",
+          path: file1Path,
+          txId: version.id,
+        },
+      ]);
     });
   });
 });

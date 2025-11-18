@@ -13,6 +13,7 @@ import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { diffNodeLists, diffNodeTrees } from "../utils/node-diff.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
+import type { FileChangeMetadata } from "../lib/snapshot.ts";
 import {
   DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
@@ -217,5 +218,42 @@ export const synchronizeFile = async (
   return ok({
     author: config.author,
     nodes: diffResult.data,
+  });
+};
+
+export const synchronizeModifiedFiles = async (
+  fs: FileSystem,
+  kg: KnowledgeGraph,
+  config: Config,
+  navigationItems: NavigationItem[],
+  schema: NodeSchema,
+  modifiedFiles: FileChangeMetadata[],
+): ResultAsync<TransactionInput | null> => {
+  const allNodes: TransactionInput["nodes"] = [];
+
+  for (const file of modifiedFiles) {
+    const syncResult = await synchronizeFile(
+      fs,
+      kg,
+      config,
+      navigationItems,
+      schema,
+      file.path,
+      "txId" in file ? file.txId : undefined,
+    );
+    if (isErr(syncResult)) return syncResult;
+
+    if (syncResult.data?.nodes) {
+      allNodes.push(...syncResult.data.nodes);
+    }
+  }
+
+  if (allNodes.length === 0) {
+    return ok(null);
+  }
+
+  return ok({
+    author: config.author,
+    nodes: allNodes,
   });
 };

@@ -5,8 +5,9 @@ import {
   type CommandHandlerWithDbWrite,
 } from "../bootstrap.ts";
 import { renderDocs } from "../document/repository.ts";
-import { synchronizeFile } from "../document/synchronizer.ts";
+import { synchronizeModifiedFiles } from "../document/synchronizer.ts";
 import { loadNavigation } from "../document/navigation.ts";
+import { modifiedFiles } from "../lib/snapshot.ts";
 import { types } from "./types.ts";
 
 export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
@@ -19,18 +20,35 @@ export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
 };
 
 export const docsSyncHandler: CommandHandlerWithDbWrite<{
-  filePath: string;
-}> = async ({ kg, fs, ui, config, args }) => {
+  path?: string;
+}> = async ({ kg, fs, ui, config, args, db }) => {
   const navigationResult = await loadNavigation(fs, config.paths.binder);
   if (isErr(navigationResult)) return navigationResult;
 
-  const syncResult = await synchronizeFile(
+  const modifiedFilesResult = await modifiedFiles(
+    db,
+    fs,
+    config.paths.docs,
+    args.path,
+  );
+  if (isErr(modifiedFilesResult)) return modifiedFilesResult;
+
+  const actionableFiles = modifiedFilesResult.data.filter(
+    (file) => file.type === "untracked" || file.type === "updated",
+  );
+
+  if (actionableFiles.length === 0) {
+    ui.println("No changes detected");
+    return ok(undefined);
+  }
+
+  const syncResult = await synchronizeModifiedFiles(
     fs,
     kg,
     config,
     navigationResult.data,
     { fields: {}, types: {} },
-    args.filePath,
+    actionableFiles,
   );
   if (isErr(syncResult)) return syncResult;
 
@@ -45,7 +63,9 @@ export const docsSyncHandler: CommandHandlerWithDbWrite<{
   ui.block(() => {
     ui.printTransaction(updateResult.data);
   });
-  ui.success("File synchronized successfully");
+  ui.success(
+    `Synchronized ${actionableFiles.length} file${actionableFiles.length === 1 ? "" : "s"}`,
+  );
   return ok(undefined);
 };
 
@@ -63,13 +83,15 @@ const DocsCommand = types({
       )
       .command(
         types({
-          command: "sync <filePath>",
-          describe: "synchronize a file with the knowledge graph",
+          command: "sync [path]",
+          describe:
+            "synchronize files with the knowledge graph (file, directory, or all modified files)",
           builder: (yargs: Argv) => {
-            return yargs.positional("filePath", {
-              describe: "path to the markdown file to synchronize",
+            return yargs.positional("path", {
+              describe:
+                "path to file or directory (omit to sync all modified files)",
               type: "string",
-              demandOption: true,
+              demandOption: false,
             });
           },
           handler: bootstrapWithDbWrite(docsSyncHandler),

@@ -1,4 +1,5 @@
 import { dirname } from "path";
+import { like } from "drizzle-orm";
 import type { GraphVersion, TransactionId } from "@binder/db";
 import {
   isErr,
@@ -50,8 +51,19 @@ export const saveSnapshotMetadata = async (
 
 export const getSnapshotMetadata = (
   db: DatabaseCli,
+  scopePath?: string,
 ): Result<SnapshotMetadata[]> => {
-  return tryCatch(() => db.select().from(cliSnapshotMetadataTable).all());
+  return tryCatch(() =>
+    db
+      .select()
+      .from(cliSnapshotMetadataTable)
+      .where(
+        scopePath
+          ? like(cliSnapshotMetadataTable.path, `${scopePath}%`)
+          : undefined,
+      )
+      .all(),
+  );
 };
 
 export type FileChangeMetadata = { path: string } & (
@@ -72,12 +84,41 @@ export const modifiedFiles = async (
   db: DatabaseCli,
   fs: FileSystem,
   rootPath: string,
+  scopePath?: string,
 ): ResultAsync<FileChangeMetadata[]> => {
-  const snapshotMetadataResult = getSnapshotMetadata(db);
+  const snapshotMetadataResult = getSnapshotMetadata(db, scopePath);
   if (isErr(snapshotMetadataResult)) return snapshotMetadataResult;
   const snapshotMetadata = snapshotMetadataResult.data;
   const metadataByPath = new Map(snapshotMetadata.map((m) => [m.path, m]));
   const seenPaths = new Set<string>();
+
+  const checkFile = async (
+    filePath: string,
+  ): ResultAsync<FileChangeMetadata | null> => {
+    seenPaths.add(filePath);
+    const metadata = metadataByPath.get(filePath);
+
+    if (!metadata) {
+      return ok({
+        type: "untracked",
+        path: filePath,
+      });
+    }
+
+    const statResult = fs.stat(filePath);
+    if (isErr(statResult)) return statResult;
+    const stats = statResult.data;
+    if (stats.size === metadata.size) {
+      const hash = await calculateFileHash(fs, filePath);
+      if (hash === metadata.hash) return ok(null);
+    }
+
+    return ok({
+      type: stats.mtime > metadata.mtime ? "updated" : "outdated",
+      path: filePath,
+      txId: metadata.txId,
+    });
+  };
 
   const scanDirectory = async (
     dirPath: string,
@@ -94,36 +135,24 @@ export const modifiedFiles = async (
         if (isErr(result)) return result;
         modified.push(...result.data);
       } else if (entry.isFile) {
-        seenPaths.add(filePath);
-        const metadata = metadataByPath.get(filePath);
-
-        if (!metadata) {
-          modified.push({
-            type: "untracked",
-            path: filePath,
-          });
-          continue;
-        }
-
-        const statResult = fs.stat(filePath);
-        if (isErr(statResult)) return statResult;
-        const stats = statResult.data;
-        if (stats.size === metadata.size) {
-          const hash = await calculateFileHash(fs, filePath);
-          if (hash === metadata.hash) continue;
-        }
-
-        modified.push({
-          type: stats.mtime > metadata.mtime ? "updated" : "outdated",
-          path: filePath,
-          txId: metadata.txId,
-        });
+        const fileResult = await checkFile(filePath);
+        if (isErr(fileResult)) return fileResult;
+        if (fileResult.data) modified.push(fileResult.data);
       }
     }
     return ok(modified);
   };
 
-  const scanResult = await scanDirectory(rootPath);
+  const scanPath = scopePath ?? rootPath;
+  const isDirectoryResult = await fs.readdir(scanPath);
+
+  if (isErr(isDirectoryResult)) {
+    const fileResult = await checkFile(scanPath);
+    if (isErr(fileResult)) return fileResult;
+    return ok(fileResult.data ? [fileResult.data] : []);
+  }
+
+  const scanResult = await scanDirectory(scanPath);
   if (isErr(scanResult)) return scanResult;
 
   const removedFiles: FileChangeMetadata[] = [];

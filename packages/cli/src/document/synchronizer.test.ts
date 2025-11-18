@@ -13,23 +13,20 @@ import {
 } from "@binder/db/mocks";
 import type { CommandContextWithDbWrite } from "../bootstrap.ts";
 import { createMockCommandContextWithDb } from "../bootstrap.mock.ts";
+import type { FileChangeMetadata } from "../lib/snapshot.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
   mockCoreTransactionInputForDocs,
   mockDocumentTransactionInput,
 } from "./document.mock.ts";
-import { synchronizeFile } from "./synchronizer.ts";
+import { synchronizeFile, synchronizeModifiedFiles } from "./synchronizer.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import { type NavigationItem } from "./navigation.ts";
 
-describe("synchronizeFile", () => {
-  let ctx: CommandContextWithDbWrite;
-  let kg: KnowledgeGraph;
-
-  const navigationItems: NavigationItem[] = [
-    {
-      path: "tasks/{key}.md",
-      view: `# {title}
+const navigationItems: NavigationItem[] = [
+  {
+    path: "tasks/{key}.md",
+    view: `# {title}
 
 **Status:** {status}
 
@@ -37,16 +34,39 @@ describe("synchronizeFile", () => {
 
 {description}
 `,
-    },
-    {
-      path: "tasks/{key}.yaml",
-      includes: { title: true, status: true, description: true },
-    },
-    {
-      path: "all-tasks.yaml",
-      query: { filters: { type: "Task" } },
-    },
-  ];
+  },
+  {
+    path: "tasks/{key}.yaml",
+    includes: { title: true, status: true, description: true },
+  },
+  {
+    path: "all-tasks.yaml",
+    query: { filters: { type: "Task" } },
+  },
+];
+
+const taskMarkdown = (
+  title: string,
+  status: string,
+  description: string,
+) => `# ${title}
+
+**Status:** ${status}
+
+## Description
+
+${description}
+`;
+
+describe("synchronizeFile", () => {
+  let ctx: CommandContextWithDbWrite;
+  let kg: KnowledgeGraph;
+
+  const mockFileChange = (relativePath: string): FileChangeMetadata => ({
+    type: "updated",
+    path: join(ctx.config.paths.docs, relativePath),
+    txId: 1 as any,
+  });
 
   beforeEach(async () => {
     ctx = await createMockCommandContextWithDb();
@@ -84,14 +104,11 @@ describe("synchronizeFile", () => {
     it("returns null when no changes", async () => {
       await check(
         `tasks/${mockTask1Node.key}.md`,
-        `# ${mockTask1Node.title}
-
-**Status:** ${mockTask1Node.status}
-
-## Description
-
-${mockTask1Node.description}
-`,
+        taskMarkdown(
+          mockTask1Node.title,
+          mockTask1Node.status,
+          mockTask1Node.description,
+        ),
         null,
       );
     });
@@ -99,14 +116,7 @@ ${mockTask1Node.description}
     it("detects field changes", async () => {
       await check(
         `tasks/${mockTask1Node.key}.md`,
-        `# Updated Task Title
-
-**Status:** done
-
-## Description
-
-New description text
-`,
+        taskMarkdown("Updated Task Title", "done", "New description text"),
         [
           {
             $ref: mockTask1Uid,
@@ -178,6 +188,96 @@ New description text
           { $ref: mockTask2Uid, status: "done" },
         ],
       );
+    });
+  });
+
+  describe("synchronizeModifiedFiles", () => {
+    it("returns null when no modified files", async () => {
+      const result = throwIfError(
+        await synchronizeModifiedFiles(
+          ctx.fs,
+          kg,
+          ctx.config,
+          navigationItems,
+          mockNodeSchema,
+          [],
+        ),
+      );
+      expect(result).toEqual(null);
+    });
+
+    it("merges changes from multiple files", async () => {
+      await check(
+        `tasks/${mockTask1Node.key}.md`,
+        taskMarkdown("Updated Task 1", "done", mockTask1Node.description),
+        [{ $ref: mockTask1Uid, title: "Updated Task 1", status: "done" }],
+      );
+      await check(
+        `tasks/${mockTask2Node.key}.md`,
+        taskMarkdown(mockTask2Node.title, "in-progress", "Updated description"),
+        [
+          {
+            $ref: mockTask2Uid,
+            status: "in-progress",
+            description: "Updated description",
+          },
+        ],
+      );
+
+      const result = throwIfError(
+        await synchronizeModifiedFiles(
+          ctx.fs,
+          kg,
+          ctx.config,
+          navigationItems,
+          mockNodeSchema,
+          [
+            mockFileChange(`tasks/${mockTask1Node.key}.md`),
+            mockFileChange(`tasks/${mockTask2Node.key}.md`),
+          ],
+        ),
+      );
+
+      expect(result).toEqual({
+        author: ctx.config.author,
+        nodes: [
+          {
+            $ref: mockTask1Uid,
+            title: "Updated Task 1",
+            status: "done",
+          },
+          {
+            $ref: mockTask2Uid,
+            status: "in-progress",
+            description: "Updated description",
+          },
+        ],
+      });
+    });
+
+    it("returns null when all files have no changes", async () => {
+      await check(
+        `tasks/${mockTask1Node.key}.md`,
+        taskMarkdown(
+          mockTask1Node.title,
+          mockTask1Node.status,
+          mockTask1Node.description,
+        ),
+        null,
+      );
+
+      const result = throwIfError(
+        await synchronizeModifiedFiles(
+          ctx.fs,
+          kg,
+          ctx.config,
+          navigationItems,
+          mockNodeSchema,
+          [mockFileChange(`tasks/${mockTask1Node.key}.md`)],
+        ),
+      );
+
+      expect(result).toEqual(null);
     });
   });
 });
