@@ -1,6 +1,10 @@
-import { dirname } from "path";
+import { dirname, relative } from "path";
 import { like } from "drizzle-orm";
-import type { GraphVersion, TransactionId } from "@binder/db";
+import type {
+  GraphVersion,
+  NamespaceEditable,
+  TransactionId,
+} from "@binder/db";
 import {
   isErr,
   ok,
@@ -10,6 +14,7 @@ import {
 } from "@binder/utils";
 import type { DatabaseCli } from "../db";
 import { cliSnapshotMetadataTable } from "../db/schema.ts";
+import type { ConfigPaths } from "../config.ts";
 import type { FileSystem } from "./filesystem.ts";
 
 export type SnapshotMetadata = {
@@ -20,6 +25,13 @@ export type SnapshotMetadata = {
   size: number;
   hash: string;
 };
+
+const toSnapshotPath = (
+  absolutePath: string,
+  paths: ConfigPaths,
+  namespace: NamespaceEditable,
+): string =>
+  relative(namespace === "config" ? paths.root : paths.docs, absolutePath);
 
 export const calculateFileHash = async (
   fs: FileSystem,
@@ -83,45 +95,49 @@ export type FileChangeMetadata = { path: string } & (
 export const modifiedFiles = async (
   db: DatabaseCli,
   fs: FileSystem,
-  rootPath: string,
-  scopePath?: string,
+  paths: ConfigPaths,
+  scopePath: string = paths.docs,
 ): ResultAsync<FileChangeMetadata[]> => {
-  const snapshotMetadataResult = getSnapshotMetadata(db, scopePath);
+  const snapshotMetadataResult = getSnapshotMetadata(db, undefined);
   if (isErr(snapshotMetadataResult)) return snapshotMetadataResult;
   const snapshotMetadata = snapshotMetadataResult.data;
+
   const metadataByPath = new Map(snapshotMetadata.map((m) => [m.path, m]));
   const seenPaths = new Set<string>();
 
   const checkFile = async (
-    filePath: string,
+    absolutePath: string,
+    namespace: NamespaceEditable,
   ): ResultAsync<FileChangeMetadata | null> => {
-    seenPaths.add(filePath);
-    const metadata = metadataByPath.get(filePath);
+    const snapshotPath = toSnapshotPath(absolutePath, paths, namespace);
+    seenPaths.add(snapshotPath);
+    const metadata = metadataByPath.get(snapshotPath);
 
     if (!metadata) {
       return ok({
         type: "untracked",
-        path: filePath,
+        path: snapshotPath,
       });
     }
 
-    const statResult = fs.stat(filePath);
+    const statResult = fs.stat(absolutePath);
     if (isErr(statResult)) return statResult;
     const stats = statResult.data;
     if (stats.size === metadata.size) {
-      const hash = await calculateFileHash(fs, filePath);
+      const hash = await calculateFileHash(fs, absolutePath);
       if (hash === metadata.hash) return ok(null);
     }
 
     return ok({
       type: stats.mtime > metadata.mtime ? "updated" : "outdated",
-      path: filePath,
+      path: snapshotPath,
       txId: metadata.txId,
     });
   };
 
   const scanDirectory = async (
     dirPath: string,
+    namespace: NamespaceEditable,
   ): ResultAsync<FileChangeMetadata[]> => {
     const entriesResult = await fs.readdir(dirPath);
     if (isErr(entriesResult)) return entriesResult;
@@ -131,11 +147,11 @@ export const modifiedFiles = async (
       const filePath = `${dirPath}/${entry.name}`;
 
       if (entry.isDirectory) {
-        const result = await scanDirectory(filePath);
+        const result = await scanDirectory(filePath, namespace);
         if (isErr(result)) return result;
         modified.push(...result.data);
       } else if (entry.isFile) {
-        const fileResult = await checkFile(filePath);
+        const fileResult = await checkFile(filePath, namespace);
         if (isErr(fileResult)) return fileResult;
         if (fileResult.data) modified.push(fileResult.data);
       }
@@ -143,21 +159,27 @@ export const modifiedFiles = async (
     return ok(modified);
   };
 
-  const scanPath = scopePath ?? rootPath;
-  const isDirectoryResult = await fs.readdir(scanPath);
+  const scanResults: FileChangeMetadata[] = [];
+  const namespace = scopePath.startsWith(paths.binder) ? "config" : "node";
+  const isDirectoryResult = await fs.readdir(scopePath);
 
   if (isErr(isDirectoryResult)) {
-    const fileResult = await checkFile(scanPath);
+    const fileResult = await checkFile(scopePath, namespace);
     if (isErr(fileResult)) return fileResult;
-    return ok(fileResult.data ? [fileResult.data] : []);
+    if (fileResult.data) scanResults.push(fileResult.data);
+  } else {
+    const result = await scanDirectory(scopePath, namespace);
+    if (isErr(result)) return result;
+    scanResults.push(...result.data);
   }
 
-  const scanResult = await scanDirectory(scanPath);
-  if (isErr(scanResult)) return scanResult;
+  const scopePrefix = toSnapshotPath(scopePath, paths, namespace);
 
   const removedFiles: FileChangeMetadata[] = [];
   for (const metadata of snapshotMetadata) {
-    if (!seenPaths.has(metadata.path)) {
+    if (seenPaths.has(metadata.path)) continue;
+
+    if (metadata.path.startsWith(scopePrefix)) {
       removedFiles.push({
         type: "removed",
         path: metadata.path,
@@ -166,33 +188,38 @@ export const modifiedFiles = async (
     }
   }
 
-  return ok([...scanResult.data, ...removedFiles]);
+  return ok([...scanResults, ...removedFiles]);
 };
 
 export const saveSnapshot = async (
   db: DatabaseCli,
   fs: FileSystem,
-  filePath: string,
+  paths: ConfigPaths,
+  absolutePath: string,
   content: string,
   version: GraphVersion,
+  namespace: NamespaceEditable = "node",
 ): ResultAsync<void> => {
-  const mkdirResult = await fs.mkdir(dirname(filePath), { recursive: true });
+  const mkdirResult = await fs.mkdir(dirname(absolutePath), {
+    recursive: true,
+  });
   if (isErr(mkdirResult)) return mkdirResult;
 
-  const writeResult = await fs.writeFile(filePath, content);
+  const writeResult = await fs.writeFile(absolutePath, content);
   if (isErr(writeResult)) return writeResult;
 
-  const statResult = fs.stat(filePath);
+  const statResult = fs.stat(absolutePath);
   if (isErr(statResult)) return statResult;
 
-  const hash = await calculateFileHash(fs, filePath);
+  const hash = await calculateFileHash(fs, absolutePath);
   const size = statResult.data.size;
   const mtime = statResult.data.mtime;
+  const snapshotPath = toSnapshotPath(absolutePath, paths, namespace);
 
   return tryCatch(() => {
     db.insert(cliSnapshotMetadataTable)
       .values({
-        path: filePath,
+        path: snapshotPath,
         txId: version.id,
         mtime,
         size,

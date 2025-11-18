@@ -15,7 +15,7 @@ export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
   const result = await renderDocs(context);
   if (isErr(result)) return result;
 
-  ui.println("Documentation rendered successfully");
+  ui.println("Documentation and configuration files rendered successfully");
   return ok(undefined);
 };
 
@@ -25,11 +25,12 @@ export const docsSyncHandler: CommandHandlerWithDbWrite<{
   const navigationResult = await loadNavigation(fs, config.paths.binder);
   if (isErr(navigationResult)) return navigationResult;
 
+  const scopePath = args.path ? args.path : undefined;
   const modifiedFilesResult = await modifiedFiles(
     db,
     fs,
-    config.paths.docs,
-    args.path,
+    config.paths,
+    scopePath,
   );
   if (isErr(modifiedFilesResult)) return modifiedFilesResult;
 

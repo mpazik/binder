@@ -11,6 +11,7 @@ import {
   type Includes,
   IncludesSchema,
   type KnowledgeGraph,
+  type NamespaceEditable,
   type NodeSchema,
   type QueryParams,
   QueryParamsSchema,
@@ -34,6 +35,7 @@ import type { DatabaseCli } from "../db";
 import { interpolateQueryParams } from "../utils/query.ts";
 import { saveSnapshot } from "../lib/snapshot.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
+import { type ConfigPaths, renderPathForNamespace } from "../config.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
@@ -98,6 +100,21 @@ export type NavigationItem = {
   query?: QueryParams;
   children?: NavigationItem[];
 };
+
+export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
+  {
+    path: "fields.yaml",
+    query: {
+      filters: { type: "Field" },
+    },
+  },
+  {
+    path: "types.yaml",
+    query: {
+      filters: { type: "Type" },
+    },
+  },
+];
 
 export const loadNavigation = async (
   fs: FileSystem,
@@ -177,6 +194,7 @@ const renderContent = async (
   entity: FieldsetNested,
   parentEntities: Fieldset[],
   fileType: FileType,
+  namespace: NamespaceEditable,
 ): Promise<Result<string> | undefined> => {
   if (fileType === "markdown") {
     assertDefined(item.view);
@@ -192,7 +210,7 @@ const renderContent = async (
       ]);
       if (isErr(interpolatedQuery)) return interpolatedQuery;
 
-      const queryResult = await kg.search(interpolatedQuery.data);
+      const queryResult = await kg.search(interpolatedQuery.data, namespace);
       if (isErr(queryResult)) return queryResult;
 
       return ok(renderYamlList(queryResult.data.items));
@@ -206,12 +224,13 @@ const renderNavigationItem = async (
   db: DatabaseCli,
   kg: KnowledgeGraph,
   fs: FileSystem,
-  docsPath: string,
+  paths: ConfigPaths,
   schema: NodeSchema,
   version: GraphVersion,
   item: NavigationItem,
   parentPath: string,
   parentEntities: Fieldset[],
+  namespace: NamespaceEditable,
 ): ResultAsync<void> => {
   const fileType = getSnapshotFileType(item.path);
 
@@ -229,7 +248,7 @@ const renderNavigationItem = async (
     );
     if (isErr(interpolatedQuery)) return interpolatedQuery;
 
-    const searchResult = await kg.search(interpolatedQuery.data);
+    const searchResult = await kg.search(interpolatedQuery.data, namespace);
     if (isErr(searchResult)) return searchResult;
 
     entities = searchResult.data.items;
@@ -254,6 +273,7 @@ const renderNavigationItem = async (
       entity,
       parentEntities,
       fileType,
+      namespace,
     );
 
     if (renderResult) {
@@ -261,9 +281,11 @@ const renderNavigationItem = async (
       const saveResult = await saveSnapshot(
         db,
         fs,
-        join(docsPath, filePath),
+        paths,
+        join(renderPathForNamespace(namespace, paths), filePath),
         renderResult.data,
         version,
+        namespace,
       );
       if (isErr(saveResult)) return saveResult;
     }
@@ -279,27 +301,29 @@ const renderNavigationItem = async (
           db,
           kg,
           fs,
-          docsPath,
+          paths,
           schema,
           version,
           child,
           itemDir,
           childParentEntities,
+          namespace,
         );
         if (isErr(result)) return result;
       }
     }
   }
 
-  return ok(undefined);
+  return okVoid;
 };
 
 export const renderNavigation = async (
   db: DatabaseCli,
   kg: KnowledgeGraph,
   fs: FileSystem,
-  docsPath: string,
+  paths: ConfigPaths,
   navigationItems: NavigationItem[],
+  namespace: NamespaceEditable = "node",
 ): ResultAsync<void> => {
   const schemaResult = await kg.getNodeSchema();
   if (isErr(schemaResult)) return schemaResult;
@@ -311,12 +335,13 @@ export const renderNavigation = async (
       db,
       kg,
       fs,
-      docsPath,
+      paths,
       schemaResult.data,
       versionResult.data,
       item,
       "",
       [],
+      namespace,
     );
     if (isErr(result)) return result;
   }

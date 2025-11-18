@@ -19,9 +19,10 @@ import {
   saveSnapshotMetadata,
 } from "./snapshot.ts";
 
-const rootPath = mockConfig.paths.docs;
-const filePath = `${rootPath}/test.md`;
-const filePath2 = `${rootPath}/test2.md`;
+const paths = mockConfig.paths;
+const { docs: docsPath } = paths;
+const filePath = `${docsPath}/test.md`;
+const filePath2 = `${docsPath}/test2.md`;
 
 const version: GraphVersion = versionFromTransaction(mockTransactionInit);
 
@@ -31,7 +32,7 @@ describe("snapshot", () => {
 
   beforeEach(async () => {
     fs = createInMemoryFileSystem();
-    await fs.mkdir(rootPath, { recursive: true });
+    await fs.mkdir(docsPath, { recursive: true });
     db = getTestDatabaseCli();
   });
 
@@ -65,7 +66,9 @@ describe("snapshot", () => {
     const content = "# Test Document\n\nThis is a test.";
 
     it("saves file to filesystem and creates corresponding metadata record", async () => {
-      throwIfError(await saveSnapshot(db, fs, filePath, content, version));
+      throwIfError(
+        await saveSnapshot(db, fs, paths, filePath, content, version, "node"),
+      );
 
       expect((await fs.readFile(filePath)).data).toBe(content);
 
@@ -73,7 +76,7 @@ describe("snapshot", () => {
       expect(metadata).toEqual([
         {
           id: 1,
-          path: filePath,
+          path: "test.md",
           txId: version.id,
           ...throwIfError(fs.stat(filePath)),
           hash: await calculateFileHash(fs, filePath),
@@ -88,8 +91,12 @@ describe("snapshot", () => {
         updatedAt: newIsoTimestamp(),
       };
 
-      throwIfError(await saveSnapshot(db, fs, filePath, content, version));
-      throwIfError(await saveSnapshot(db, fs, filePath, "Version 2", version2));
+      throwIfError(
+        await saveSnapshot(db, fs, paths, filePath, content, version),
+      );
+      throwIfError(
+        await saveSnapshot(db, fs, paths, filePath, "Version 2", version2),
+      );
 
       const fileResult = await fs.readFile(filePath);
       expect(fileResult.data).toBe("Version 2");
@@ -98,7 +105,7 @@ describe("snapshot", () => {
       expect(metadata).toEqual([
         {
           id: 1,
-          path: filePath,
+          path: "test.md",
           txId: version2.id,
           ...throwIfError(fs.stat(filePath)),
           hash: await calculateFileHash(fs, filePath),
@@ -111,15 +118,27 @@ describe("snapshot", () => {
     it("detects new untracked file", async () => {
       await fs.writeFile(filePath, "new content");
 
-      const result = throwIfError(await modifiedFiles(db, fs, rootPath));
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+      );
 
-      expect(result).toEqual([{ type: "untracked", path: filePath }]);
+      expect(result).toEqual([{ type: "untracked", path: "test.md" }]);
     });
 
     it("ignores unchanged files", async () => {
-      await saveSnapshot(db, fs, filePath, "unchanged content", version);
+      await saveSnapshot(
+        db,
+        fs,
+        mockConfig.paths,
+        filePath,
+        "unchanged content",
+        version,
+        "node",
+      );
 
-      const result = throwIfError(await modifiedFiles(db, fs, rootPath));
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+      );
 
       expect(result).toEqual([]);
     });
@@ -131,7 +150,7 @@ describe("snapshot", () => {
 
       await saveSnapshotMetadata(db, [
         {
-          path: filePath,
+          path: "test.md",
           txId: version.id,
           mtime: originalStat.mtime - 1000,
           size: originalStat.size,
@@ -140,10 +159,12 @@ describe("snapshot", () => {
       ]);
       await fs.writeFile(filePath, "updated content");
 
-      const result = throwIfError(await modifiedFiles(db, fs, rootPath));
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+      );
 
       expect(result).toEqual([
-        { type: "updated", path: filePath, txId: version.id },
+        { type: "updated", path: "test.md", txId: version.id },
       ]);
     });
 
@@ -154,7 +175,7 @@ describe("snapshot", () => {
 
       await saveSnapshotMetadata(db, [
         {
-          path: filePath,
+          path: "test.md",
           txId: version.id,
           mtime: currentStat.mtime + 1000,
           size: currentStat.size + 10,
@@ -162,17 +183,19 @@ describe("snapshot", () => {
         },
       ]);
 
-      const result = throwIfError(await modifiedFiles(db, fs, rootPath));
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+      );
 
       expect(result).toEqual([
-        { type: "outdated", path: filePath, txId: version.id },
+        { type: "outdated", path: "test.md", txId: version.id },
       ]);
     });
 
     it("detects removed file", async () => {
       await saveSnapshotMetadata(db, [
         {
-          path: filePath,
+          path: "test.md",
           txId: version.id,
           mtime: Date.now(),
           size: 100,
@@ -180,32 +203,33 @@ describe("snapshot", () => {
         },
       ]);
 
-      const result = throwIfError(await modifiedFiles(db, fs, rootPath));
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+      );
 
       expect(result).toEqual([
-        { type: "removed", path: filePath, txId: version.id },
+        { type: "removed", path: "test.md", txId: version.id },
       ]);
     });
 
     it("handles multiple files with different change types", async () => {
-      const untracedPath = `${rootPath}/untracked.md`;
+      const untracedPath = `${docsPath}/untracked.md`;
       await fs.writeFile(untracedPath, "new content");
 
-      const updatedPath = `${rootPath}/updated.md`;
+      const updatedPath = `${docsPath}/updated.md`;
       await fs.writeFile(updatedPath, "original");
       const updatedStat = throwIfError(fs.stat(updatedPath));
-      const removedPath = `${rootPath}/removed.md`;
 
       await saveSnapshotMetadata(db, [
         {
-          path: updatedPath,
+          path: "updated.md",
           txId: 2 as TransactionId,
           mtime: updatedStat.mtime - 1000,
           size: updatedStat.size,
           hash: await calculateFileHash(fs, updatedPath),
         },
         {
-          path: removedPath,
+          path: "removed.md",
           txId: 3 as TransactionId,
           mtime: Date.now(),
           size: 50,
@@ -214,60 +238,55 @@ describe("snapshot", () => {
       ]);
       await fs.writeFile(updatedPath, "modified content");
 
-      const result = throwIfError(await modifiedFiles(db, fs, rootPath));
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+      );
 
       expect(result).toEqual([
         {
           type: "untracked",
-          path: untracedPath,
+          path: "untracked.md",
         },
         {
           type: "updated",
-          path: updatedPath,
+          path: "updated.md",
           txId: 2 as TransactionId,
         },
         {
           type: "removed",
-          path: removedPath,
+          path: "removed.md",
           txId: 3 as TransactionId,
         },
       ]);
     });
 
     it("scopes to subdirectory when scopePath provided", async () => {
-      const scopeDir = `${rootPath}/tasks`;
+      const scopeDir = `${docsPath}/tasks`;
       await fs.mkdir(scopeDir, { recursive: true });
-
-      const inscopePath = `${scopeDir}/task1.md`;
-      await fs.writeFile(inscopePath, "task content");
-
-      const outscopePath = `${rootPath}/other.md`;
-      await fs.writeFile(outscopePath, "other content");
+      await fs.writeFile(`${scopeDir}/task1.md`, "task content");
+      await fs.writeFile(`${docsPath}/other.md`, "other content");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, rootPath, scopeDir),
+        await modifiedFiles(db, fs, mockConfig.paths, scopeDir),
       );
 
-      expect(result).toEqual([{ type: "untracked", path: inscopePath }]);
+      expect(result).toEqual([{ type: "untracked", path: "tasks/task1.md" }]);
     });
 
     it("only detects removed files in scope when scopePath provided", async () => {
-      const scopeDir = `${rootPath}/tasks`;
+      const scopeDir = `${docsPath}/tasks`;
       await fs.mkdir(scopeDir, { recursive: true });
-
-      const inscopeRemovedPath = `${scopeDir}/removed1.md`;
-      const outscopeRemovedPath = `${rootPath}/removed2.md`;
 
       await saveSnapshotMetadata(db, [
         {
-          path: inscopeRemovedPath,
+          path: "tasks/removed1.md",
           txId: version.id,
           mtime: Date.now(),
           size: 50,
           hash: "hash1",
         },
         {
-          path: outscopeRemovedPath,
+          path: "removed2.md",
           txId: version.id,
           mtime: Date.now(),
           size: 50,
@@ -276,29 +295,28 @@ describe("snapshot", () => {
       ]);
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, rootPath, scopeDir),
+        await modifiedFiles(db, fs, mockConfig.paths, scopeDir),
       );
 
       expect(result).toEqual([
         {
           type: "removed",
-          path: inscopeRemovedPath,
+          path: "tasks/removed1.md",
           txId: version.id,
         },
       ]);
     });
 
     it("handles when scopePath is a file", async () => {
-      const file1Path = `${rootPath}/file1.md`;
-      const file2Path = `${rootPath}/file2.md`;
+      const file1Path = `${docsPath}/file1.md`;
       await fs.writeFile(file1Path, "content 1");
-      await fs.writeFile(file2Path, "content 2");
+      await fs.writeFile(`${docsPath}/file2.md`, "content 2");
 
       const file1Stat = throwIfError(fs.stat(file1Path));
 
       await saveSnapshotMetadata(db, [
         {
-          path: file1Path,
+          path: "file1.md",
           txId: version.id,
           mtime: file1Stat.mtime - 1000,
           size: file1Stat.size,
@@ -309,13 +327,89 @@ describe("snapshot", () => {
       await fs.writeFile(file1Path, "updated content 1");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, rootPath, file1Path),
+        await modifiedFiles(db, fs, mockConfig.paths, file1Path),
       );
 
       expect(result).toEqual([
         {
           type: "updated",
-          path: file1Path,
+          path: "file1.md",
+          txId: version.id,
+        },
+      ]);
+    });
+
+    it("handles config file from .binder directory", async () => {
+      const binderPath = paths.binder;
+      await fs.mkdir(binderPath, { recursive: true });
+      const configFilePath = `${binderPath}/fields.yaml`;
+      await fs.writeFile(configFilePath, "- name: title\n  type: string");
+
+      throwIfError(
+        await saveSnapshot(
+          db,
+          fs,
+          paths,
+          configFilePath,
+          "- name: title\n  type: string",
+          version,
+          "config",
+        ),
+      );
+
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, binderPath),
+      );
+
+      expect(result).toEqual([]);
+    });
+
+    it("detects new config file in .binder directory", async () => {
+      const binderPath = paths.binder;
+      await fs.mkdir(binderPath, { recursive: true });
+      const configFilePath = `${binderPath}/types.yaml`;
+      await fs.writeFile(configFilePath, "- name: Task\n  fields: []");
+
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, binderPath),
+      );
+
+      expect(result).toEqual([
+        {
+          type: "untracked",
+          path: ".binder/types.yaml",
+        },
+      ]);
+    });
+
+    it("detects updated config file in .binder directory", async () => {
+      const binderPath = paths.binder;
+      await fs.mkdir(binderPath, { recursive: true });
+      const configFilePath = `${binderPath}/fields.yaml`;
+      await fs.writeFile(configFilePath, "original config");
+
+      const originalStat = throwIfError(fs.stat(configFilePath));
+
+      await saveSnapshotMetadata(db, [
+        {
+          path: ".binder/fields.yaml",
+          txId: version.id,
+          mtime: originalStat.mtime - 1000,
+          size: originalStat.size,
+          hash: await calculateFileHash(fs, configFilePath),
+        },
+      ]);
+
+      await fs.writeFile(configFilePath, "updated config");
+
+      const result = throwIfError(
+        await modifiedFiles(db, fs, mockConfig.paths, binderPath),
+      );
+
+      expect(result).toEqual([
+        {
+          type: "updated",
+          path: ".binder/fields.yaml",
           txId: version.id,
         },
       ]);

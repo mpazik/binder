@@ -1,61 +1,68 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
-import { type KnowledgeGraph, type NodeUid } from "@binder/db";
-import { isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
+import { join } from "path";
+import { type KnowledgeGraph } from "@binder/db";
+import { isErr, ok, okVoid, type ResultAsync } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import type { DatabaseCli } from "../db";
-import type { Config } from "../bootstrap.ts";
+import type { AppConfig } from "../config.ts";
 import {
+  CONFIG_NAVIGATION_ITEMS,
   loadNavigation,
+  type NavigationItem,
   renderNavigation,
   SUPPORTED_SNAPSHOT_EXTS,
 } from "./navigation.ts";
-import { buildAstDoc } from "./doc-builder.ts";
-import { renderAstToMarkdown } from "./markdown.ts";
 
-export type DocumentWithPath = {
-  uid: NodeUid;
-  key?: string;
-  title?: string;
-  path: string;
-};
-const fetchDocumentsWithPath = async (
-  kg: KnowledgeGraph,
-): ResultAsync<DocumentWithPath[]> => {
-  const searchResult = await kg.search({
-    filters: { type: "Document" },
-  });
+const removeSnapshotFiles = async (
+  fs: FileSystem,
+  dir: string,
+): ResultAsync<void> => {
+  const exists = await fs.exists(dir);
+  if (!exists) return ok(undefined);
 
-  if (isErr(searchResult)) return searchResult;
+  const listResult = await fs.readdir(dir);
+  if (isErr(listResult)) return listResult;
 
-  const docsWithPath = searchResult.data.items
-    .filter((doc) => doc.path !== undefined && doc.path !== null)
-    .map((doc) => ({
-      uid: doc.uid as NodeUid,
-      key: doc.key as string | undefined,
-      title: doc.title as string | undefined,
-      path: doc.path as string,
-    }));
-
-  return ok(docsWithPath);
-};
-
-const removeSnapshotFiles = (dir: string): void => {
-  if (!existsSync(dir)) return;
-
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      removeSnapshotFiles(fullPath);
+  for (const entry of listResult.data) {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory) {
+      const removeResult = await removeSnapshotFiles(fs, entryPath);
+      if (isErr(removeResult)) return removeResult;
     } else if (
-      entry.isFile() &&
       SUPPORTED_SNAPSHOT_EXTS.some((ext) => entry.name.endsWith(ext))
     ) {
-      rmSync(fullPath);
+      const rmResult = await fs.rm(entryPath);
+      if (isErr(rmResult)) return rmResult;
     }
   }
+
+  return okVoid;
+};
+
+const removeNavigationFiles = async (
+  fs: FileSystem,
+  items: NavigationItem[],
+  baseDir: string,
+): ResultAsync<void> => {
+  for (const item of items) {
+    const filePath = join(baseDir, item.path);
+    const exists = await fs.exists(filePath);
+    if (exists) {
+      const rmResult = await fs.rm(filePath);
+      if (isErr(rmResult)) return rmResult;
+    }
+
+    if (item.children) {
+      const removeResult = await removeNavigationFiles(
+        fs,
+        item.children,
+        baseDir,
+      );
+      if (isErr(removeResult)) return removeResult;
+    }
+  }
+
+  return okVoid;
 };
 
 export const renderDocs = async (services: {
@@ -63,7 +70,7 @@ export const renderDocs = async (services: {
   kg: KnowledgeGraph;
   fs: FileSystem;
   log: Logger;
-  config: Config;
+  config: AppConfig;
 }): ResultAsync<void> => {
   const {
     db,
@@ -72,41 +79,39 @@ export const renderDocs = async (services: {
     log,
     config: { paths },
   } = services;
-  const removeResult = tryCatch(() => {
-    removeSnapshotFiles(paths.docs);
-    mkdirSync(paths.docs, { recursive: true });
-  });
-  if (isErr(removeResult)) return removeResult;
 
-  const docsResult = await fetchDocumentsWithPath(kg);
-  if (isErr(docsResult)) return docsResult;
+  const removeDocsResult = await removeSnapshotFiles(fs, paths.docs);
+  if (isErr(removeDocsResult)) return removeDocsResult;
 
-  const docs = docsResult.data;
-
-  for (const doc of docs) {
-    const astResult = await buildAstDoc(kg, doc.uid);
-    if (isErr(astResult)) {
-      log.error(`Failed to build AST for ${doc.path}`, {
-        error: astResult.error,
-      });
-      continue;
-    }
-
-    const markdown = renderAstToMarkdown(astResult.data);
-    const filePath = join(paths.docs, doc.path);
-
-    const writeResult = tryCatch(() => {
-      mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, markdown, "utf-8");
-    });
-
-    if (isErr(writeResult)) {
-      log.error(`Failed to write ${filePath}`, { error: writeResult.error });
-    }
-  }
+  const removeConfigResult = await removeNavigationFiles(
+    fs,
+    CONFIG_NAVIGATION_ITEMS,
+    paths.binder,
+  );
+  if (isErr(removeConfigResult)) return removeConfigResult;
 
   const navigationResult = await loadNavigation(fs, paths.binder);
   if (isErr(navigationResult)) return navigationResult;
 
-  return renderNavigation(db, kg, fs, paths.docs, navigationResult.data);
+  const renderNodeResult = await renderNavigation(
+    db,
+    kg,
+    fs,
+    paths,
+    navigationResult.data,
+    "node",
+  );
+  if (isErr(renderNodeResult)) return renderNodeResult;
+
+  const renderConfigResult = await renderNavigation(
+    db,
+    kg,
+    fs,
+    paths,
+    CONFIG_NAVIGATION_ITEMS,
+    "config",
+  );
+  if (isErr(renderConfigResult)) return renderConfigResult;
+
+  return ok(undefined);
 };

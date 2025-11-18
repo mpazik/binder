@@ -64,7 +64,7 @@ describe("synchronizeFile", () => {
 
   const mockFileChange = (relativePath: string): FileChangeMetadata => ({
     type: "updated",
-    path: join(ctx.config.paths.docs, relativePath),
+    path: relativePath,
     txId: 1 as any,
   });
 
@@ -91,7 +91,7 @@ describe("synchronizeFile", () => {
         ctx.config,
         navigationItems,
         mockNodeSchema,
-        fullPath,
+        filePath,
       ),
     );
     const expected = expectedNodes

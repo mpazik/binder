@@ -20,8 +20,12 @@ import {
   okVoid,
   type ResultAsync,
 } from "@binder/utils";
-import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
-import type { Config, KnowledgeGraphReadonly } from "../bootstrap.ts";
+import {
+  type AppConfig,
+  TRANSACTION_LOG_FILE,
+  UNDO_LOG_FILE,
+} from "../config.ts";
+import type { KnowledgeGraphReadonly } from "../bootstrap.ts";
 import { renderDocs } from "../document/repository.ts";
 import type { Logger } from "../log.ts";
 import type { DatabaseCli } from "../db";
@@ -265,7 +269,7 @@ type Services = {
   db: DatabaseCli;
   fs: FileSystem;
   log: Logger;
-  config: Config;
+  config: AppConfig;
 };
 
 export const setupKnowledgeGraph = (services: Services): KnowledgeGraph => {

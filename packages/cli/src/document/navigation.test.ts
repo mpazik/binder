@@ -20,6 +20,7 @@ import {
   createInMemoryFileSystem,
   type MockFileSystem,
 } from "../lib/filesystem.mock.ts";
+import { mockConfig } from "../bootstrap.mock.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
@@ -111,7 +112,8 @@ describe("navigation", () => {
     let db: DatabaseCli;
     let kg: KnowledgeGraph;
     let fs: MockFileSystem;
-    const docsPath = "/docs";
+    const paths = mockConfig.paths;
+    const docsPath = mockConfig.paths.docs;
     const defaultViewAst = parseView(DEFAULT_DYNAMIC_VIEW);
 
     beforeEach(async () => {
@@ -131,9 +133,7 @@ describe("navigation", () => {
       navigationItems: NavigationItem[],
       files: FileSpec[],
     ) => {
-      throwIfError(
-        await renderNavigation(db, kg, fs, docsPath, navigationItems),
-      );
+      throwIfError(await renderNavigation(db, kg, fs, paths, navigationItems));
 
       for (const file of files) {
         const fileContent = throwIfError(
@@ -306,6 +306,39 @@ describe("navigation", () => {
           {
             path: `projects/${mockProjectNode.title}/tasks.yaml`,
             yamlList: [mockTask2Node],
+          },
+        ],
+      );
+    });
+
+    it("renders config files from query", async () => {
+      const typesResult = throwIfError(
+        await kg.search({ filters: { type: "Type" } }),
+      );
+
+      const allFieldConfigs = throwIfError(
+        await kg.search({ filters: { type: "Field" } }),
+      ).items;
+
+      await check(
+        [
+          {
+            path: "fields.yaml",
+            query: { filters: { type: "Field" } },
+          },
+          {
+            path: "types.yaml",
+            query: { filters: { type: "Type" } },
+          },
+        ],
+        [
+          {
+            path: "fields.yaml",
+            yamlList: allFieldConfigs,
+          },
+          {
+            path: "types.yaml",
+            yamlList: typesResult.items,
           },
         ],
       );

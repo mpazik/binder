@@ -3,14 +3,14 @@ import { join } from "path";
 import * as YAML from "yaml";
 import { isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
 import { type KnowledgeGraph, openKnowledgeGraph } from "@binder/db";
-import { openCliDb, type DatabaseCli } from "./db";
+import { type DatabaseCli, openCliDb } from "./db";
 import {
   BINDER_DIR,
-  type BinderConfig,
-  BinderConfigSchema,
+  UserConfigSchema,
   CONFIG_FILE,
   DB_FILE,
   findBinderRoot,
+  type AppConfig,
 } from "./config.ts";
 import * as ui from "./ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
@@ -19,15 +19,7 @@ import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { createLogger, type Logger } from "./log.ts";
 import { isDevMode } from "./build-time.ts";
 
-export type Config = Omit<BinderConfig, "docsPath"> & {
-  paths: {
-    root: string;
-    binder: string;
-    docs: string;
-  };
-};
-
-const loadConfig = async (root: string): ResultAsync<Config> => {
+const loadConfig = async (root: string): ResultAsync<AppConfig> => {
   const configPath = join(root, BINDER_DIR, CONFIG_FILE);
   const fileResult = await tryCatch(async () => {
     const bunFile = Bun.file(configPath);
@@ -42,7 +34,7 @@ const loadConfig = async (root: string): ResultAsync<Config> => {
 
   const rawConfig = fileResult.data ?? {};
 
-  const loadedConfig = tryCatch(() => BinderConfigSchema.parse(rawConfig));
+  const loadedConfig = tryCatch(() => UserConfigSchema.parse(rawConfig));
   if (isErr(loadedConfig)) return loadedConfig;
 
   const { docsPath, ...rest } = loadedConfig.data;
@@ -62,7 +54,7 @@ export type GlobalOptions = {
 };
 
 export type CommandContext = {
-  config: Config;
+  config: AppConfig;
   log: Logger;
   ui: typeof ui;
   fs: FileSystem;
@@ -179,7 +171,7 @@ export const bootstrapWithDbRead = <TArgs extends object = object>(
 export const openDbWrite = <T = void>(
   fs: FileSystem,
   log: Logger,
-  config: Config,
+  config: AppConfig,
   handler: (kg: KnowledgeGraph, db: DatabaseCli) => ResultAsync<T>,
 ): ResultAsync<T> => {
   const { paths } = config;

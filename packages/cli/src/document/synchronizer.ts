@@ -1,19 +1,20 @@
-import { relative } from "path";
+import { join } from "path";
 import type {
   Fieldset,
   FieldsetNested,
   KnowledgeGraph,
+  NamespaceEditable,
   NodeSchema,
   TransactionId,
   TransactionInput,
 } from "@binder/db";
 import { createError, err, isErr, ok, type ResultAsync } from "@binder/utils";
-import type { Config } from "../bootstrap.ts";
 import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { diffNodeLists, diffNodeTrees } from "../utils/node-diff.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import type { FileChangeMetadata } from "../lib/snapshot.ts";
+import { renderPathForNamespace, type AppConfig } from "../config.ts";
 import {
   DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
@@ -35,13 +36,17 @@ const extractFromYamlSingle = async (
   _navItem: NavigationItem,
   content: string,
   pathFields: Fieldset,
+  namespace: NamespaceEditable,
 ): ResultAsync<ParsedFileResult> => {
   const parseResult = parseYamlEntity(content);
   if (isErr(parseResult)) return parseResult;
 
-  const kgSearchResult = await kg.search({
-    filters: pathFields as Record<string, string>,
-  });
+  const kgSearchResult = await kg.search(
+    {
+      filters: pathFields as Record<string, string>,
+    },
+    namespace,
+  );
   if (isErr(kgSearchResult)) return kgSearchResult;
 
   if (kgSearchResult.data.items.length !== 1) {
@@ -69,6 +74,7 @@ const extractFromYamlList = async (
   navItem: NavigationItem,
   content: string,
   pathFields: Fieldset,
+  namespace: NamespaceEditable,
 ): ResultAsync<ParsedFileResult> => {
   const parseResult = parseYamlList(content);
   if (isErr(parseResult)) return parseResult;
@@ -85,7 +91,7 @@ const extractFromYamlList = async (
   const interpolatedQuery = interpolateQueryParams(navItem.query, [pathFields]);
   if (isErr(interpolatedQuery)) return interpolatedQuery;
 
-  const kgSearchResult = await kg.search(interpolatedQuery.data);
+  const kgSearchResult = await kg.search(interpolatedQuery.data, namespace);
   if (isErr(kgSearchResult)) return kgSearchResult;
 
   return ok({
@@ -101,6 +107,7 @@ const extractFromMarkdown = async (
   navItem: NavigationItem,
   markdown: string,
   pathFields: Fieldset,
+  namespace: NamespaceEditable,
 ): ResultAsync<ParsedFileResult> => {
   const templateString = navItem.view ?? DEFAULT_DYNAMIC_VIEW;
   const viewAst = parseView(templateString);
@@ -108,9 +115,12 @@ const extractFromMarkdown = async (
   const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
   if (isErr(fileFieldsResult)) return fileFieldsResult;
 
-  const kgSearchResult = await kg.search({
-    filters: pathFields as Record<string, string>,
-  });
+  const kgSearchResult = await kg.search(
+    {
+      filters: pathFields as Record<string, string>,
+    },
+    namespace,
+  );
   if (isErr(kgSearchResult)) return kgSearchResult;
 
   if (kgSearchResult.data.items.length !== 1) {
@@ -140,14 +150,15 @@ const extractFromFile = async (
   content: string,
   pathFields: Fieldset,
   filePath: string,
+  namespace: NamespaceEditable,
 ): ResultAsync<ParsedFileResult> => {
   const fileType = getSnapshotFileType(filePath);
 
   if (fileType === "yaml") {
     if (navItem.includes)
-      return extractFromYamlSingle(kg, navItem, content, pathFields);
+      return extractFromYamlSingle(kg, navItem, content, pathFields, namespace);
     if (navItem.query)
-      return extractFromYamlList(kg, navItem, content, pathFields);
+      return extractFromYamlList(kg, navItem, content, pathFields, namespace);
     return err(
       createError(
         "invalid_yaml_config",
@@ -156,7 +167,14 @@ const extractFromFile = async (
     );
   }
   if (fileType === "markdown")
-    return extractFromMarkdown(kg, schema, navItem, content, pathFields);
+    return extractFromMarkdown(
+      kg,
+      schema,
+      navItem,
+      content,
+      pathFields,
+      namespace,
+    );
 
   return err(
     createError("unsupported_file_type", "Unsupported file type", {
@@ -169,13 +187,13 @@ const extractFromFile = async (
 export const synchronizeFile = async (
   fs: FileSystem,
   kg: KnowledgeGraph,
-  config: Config,
+  config: AppConfig,
   navigationItems: NavigationItem[],
   schema: NodeSchema,
-  filePath: string,
+  relativePath: string,
+  namespace: NamespaceEditable = "node",
   _txVersion?: TransactionId, // we should later use it to fetch data for a given version for fair comparison
 ): ResultAsync<TransactionInput | null> => {
-  const relativePath = relative(config.paths.docs, filePath);
   const navItem = findNavigationItemByPath(navigationItems, relativePath);
   if (!navItem) {
     return err(
@@ -191,7 +209,11 @@ export const synchronizeFile = async (
   if (isErr(pathFieldsResult)) return pathFieldsResult;
   const pathFields = pathFieldsResult.data;
 
-  const contentResult = await fs.readFile(filePath);
+  const absolutePath = join(
+    renderPathForNamespace(namespace, config.paths),
+    relativePath,
+  );
+  const contentResult = await fs.readFile(absolutePath);
   if (isErr(contentResult)) return contentResult;
 
   const extractResult = await extractFromFile(
@@ -200,7 +222,8 @@ export const synchronizeFile = async (
     navItem,
     contentResult.data,
     pathFields,
-    filePath,
+    absolutePath,
+    namespace,
   );
   if (isErr(extractResult)) return extractResult;
 
@@ -224,10 +247,11 @@ export const synchronizeFile = async (
 export const synchronizeModifiedFiles = async (
   fs: FileSystem,
   kg: KnowledgeGraph,
-  config: Config,
+  config: AppConfig,
   navigationItems: NavigationItem[],
   schema: NodeSchema,
   modifiedFiles: FileChangeMetadata[],
+  namespace: NamespaceEditable = "node",
 ): ResultAsync<TransactionInput | null> => {
   const allNodes: TransactionInput["nodes"] = [];
 
@@ -239,7 +263,7 @@ export const synchronizeModifiedFiles = async (
       navigationItems,
       schema,
       file.path,
-      "txId" in file ? file.txId : undefined,
+      namespace,
     );
     if (isErr(syncResult)) return syncResult;
 

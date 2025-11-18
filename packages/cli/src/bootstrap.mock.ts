@@ -1,15 +1,12 @@
-import type {
-  Config,
-  CommandContext,
-  CommandContextWithDbWrite,
-} from "./bootstrap.ts";
+import type { CommandContext, CommandContextWithDbWrite } from "./bootstrap.ts";
 import { type Logger } from "./log.ts";
 import * as ui from "./ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 import { getTestDatabaseCli } from "./db/db.mock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
+import type { AppConfig } from "./config.ts";
 
-export const mockConfig: Config = {
+export const mockConfig: AppConfig = {
   author: "test-user",
   paths: {
     root: "/test",
