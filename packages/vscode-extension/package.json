@@ -1,0 +1,70 @@
+{
+  "name": "binder-vscode",
+  "displayName": "Binder",
+  "description": "Language support for Binder - Git-inspired knowledge graph for Markdown",
+  "version": "0.0.1",
+  "publisher": "binder",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/binder/binder"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:.binder"
+  ],
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Binder",
+      "properties": {
+        "binder.path": {
+          "type": "string",
+          "default": "binder",
+          "description": "Path to the Binder executable",
+          "scope": "machine-overridable"
+        },
+        "binder.devMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the language server in development mode (uses bun to run from source)",
+          "scope": "machine-overridable"
+        },
+        "binder.trace": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the Binder language server",
+          "scope": "window"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "prepackage": "npm install --production",
+    "package": "vsce package --out out"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.0.0"
+  }
+}
