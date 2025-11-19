@@ -12,6 +12,7 @@ import DevCommand from "./commands/dev.ts";
 import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
 import McpCommand from "./commands/mcp.ts";
+import LspCommand from "./commands/lsp.ts";
 import * as UI from "./ui";
 import { BINDER_VERSION, isDevMode } from "./build-time";
 
@@ -47,7 +48,8 @@ let cli = yargs(hideBin(process.argv))
   .command(DocsCommand)
   .command(UndoCommand)
   .command(RedoCommand)
-  .command(McpCommand);
+  .command(McpCommand)
+  .command(LspCommand);
 
 if (isDevMode()) {
   cli = cli.command(DevCommand);

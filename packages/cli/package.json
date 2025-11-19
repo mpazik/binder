@@ -40,6 +40,8 @@
     "remark-parse-frontmatter": "^1.0.3",
     "remark-stringify": "^11.0.0",
     "unified": "^11.0.5",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
     "yaml": "^2.8.1",
     "yargs": "^18.0.0",
     "zod": "^4.1.11"

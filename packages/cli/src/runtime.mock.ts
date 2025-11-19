@@ -4,11 +4,7 @@ import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 import { getTestDatabaseCli } from "./db/db.mock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import type { AppConfig } from "./config.ts";
-import type {
-  RuntimeContextInit,
-  RuntimeContextWithDb,
-  RuntimeContext,
-} from "./bootstrap.ts";
+import type { RuntimeContextWithDb, RuntimeContext } from "./runtime.ts";
 
 export const mockConfig: AppConfig = {
   author: "test-user",
