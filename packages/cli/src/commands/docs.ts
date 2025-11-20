@@ -1,16 +1,13 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
-import {
-  bootstrapWithDbWrite,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { renderDocs } from "../document/repository.ts";
 import { synchronizeModifiedFiles } from "../document/synchronizer.ts";
 import { loadNavigation } from "../document/navigation.ts";
 import { modifiedFiles } from "../lib/snapshot.ts";
 import { types } from "./types.ts";
 
-export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
+export const docsRenderHandler: CommandHandlerWithDb = async (context) => {
   const { ui } = context;
   const result = await renderDocs(context);
   if (isErr(result)) return result;
@@ -19,7 +16,7 @@ export const docsRenderHandler: CommandHandlerWithDbWrite = async (context) => {
   return ok(undefined);
 };
 
-export const docsSyncHandler: CommandHandlerWithDbWrite<{
+export const docsSyncHandler: CommandHandlerWithDb<{
   path?: string;
 }> = async ({ kg, fs, ui, config, args, db }) => {
   const navigationResult = await loadNavigation(fs, config.paths.binder);
@@ -79,7 +76,7 @@ const DocsCommand = types({
         types({
           command: "render",
           describe: "render documents to markdown files",
-          handler: bootstrapWithDbWrite(docsRenderHandler),
+          handler: bootstrapWithDb(docsRenderHandler),
         }),
       )
       .command(
@@ -95,7 +92,7 @@ const DocsCommand = types({
               demandOption: false,
             });
           },
-          handler: bootstrapWithDbWrite(docsSyncHandler),
+          handler: bootstrapWithDb(docsSyncHandler),
         }),
       )
       .demandCommand(1, "You need to specify a subcommand: render, sync");

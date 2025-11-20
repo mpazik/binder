@@ -14,7 +14,7 @@ import {
 } from "./config.ts";
 import * as ui from "./ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
-import { setupCleanupHandlers, withLock } from "./lib/lock.ts";
+import { setupCleanupHandlers } from "./lib/lock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { createLogger, type Logger } from "./log.ts";
 import { isDevMode } from "./build-time.ts";
@@ -60,14 +60,7 @@ export type CommandContext = {
   fs: FileSystem;
 };
 
-export type KnowledgeGraphReadonly = Omit<
-  KnowledgeGraph,
-  "update" | "apply" | "rollback"
->;
-export type CommandContextWithDbRead = CommandContext & {
-  kg: KnowledgeGraphReadonly;
-};
-export type CommandContextWithDbWrite = CommandContext & {
+export type CommandContextWithDb = CommandContext & {
   db: DatabaseCli;
   kg: KnowledgeGraph;
 };
@@ -76,12 +69,8 @@ export type CommandHandler<TArgs = object> = (
   context: CommandContext & { args: TArgs & GlobalOptions },
 ) => ResultAsync<string | undefined>;
 
-export type CommandHandlerWithDbWrite<TArgs = object> = (
-  context: CommandContextWithDbWrite & { args: TArgs & GlobalOptions },
-) => ResultAsync<string | undefined>;
-
-export type CommandHandlerWithDbRead<TArgs = object> = (
-  context: CommandContextWithDbRead & { args: TArgs & GlobalOptions },
+export type CommandHandlerWithDb<TArgs = object> = (
+  context: CommandContextWithDb & { args: TArgs & GlobalOptions },
 ) => ResultAsync<string | undefined>;
 
 export const bootstrap = <TArgs extends object = object>(
@@ -142,33 +131,7 @@ export const bootstrap = <TArgs extends object = object>(
   };
 };
 
-export const bootstrapWithDbRead = <TArgs extends object = object>(
-  handler: CommandHandlerWithDbRead<TArgs>,
-): ((args: TArgs & GlobalOptions) => Promise<void>) => {
-  return bootstrap<TArgs>(async (context) => {
-    const { fs, config, log } = context;
-    const binderPath = config.paths.binder;
-    mkdirSync(binderPath, { recursive: true });
-    setupCleanupHandlers(fs, binderPath);
-
-    const dbResult = openCliDb({
-      path: join(binderPath, DB_FILE),
-      migrate: true,
-    });
-    if (isErr(dbResult)) {
-      log.error("Failed to open database", { error: dbResult.error });
-      ui.printError(dbResult.error);
-      process.exit(1);
-    }
-
-    return handler({
-      ...context,
-      kg: openKnowledgeGraph(dbResult.data),
-    });
-  });
-};
-
-export const openDbWrite = <T = void>(
+export const openDb = <T = void>(
   fs: FileSystem,
   log: Logger,
   config: AppConfig,
@@ -186,11 +149,11 @@ export const openDbWrite = <T = void>(
   const db = dbResult.data;
   const kg = setupKnowledgeGraph({ fs, log, config, db });
 
-  return withLock(fs, paths.binder, async () => handler(kg, db));
+  return handler(kg, db);
 };
 
-export const bootstrapWithDbWrite = <TArgs extends object = object>(
-  handler: CommandHandlerWithDbWrite<TArgs>,
+export const bootstrapWithDb = <TArgs extends object = object>(
+  handler: CommandHandlerWithDb<TArgs>,
 ): ((args: TArgs & GlobalOptions) => Promise<void>) => {
   return bootstrap<TArgs>(async (context) => {
     const { fs, config, log } = context;
@@ -198,7 +161,7 @@ export const bootstrapWithDbWrite = <TArgs extends object = object>(
     mkdirSync(paths.binder, { recursive: true });
     setupCleanupHandlers(fs, paths.binder);
 
-    return openDbWrite(fs, log, config, (kg, db) =>
+    return openDb(fs, log, config, (kg, db) =>
       handler({
         ...context,
         db,

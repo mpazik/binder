@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { isErr, ok } from "@binder/utils";
 import { TransactionInput } from "@binder/db";
-import { openDbWrite } from "../../bootstrap.ts";
 import { defineTool } from "./types.ts";
 
 export const transactToolName = "transact";
@@ -90,31 +89,29 @@ Call the 'schema' tool first to understand available types, fields, and data typ
     readOnly: false,
     idempotent: false,
   },
-  async execute(args, { fs, log, config }) {
+  async execute(args, { kg, config }) {
     const input = TransactionInput.parse({
       author: config.author,
       nodes: args.nodes,
       configurations: args.configurations,
     });
 
-    return openDbWrite(fs, log, config, async (kg) => {
-      const updateResult = await kg.update(input);
-      if (isErr(updateResult)) return updateResult;
+    const updateResult = await kg.update(input);
+    if (isErr(updateResult)) return updateResult;
 
-      const transaction = updateResult.data;
-      const nodeCount = Object.keys(transaction.nodes).length;
-      const configCount = Object.keys(transaction.configurations).length;
+    const transaction = updateResult.data;
+    const nodeCount = Object.keys(transaction.nodes).length;
+    const configCount = Object.keys(transaction.configurations).length;
 
-      return ok({
-        metadata: {
-          transactionId: transaction.id,
-          transactionHash: transaction.hash,
-          nodeCount,
-          configCount,
-        },
-        output: `Transaction ${transaction.id} applied: ${nodeCount} node(s), ${configCount} config(s) affected`,
-        structuredData: transaction,
-      });
+    return ok({
+      metadata: {
+        transactionId: transaction.id,
+        transactionHash: transaction.hash,
+        nodeCount,
+        configCount,
+      },
+      output: `Transaction ${transaction.id} applied: ${nodeCount} node(s), ${configCount} config(s) affected`,
+      structuredData: transaction,
     });
   },
 });

@@ -3,10 +3,7 @@ import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
 import { isErr, isOk, ok, type ResultAsync, tryCatch } from "@binder/utils";
-import {
-  bootstrapWithDbWrite,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { documentSchemaTransactionInput } from "../document/document-schema.ts";
 import {
   BINDER_DIR,
@@ -164,10 +161,10 @@ const initSetupHandler = async (args: {
     }
   }
 
-  await bootstrapWithDbWrite(initSchemaHandler)({});
+  await bootstrapWithDb(initSchemaHandler)({});
 };
 
-const initSchemaHandler: CommandHandlerWithDbWrite = async ({
+const initSchemaHandler: CommandHandlerWithDb = async ({
   kg,
   ui,
   config,

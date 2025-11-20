@@ -1,16 +1,11 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import { type NodeRef, type NodeType, normalizeEntityRef } from "@binder/db";
-import {
-  bootstrapWithDbRead,
-  bootstrapWithDbWrite,
-  type CommandHandlerWithDbRead,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { parsePatches, patchesDescription } from "../lib/patch-parser.ts";
 import { types } from "./types.ts";
 
-export const nodeCreateHandler: CommandHandlerWithDbWrite<{
+export const nodeCreateHandler: CommandHandlerWithDb<{
   type: NodeType;
   patches: string[];
 }> = async ({ kg, config, ui, args }) => {
@@ -33,7 +28,7 @@ export const nodeCreateHandler: CommandHandlerWithDbWrite<{
   return ok("Node created successfully");
 };
 
-export const nodeReadHandler: CommandHandlerWithDbRead<{
+export const nodeReadHandler: CommandHandlerWithDb<{
   ref: NodeRef;
 }> = async ({ kg, ui, args }) => {
   const result = await kg.fetchNode(args.ref);
@@ -43,7 +38,7 @@ export const nodeReadHandler: CommandHandlerWithDbRead<{
   return ok(undefined);
 };
 
-export const nodeUpdateHandler: CommandHandlerWithDbWrite<{
+export const nodeUpdateHandler: CommandHandlerWithDb<{
   ref: NodeRef;
   patches: string[];
 }> = async ({ kg, config, ui, args }) => {
@@ -91,7 +86,7 @@ const NodeCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDbWrite(nodeCreateHandler),
+          handler: bootstrapWithDb(nodeCreateHandler),
         }),
       )
       .command(
@@ -107,7 +102,7 @@ const NodeCommand = types({
               coerce: (value: string) => normalizeEntityRef<"node">(value),
             });
           },
-          handler: bootstrapWithDbRead(nodeReadHandler),
+          handler: bootstrapWithDb(nodeReadHandler),
         }),
       )
       .command(
@@ -129,7 +124,7 @@ const NodeCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDbWrite(nodeUpdateHandler),
+          handler: bootstrapWithDb(nodeUpdateHandler),
         }),
       )
       .command(

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErr, ok } from "@binder/utils";
+import { type ErrorObject, isErr, ok, type ResultAsync } from "@binder/utils";
 import { FiltersSchema } from "@binder/db";
 import { defineTool } from "./types.ts";
 
@@ -41,7 +41,8 @@ Filter examples:
       },
     });
 
-    if (isErr(searchResult)) return searchResult;
+    if (isErr(searchResult))
+      return searchResult as unknown as ResultAsync<never, ErrorObject>;
 
     const { items, pagination } = searchResult.data;
 

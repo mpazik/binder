@@ -11,7 +11,7 @@ import {
   mockTask2Uid,
   mockTaskTypeKey,
 } from "@binder/db/mocks";
-import type { CommandContextWithDbWrite } from "../bootstrap.ts";
+import type { CommandContextWithDb } from "../bootstrap.ts";
 import { createMockCommandContextWithDb } from "../bootstrap.mock.ts";
 import type { FileChangeMetadata } from "../lib/snapshot.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
@@ -59,7 +59,7 @@ ${description}
 `;
 
 describe("synchronizeFile", () => {
-  let ctx: CommandContextWithDbWrite;
+  let ctx: CommandContextWithDb;
   let kg: KnowledgeGraph;
 
   const mockFileChange = (relativePath: string): FileChangeMetadata => ({

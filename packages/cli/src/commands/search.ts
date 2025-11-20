@@ -1,12 +1,7 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import type { Filters } from "@binder/db";
-import {
-  bootstrapWithDbRead,
-  bootstrapWithDbWrite,
-  type CommandHandlerWithDbRead,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { types } from "./types.ts";
 
 const parseQuery = (queryParts: string[]): Filters => {
@@ -43,7 +38,7 @@ const parseQuery = (queryParts: string[]): Filters => {
   return filters;
 };
 
-const searchHandler: CommandHandlerWithDbRead<{
+const searchHandler: CommandHandlerWithDb<{
   query: string[];
 }> = async ({ kg, ui, args }) => {
   const filters = parseQuery(args.query);
@@ -66,5 +61,5 @@ export const SearchCommand = types({
       default: [],
     });
   },
-  handler: bootstrapWithDbRead(searchHandler),
+  handler: bootstrapWithDb(searchHandler),
 });

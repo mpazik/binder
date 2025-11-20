@@ -1,4 +1,4 @@
-import type { CommandContext, CommandContextWithDbWrite } from "./bootstrap.ts";
+import type { CommandContext, CommandContextWithDb } from "./bootstrap.ts";
 import { type Logger } from "./log.ts";
 import * as ui from "./ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
@@ -50,7 +50,7 @@ export const createMockCommandContext = async (): Promise<CommandContext> => {
 };
 
 export const createMockCommandContextWithDb =
-  async (): Promise<CommandContextWithDbWrite> => {
+  async (): Promise<CommandContextWithDb> => {
     const context = await createMockCommandContext();
     const db = getTestDatabaseCli();
     return {

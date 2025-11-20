@@ -1,16 +1,12 @@
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
-import {
-  bootstrapWithDbWrite,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { redoTransactions } from "../lib/orchestrator.ts";
-import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
-export const redoHandler: CommandHandlerWithDbWrite<{
+export const redoHandler: CommandHandlerWithDb<{
   steps: number;
-}> = async ({ kg, ui, log, config, fs, args }) => {
+}> = async ({ db, ui, log, config, fs, args }) => {
   if (args.steps < 1)
     return err(
       createError(
@@ -20,9 +16,7 @@ export const redoHandler: CommandHandlerWithDbWrite<{
     );
 
   const redoResult = await redoTransactions(
-    fs,
-    kg,
-    config.paths.binder,
+    { db, fs, log, config },
     args.steps,
   );
   if (isErr(redoResult)) return redoResult;
@@ -53,7 +47,7 @@ const RedoCommand = types({
       default: 1,
     });
   },
-  handler: bootstrapWithDbWrite(redoHandler),
+  handler: bootstrapWithDb(redoHandler),
 });
 
 export default RedoCommand;

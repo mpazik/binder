@@ -10,10 +10,7 @@ import {
   ok,
   tryCatch,
 } from "@binder/utils";
-import {
-  bootstrapWithDbRead,
-  type CommandHandlerWithDbRead,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { BINDER_VERSION } from "../build-time.ts";
 import { processRequest } from "../mcp";
 import { types } from "./types.ts";
@@ -22,12 +19,7 @@ const respond = (response: JsonRpcResponse) => {
   process.stdout.write(JSON.stringify(response) + "\n");
 };
 
-const mcpHandler: CommandHandlerWithDbRead = async ({
-  kg,
-  log,
-  config,
-  fs,
-}) => {
+const mcpHandler: CommandHandlerWithDb = async ({ kg, log, config, fs }) => {
   log.info("MCP server starting", {
     version: BINDER_VERSION,
     cwd: config.paths.root,
@@ -126,7 +118,7 @@ AVAILABLE TOOLS:
     `);
   },
   // as it is a long-running process, we cannot open db in writing mode because it would lock a database, tools should open db in writing mode themselves if need it
-  handler: bootstrapWithDbRead(mcpHandler),
+  handler: bootstrapWithDb(mcpHandler),
 });
 
 export default McpCommand;

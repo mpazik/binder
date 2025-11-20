@@ -1,16 +1,12 @@
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
-import {
-  bootstrapWithDbWrite,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import { undoTransactions } from "../lib/orchestrator.ts";
-import { renderDocs } from "../document/repository.ts";
 import { types } from "./types.ts";
 
-export const undoHandler: CommandHandlerWithDbWrite<{
+export const undoHandler: CommandHandlerWithDb<{
   steps: number;
-}> = async ({ kg, ui, log, config, fs, args }) => {
+}> = async ({ db, ui, log, config, fs, args }) => {
   if (args.steps < 1)
     return err(
       createError(
@@ -20,9 +16,7 @@ export const undoHandler: CommandHandlerWithDbWrite<{
     );
 
   const undoResult = await undoTransactions(
-    fs,
-    kg,
-    config.paths.binder,
+    { db, fs, log, config },
     args.steps,
   );
   if (isErr(undoResult)) return undoResult;
@@ -56,7 +50,7 @@ const UndoCommand = types({
       default: 1,
     });
   },
-  handler: bootstrapWithDbWrite(undoHandler),
+  handler: bootstrapWithDb(undoHandler),
 });
 
 export default UndoCommand;

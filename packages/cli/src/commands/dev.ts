@@ -181,7 +181,12 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
         error: dbResult.error,
       }),
     );
-  const repairResult = await repairDbFromLog(fs, dbResult.data, binderPath);
+  const repairResult = await repairDbFromLog({
+    db: dbResult.data as any,
+    fs,
+    log,
+    config,
+  });
   if (isErr(repairResult))
     return err(
       createError(

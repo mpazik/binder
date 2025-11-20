@@ -15,12 +15,7 @@ import {
   type TransactionRef,
 } from "@binder/db";
 import * as YAML from "yaml";
-import {
-  bootstrapWithDbRead,
-  bootstrapWithDbWrite,
-  type CommandHandlerWithDbRead,
-  type CommandHandlerWithDbWrite,
-} from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
 import {
   verifySync,
   repairDbFromLog,
@@ -91,7 +86,7 @@ export const loadTransactionFromFile = async (
   return ok(validationResult.data);
 };
 
-export const transactionCreateHandler: CommandHandlerWithDbWrite<{
+export const transactionCreateHandler: CommandHandlerWithDb<{
   path: string;
 }> = async ({ kg, config, ui, log, args }) => {
   const path = args.path;
@@ -122,7 +117,7 @@ export const transactionCreateHandler: CommandHandlerWithDbWrite<{
   return ok(undefined);
 };
 
-export const transactionReadHandler: CommandHandlerWithDbRead<{
+export const transactionReadHandler: CommandHandlerWithDb<{
   ref: TransactionRef;
 }> = async ({ kg, ui, args }) => {
   const result = await kg.fetchTransaction(args.ref);
@@ -132,7 +127,7 @@ export const transactionReadHandler: CommandHandlerWithDbRead<{
   return ok(undefined);
 };
 
-export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
+export const transactionRollbackHandler: CommandHandlerWithDb<{
   count: number;
 }> = async ({ kg, ui, log, args }) => {
   const versionResult = await kg.version();
@@ -174,7 +169,7 @@ export const transactionRollbackHandler: CommandHandlerWithDbWrite<{
   return ok(undefined);
 };
 
-export const transactionSquashHandler: CommandHandlerWithDbWrite<{
+export const transactionSquashHandler: CommandHandlerWithDb<{
   count: number;
   yes?: boolean;
 }> = async (context) => {
@@ -233,7 +228,7 @@ export const transactionSquashHandler: CommandHandlerWithDbWrite<{
   return ok(undefined);
 };
 
-export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
+export const transactionVerifyHandler: CommandHandlerWithDb = async ({
   kg,
   config,
   ui,
@@ -305,7 +300,7 @@ export const transactionVerifyHandler: CommandHandlerWithDbRead = async ({
   );
 };
 
-export const transactionRepairHandler: CommandHandlerWithDbWrite<{
+export const transactionRepairHandler: CommandHandlerWithDb<{
   dryRun?: boolean;
   yes?: boolean;
   rehash?: boolean;
@@ -352,7 +347,7 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
 
     ui.info("Syncing database with rehashed log...");
 
-    const repairResult = await repairDbFromLog(fs, db, config.paths.binder);
+    const repairResult = await repairDbFromLog({ db, fs, log, config });
     if (isErr(repairResult)) {
       log.error("Failed to sync database with rehashed log", {
         error: repairResult.error,
@@ -436,7 +431,7 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
     }
   }
 
-  const repairResult = await repairDbFromLog(fs, db, config.paths.binder);
+  const repairResult = await repairDbFromLog({ db, fs, log, config });
   if (isErr(repairResult)) {
     log.error("Failed to repair sync", { error: repairResult.error });
     return repairResult;
@@ -465,7 +460,7 @@ export const transactionRepairHandler: CommandHandlerWithDbWrite<{
   return ok(undefined);
 };
 
-export const transactionLogHandler: CommandHandlerWithDbRead<{
+export const transactionLogHandler: CommandHandlerWithDb<{
   count: number;
   format: string;
   oneline?: boolean;
@@ -528,7 +523,7 @@ const TransactionCommand = types({
               demandOption: true,
             });
           },
-          handler: bootstrapWithDbWrite(transactionCreateHandler),
+          handler: bootstrapWithDb(transactionCreateHandler),
         }),
       )
       .command(
@@ -545,7 +540,7 @@ const TransactionCommand = types({
                 normalizeEntityRef<"transaction">(value),
             });
           },
-          handler: bootstrapWithDbRead(transactionReadHandler),
+          handler: bootstrapWithDb(transactionReadHandler),
         }),
       )
       .command(
@@ -559,7 +554,7 @@ const TransactionCommand = types({
               default: 1,
             });
           },
-          handler: bootstrapWithDbWrite(transactionRollbackHandler),
+          handler: bootstrapWithDb(transactionRollbackHandler),
         }),
       )
       .command(
@@ -580,14 +575,14 @@ const TransactionCommand = types({
                 default: false,
               });
           },
-          handler: bootstrapWithDbWrite(transactionSquashHandler),
+          handler: bootstrapWithDb(transactionSquashHandler),
         }),
       )
       .command(
         types({
           command: "verify",
           describe: "verify database and log are in sync",
-          handler: bootstrapWithDbRead(transactionVerifyHandler),
+          handler: bootstrapWithDb(transactionVerifyHandler),
         }),
       )
       .command(
@@ -616,7 +611,7 @@ const TransactionCommand = types({
                 default: false,
               });
           },
-          handler: bootstrapWithDbWrite(transactionRepairHandler),
+          handler: bootstrapWithDb(transactionRepairHandler),
         }),
       )
       .command(
@@ -655,7 +650,7 @@ const TransactionCommand = types({
                 default: false,
               });
           },
-          handler: bootstrapWithDbRead(transactionLogHandler),
+          handler: bootstrapWithDb(transactionLogHandler),
         }),
       )
       .demandCommand(
