@@ -21,7 +21,7 @@ import { mockNodeSchema } from "./schema.mock.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
-  "df01a85814874ca9c2de1f36010cedf537cbdf3f2a9514971bc08a2d7428a872" as TransactionHash;
+  "ad445a702ac69ab50644a7346adc40460829230fcd13872514475ed07c34a7b7" as TransactionHash;
 
 export const mockAuthor = "test-user";
 export const mockAuthor2 = "test-user2";
@@ -50,7 +50,7 @@ export const mockTransactionInit: Transaction = {
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "d45a456f12b30e5a00607cf71dd0d80174b790cde7912180fea4d0b77f89618b" as TransactionHash;
+  "6c9fde07e1cd26d1a75772f605fd2de76d001f50a2cbeec55a51e1ef3cd36cb8" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
   hash: mockTransactionUpdateHash,

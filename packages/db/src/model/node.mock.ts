@@ -45,7 +45,6 @@ export const mockProjectNode = {
   title: "Binder System",
   description: "Build a robust entity management system with REST API",
   status: "in_progress",
-  tasks: [mockTask2Uid, mockTask3Uid],
 } as const satisfies Fieldset;
 
 export const mockTask2Node = {

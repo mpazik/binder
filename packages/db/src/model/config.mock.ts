@@ -116,6 +116,7 @@ export const mockTasksField = {
   dataType: "relation",
   range: [mockTaskTypeKey],
   allowMultiple: true,
+  inverseOf: "project" as ConfigKey,
 } as const satisfies NodeFieldDefinition;
 
 export const mockTagsFieldKey = "tags" as ConfigKey;

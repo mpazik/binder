@@ -9,13 +9,14 @@ import {
 } from "@binder/utils";
 import { and, asc, desc, inArray, or, sql } from "drizzle-orm";
 import {
-  configSchema,
   type ConfigRef,
+  configSchema,
   type ConfigSchema,
-  type ConfigUid,
   fieldNodeTypes,
   type Fieldset,
+  type Filters,
   type GraphVersion,
+  type Includes,
   isFieldInSchema,
   type NamespaceEditable,
   type NodeFieldDefinition,
@@ -30,13 +31,9 @@ import {
   type TransactionRef,
   typeConfigType,
 } from "./model";
-import type { Database } from "./db.ts";
+import type { Database, DbTransaction } from "./db.ts";
 import { configTable, nodeTable } from "./schema.ts";
-import {
-  dbModelToEntity,
-  fetchEntity,
-  resolveEntityRefs,
-} from "./entity-store.ts";
+import { dbModelToEntity, fetchEntity } from "./entity-store.ts";
 import { fetchTransaction, getVersion } from "./transaction-store.ts";
 import {
   applyAndSaveTransaction,
@@ -44,10 +41,11 @@ import {
   rollbackTransaction,
 } from "./transaction-processor";
 import { buildWhereClause } from "./filter-entities.ts";
+import { resolveIncludes } from "./relationship-resolver.ts";
 
 export type KnowledgeGraph = {
-  fetchNode: (ref: NodeRef) => ResultAsync<Fieldset>;
-  fetchConfig: (ref: ConfigRef) => ResultAsync<Fieldset>;
+  fetchNode: (ref: NodeRef, includes?: Includes) => ResultAsync<Fieldset>;
+  fetchConfig: (ref: ConfigRef, includes?: Includes) => ResultAsync<Fieldset>;
   fetchTransaction: (ref: TransactionRef) => ResultAsync<Transaction>;
   search: (
     query: QueryParams,
@@ -72,6 +70,22 @@ export type KnowledgeGraphCallbacks = {
   beforeCommit?: (transaction: Transaction) => ResultAsync<void>;
   afterCommit?: (transaction: Transaction) => Promise<void>;
   afterRollback?: (transactions: Transaction[], count: number) => Promise<void>;
+};
+
+const internalSearch = async (
+  tx: DbTransaction,
+  namespace: NamespaceEditable,
+  filters: Filters,
+): ResultAsync<Fieldset[]> => {
+  const table = namespace === "config" ? configTable : nodeTable;
+  return tryCatch(
+    tx
+      .select()
+      .from(table)
+      .where(buildWhereClause(table, filters))
+      .orderBy(asc(table.id))
+      .then((rows) => rows.map((row) => dbModelToEntity(row))),
+  );
 };
 
 export const openKnowledgeGraph = (
@@ -122,6 +136,32 @@ export const openKnowledgeGraph = (
     return namespace === "config" ? ok(configSchema) : getNodeSchema();
   };
 
+  const fetchEntityWithIncludes = async <N extends NamespaceEditable>(
+    namespace: N,
+    ref: N extends "node" ? NodeRef : ConfigRef,
+    includes: Includes | undefined,
+  ): ResultAsync<Fieldset> =>
+    db.transaction(async (tx) => {
+      const entityResult = await fetchEntity(tx, namespace, ref as any);
+      if (isErr(entityResult)) return entityResult;
+      if (!includes) return entityResult;
+
+      const schemaResult = await getSchema(namespace);
+      if (isErr(schemaResult)) return schemaResult;
+
+      const resolvedResult = await resolveIncludes(
+        tx,
+        [entityResult.data],
+        includes,
+        namespace,
+        schemaResult.data,
+        internalSearch,
+      );
+      if (isErr(resolvedResult)) return resolvedResult;
+
+      return ok(resolvedResult.data[0]!);
+    });
+
   const applyAndNotify = async (transaction: Transaction) => {
     let rollbackBeforeHook: TransactionRollback | null = null;
 
@@ -161,19 +201,11 @@ export const openKnowledgeGraph = (
   };
 
   return {
-    fetchNode: async (ref: NodeRef) => {
-      return db.transaction(async (tx) => {
-        return fetchEntity(tx, "node", ref);
-      });
+    fetchNode: async (ref: NodeRef, includes?: Includes) => {
+      return fetchEntityWithIncludes("node", ref, includes);
     },
-    fetchConfig: async (ref: ConfigRef) => {
-      return db.transaction(async (tx) => {
-        const resolvedRefs = await resolveEntityRefs(tx, "config", [ref]);
-        if (isErr(resolvedRefs)) return resolvedRefs;
-        const configUid = resolvedRefs.data[0] as ConfigUid;
-
-        return fetchEntity(tx, "config", configUid);
-      });
+    fetchConfig: async (ref: ConfigRef, includes?: Includes) => {
+      return fetchEntityWithIncludes("config", ref, includes);
     },
     fetchTransaction: async (ref: TransactionRef) => {
       return db.transaction(async (tx) => {
@@ -185,7 +217,7 @@ export const openKnowledgeGraph = (
       namespace: "node" | "config" = "node",
     ) => {
       return db.transaction(async (tx) => {
-        const { filters = {}, pagination } = query;
+        const { filters = {}, pagination, includes } = query;
         const limit = pagination?.limit ?? 50;
         const after = pagination?.after;
         const before = pagination?.before;
@@ -229,9 +261,22 @@ export const openKnowledgeGraph = (
 
         const orderedResults = before ? results.data.reverse() : results.data;
         const hasMore = orderedResults.length > limit;
-        const items = orderedResults
+        let items = orderedResults
           .slice(0, limit)
           .map((row) => dbModelToEntity(row));
+
+        if (includes) {
+          const resolvedResult = await resolveIncludes(
+            tx,
+            items,
+            includes,
+            namespace,
+            schema,
+            internalSearch,
+          );
+          if (isErr(resolvedResult)) return resolvedResult;
+          items = resolvedResult.data;
+        }
 
         const firstItem = items[0];
         const lastItem = items[items.length - 1];

@@ -343,5 +343,32 @@ describe("navigation", () => {
         ],
       );
     });
+
+    it("renders yaml with includes option", async () => {
+      const tasksWithProject = throwIfError(
+        await kg.search({
+          filters: { type: "Task", project: mockProjectNode.uid },
+          includes: { project: true },
+        }),
+      );
+
+      await check(
+        [
+          {
+            path: "tasks-with-project.yaml",
+            query: {
+              filters: { type: "Task", project: mockProjectNode.uid },
+              includes: { project: true },
+            },
+          },
+        ],
+        [
+          {
+            path: "tasks-with-project.yaml",
+            yamlList: tasksWithProject.items,
+          },
+        ],
+      );
+    });
   });
 });

@@ -6,6 +6,7 @@ import { openKnowledgeGraph } from "./knowledge-graph.ts";
 import type { Database } from "./db.ts";
 import { createEntity, fetchEntity } from "./entity-store.ts";
 import {
+  mockProjectNode,
   mockTask1Key,
   mockTask1Node,
   mockTask1Uid,
@@ -74,6 +75,14 @@ describe("knowledge graph", () => {
     });
 
     describe("fetchNode", () => {
+      beforeEach(async () => {
+        await db.transaction(async (tx) => {
+          await createEntity(tx, "node", mockProjectNode);
+          await createEntity(tx, "node", mockTask2Node);
+          await createEntity(tx, "node", mockTask3Node);
+        });
+      });
+
       it("fetches node by id", async () => {
         const result = throwIfError(await kg.fetchNode(mockTask1Node.id));
 
@@ -96,6 +105,34 @@ describe("knowledge graph", () => {
         const result = await kg.fetchNode(NONEXISTENT_NODE_UID);
 
         expect(result).toBeErr();
+      });
+
+      it("fetches node with relationship includes", async () => {
+        const result = throwIfError(
+          await kg.fetchNode(mockTask2Node.uid, { uid: true, project: true }),
+        );
+
+        expect(result.uid).toBe(mockTask2Node.uid);
+        expect(result.project).toEqual(
+          expect.objectContaining({
+            uid: mockProjectNode.uid,
+            title: mockProjectNode.title,
+          }),
+        );
+      });
+
+      it("applies field selection with includes", async () => {
+        const result = throwIfError(
+          await kg.fetchNode(mockTask2Node.uid, {
+            title: true,
+            project: { includes: { title: true } },
+          }),
+        );
+
+        expect(result).toEqual({
+          title: mockTask2Node.title,
+          project: { title: mockProjectNode.title },
+        });
       });
     });
 
@@ -207,6 +244,63 @@ describe("knowledge graph", () => {
 
         const types = Object.keys(mockNodeSchema.types);
         expect(result.items.map((it) => it.key)).toEqual(types);
+      });
+
+      it("resolves direct relationship with includes", async () => {
+        const result = throwIfError(
+          await kg.search({
+            filters: { type: "Task", key: mockTask2Node.key },
+            includes: { project: true },
+          }),
+        );
+
+        expect(result.items.length).toBe(1);
+        const task = result.items[0]!;
+        expect(task.project).toEqual(
+          expect.objectContaining({
+            uid: mockProjectNode.uid,
+            title: mockProjectNode.title,
+          }),
+        );
+      });
+
+      it("resolves inverse relationship with includes", async () => {
+        const { mockTasksFieldKey } = await import("./model/config.mock.ts");
+        const result = throwIfError(
+          await kg.search({
+            filters: { type: "Project" },
+            includes: { [mockTasksFieldKey]: true },
+          }),
+        );
+
+        expect(result.items.length).toBe(1);
+        const project = result.items[0]!;
+        expect(Array.isArray(project[mockTasksFieldKey])).toBe(true);
+        expect((project[mockTasksFieldKey] as any[]).length).toBe(2);
+      });
+
+      it("applies field selection with includes", async () => {
+        const result = throwIfError(
+          await kg.search({
+            filters: { type: "Task", key: mockTask2Node.key },
+            includes: {
+              title: true,
+              project: { includes: { uid: true, title: true } },
+            },
+          }),
+        );
+
+        expect(result.items.length).toBe(1);
+        const task = result.items[0]!;
+        expect(task.title).toBe(mockTask2Node.title);
+        expect(task.description).toBeUndefined();
+        expect(task.project).toEqual(
+          expect.objectContaining({
+            uid: mockProjectNode.uid,
+            title: mockProjectNode.title,
+          }),
+        );
+        expect((task.project as any).description).toBeUndefined();
       });
     });
 
