@@ -1,6 +1,6 @@
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { undoTransactions } from "../lib/orchestrator.ts";
 import { types } from "./types.ts";
 

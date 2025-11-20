@@ -1,7 +1,7 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import { type NodeRef, type NodeType, normalizeEntityRef } from "@binder/db";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { parsePatches, patchesDescription } from "../lib/patch-parser.ts";
 import { types } from "./types.ts";
 

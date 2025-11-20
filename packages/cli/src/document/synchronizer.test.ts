@@ -11,9 +11,9 @@ import {
   mockTask2Uid,
   mockTaskTypeKey,
 } from "@binder/db/mocks";
-import type { CommandContextWithDb } from "../bootstrap.ts";
-import { createMockCommandContextWithDb } from "../bootstrap.mock.ts";
+import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { FileChangeMetadata } from "../lib/snapshot.ts";
+import type { RuntimeContextWithDb } from "../runtime.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
   mockCoreTransactionInputForDocs,
@@ -59,7 +59,7 @@ ${description}
 `;
 
 describe("synchronizeFile", () => {
-  let ctx: CommandContextWithDb;
+  let ctx: RuntimeContextWithDb;
   let kg: KnowledgeGraph;
 
   const mockFileChange = (relativePath: string): FileChangeMetadata => ({
@@ -69,7 +69,7 @@ describe("synchronizeFile", () => {
   });
 
   beforeEach(async () => {
-    ctx = await createMockCommandContextWithDb();
+    ctx = await createMockRuntimeContextWithDb();
     kg = ctx.kg;
     throwIfError(await kg.update(documentSchemaTransactionInput));
     throwIfError(await kg.update(mockCoreTransactionInputForDocs));

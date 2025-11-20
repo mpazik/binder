@@ -10,7 +10,7 @@ import {
   tryCatch,
 } from "@binder/utils";
 import { openDb } from "@binder/db";
-import { bootstrap, type CommandHandler } from "../bootstrap.ts";
+import { runtime, type CommandHandler } from "../runtime.ts";
 import {
   DB_FILE,
   LOCK_FILE,
@@ -135,7 +135,7 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
         `Restore ${count} transactions from backup`,
         `Delete database (${DB_FILE})`,
         `Delete undo log (${UNDO_LOG_FILE})`,
-        `Delete CLI log (cli.log)`,
+        `Delete logs directory`,
         `Delete lock file (${LOCK_FILE})`,
       ]);
     });
@@ -159,7 +159,7 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
       ),
     );
 
-  const filesToRemove = [UNDO_LOG_FILE, DB_FILE, "cli.log", LOCK_FILE];
+  const filesToRemove = [UNDO_LOG_FILE, DB_FILE, LOCK_FILE];
 
   for (const fileName of filesToRemove) {
     const filePath = join(binderPath, fileName);
@@ -171,6 +171,17 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
           error: removeResult.error,
         });
       }
+    }
+  }
+
+  const logsDir = join(binderPath, "logs");
+  if (await fs.exists(logsDir)) {
+    const removeResult = await fs.rm(logsDir, { recursive: true, force: true });
+    if (isErr(removeResult)) {
+      log.warn("Failed to remove logs directory during reset", {
+        path: logsDir,
+        error: removeResult.error,
+      });
     }
   }
 
@@ -216,7 +227,7 @@ const DevCommand = types({
         types({
           command: "backup",
           describe: "create a backup of the transaction log",
-          handler: bootstrap(backupHandler),
+          handler: runtime(backupHandler),
         }),
       )
       .command(
@@ -231,7 +242,7 @@ const DevCommand = types({
               default: false,
             });
           },
-          handler: bootstrap(resetHandler),
+          handler: runtime(resetHandler),
         }),
       )
       .demandCommand(

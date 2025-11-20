@@ -10,7 +10,7 @@ import {
   ok,
   tryCatch,
 } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
 import { processRequest } from "../mcp";
 import { types } from "./types.ts";
@@ -118,7 +118,7 @@ AVAILABLE TOOLS:
     `);
   },
   // as it is a long-running process, we cannot open db in writing mode because it would lock a database, tools should open db in writing mode themselves if need it
-  handler: bootstrapWithDb(mcpHandler),
+  handler: bootstrapWithDb(mcpHandler, { logFile: "mcp.log", silent: true }),
 });
 
 export default McpCommand;

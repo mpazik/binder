@@ -3,7 +3,7 @@ import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
 import { isErr, isOk, ok, type ResultAsync, tryCatch } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { documentSchemaTransactionInput } from "../document/document-schema.ts";
 import {
   BINDER_DIR,

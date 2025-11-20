@@ -20,7 +20,7 @@ import {
   createInMemoryFileSystem,
   type MockFileSystem,
 } from "../lib/filesystem.mock.ts";
-import { mockConfig } from "../bootstrap.mock.ts";
+import { mockConfig } from "../runtime.mock.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";

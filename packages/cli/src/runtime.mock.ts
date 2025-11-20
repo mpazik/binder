@@ -1,10 +1,14 @@
-import type { CommandContext, CommandContextWithDb } from "./bootstrap.ts";
 import { type Logger } from "./log.ts";
 import * as ui from "./ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 import { getTestDatabaseCli } from "./db/db.mock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import type { AppConfig } from "./config.ts";
+import type {
+  RuntimeContextInit,
+  RuntimeContextWithDb,
+  RuntimeContext,
+} from "./bootstrap.ts";
 
 export const mockConfig: AppConfig = {
   author: "test-user",
@@ -26,6 +30,7 @@ export const mockUi: typeof ui = {
 };
 
 export const mockLog: Logger = {
+  logPath: ".binder/logs/",
   debug: () => {},
   info: () => {},
   error: () => {},
@@ -36,7 +41,7 @@ export const mockLog: Logger = {
   }),
 };
 
-export const createMockCommandContext = async (): Promise<CommandContext> => {
+export const createMockCommandContext = async (): Promise<RuntimeContext> => {
   const fs = createInMemoryFileSystem();
   await fs.mkdir(mockConfig.paths.root);
   await fs.mkdir(mockConfig.paths.binder);
@@ -49,8 +54,8 @@ export const createMockCommandContext = async (): Promise<CommandContext> => {
   };
 };
 
-export const createMockCommandContextWithDb =
-  async (): Promise<CommandContextWithDb> => {
+export const createMockRuntimeContextWithDb =
+  async (): Promise<RuntimeContextWithDb> => {
     const context = await createMockCommandContext();
     const db = getTestDatabaseCli();
     return {

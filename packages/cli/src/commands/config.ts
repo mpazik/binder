@@ -10,7 +10,7 @@ import {
   type NodeType,
   normalizeEntityRef,
 } from "@binder/db";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchemaByTypes } from "../schema/schema-filter.ts";
 import { printTransaction } from "../ui.ts";

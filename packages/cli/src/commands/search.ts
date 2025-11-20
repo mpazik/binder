@@ -1,7 +1,7 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import type { Filters } from "@binder/db";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { types } from "./types.ts";
 
 const parseQuery = (queryParts: string[]): Filters => {

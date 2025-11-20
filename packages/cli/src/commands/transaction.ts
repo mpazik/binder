@@ -15,7 +15,7 @@ import {
   type TransactionRef,
 } from "@binder/db";
 import * as YAML from "yaml";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import {
   verifySync,
   repairDbFromLog,

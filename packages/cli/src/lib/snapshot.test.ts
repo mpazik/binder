@@ -8,7 +8,7 @@ import {
 import { mockTransactionInit } from "@binder/db/mocks";
 import { getTestDatabaseCli } from "../db/db.mock.ts";
 import type { DatabaseCli } from "../db";
-import { mockConfig } from "../bootstrap.mock.ts";
+import { mockConfig } from "../runtime.mock.ts";
 import { createInMemoryFileSystem } from "./filesystem.mock.ts";
 import { type FileSystem } from "./filesystem.ts";
 import {

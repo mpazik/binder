@@ -10,6 +10,7 @@ import {
   type Transaction,
   type ValueChange,
 } from "@binder/db";
+import type { ErrorObject } from "@binder/utils";
 
 export const Style = {
   TEXT_HIGHLIGHT: "\x1b[95m",
@@ -130,38 +131,17 @@ export const printTransactions = (
   }
 };
 
-export const error = (message: string, showLogHint = false) => {
+export const error = (message: string) => {
   println(Style.TEXT_DANGER_BOLD + "Error: " + Style.TEXT_NORMAL + message);
-  if (showLogHint) {
-    println(
-      Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
-    );
-  }
 };
 
-export const printError = (
-  error: {
-    key: string;
-    message?: string;
-    data?: object;
-  },
-  showLogHint = true,
-) => {
+export const printError = (error: ErrorObject) => {
   println(
     Style.TEXT_DANGER_BOLD +
       "Error: " +
       Style.TEXT_NORMAL +
       (error.message || error.key),
   );
-
-  if (!error.data || Object.keys(error.data).length === 0) {
-    if (showLogHint) {
-      println(
-        Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
-      );
-    }
-    return;
-  }
 
   const formatValue = (value: unknown, indent: string): string => {
     if (typeof value === "string") return value;
@@ -209,13 +189,7 @@ export const printError = (
           validationError.fieldKey && validationError.message
             ? `Field '${Style.TEXT_INFO}${validationError.fieldKey}${Style.TEXT_NORMAL}': ${validationError.message}`
             : formatValue(validationError, "    ");
-        println(`  - ${message})}`);
-      }
-      if (showLogHint) {
-        println("");
-        println(
-          Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
-        );
+        println(`  - ${message}`);
       }
       return;
     }
@@ -224,13 +198,6 @@ export const printError = (
   println(Style.TEXT_DIM + "Error details:" + Style.TEXT_NORMAL);
   const formatted = formatValue(error.data, "");
   println(formatted);
-
-  if (showLogHint) {
-    println("");
-    println(
-      Style.TEXT_DIM + "🔍 Debug logs: .binder/cli.log" + Style.TEXT_NORMAL,
-    );
-  }
 };
 
 export const printData = (data: unknown) => {

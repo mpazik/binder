@@ -15,20 +15,6 @@ import McpCommand from "./commands/mcp.ts";
 import * as UI from "./ui";
 import { BINDER_VERSION, isDevMode } from "./build-time";
 
-const cancel = new AbortController();
-
-process.on("unhandledRejection", (e) => {
-  console.error("rejection", {
-    e: e instanceof Error ? e.message : e,
-  });
-});
-
-process.on("uncaughtException", (e) => {
-  console.error("exception", {
-    e: e.message,
-  });
-});
-
 let cli = yargs(hideBin(process.argv))
   .scriptName("binder")
   .help("help", "show help")
@@ -36,6 +22,11 @@ let cli = yargs(hideBin(process.argv))
   .alias("version", "v")
   .completion("completion", "generate bash/zsh completion script")
   .exitProcess(false)
+  .option("cwd", {
+    describe: "working directory to run command in",
+    type: "string",
+    alias: "C",
+  })
   .option("print-logs", {
     describe: "print logs to stderr",
     type: "boolean",
@@ -78,5 +69,3 @@ if (isErr(result)) {
   console.error("fatal", result.error);
   process.exitCode = 1;
 }
-
-cancel.abort();

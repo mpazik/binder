@@ -17,11 +17,8 @@ import {
 } from "@binder/db";
 import { throwIfError } from "@binder/utils";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
-import {
-  createMockCommandContextWithDb,
-  mockConfig,
-} from "../bootstrap.mock.ts";
-import type { CommandContextWithDb } from "../bootstrap.ts";
+import { createMockRuntimeContextWithDb, mockConfig } from "../runtime.mock.ts";
+import type { RuntimeContextWithDb } from "../runtime.ts";
 import {
   applyTransactions,
   redoTransactions,
@@ -45,10 +42,10 @@ describe("orchestrator", () => {
   let fs: FileSystem;
   let db: Database;
   let kg: KnowledgeGraph;
-  let context: CommandContextWithDb;
+  let context: RuntimeContextWithDb;
 
   beforeEach(async () => {
-    context = await createMockCommandContextWithDb();
+    context = await createMockRuntimeContextWithDb();
     fs = context.fs;
     db = context.db;
     kg = context.kg;

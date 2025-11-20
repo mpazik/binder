@@ -1,6 +1,6 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../bootstrap.ts";
+import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { renderDocs } from "../document/repository.ts";
 import { synchronizeModifiedFiles } from "../document/synchronizer.ts";
 import { loadNavigation } from "../document/navigation.ts";
