@@ -62,13 +62,12 @@ const transform = (items: Item[]) => {
 ```typescript
 // ✅ Preferred - early returns without braces
 const processUser = (user: User | null): Result<ProcessedUser> => {
-  if (!user) return err(createError("user_not_found", "User is null"));
-  if (!user.isActive)
-    return err(createError("user_inactive", "User is not active"));
+  if (!user) return fail("user-not-found", "User is null");
+  if (!user.isActive) return fail("user-inactive", "User is not active");
   if (user.role !== "admin")
-    return err(createError("insufficient_permissions", "Admin role required"));
+    return fail("insufficient-permissions", "Admin role required");
   if (user.providerFailed)
-    return err(createError("provider_error", "Provider call failed", { providerCalled: true }));
+    return fail("provider-error", "Provider call failed", { providerCalled: true });
 
   // ... main logic here with happy path
 };
@@ -139,13 +138,28 @@ export const createUserId = (): UserId => createUid(7, "u") as UserId;
 - Never use `try-catch` or `throw`
 - All fallible operations return `Result<T, E>` or `ResultAsync<T, E>`
 - Errors use consistent `ErrorObject`: `{ key, message, data? }`
+- Use `fail()` as a shortcut for `err(createError(...))`
+- Use `wrapError()` to add context to existing errors
 
 ```typescript
 // ✅ Always
-import { tryCatch, isErr, createError } from "@binder/utils";
+import { tryCatch, isErr, fail, wrapError } from "@binder/utils";
 
 const result = await tryCatch(operation());
 if (isErr(result)) return result;
+
+// ✅ Preferred - use fail() shortcut
+if (!user) return fail("user-not-found", "User not found");
+if (!user.isActive) return fail("user-inactive", "User is not active");
+
+// ✅ Wrapping errors with additional context
+const configResult = await loadConfig();
+if (isErr(configResult)) {
+  return wrapError(configResult, "Failed to initialize app", { component: "bootstrap" });
+}
+
+// ✅ Also acceptable - explicit err(createError(...))
+if (!user) return err(createError("user-not-found", "User not found"));
 
 // ❌ Never
 try {
@@ -170,12 +184,12 @@ const processEntity = (entity: Entity, index: number) => {
   // Logic proceeds knowing preconditions are met
 };
 
-import { err, ok, type Result, createError } from "@binder/utils";
+import { fail, ok, type Result } from "@binder/utils";
 
 // Results for runtime validation
 const validateUserInput = (input: unknown): Result<UserData> => {
   if (!isValidEmail(input.email))
-    return err(createError("invalid_email", "Invalid email format"));
+    return fail("invalid-email", "Invalid email format");
 
   return ok(input as UserData);
 };
