@@ -2,7 +2,7 @@
   "name": "@binder/db",
   "version": "0.0.0",
   "type": "module",
-  "types": "./src/index.ts",
+  "types": "./dist/index.d.ts",
   "main": "./src/index.ts",
   "exports": {
     ".": {
@@ -25,7 +25,8 @@
     "test": "bun test",
     "check": "bun lint && bun format && bun typecheck && bun test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "build:type": "tsc --declaration --emitDeclarationOnly --noEmit false --outDir ./dist"
   },
   "dependencies": {
     "@binder/utils": "workspace:*",

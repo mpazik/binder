@@ -131,10 +131,6 @@ export const isJsonRpcNotification = (req: JsonRpcRequest): boolean => {
   return req.id === undefined;
 };
 
-/**
- * JSON-RPC Result types
- */
-
 export type JsonRpcResult<T = unknown> = Result<T, JsonRpcError>;
 export type JsonRpcResultAsync<T = unknown> = Promise<JsonRpcResult<T>>;
 

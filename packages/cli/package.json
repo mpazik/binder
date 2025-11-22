@@ -18,7 +18,8 @@
     "test": "bun test",
     "check": "bun lint && bun format && bun typecheck && bun test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "build:type": "tsc --declaration --emitDeclarationOnly --noEmit false --outDir ./dist"
   },
   "dependencies": {
     "@binder/db": "workspace:*",

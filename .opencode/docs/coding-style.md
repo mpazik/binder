@@ -105,6 +105,26 @@ const calculateDiscount = (price: number, percentage: number): number => {
 };
 ```
 
+**Avoid Duplicate Logic in Branches**
+- When branches share the same logic with different values, compute the value and execute once
+- Extract complex conditions to named variables for readability
+
+```typescript
+// ✅ Compute the varying value, execute once
+const target = condition ? optionA : optionB;
+return processData(target, sharedArg);
+
+// ❌ Avoid - duplicate logic in branches
+if (condition) {
+  return processData(optionA, sharedArg);
+}
+return processData(optionB, sharedArg);
+
+// ✅ Complex condition - extract to variable
+const useAlternative = checkA && checkB && !checkC;
+return fetchFrom(useAlternative ? alternativeSource : defaultSource;);
+```
+
 ## Naming Conventions
 
 **Files**
