@@ -4,6 +4,7 @@ import {
   groupByToObject,
   isErr,
   ok,
+  type Result,
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
@@ -12,6 +13,7 @@ import {
   type ConfigRef,
   configSchema,
   type ConfigSchema,
+  type EntityNsSchema,
   fieldNodeTypes,
   type Fieldset,
   type Filters,
@@ -59,6 +61,10 @@ export type KnowledgeGraph = {
   apply: (transaction: Transaction) => ResultAsync<Transaction>;
   rollback: (count: number, version?: TransactionId) => ResultAsync<void>;
   getNodeSchema: () => ResultAsync<NodeSchema>;
+  getConfigSchema: () => ConfigSchema;
+  getSchema: <N extends NamespaceEditable>(
+    namespace: N,
+  ) => ResultAsync<EntityNsSchema[N]>;
 };
 
 export type TransactionRollback = () => ResultAsync<void>;
@@ -94,7 +100,7 @@ export const openKnowledgeGraph = (
 ): KnowledgeGraph => {
   let nodeSchemaCache: NodeSchema | null = null;
 
-  const getNodeSchema = async () => {
+  const getNodeSchema = async (): ResultAsync<NodeSchema> => {
     if (nodeSchemaCache !== null) {
       return ok(nodeSchemaCache);
     }
@@ -333,5 +339,10 @@ export const openKnowledgeGraph = (
       return ok(undefined);
     },
     getNodeSchema,
+    getConfigSchema: () => configSchema,
+    getSchema: async <N extends NamespaceEditable>(namespace: N) =>
+      (namespace === "node"
+        ? await getNodeSchema()
+        : ok(configSchema)) as Result<EntityNsSchema[N]>,
   };
 };

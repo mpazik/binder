@@ -35,28 +35,16 @@ import type { DatabaseCli } from "../db";
 import { interpolateQueryParams } from "../utils/query.ts";
 import { saveSnapshot } from "../lib/snapshot.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
-import { type ConfigPaths, renderPathForNamespace } from "../config.ts";
+import { type ConfigPaths } from "../config.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
-
-export const SUPPORTED_MARKDOWN_EXTS = [".md", ".mdx"] as const;
-export const SUPPORTED_YAML_EXTS = [".yaml", ".yml"] as const;
-export const SUPPORTED_SNAPSHOT_EXTS = [
-  ...SUPPORTED_MARKDOWN_EXTS,
-  ...SUPPORTED_YAML_EXTS,
-] as const;
-
-type FileType = "directory" | "markdown" | "yaml" | "unknown";
-
-export const getSnapshotFileType = (path: string): FileType => {
-  if (path.endsWith("/")) return "directory";
-  const ext = extname(path);
-  if (!ext) return "directory";
-  if (includes(SUPPORTED_MARKDOWN_EXTS, ext)) return "markdown";
-  if (includes(SUPPORTED_YAML_EXTS, ext)) return "yaml";
-  return "unknown";
-};
+import {
+  type FileType,
+  getFileType,
+  SUPPORTED_MARKDOWN_EXTS,
+  SUPPORTED_YAML_EXTS,
+} from "./document.ts";
 
 const NavigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() => {
   const base = {
@@ -83,7 +71,7 @@ const NavigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() => {
     }),
     z.object({
       ...base,
-      path: z.string().refine((p) => getSnapshotFileType(p) === "directory"),
+      path: z.string().refine((p) => getFileType(p) === "directory"),
     }),
   ]);
 });
@@ -103,13 +91,13 @@ export type NavigationItem = {
 
 export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
   {
-    path: "fields.yaml",
+    path: ".binder/fields.yaml",
     query: {
       filters: { type: "Field" },
     },
   },
   {
-    path: "types.yaml",
+    path: ".binder/types.yaml",
     query: {
       filters: { type: "Type" },
     },
@@ -119,7 +107,9 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
 export const loadNavigation = async (
   fs: FileSystem,
   binderPath: string,
+  namespace: NamespaceEditable = "node",
 ): ResultAsync<NavigationItem[]> => {
+  if (namespace === "config") return ok(CONFIG_NAVIGATION_ITEMS);
   const navigationPath = join(binderPath, "navigation.yaml");
 
   const fileResult = await fs.readFile(navigationPath);
@@ -138,7 +128,7 @@ export const findNavigationItemByPath = (
   path: string,
 ): NavigationItem | undefined => {
   for (const item of items) {
-    const fileType = getSnapshotFileType(item.path);
+    const fileType = getFileType(item.path);
 
     if (fileType === "directory") {
       if (!item.children) continue;
@@ -232,7 +222,7 @@ const renderNavigationItem = async (
   parentEntities: Fieldset[],
   namespace: NamespaceEditable,
 ): ResultAsync<void> => {
-  const fileType = getSnapshotFileType(item.path);
+  const fileType = getFileType(item.path);
 
   let entities: FieldsetNested[] = [];
   let shouldUpdateParentContext = false;
@@ -282,10 +272,9 @@ const renderNavigationItem = async (
         db,
         fs,
         paths,
-        join(renderPathForNamespace(namespace, paths), filePath),
+        filePath,
         renderResult.data,
         version,
-        namespace,
       );
       if (isErr(saveResult)) return saveResult;
     }

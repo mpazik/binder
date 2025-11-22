@@ -7,7 +7,12 @@ import {
   ok,
   type Result,
 } from "@binder/utils";
-import { coreFields, type FieldsetNested, type NodeSchema } from "@binder/db";
+import {
+  coreFields,
+  type FieldsetNested,
+  getAllFieldsForType,
+  type NodeSchema,
+} from "@binder/db";
 import type { Nodes, Parent, Text } from "mdast";
 import { visit } from "unist-util-visit";
 import {
@@ -23,10 +28,6 @@ type FieldDef = {
   dataType: string;
   allowMultiple?: boolean;
   range?: string[];
-};
-type TypeDef = {
-  fields: string[];
-  extends?: string;
 };
 
 const getNestedValue = (
@@ -135,8 +136,8 @@ const getFieldDef = (schema: NodeSchema, path: string): Result<FieldDef> => {
         ),
       );
 
-    const rangeType = currentField.range[0]!;
-    const typeDef = schema.types[rangeType as keyof typeof schema.types];
+    const rangeType = currentField.range[0]! as keyof typeof schema.types;
+    const typeDef = schema.types[rangeType];
 
     if (!typeDef)
       return err(
@@ -158,19 +159,7 @@ const getFieldDef = (schema: NodeSchema, path: string): Result<FieldDef> => {
         ),
       );
 
-    const getAllFields = (type: TypeDef): string[] => {
-      const fields = [...type.fields];
-      if (type.extends) {
-        const parentType =
-          schema.types[type.extends as keyof typeof schema.types];
-        if (parentType) {
-          fields.push(...getAllFields(parentType));
-        }
-      }
-      return fields;
-    };
-
-    const allFields = getAllFields(typeDef);
+    const allFields = getAllFieldsForType(rangeType, schema);
     if (!allFields.includes(nextFieldKey))
       return err(
         createError(

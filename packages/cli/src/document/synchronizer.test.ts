@@ -12,7 +12,7 @@ import {
   mockTaskTypeKey,
 } from "@binder/db/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
-import type { FileChangeMetadata } from "../lib/snapshot.ts";
+import type { SnapshotChangeMetadata } from "../lib/snapshot.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
@@ -62,7 +62,7 @@ describe("synchronizeFile", () => {
   let ctx: RuntimeContextWithDb;
   let kg: KnowledgeGraph;
 
-  const mockFileChange = (relativePath: string): FileChangeMetadata => ({
+  const mockFileChange = (relativePath: string): SnapshotChangeMetadata => ({
     type: "updated",
     path: relativePath,
     txId: 1 as any,

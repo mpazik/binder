@@ -10,8 +10,8 @@ import {
   loadNavigation,
   type NavigationItem,
   renderNavigation,
-  SUPPORTED_SNAPSHOT_EXTS,
 } from "./navigation.ts";
+import { SUPPORTED_SNAPSHOT_EXTS } from "./document.ts";
 
 const removeSnapshotFiles = async (
   fs: FileSystem,

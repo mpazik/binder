@@ -1,4 +1,3 @@
-import { join } from "path";
 import type {
   Fieldset,
   FieldsetNested,
@@ -13,17 +12,20 @@ import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { diffNodeLists, diffNodeTrees } from "../utils/node-diff.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
-import type { FileChangeMetadata } from "../lib/snapshot.ts";
-import { renderPathForNamespace, type AppConfig } from "../config.ts";
+import {
+  resolveSnapshotPath,
+  type SnapshotChangeMetadata,
+} from "../lib/snapshot.ts";
+import { type AppConfig } from "../config.ts";
 import {
   DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
-  getSnapshotFileType,
   type NavigationItem,
 } from "./navigation.ts";
 import { parseMarkdown, parseView } from "./markdown.ts";
 import { extractFields } from "./view.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
+import { getDocumentFileType } from "./document.ts";
 
 export { diffNodeTrees } from "../utils/node-diff.ts";
 
@@ -152,7 +154,7 @@ const extractFromFile = async (
   filePath: string,
   namespace: NamespaceEditable,
 ): ResultAsync<ParsedFileResult> => {
-  const fileType = getSnapshotFileType(filePath);
+  const fileType = getDocumentFileType(filePath);
 
   if (fileType === "yaml") {
     if (navItem.includes)
@@ -179,7 +181,6 @@ const extractFromFile = async (
   return err(
     createError("unsupported_file_type", "Unsupported file type", {
       path: filePath,
-      fileType,
     }),
   );
 };
@@ -209,10 +210,7 @@ export const synchronizeFile = async (
   if (isErr(pathFieldsResult)) return pathFieldsResult;
   const pathFields = pathFieldsResult.data;
 
-  const absolutePath = join(
-    renderPathForNamespace(namespace, config.paths),
-    relativePath,
-  );
+  const absolutePath = resolveSnapshotPath(relativePath, config.paths);
   const contentResult = await fs.readFile(absolutePath);
   if (isErr(contentResult)) return contentResult;
 
@@ -250,7 +248,7 @@ export const synchronizeModifiedFiles = async (
   config: AppConfig,
   navigationItems: NavigationItem[],
   schema: NodeSchema,
-  modifiedFiles: FileChangeMetadata[],
+  modifiedFiles: SnapshotChangeMetadata[],
   namespace: NamespaceEditable = "node",
 ): ResultAsync<TransactionInput | null> => {
   const allNodes: TransactionInput["nodes"] = [];

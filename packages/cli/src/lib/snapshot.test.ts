@@ -12,9 +12,9 @@ import { mockConfig } from "../runtime.mock.ts";
 import { createInMemoryFileSystem } from "./filesystem.mock.ts";
 import { type FileSystem } from "./filesystem.ts";
 import {
-  calculateFileHash,
+  calculateSnapshotHash,
   getSnapshotMetadata,
-  modifiedFiles,
+  modifiedSnapshots,
   saveSnapshot,
   saveSnapshotMetadata,
 } from "./snapshot.ts";
@@ -39,7 +39,7 @@ describe("snapshot", () => {
   describe("calculateFileHash", () => {
     it("calculates SHA-256 hash of file content", async () => {
       await fs.writeFile(filePath, "hello world");
-      const hash = await calculateFileHash(fs, filePath);
+      const hash = await calculateSnapshotHash(fs, filePath);
       expect(hash).toBe(
         "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
       );
@@ -48,16 +48,16 @@ describe("snapshot", () => {
     it("returns consistent hash for same file content", async () => {
       await fs.writeFile(filePath, "test content");
       await fs.writeFile(filePath2, "test content");
-      const hash1 = await calculateFileHash(fs, filePath);
-      const hash2 = await calculateFileHash(fs, filePath2);
+      const hash1 = await calculateSnapshotHash(fs, filePath);
+      const hash2 = await calculateSnapshotHash(fs, filePath2);
       expect(hash1).toBe(hash2);
     });
 
     it("returns different hash for different file content", async () => {
       await fs.writeFile(filePath, "content one");
       await fs.writeFile(filePath2, "content two");
-      const hash1 = await calculateFileHash(fs, filePath);
-      const hash2 = await calculateFileHash(fs, filePath2);
+      const hash1 = await calculateSnapshotHash(fs, filePath);
+      const hash2 = await calculateSnapshotHash(fs, filePath2);
       expect(hash1).not.toBe(hash2);
     });
   });
@@ -67,7 +67,7 @@ describe("snapshot", () => {
 
     it("saves file to filesystem and creates corresponding metadata record", async () => {
       throwIfError(
-        await saveSnapshot(db, fs, paths, filePath, content, version, "node"),
+        await saveSnapshot(db, fs, paths, filePath, content, version),
       );
 
       expect((await fs.readFile(filePath)).data).toBe(content);
@@ -79,7 +79,7 @@ describe("snapshot", () => {
           path: "test.md",
           txId: version.id,
           ...throwIfError(fs.stat(filePath)),
-          hash: await calculateFileHash(fs, filePath),
+          hash: await calculateSnapshotHash(fs, filePath),
         },
       ]);
     });
@@ -108,7 +108,7 @@ describe("snapshot", () => {
           path: "test.md",
           txId: version2.id,
           ...throwIfError(fs.stat(filePath)),
-          hash: await calculateFileHash(fs, filePath),
+          hash: await calculateSnapshotHash(fs, filePath),
         },
       ]);
     });
@@ -119,7 +119,7 @@ describe("snapshot", () => {
       await fs.writeFile(filePath, "new content");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, docsPath),
       );
 
       expect(result).toEqual([{ type: "untracked", path: "test.md" }]);
@@ -133,11 +133,10 @@ describe("snapshot", () => {
         filePath,
         "unchanged content",
         version,
-        "node",
       );
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, docsPath),
       );
 
       expect(result).toEqual([]);
@@ -154,13 +153,13 @@ describe("snapshot", () => {
           txId: version.id,
           mtime: originalStat.mtime - 1000,
           size: originalStat.size,
-          hash: await calculateFileHash(fs, filePath),
+          hash: await calculateSnapshotHash(fs, filePath),
         },
       ]);
       await fs.writeFile(filePath, "updated content");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, docsPath),
       );
 
       expect(result).toEqual([
@@ -184,7 +183,7 @@ describe("snapshot", () => {
       ]);
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, docsPath),
       );
 
       expect(result).toEqual([
@@ -204,7 +203,7 @@ describe("snapshot", () => {
       ]);
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, docsPath),
       );
 
       expect(result).toEqual([
@@ -226,7 +225,7 @@ describe("snapshot", () => {
           txId: 2 as TransactionId,
           mtime: updatedStat.mtime - 1000,
           size: updatedStat.size,
-          hash: await calculateFileHash(fs, updatedPath),
+          hash: await calculateSnapshotHash(fs, updatedPath),
         },
         {
           path: "removed.md",
@@ -239,7 +238,7 @@ describe("snapshot", () => {
       await fs.writeFile(updatedPath, "modified content");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, docsPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, docsPath),
       );
 
       expect(result).toEqual([
@@ -267,7 +266,7 @@ describe("snapshot", () => {
       await fs.writeFile(`${docsPath}/other.md`, "other content");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, scopeDir),
+        await modifiedSnapshots(db, fs, mockConfig.paths, scopeDir),
       );
 
       expect(result).toEqual([{ type: "untracked", path: "tasks/task1.md" }]);
@@ -295,7 +294,7 @@ describe("snapshot", () => {
       ]);
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, scopeDir),
+        await modifiedSnapshots(db, fs, mockConfig.paths, scopeDir),
       );
 
       expect(result).toEqual([
@@ -320,14 +319,14 @@ describe("snapshot", () => {
           txId: version.id,
           mtime: file1Stat.mtime - 1000,
           size: file1Stat.size,
-          hash: await calculateFileHash(fs, file1Path),
+          hash: await calculateSnapshotHash(fs, file1Path),
         },
       ]);
 
       await fs.writeFile(file1Path, "updated content 1");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, file1Path),
+        await modifiedSnapshots(db, fs, mockConfig.paths, file1Path),
       );
 
       expect(result).toEqual([
@@ -353,12 +352,11 @@ describe("snapshot", () => {
           configFilePath,
           "- name: title\n  type: string",
           version,
-          "config",
         ),
       );
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, binderPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, binderPath),
       );
 
       expect(result).toEqual([]);
@@ -371,7 +369,7 @@ describe("snapshot", () => {
       await fs.writeFile(configFilePath, "- name: Task\n  fields: []");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, binderPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, binderPath),
       );
 
       expect(result).toEqual([
@@ -396,14 +394,14 @@ describe("snapshot", () => {
           txId: version.id,
           mtime: originalStat.mtime - 1000,
           size: originalStat.size,
-          hash: await calculateFileHash(fs, configFilePath),
+          hash: await calculateSnapshotHash(fs, configFilePath),
         },
       ]);
 
       await fs.writeFile(configFilePath, "updated config");
 
       const result = throwIfError(
-        await modifiedFiles(db, fs, mockConfig.paths, binderPath),
+        await modifiedSnapshots(db, fs, mockConfig.paths, binderPath),
       );
 
       expect(result).toEqual([

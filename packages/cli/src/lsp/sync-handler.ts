@@ -1,10 +1,11 @@
 import { isErr, ok, type ResultAsync } from "@binder/utils";
 import { synchronizeFile } from "../document/synchronizer.ts";
-import {
-  loadNavigation,
-  CONFIG_NAVIGATION_ITEMS,
-} from "../document/navigation.ts";
+import { loadNavigation } from "../document/navigation.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
+import {
+  getRelativeSnapshotPath,
+  namespaceFromSnapshotPath,
+} from "../lib/snapshot.ts";
 
 export const handleDocumentSave = async (
   context: RuntimeContextWithDb,
@@ -17,31 +18,19 @@ export const handleDocumentSave = async (
     log.warn("Ignoring non-file URI", { uri });
     return ok(undefined);
   }
-
   const absolutePath = uriObj.pathname;
 
-  if (
-    !absolutePath.startsWith(config.paths.docs) &&
-    !absolutePath.startsWith(config.paths.binder)
-  ) {
+  const namespace = namespaceFromSnapshotPath(absolutePath, config.paths);
+  if (namespace === undefined) {
     log.debug("File outside workspace, skipping sync", { path: absolutePath });
     return ok(undefined);
   }
+  const relativePath = getRelativeSnapshotPath(absolutePath, config.paths);
 
-  const isConfig = absolutePath.startsWith(config.paths.binder);
-  const namespace = isConfig ? "config" : "node";
-  const basePath = isConfig ? config.paths.binder : config.paths.docs;
-  const relativePath = absolutePath.slice(basePath.length + 1);
-
-  log.debug("Syncing file", { relativePath, namespace });
-
-  const navResult = isConfig
-    ? ok(CONFIG_NAVIGATION_ITEMS)
-    : await loadNavigation(fs, config.paths.binder);
-
+  const navResult = await loadNavigation(fs, config.paths.binder, namespace);
   if (isErr(navResult)) return navResult;
 
-  const schemaResult = await kg.getNodeSchema();
+  const schemaResult = await kg.getSchema(namespace);
   if (isErr(schemaResult)) return schemaResult;
 
   const syncResult = await synchronizeFile(

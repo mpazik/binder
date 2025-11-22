@@ -2,6 +2,9 @@ import { fileURLToPath } from "node:url";
 import {
   type Connection,
   createConnection,
+  type Diagnostic,
+  DiagnosticSeverity,
+  type DocumentDiagnosticReport,
   ErrorCodes,
   type InitializeParams,
   ProposedFeatures,
@@ -19,7 +22,22 @@ import {
 } from "../runtime.ts";
 import { setupCleanupHandlers } from "../lib/lock.ts";
 import type { Logger } from "../log.ts";
+import {
+  validateDocument,
+  type ValidationError,
+  type ValidationSeverity,
+} from "../validation";
+import {
+  findNavigationItemByPath,
+  loadNavigation,
+} from "../document/navigation.ts";
+import { BINDER_VERSION } from "../build-time.ts";
+import {
+  getRelativeSnapshotPath,
+  namespaceFromSnapshotPath,
+} from "../lib/snapshot.ts";
 import { handleDocumentSave } from "./sync-handler.ts";
+import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
 
 const throwLspError = (
   error: ErrorObject,
@@ -35,19 +53,42 @@ const throwLspError = (
   );
 };
 
+const severityToDiagnosticSeverity: Record<
+  ValidationSeverity,
+  DiagnosticSeverity
+> = {
+  error: DiagnosticSeverity.Error,
+  warning: DiagnosticSeverity.Error,
+  info: DiagnosticSeverity.Information,
+  hint: DiagnosticSeverity.Hint,
+};
+
+const EMPTY_DIAGNOSTICS: DocumentDiagnosticReport = {
+  kind: "full",
+  items: [],
+} as const;
+
+const validationErrorToDiagnostic = (error: ValidationError): Diagnostic => ({
+  range: error.range,
+  severity: severityToDiagnosticSeverity[error.severity],
+  message: error.message,
+  source: "binder",
+  code: error.code,
+});
+
 export const createLspServer = (
   minimalContext: RuntimeContextInit,
 ): Connection => {
-  const { log } = minimalContext;
-
   const connection = createConnection(
     ProposedFeatures.all,
     process.stdin,
     process.stdout,
   );
-  const documents = new TextDocuments(TextDocument);
+  const lspDocuments = new TextDocuments(TextDocument);
+  let log = minimalContext.log;
 
   let runtime: RuntimeContextWithDb | null = null;
+  let documentCache: DocumentCache = createDocumentCache(log);
 
   connection.onInitialize(async (params: InitializeParams) => {
     log.info("LSP client initialized", {
@@ -75,6 +116,7 @@ export const createLspServer = (
         logLevel: "INFO",
         printLogs: false,
         silent: true,
+        logFile: "lsp.log",
       },
       rootPath,
     );
@@ -86,6 +128,7 @@ export const createLspServer = (
       );
 
     const runtimeContext = runtimeResult.data!;
+    log = runtimeContext.log; // promote to local logger
 
     const dbResult = await initializeDbRuntime(runtimeContext);
     if (isErr(dbResult))
@@ -102,9 +145,11 @@ export const createLspServer = (
       db: dbResult.data!.db,
       kg: dbResult.data!.kg,
     };
+    documentCache = createDocumentCache(log);
 
-    log.info("Workspace initialized", {
-      root: runtime.config.paths.root,
+    log.info("Workspace loaded", {
+      version: BINDER_VERSION,
+      cwd: runtimeContext.config.paths.root,
     });
 
     return {
@@ -115,6 +160,10 @@ export const createLspServer = (
           save: {
             includeText: false,
           },
+        },
+        diagnosticProvider: {
+          interFileDependencies: false,
+          workspaceDiagnostics: false,
         },
       },
     };
@@ -128,6 +177,8 @@ export const createLspServer = (
 
   connection.onShutdown(() => {
     log.info("LSP server shutdown requested");
+    const stats = documentCache.getStats();
+    log.info("Document cache stats", stats);
     shutdownReceived = true;
     return undefined;
   });
@@ -138,25 +189,26 @@ export const createLspServer = (
     process.exit(exitCode);
   });
 
-  documents.onDidSave(async (change) => {
+  lspDocuments.onDidOpen(async (event) => {
+    log.info("Document opened", { uri: event.document.uri });
+  });
+
+  lspDocuments.onDidChangeContent(async (change) => {
+    log.debug("Document changed", { uri: change.document.uri });
+  });
+
+  lspDocuments.onDidClose((event) => {
+    const uri = event.document.uri;
+    log.info("Document closed", { uri });
+    documentCache.invalidate(uri);
+  });
+
+  lspDocuments.onDidSave(async (change) => {
     const uri = change.document.uri;
-    log.debug("Document saved", { uri });
+    log.info("Document saved", { uri });
 
     if (!runtime) {
       log.error("Workspace not initialized, cannot sync file", { uri });
-      connection.sendDiagnostics({
-        uri,
-        diagnostics: [
-          {
-            range: {
-              start: { line: 0, character: 0 },
-              end: { line: 0, character: 0 },
-            },
-            message: "Workspace not initialized",
-            severity: 1, // Error
-          },
-        ],
-      });
       return;
     }
 
@@ -164,28 +216,96 @@ export const createLspServer = (
 
     if (isErr(result)) {
       log.error("Sync failed", { error: result.error, uri });
-      connection.sendDiagnostics({
-        uri,
-        diagnostics: [
-          {
-            range: {
-              start: { line: 0, character: 0 },
-              end: { line: 0, character: 0 },
-            },
-            message: `Sync failed: ${result.error.message}`,
-            severity: 1, // Error
-          },
-        ],
-      });
-    } else {
-      connection.sendDiagnostics({
-        uri,
-        diagnostics: [],
-      });
     }
   });
 
-  documents.listen(connection);
+  connection.languages.diagnostics.on(async (params) => {
+    log.info("Diagnostic request received", { uri: params.textDocument.uri });
+
+    if (!runtime) {
+      log.warn("Runtime not initialized, returning empty diagnostics");
+      return EMPTY_DIAGNOSTICS;
+    }
+    const { kg, config, fs } = runtime;
+
+    const uri = params.textDocument.uri;
+    const document = lspDocuments.get(uri);
+
+    if (!document) {
+      log.warn("Document not found", { uri });
+      return EMPTY_DIAGNOSTICS;
+    }
+
+    const content = documentCache.getParsed(document);
+    if (!content) {
+      log.debug("Document type not supported", { uri });
+      return EMPTY_DIAGNOSTICS;
+    }
+
+    const filePath = fileURLToPath(uri);
+    log.debug("validateDocument called", { filePath });
+    const ruleConfig = config.validation?.rules ?? {};
+
+    const namespace = namespaceFromSnapshotPath(filePath, config.paths);
+    if (namespace === undefined) {
+      log.debug("Document from outside binder directories", { filePath });
+      return EMPTY_DIAGNOSTICS;
+    }
+    const schemaResult = await runtime.kg.getSchema(namespace);
+    if (isErr(schemaResult)) {
+      log.error("Failed to load schema", schemaResult.error);
+      return EMPTY_DIAGNOSTICS;
+    }
+
+    const navigationResult = await loadNavigation(
+      fs,
+      config.paths.binder,
+      namespace,
+    );
+    if (isErr(navigationResult)) {
+      log.error("Failed to load navigation", navigationResult.error);
+      return EMPTY_DIAGNOSTICS;
+    }
+
+    const relativePath = getRelativeSnapshotPath(filePath, config.paths);
+    log.debug("Resolved relative path", { filePath, relativePath });
+
+    const navigationItem = findNavigationItemByPath(
+      navigationResult.data,
+      relativePath,
+    );
+
+    if (!navigationItem) {
+      log.debug("No navigation item found", { filePath, relativePath });
+      return EMPTY_DIAGNOSTICS;
+    }
+
+    const validationResult = await validateDocument(content, {
+      filePath,
+      navigationItem,
+      schema: schemaResult.data,
+      ruleConfig,
+      kg,
+    });
+
+    const diagnostics = [
+      ...validationResult.errors,
+      ...validationResult.warnings,
+    ].map(validationErrorToDiagnostic);
+
+    log.info("Returning diagnostics", {
+      filePath,
+      errorCount: validationResult.errors.length,
+      warningCount: validationResult.warnings.length,
+    });
+
+    return {
+      kind: "full",
+      items: diagnostics,
+    };
+  });
+
+  lspDocuments.listen(connection);
   connection.listen();
 
   return connection;

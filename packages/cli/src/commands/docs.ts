@@ -1,10 +1,28 @@
+import { relative } from "path";
 import type { Argv } from "yargs";
-import { isErr, ok } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import type { EntityNsSchema, NamespaceEditable } from "@binder/db";
+import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
+import {
+  bootstrapWithDb,
+  type CommandHandlerWithDb,
+  type RuntimeContextWithDb,
+} from "../runtime.ts";
 import { renderDocs } from "../document/repository.ts";
 import { synchronizeModifiedFiles } from "../document/synchronizer.ts";
-import { loadNavigation } from "../document/navigation.ts";
-import { modifiedFiles } from "../lib/snapshot.ts";
+import {
+  loadNavigation,
+  findNavigationItemByPath,
+} from "../document/navigation.ts";
+import {
+  getRelativeSnapshotPath,
+  modifiedSnapshots,
+  namespaceFromSnapshotPath,
+  resolveSnapshotPath,
+  snapshotRootForNamespace,
+} from "../lib/snapshot.ts";
+import type { ValidationError } from "../validation";
+import { validateDocument } from "../validation";
+import { getDocumentFileType, parseDocument } from "../document/document.ts";
 import { types } from "./types.ts";
 
 export const docsRenderHandler: CommandHandlerWithDb = async (context) => {
@@ -22,8 +40,8 @@ export const docsSyncHandler: CommandHandlerWithDb<{
   const navigationResult = await loadNavigation(fs, config.paths.binder);
   if (isErr(navigationResult)) return navigationResult;
 
-  const scopePath = args.path ? args.path : undefined;
-  const modifiedFilesResult = await modifiedFiles(
+  const scopePath = resolveSnapshotPath(args.path, config.paths);
+  const modifiedFilesResult = await modifiedSnapshots(
     db,
     fs,
     config.paths,
@@ -67,6 +85,144 @@ export const docsSyncHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
+const lintNamespace = async <N extends NamespaceEditable>(
+  { fs, ui, config, kg }: RuntimeContextWithDb,
+  namespace: N,
+  scanPath: string,
+): ResultAsync<{ errors: number; warnings: number }> => {
+  const ruleConfig = config.validation?.rules ?? {};
+  const schemaResult = await kg.getSchema(namespace);
+  if (isErr(schemaResult)) return schemaResult;
+
+  let currentFile = "";
+  const printError = (relativePath: string, error: ValidationError) => {
+    if (currentFile !== relativePath) {
+      ui.println(`\n${relativePath}:`);
+      currentFile = relativePath;
+    }
+    const location = `${error.range.start.line + 1}:${error.range.start.character + 1}`;
+    const severity = error.severity === "error" ? "error" : error.severity;
+    ui.println(`  ${location} ${severity} ${error.message} (${error.code})`);
+  };
+
+  const navigationResult = await loadNavigation(
+    fs,
+    config.paths.binder,
+    namespace,
+  );
+  if (isErr(navigationResult)) return navigationResult;
+
+  let errors = 0;
+  let warnings = 0;
+
+  for await (const filePath of fs.scan(scanPath)) {
+    const fileType = getDocumentFileType(filePath);
+    if (fileType === undefined) continue;
+
+    const relativePath = getRelativeSnapshotPath(filePath, config.paths);
+    const navigationItem = findNavigationItemByPath(
+      navigationResult.data,
+      relativePath,
+    );
+
+    if (!navigationItem) continue;
+
+    const contentResult = await fs.readFile(filePath);
+    if (isErr(contentResult)) {
+      ui.println(`  error ${contentResult.error.message ?? "Unknown error"}`);
+      errors += 1;
+      continue;
+    }
+
+    const content = parseDocument(contentResult.data, fileType);
+    const result = await validateDocument(content, {
+      filePath,
+      navigationItem,
+      schema: schemaResult.data as EntityNsSchema[N],
+      ruleConfig,
+      kg,
+    });
+
+    for (const error of result.errors) {
+      printError(relativePath, error);
+    }
+    for (const warning of result.warnings) {
+      printError(relativePath, warning);
+    }
+
+    errors += result.errors.length;
+    warnings += result.warnings.length;
+  }
+
+  return ok({ errors, warnings });
+};
+
+export const docsLintHandler: CommandHandlerWithDb<{
+  path?: string;
+  all?: boolean;
+  config?: boolean;
+}> = async (context) => {
+  const { ui, config, args } = context;
+
+  if (args.all && args.config) {
+    return fail("invalid-args", "Cannot use --all and --config flags together");
+  }
+
+  if (args.path && (args.all || args.config)) {
+    return fail(
+      "invalid-args",
+      "Cannot specify path with --all or --config flags",
+    );
+  }
+  let toLint: [NamespaceEditable, string][] = [];
+
+  if (args.path) {
+    const absolutePath = resolveSnapshotPath(args.path, config.paths);
+    const namespace = namespaceFromSnapshotPath(absolutePath, config.paths);
+    if (!namespace) {
+      return fail(
+        "invalid-path",
+        `Path is outside known directories: ${args.path}`,
+      );
+    }
+    toLint = [[namespace, absolutePath]];
+  } else {
+    const namespacesToLint: NamespaceEditable[] = args.all
+      ? ["node", "config"]
+      : args.config
+        ? ["config"]
+        : ["node"];
+    toLint = namespacesToLint.map((ns) => [
+      ns,
+      snapshotRootForNamespace(ns, config.paths),
+    ]);
+  }
+
+  let totalErrors = 0;
+  let totalWarnings = 0;
+
+  for (const [namespace, scanPath] of toLint) {
+    const result = await lintNamespace(context, namespace, scanPath);
+    if (isErr(result)) return result;
+
+    totalErrors += result.data.errors;
+    totalWarnings += result.data.warnings;
+  }
+
+  ui.println("");
+  if (totalErrors > 0 || totalWarnings > 0) {
+    ui.println(
+      `Found ${totalErrors} error${totalErrors === 1 ? "" : "s"} and ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}`,
+    );
+    if (totalErrors > 0) {
+      return fail("validation-failed", "Validation failed with errors");
+    }
+    return ok(undefined);
+  }
+
+  return ok("No validation issues found");
+};
+
 const DocsCommand = types({
   command: "docs <command>",
   describe: "manage documentation",
@@ -95,7 +251,32 @@ const DocsCommand = types({
           handler: bootstrapWithDb(docsSyncHandler),
         }),
       )
-      .demandCommand(1, "You need to specify a subcommand: render, sync");
+      .command(
+        types({
+          command: "lint [path]",
+          describe: "validate YAML and Markdown files",
+          builder: (yargs: Argv) => {
+            return yargs
+              .positional("path", {
+                describe:
+                  "path to file or directory to validate (defaults to docs directory)",
+                type: "string",
+              })
+              .option("all", {
+                describe: "validate both docs and config files",
+                type: "boolean",
+                default: false,
+              })
+              .option("config", {
+                describe: "validate config files (.binder directory)",
+                type: "boolean",
+                default: false,
+              });
+          },
+          handler: bootstrapWithDb(docsLintHandler),
+        }),
+      )
+      .demandCommand(1, "You need to specify a subcommand: render, sync, lint");
   },
   handler: async () => {},
 });

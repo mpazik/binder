@@ -49,6 +49,39 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
     return ok(undefined);
   };
 
+  const readdir = async (path: string) => {
+    const normalized = normalizePath(path);
+    const entry = files.get(normalized);
+
+    if (!entry) {
+      return err(createError("file-not-found", `Directory not found: ${path}`));
+    }
+
+    if (!entry.isDirectory) {
+      return err(
+        createError("not-directory", `Path is not a directory: ${path}`),
+      );
+    }
+
+    const entries = [];
+    const prefix = normalized === "/" ? "/" : normalized + "/";
+
+    for (const [filePath, fileEntry] of files) {
+      if (filePath.startsWith(prefix)) {
+        const relativePath = filePath.substring(prefix.length);
+        if (!relativePath.includes("/")) {
+          entries.push({
+            name: relativePath,
+            isFile: !fileEntry.isDirectory,
+            isDirectory: fileEntry.isDirectory,
+          });
+        }
+      }
+    }
+
+    return ok(entries);
+  };
+
   return {
     files,
     exists: async (path: string) => {
@@ -246,40 +279,7 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       return ok(undefined);
     },
 
-    readdir: async (path: string) => {
-      const normalized = normalizePath(path);
-      const entry = files.get(normalized);
-
-      if (!entry) {
-        return err(
-          createError("file-not-found", `Directory not found: ${path}`),
-        );
-      }
-
-      if (!entry.isDirectory) {
-        return err(
-          createError("not-directory", `Path is not a directory: ${path}`),
-        );
-      }
-
-      const entries = [];
-      const prefix = normalized === "/" ? "/" : normalized + "/";
-
-      for (const [filePath, fileEntry] of files) {
-        if (filePath.startsWith(prefix)) {
-          const relativePath = filePath.substring(prefix.length);
-          if (!relativePath.includes("/")) {
-            entries.push({
-              name: relativePath,
-              isFile: !fileEntry.isDirectory,
-              isDirectory: fileEntry.isDirectory,
-            });
-          }
-        }
-      }
-
-      return ok(entries);
-    },
+    readdir,
 
     renameFile: async (oldPath: string, newPath: string) => {
       const normalizedOld = normalizePath(oldPath);
@@ -297,6 +297,29 @@ export const createInMemoryFileSystem = (): MockFileSystem => {
       files.delete(normalizedOld);
 
       return ok(undefined);
+    },
+
+    scan: async function* (
+      startPath: string,
+    ): AsyncGenerator<string, void, unknown> {
+      async function* scanDirectory(
+        dirPath: string,
+      ): AsyncGenerator<string, void, unknown> {
+        const entriesResult = await readdir(dirPath);
+        if (isErr(entriesResult)) return;
+
+        for (const entry of entriesResult.data) {
+          const filePath = `${normalizePath(dirPath)}/${entry.name}`;
+
+          if (entry.isDirectory) {
+            yield* scanDirectory(filePath);
+          } else if (entry.isFile) {
+            yield filePath;
+          }
+        }
+      }
+
+      yield* scanDirectory(normalizePath(startPath));
     },
   };
 };

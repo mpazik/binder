@@ -1,4 +1,4 @@
-import { tableStoredFields } from "../schema.ts";
+import { includes } from "@binder/utils";
 import type { EntityId, EntityKey, EntityUid, FieldKey } from "./entity.ts";
 import {
   type CoreDataType,
@@ -15,6 +15,11 @@ import type {
   ConfigType,
 } from "./config.ts";
 import type { NodeFieldKey, NodeType } from "./node.ts";
+import type {
+  EntityNsSchema,
+  EntityNsType,
+  NamespaceEditable,
+} from "./namespace.ts";
 
 export type EntityTypeBuilder<
   D extends Record<string, unknown>,
@@ -117,10 +122,12 @@ export const configSchemaIds = {
   disabled: newId<ConfigId>(9, coreIdsLimit),
   extends: newId<ConfigId>(10, coreIdsLimit),
   unique: newId<ConfigId>(11, coreIdsLimit),
+  fields_attrs: newId<ConfigId>(12, coreIdsLimit),
   Field: newId<ConfigId>(14, coreIdsLimit),
   Type: newId<ConfigId>(15, coreIdsLimit),
   RelationField: newId<ConfigId>(16, coreIdsLimit),
   StringField: newId<ConfigId>(17, coreIdsLimit),
+  OptionField: newId<ConfigId>(18, coreIdsLimit),
 } as const;
 
 export type FieldAttrDef = {
@@ -153,12 +160,14 @@ export const nodeDataTypes = {
 export const fieldConfigType = "Field" as ConfigType;
 export const relationFieldConfigType = "RelationField" as ConfigType;
 export const stringFieldConfigType = "StringField" as ConfigType;
+export const optionFieldConfigType = "OptionField" as ConfigType;
 export const typeConfigType = "Type" as ConfigType;
 
 export const fieldNodeTypes = [
   fieldConfigType,
   relationFieldConfigType,
   stringFieldConfigType,
+  optionFieldConfigType,
 ] as const;
 
 export const configFields = {
@@ -170,20 +179,6 @@ export const configFields = {
     dataType: "option",
     options: dataTypeDefsToOptions(coreDataTypes),
     immutable: true,
-  },
-  immutable: {
-    id: configSchemaIds.immutable,
-    key: "immutable",
-    name: "Immutable",
-    dataType: "boolean",
-    description: "If true, this field cannot be modified after entity creation",
-  },
-  disabled: {
-    id: configSchemaIds.disabled,
-    key: "disabled",
-    name: "Disabled",
-    dataType: "boolean",
-    description: "Indicates if this entity is disabled",
   },
   options: {
     id: configSchemaIds.options,
@@ -221,14 +216,6 @@ export const configFields = {
     description: "Attribute of which this attribute is an inverse relation of",
     immutable: true,
   },
-  unique: {
-    id: configSchemaIds.unique,
-    key: "unique",
-    name: "Unique",
-    dataType: "boolean",
-    description: "Whether the field value must be unique",
-    immutable: true,
-  },
   // rangeQuery: { key: "rangeQuery", name: "Range Query", dataType: "query" },
   // formula: { key: "formula", name: "formula", dataType: "formula" },
   fields: {
@@ -238,12 +225,42 @@ export const configFields = {
     dataType: "relation",
     allowMultiple: true,
   },
+  immutable: {
+    id: configSchemaIds.immutable,
+    key: "immutable",
+    name: "Immutable",
+    dataType: "boolean",
+    description: "If true, this field cannot be modified after entity creation",
+  },
+  disabled: {
+    id: configSchemaIds.disabled,
+    key: "disabled",
+    name: "Disabled",
+    dataType: "boolean",
+    description: "Indicates if this entity is disabled",
+  },
   extends: {
-    id: configSchemaIds.fields,
+    id: configSchemaIds.extends,
     key: "extends",
     name: "Extends",
     dataType: "relation",
     range: [typeConfigType],
+  },
+  unique: {
+    id: configSchemaIds.unique,
+    key: "unique",
+    name: "Unique",
+    dataType: "boolean",
+    description: "Whether the field value must be unique",
+    immutable: true,
+  },
+  fields_attrs: {
+    id: configSchemaIds.fields_attrs,
+    key: "fields_attrs",
+    name: "Fields Attrs",
+    dataType: "object",
+    description: "Temporary hack field for fields attributes",
+    immutable: true,
   },
 } as const satisfies FieldDefs;
 export type ConfigFieldDefinitions = typeof configFields;
@@ -269,7 +286,7 @@ export const configTypeDefs: ConfigTypeDefinitions = {
     key: fieldConfigType,
     name: "Attribute",
     description: "Configuration field definition",
-    fields: ["key", "dataType", "description", "allowMultiple"],
+    fields: ["key", "name", "dataType", "description", "allowMultiple"],
     fields_attrs: {
       key: { required: true },
       dataType: { required: true },
@@ -297,12 +314,23 @@ export const configTypeDefs: ConfigTypeDefinitions = {
       dataType: { value: "string" },
     },
   },
+  [optionFieldConfigType]: {
+    id: configSchemaIds.OptionField,
+    key: optionFieldConfigType,
+    name: "Option Attribute",
+    description: "Option field with predefined choices",
+    extends: fieldConfigType,
+    fields: ["options"],
+    fields_attrs: {
+      dataType: { value: "option" },
+    },
+  },
   [typeConfigType]: {
     id: configSchemaIds.Type,
     key: typeConfigType,
     name: "Type",
     description: "Configuration entity type definition",
-    fields: ["key", "description"],
+    fields: ["key", "name", "description", "fields", "extends"],
     fields_attrs: {
       key: { required: true },
     },
@@ -319,6 +347,13 @@ export const configSchema = {
   types: configTypeDefs,
 } as const satisfies ConfigSchema;
 
+export const systemFieldKeys = [
+  "id",
+  "uid",
+  "key",
+  "type",
+  "fields_attrs", // temporary hack
+] as const satisfies ConfigFieldKey[];
 type SystemFieldKeys = "id" | "uid" | "key" | "type";
 export type ConfigTypeBuilder<
   M extends ConfigFieldKey,
@@ -362,4 +397,21 @@ export type EntitySchema = NodeSchema | ConfigSchema;
 export const isFieldInSchema = (
   fieldKey: string,
   schema: EntitySchema,
-): boolean => tableStoredFields.includes(fieldKey) || fieldKey in schema.fields;
+): boolean => includes(systemFieldKeys, fieldKey) || fieldKey in schema.fields;
+
+export const getAllFieldsForType = <N extends NamespaceEditable>(
+  type: EntityNsType[N],
+  schema: EntityNsSchema[N],
+  includeSystemFields = true,
+): string[] => {
+  const typeDef = (schema.types as any)[type];
+  if (!typeDef) return [];
+  const fields = [...typeDef.fields];
+  if (typeDef.extends) {
+    fields.push(...getAllFieldsForType(typeDef.extends, schema, false));
+  }
+  if (includeSystemFields) {
+    return [...systemFieldKeys, ...fields];
+  }
+  return fields;
+};

@@ -13,14 +13,7 @@ import { type Options } from "remark-stringify";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { directiveToMarkdown } from "mdast-util-directive";
 import { type Brand } from "@binder/utils";
-import type {
-  Nodes,
-  Parent,
-  PhrasingContent,
-  Root,
-  RootContent,
-  Text,
-} from "mdast";
+import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import type { Data, Literal, Node } from "unist";
 import { remarkViewSlot, type ViewSlot } from "./remark-view-slot.ts";
 
@@ -284,3 +277,13 @@ export const astTextNode = (text: string): Literal => ({
   type: "text",
   value: text,
 });
+
+export type ParsedMarkdown = {
+  root: FullAST;
+};
+
+export const parseMarkdownDocument = (content: string): ParsedMarkdown => {
+  return {
+    root: parseAst(content),
+  };
+};

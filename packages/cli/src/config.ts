@@ -1,6 +1,5 @@
 import { dirname, join, resolve } from "path";
 import { homedir } from "os";
-import { mkdirSync } from "fs";
 import { z } from "zod";
 import * as YAML from "yaml";
 import {
@@ -10,7 +9,6 @@ import {
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
-import type { NamespaceEditable } from "@binder/db";
 import type { FileSystem } from "./lib/filesystem.ts";
 
 const DEFAULT_DOCS_DIR = "./docs";
@@ -33,6 +31,13 @@ export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 
 export const UserConfigSchema = GlobalConfigSchema.extend({
   docsPath: z.string().default(DEFAULT_DOCS_DIR),
+  validation: z
+    .object({
+      rules: z
+        .record(z.string(), z.enum(["error", "warning", "info", "hint", "off"]))
+        .optional(),
+    })
+    .optional(),
 });
 export type UserConfig = z.infer<typeof UserConfigSchema>;
 
@@ -98,6 +103,9 @@ export type AppConfig = {
   author: string;
   logLevel?: "DEBUG" | "INFO" | "WARN" | "ERROR";
   paths: ConfigPaths;
+  validation?: {
+    rules?: Record<string, "error" | "warning" | "info" | "hint" | "off">;
+  };
 };
 
 const getGlobalConfigPath = (): string => {
@@ -127,7 +135,7 @@ export const loadWorkspaceConfig = async (
 
   if (isErr(loadedConfig)) return loadedConfig;
 
-  const { docsPath, author, logLevel } = loadedConfig.data;
+  const { docsPath, author, logLevel, validation } = loadedConfig.data;
 
   return ok({
     author: author || globalConfig.author || DEFAULT_AUTHOR,
@@ -137,10 +145,6 @@ export const loadWorkspaceConfig = async (
       binder: join(root, BINDER_DIR),
       docs: join(root, docsPath),
     },
+    validation,
   });
 };
-
-export const renderPathForNamespace = (
-  namespace: NamespaceEditable,
-  paths: ConfigPaths,
-): string => (namespace === "config" ? paths.binder : paths.docs);

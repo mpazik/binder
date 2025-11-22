@@ -1,5 +1,5 @@
 import { mkdir, readdir, rename, rm, truncate, access } from "fs/promises";
-import { type Result, type ResultAsync, tryCatch } from "@binder/utils";
+import { isErr, type Result, type ResultAsync, tryCatch } from "@binder/utils";
 
 export type FileStat = {
   size: number;
@@ -28,6 +28,7 @@ export type FileSystem = {
   ) => ResultAsync<void>;
   readdir: (path: string) => ResultAsync<DirEntry[]>;
   renameFile: (oldPath: string, newPath: string) => ResultAsync<void>;
+  scan: (path: string) => AsyncGenerator<string, void, unknown>;
 };
 
 export const createRealFileSystem = (): FileSystem => {
@@ -99,5 +100,35 @@ export const createRealFileSystem = (): FileSystem => {
 
     renameFile: async (oldPath: string, newPath: string) =>
       tryCatch(async () => await rename(oldPath, newPath)),
+
+    scan: async function* (
+      startPath: string,
+    ): AsyncGenerator<string, void, unknown> {
+      async function* scanDirectory(
+        dirPath: string,
+      ): AsyncGenerator<string, void, unknown> {
+        const entriesResult = await tryCatch(async () => {
+          const entries = await readdir(dirPath, { withFileTypes: true });
+          return entries.map((entry) => ({
+            name: entry.name,
+            isFile: entry.isFile(),
+            isDirectory: entry.isDirectory(),
+          }));
+        });
+        if (isErr(entriesResult)) return;
+
+        for (const entry of entriesResult.data) {
+          const filePath = `${dirPath}/${entry.name}`;
+
+          if (entry.isDirectory) {
+            yield* scanDirectory(filePath);
+          } else if (entry.isFile) {
+            yield filePath;
+          }
+        }
+      }
+
+      yield* scanDirectory(startPath);
+    },
   };
 };

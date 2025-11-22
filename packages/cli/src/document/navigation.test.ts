@@ -25,6 +25,7 @@ import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import {
+  CONFIG_NAVIGATION_ITEMS,
   DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
   type NavigationItem,
@@ -104,6 +105,14 @@ describe("navigation", () => {
         ],
         "projects/tasks/details.yaml",
         deepChild,
+      );
+    });
+
+    it("matches config file", () => {
+      check(
+        CONFIG_NAVIGATION_ITEMS,
+        ".binder/fields.yaml",
+        CONFIG_NAVIGATION_ITEMS[0],
       );
     });
   });
