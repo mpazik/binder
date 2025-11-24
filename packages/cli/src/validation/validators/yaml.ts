@@ -69,7 +69,7 @@ const visitEntityNode = <N extends NamespaceEditable>(
         errors.push(
           createValidationError(
             "extra-field",
-            `Field '${fieldKey}' is not allowed in type '${entityType}'`,
+            `Field '${fieldKey}' is not part of type '${entityType}'`,
             range,
             "warning",
             { fieldKey, entityType },

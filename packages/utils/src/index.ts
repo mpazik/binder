@@ -14,3 +14,5 @@ export type * from "./encoding.ts";
 export * from "./encoding.ts";
 export * from "./json-rpc.ts";
 export type * from "./json-rpc.ts";
+export * from "./string.ts";
+export type * from "./string.ts";

@@ -1,16 +1,25 @@
 import { fileURLToPath } from "node:url";
 import {
+  type CodeAction,
+  CodeActionKind,
+  type CodeActionParams,
+  type CompletionItem,
+  type CompletionParams,
   type Connection,
   createConnection,
   type Diagnostic,
   DiagnosticSeverity,
   type DocumentDiagnosticReport,
   ErrorCodes,
+  type Hover,
+  type HoverParams,
   type InitializeParams,
+  MarkupKind,
   ProposedFeatures,
   ResponseError,
   TextDocuments,
   TextDocumentSyncKind,
+  TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { type ErrorObject, isErr } from "@binder/utils";
@@ -38,6 +47,9 @@ import {
 } from "../lib/snapshot.ts";
 import { handleDocumentSave } from "./sync-handler.ts";
 import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
+import { handleHover } from "./hover.ts";
+import { handleCompletion } from "./completion.ts";
+import { handleCodeAction } from "./code-actions.ts";
 
 const throwLspError = (
   error: ErrorObject,
@@ -58,7 +70,7 @@ const severityToDiagnosticSeverity: Record<
   DiagnosticSeverity
 > = {
   error: DiagnosticSeverity.Error,
-  warning: DiagnosticSeverity.Error,
+  warning: DiagnosticSeverity.Warning,
   info: DiagnosticSeverity.Information,
   hint: DiagnosticSeverity.Hint,
 };
@@ -74,6 +86,7 @@ const validationErrorToDiagnostic = (error: ValidationError): Diagnostic => ({
   message: error.message,
   source: "binder",
   code: error.code,
+  data: error.data,
 });
 
 export const createLspServer = (
@@ -159,6 +172,13 @@ export const createLspServer = (
         diagnosticProvider: {
           interFileDependencies: false,
           workspaceDiagnostics: false,
+        },
+        completionProvider: {
+          triggerCharacters: [":", " "],
+        },
+        hoverProvider: true,
+        codeActionProvider: {
+          codeActionKinds: [CodeActionKind.QuickFix],
         },
       },
     };
@@ -299,6 +319,44 @@ export const createLspServer = (
       items: diagnostics,
     };
   });
+
+  connection.onCompletion(
+    async (params: CompletionParams): Promise<CompletionItem[]> => {
+      log.debug("Completion request received", {
+        uri: params.textDocument.uri,
+      });
+      if (!runtime) return [];
+      return handleCompletion(
+        params,
+        lspDocuments,
+        documentCache,
+        runtime,
+        log,
+      );
+    },
+  );
+
+  connection.onHover(async (params: HoverParams): Promise<Hover | null> => {
+    log.debug("Hover request received", { uri: params.textDocument.uri });
+    if (!runtime) return null;
+    return handleHover(params, lspDocuments, documentCache, runtime, log);
+  });
+
+  connection.onCodeAction(
+    async (params: CodeActionParams): Promise<CodeAction[]> => {
+      log.debug("Code action request received", {
+        uri: params.textDocument.uri,
+      });
+      if (!runtime) return [];
+      return handleCodeAction(
+        params,
+        lspDocuments,
+        documentCache,
+        runtime,
+        log,
+      );
+    },
+  );
 
   lspDocuments.listen(connection);
   connection.listen();
