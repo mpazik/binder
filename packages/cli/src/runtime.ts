@@ -91,7 +91,7 @@ export const initializeMinimalRuntime = async (
   options?: RuntimeOptions,
 ): ResultAsync<RuntimeContextInit> => {
   const fs = createRealFileSystem();
-  const logLevel = options?.logLevel || (isDevMode() ? "DEBUG" : "INFO");
+  const logLevel = options?.logLevel || (isDevMode() ? "debug" : "info");
 
   const logResult = await createLogger(fs, {
     binderDir: getGlobalStatePath(),
@@ -152,7 +152,7 @@ export const initializeRuntime = async (
   const logResult = await createLogger(fs, {
     binderDir: config.paths.binder,
     logFile: runtime.logFile ?? "cli.log",
-    level: config.logLevel || "INFO",
+    level: runtime.logLevel ?? config.logLevel,
     printLogs: runtime.printLogs,
   });
   if (isErr(logResult)) return logResult;
@@ -167,7 +167,7 @@ export const initializeRuntime = async (
 
 export const initializeDbRuntime = async (
   context: RuntimeContext,
-): ResultAsync<{ kg: KnowledgeGraph; db: DatabaseCli }> => {
+): ResultAsync<RuntimeContextWithDb> => {
   const { config, log, fs } = context;
   const dbPath = join(config.paths.binder, DB_FILE);
   const dbResult = openCliDb({ path: dbPath, migrate: true });
@@ -179,7 +179,7 @@ export const initializeDbRuntime = async (
   const db = dbResult.data;
   const kg = setupKnowledgeGraph({ fs, log, config, db });
 
-  return ok({ kg, db });
+  return ok({ ...context, kg, db });
 };
 
 type CommandOptions = {
@@ -299,7 +299,7 @@ export const bootstrapWithDb = <TArgs extends object = object>(
   options?: CommandOptions,
 ): ((args: TArgs & GlobalOptions) => Promise<void>) => {
   return runtime<TArgs>(async (context) => {
-    const { fs, config } = context;
+    const { fs, config, args } = context;
     const { paths } = config;
     const dirResult = await fs.mkdir(paths.binder, { recursive: true });
     if (isErr(dirResult)) return dirResult;
@@ -310,7 +310,7 @@ export const bootstrapWithDb = <TArgs extends object = object>(
     if (isErr(dbResult)) return dbResult;
 
     return handler({
-      ...context,
+      args,
       ...dbResult.data,
     });
   }, options);

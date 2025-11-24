@@ -1,19 +1,13 @@
 import type { Argv } from "yargs";
 import { ok } from "@binder/utils";
 import { bootstrapMinimal, type CommandHandlerMinimal } from "../runtime.ts";
-import { BINDER_VERSION } from "../build-time.ts";
 import { createLspServer } from "../lsp";
 import { types } from "./types.ts";
 
-const lspHandler: CommandHandlerMinimal = async ({ log, fs, globalConfig }) => {
-  log.info("LSP server starting", {
-    version: BINDER_VERSION,
-  });
-
-  const connection = createLspServer({ log, fs, globalConfig });
+const lspHandler: CommandHandlerMinimal = async (context) => {
+  const connection = createLspServer(context);
 
   const cleanup = () => {
-    log.info("LSP server stopping");
     connection.dispose();
     process.exit(0);
   };

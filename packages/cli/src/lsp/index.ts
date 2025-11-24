@@ -113,8 +113,6 @@ export const createLspServer = (
     const runtimeResult = await initializeRuntime(
       {
         ...minimalContext,
-        logLevel: "INFO",
-        printLogs: false,
         silent: true,
         logFile: "lsp.log",
       },
@@ -130,26 +128,23 @@ export const createLspServer = (
     const runtimeContext = runtimeResult.data!;
     log = runtimeContext.log; // promote to local logger
 
-    const dbResult = await initializeDbRuntime(runtimeContext);
-    if (isErr(dbResult))
+    const runtimeWithDbResult = await initializeDbRuntime(runtimeContext);
+    if (isErr(runtimeWithDbResult))
       throwLspError(
-        dbResult.error,
+        runtimeWithDbResult.error,
         log,
         "Failed to initialize Binder database",
       );
 
     setupCleanupHandlers(runtimeContext.fs, runtimeContext.config.paths.binder);
 
-    runtime = {
-      ...runtimeContext,
-      db: dbResult.data!.db,
-      kg: dbResult.data!.kg,
-    };
+    runtime = { ...runtimeContext, ...runtimeWithDbResult.data! };
     documentCache = createDocumentCache(log);
 
     log.info("Workspace loaded", {
       version: BINDER_VERSION,
       cwd: runtimeContext.config.paths.root,
+      logLevel: minimalContext.logLevel,
     });
 
     return {

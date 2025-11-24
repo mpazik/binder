@@ -7,14 +7,14 @@ import {
 } from "@binder/utils";
 import type { FileSystem } from "./lib/filesystem.ts";
 
-export const levels = ["DEBUG", "INFO", "WARN", "ERROR"] as const;
-export type LogLevel = (typeof levels)[number];
+export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
+export type LogLevel = (typeof LOG_LEVELS)[number];
 
 const levelPriority: Record<LogLevel, number> = {
-  DEBUG: 0,
-  INFO: 1,
-  WARN: 2,
-  ERROR: 3,
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
 };
 
 export type Logger = {
@@ -98,11 +98,11 @@ export const createLogger = async (
     }
   };
 
-  const currentLevel = options.level ?? "INFO";
+  const level = options.level ?? "info";
   let last = Date.now();
 
   const shouldLog = (input: LogLevel): boolean => {
-    return levelPriority[input] >= levelPriority[currentLevel];
+    return levelPriority[input] >= levelPriority[level];
   };
 
   const build = (
@@ -133,7 +133,7 @@ export const createLogger = async (
 
     return (
       [
-        level.padEnd(5),
+        level.toUpperCase().padEnd(5),
         next.toISOString().split(".")[0],
         "+" + diff + "ms",
         prefix,
@@ -145,27 +145,27 @@ export const createLogger = async (
   };
 
   const info = (message?: any, extra?: Record<string, any>) => {
-    if (shouldLog("INFO")) {
-      writeLog(build("INFO", message, extra));
+    if (shouldLog("info")) {
+      writeLog(build("info", message, extra));
     }
   };
 
   return ok({
     logPath: logFilePath,
     debug(message?: any, extra?: Record<string, any>) {
-      if (shouldLog("DEBUG")) {
-        writeLog(build("DEBUG", message, extra));
+      if (shouldLog("debug")) {
+        writeLog(build("debug", message, extra));
       }
     },
     info,
     error(message?: any, extra?: Record<string, any>) {
-      if (shouldLog("ERROR")) {
-        writeLog(build("ERROR", message, extra));
+      if (shouldLog("error")) {
+        writeLog(build("error", message, extra));
       }
     },
     warn(message?: any, extra?: Record<string, any>) {
-      if (shouldLog("WARN")) {
-        writeLog(build("WARN", message, extra));
+      if (shouldLog("warn")) {
+        writeLog(build("warn", message, extra));
       }
     },
     time(message: string, extra?: Record<string, any>) {

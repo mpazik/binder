@@ -10,6 +10,7 @@ import {
   tryCatch,
 } from "@binder/utils";
 import type { FileSystem } from "./lib/filesystem.ts";
+import { LOG_LEVELS, type LogLevel } from "./log.ts";
 
 const DEFAULT_DOCS_DIR = "./docs";
 const DEFAULT_AUTHOR = "cli-user";
@@ -25,7 +26,7 @@ export const LOCK_MAX_RETRIES = 3;
 
 export const GlobalConfigSchema = z.object({
   author: z.string().optional(),
-  logLevel: z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).optional(),
+  logLevel: z.enum(LOG_LEVELS).optional(),
 });
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 
@@ -101,7 +102,7 @@ export type ConfigPaths = {
 
 export type AppConfig = {
   author: string;
-  logLevel?: "DEBUG" | "INFO" | "WARN" | "ERROR";
+  logLevel?: LogLevel;
   paths: ConfigPaths;
   validation?: {
     rules?: Record<string, "error" | "warning" | "info" | "hint" | "off">;

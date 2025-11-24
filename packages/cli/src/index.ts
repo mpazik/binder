@@ -15,6 +15,7 @@ import McpCommand from "./commands/mcp.ts";
 import LspCommand from "./commands/lsp.ts";
 import * as UI from "./ui";
 import { BINDER_VERSION, isDevMode } from "./build-time";
+import { LOG_LEVELS } from "./log.ts";
 
 let cli = yargs(hideBin(process.argv))
   .scriptName("binder")
@@ -36,7 +37,7 @@ let cli = yargs(hideBin(process.argv))
   .option("log-level", {
     describe: "log level",
     type: "string",
-    choices: ["DEBUG", "INFO", "WARN", "ERROR"] as const,
+    choices: LOG_LEVELS,
   })
   .usage(UI.logo())
   .wrap(null)
