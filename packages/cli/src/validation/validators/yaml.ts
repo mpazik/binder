@@ -1,10 +1,13 @@
 import { isMap, isPair, isScalar, isSeq } from "yaml";
 import type { ParsedNode } from "yaml";
+import { type JsonValue, includes, isErr } from "@binder/utils";
 import {
   type EntityNsType,
   getAllFieldsForType,
   isFieldInSchema,
   type NamespaceEditable,
+  systemFieldKeys,
+  validateDataType,
 } from "@binder/db";
 import type { ParsedYaml, parseYamlDocument } from "../../document/yaml-cst.ts";
 import type {
@@ -22,6 +25,31 @@ const hasRange = (node: unknown): node is ParsedNode => {
     "range" in node &&
     Array.isArray(node.range)
   );
+};
+
+const yamlNodeToJson = (node: ParsedNode | null): JsonValue | undefined => {
+  if (node === null) return undefined;
+  if (isScalar(node)) return node.value as JsonValue;
+  if (isSeq(node)) {
+    const result: JsonValue[] = [];
+    for (const item of node.items) {
+      const value = yamlNodeToJson(item as ParsedNode);
+      if (value !== undefined) result.push(value);
+    }
+    return result;
+  }
+  if (isMap(node)) {
+    const obj: Record<string, JsonValue> = {};
+    for (const item of node.items) {
+      if (isPair(item) && isScalar(item.key)) {
+        const key = String(item.key.value);
+        const value = yamlNodeToJson(item.value as ParsedNode);
+        if (value !== undefined) obj[key] = value;
+      }
+    }
+    return obj;
+  }
+  return undefined;
 };
 
 const visitEntityNode = <N extends NamespaceEditable>(
@@ -62,7 +90,10 @@ const visitEntityNode = <N extends NamespaceEditable>(
           { fieldKey },
         ),
       );
-    } else if (entityType && fieldKey in schema.fields) {
+      continue;
+    }
+
+    if (entityType && fieldKey in schema.fields) {
       const allFields = getAllFieldsForType(entityType, schema);
       if (!allFields.includes(fieldKey)) {
         const range = rangeToValidationRange(item.key.range, lineCounter);
@@ -76,6 +107,40 @@ const visitEntityNode = <N extends NamespaceEditable>(
           ),
         );
       }
+    }
+
+    if (includes(systemFieldKeys, fieldKey)) continue;
+
+    const fieldDef = (schema.fields as Record<string, unknown>)[fieldKey];
+    if (!fieldDef || typeof fieldDef !== "object" || !("dataType" in fieldDef))
+      continue;
+
+    const typedFieldDef = fieldDef as Parameters<typeof validateDataType>[0];
+    const valueNode = item.value as ParsedNode | null;
+    if (valueNode === null) continue;
+
+    const jsonValue = yamlNodeToJson(valueNode);
+    if (jsonValue === undefined || jsonValue === null) continue;
+
+    // For YAML arrays without allowMultiple, validate as if allowMultiple were true
+    // This is lenient validation for user-edited files where array syntax is common
+    const effectiveFieldDef =
+      Array.isArray(jsonValue) && !typedFieldDef.allowMultiple
+        ? { ...typedFieldDef, allowMultiple: true }
+        : typedFieldDef;
+
+    const validationResult = validateDataType(effectiveFieldDef, jsonValue);
+    if (isErr(validationResult) && hasRange(valueNode)) {
+      const range = rangeToValidationRange(valueNode.range, lineCounter);
+      errors.push(
+        createValidationError(
+          "invalid-value",
+          validationResult.error.message ?? "Invalid value",
+          range,
+          "error",
+          { fieldKey, value: jsonValue },
+        ),
+      );
     }
   }
 };

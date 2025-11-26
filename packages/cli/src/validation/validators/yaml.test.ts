@@ -113,4 +113,94 @@ status: todo
       [],
     );
   });
+
+  it("detects invalid option value", async () => {
+    await check(
+      `
+type: Task
+title: My Task
+status: invalid_status
+`,
+      [{ code: "invalid-value", severity: "error" }],
+    );
+  });
+
+  it("detects invalid date format", async () => {
+    await check(
+      `
+type: Task
+title: My Task
+status: todo
+dueDate: not-a-date
+`,
+      [{ code: "invalid-value", severity: "error" }],
+    );
+  });
+
+  it("returns no errors for valid date", async () => {
+    await check(
+      `
+type: Task
+title: My Task
+status: todo
+dueDate: 2024-01-15
+`,
+      [],
+    );
+  });
+
+  it("returns no errors for valid option value", async () => {
+    await check(
+      `
+type: Task
+title: My Task
+status: in_progress
+`,
+      [],
+    );
+  });
+
+  it("detects invalid boolean value", async () => {
+    await check(
+      `
+title: My Task
+favorite: not-a-boolean
+`,
+      [{ code: "invalid-value", severity: "error" }],
+    );
+  });
+
+  it("returns no errors for valid boolean", async () => {
+    await check(
+      `
+title: My Task
+favorite: true
+`,
+      [],
+    );
+  });
+
+  it("validates array values even without allowMultiple in schema", async () => {
+    await check(
+      `
+title: My Task
+tags:
+  - tag1
+  - tag2
+`,
+      [],
+    );
+  });
+
+  it("detects invalid values in array", async () => {
+    await check(
+      `
+title: My Task
+owners:
+  - valid-ref
+  - 123
+`,
+      [{ code: "invalid-value", severity: "error" }],
+    );
+  });
 });

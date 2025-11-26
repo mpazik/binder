@@ -85,5 +85,16 @@ status: pending`;
       });
       expect(context).toMatchObject({ type: "value", fieldKey: "type" });
     });
+
+    it("detects value context inside items array", () => {
+      const itemsYaml = `items:
+  - type: Problem
+    status: draft`;
+      const context = getPositionContext(itemsYaml, {
+        line: 2,
+        character: 12,
+      });
+      expect(context).toMatchObject({ type: "value", fieldKey: "status" });
+    });
   });
 });

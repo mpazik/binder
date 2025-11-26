@@ -111,7 +111,10 @@ export const findYamlContext = (
             ? String(node.key.value)
             : undefined;
           visit(node.value, pairPath, "value");
-          if (bestContext.type === "unknown" || bestContext.type === "value") {
+          if (
+            bestContext.fieldKey === undefined &&
+            (bestContext.type === "unknown" || bestContext.type === "value")
+          ) {
             bestContext.fieldKey = fieldKey;
           }
           return;
