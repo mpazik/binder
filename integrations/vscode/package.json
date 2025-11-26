@@ -53,8 +53,8 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p .",
-    "watch": "tsc -watch -p .",
+    "compile": "tsc -p ",
+    "watch": "tsc -watch -p ",
     "prepackage": "npm install --production",
     "package": "vsce package --out out"
   },
