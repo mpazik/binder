@@ -1,0 +1,5 @@
+.gradle
+.idea
+.intellijPlatform
+.kotlin
+gradle/wrapper/gradle-wrapper.jar

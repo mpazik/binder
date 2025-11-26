@@ -1,0 +1,41 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.binder.intellij</id>
+    <name>Binder</name>
+    <vendor email="support@binder.dev" url="https://binder.do">Binder</vendor>
+
+    <description><![CDATA[
+    Language Server Protocol support for Binder - Git-inspired knowledge graph for Markdown.
+
+    Features:
+    - Real-time validation of Binder documents
+    - Automatic sync on save
+    - Error diagnostics
+    - Code actions and quick fixes
+
+    Requirements:
+    - Binder CLI must be installed and available in PATH
+    - Or configure custom path in Settings > Tools > Binder
+    ]]></description>
+
+    <!-- Product and plugin compatibility requirements -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lsp</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- LSP Server Support -->
+        <platform.lsp.serverSupportProvider
+            implementation="com.binder.intellij.lsp.BinderLspServerSupportProvider"/>
+
+        <!-- Settings Service -->
+        <applicationService
+            serviceImplementation="com.binder.intellij.settings.BinderSettings"/>
+
+        <!-- Settings UI -->
+        <applicationConfigurable
+            parentId="tools"
+            instance="com.binder.intellij.settings.BinderSettingsConfigurable"
+            id="com.binder.intellij.settings.BinderSettingsConfigurable"
+            displayName="Binder"/>
+    </extensions>
+</idea-plugin>
