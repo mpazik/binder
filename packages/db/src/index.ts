@@ -9,3 +9,9 @@ export * from "./model";
 export type * from "./model";
 export { entityTables } from "./schema";
 export { validateDataType } from "./data-type-validators";
+export {
+  formatFieldValue,
+  getNestedValue,
+  parseFieldValue,
+  setNestedValue,
+} from "./model/field.ts";

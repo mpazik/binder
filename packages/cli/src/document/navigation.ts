@@ -6,7 +6,7 @@ import {
   type Fieldset,
   type FieldsetNested,
   FiltersSchema,
-  formatValue,
+  formatFieldValue,
   type GraphVersion,
   type Includes,
   IncludesSchema,
@@ -158,7 +158,7 @@ export const findNavigationItemByPath = (
 
 export const resolvePath = (template: string, item: Fieldset): Result<string> =>
   interpolateFields(template, (key) =>
-    sanitizeFilename(formatValue(item[key])),
+    sanitizeFilename(formatFieldValue(item[key])),
   );
 
 export const DEFAULT_DYNAMIC_VIEW = `# {title}

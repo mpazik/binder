@@ -1,3 +1,5 @@
+export * from "./field.ts";
+export type * from "./field.ts";
 export * from "./entity.ts";
 export type * from "./entity.ts";
 export * from "./node.ts";

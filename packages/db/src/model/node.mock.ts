@@ -1,11 +1,11 @@
 import type { NodeId, NodeKey, NodeUid } from "./node.ts";
-import { type Fieldset } from "./entity.ts";
 import {
   mockEmailFieldKey,
   mockProjectTypeKey,
   mockTaskTypeKey,
   mockUserTypeKey,
 } from "./config.mock.ts";
+import type { Fieldset } from "./field.ts";
 
 export const NONEXISTENT_NODE_UID = "nonexistent" as NodeUid;
 

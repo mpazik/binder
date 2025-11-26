@@ -1,9 +1,13 @@
 import { createError, err, ok, type Result } from "@binder/utils";
-import { type Fieldset, formatValue } from "@binder/db";
+import {
+  type Fieldset,
+  type FieldValueProvider,
+  formatFieldValue,
+} from "@binder/db";
 
 export const interpolateFields = (
   template: string,
-  fieldset: Fieldset | ((key: string) => string),
+  fieldset: Fieldset | FieldValueProvider,
 ): Result<string> => {
   let result = "";
   let i = 0;
@@ -41,10 +45,11 @@ export const interpolateFields = (
         continue;
       }
 
-      const value =
+      const value = formatFieldValue(
         typeof fieldset === "function"
           ? fieldset(fieldName)
-          : formatValue(fieldset[fieldName]);
+          : fieldset[fieldName],
+      );
       result += value;
       i = closeIndex + 1;
       continue;

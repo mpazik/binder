@@ -17,8 +17,8 @@ import squashChangesets, {
   rebaseChangeset,
   type ValueChange,
 } from "./changeset.ts";
-import type { Fieldset, FieldValue } from "./entity.ts";
 import { mockTask1Node, mockTaskNode1Updated } from "./node.mock.ts";
+import type { Fieldset, FieldValue } from "./field.ts";
 
 describe("normalize", () => {
   const checkNormalized = (

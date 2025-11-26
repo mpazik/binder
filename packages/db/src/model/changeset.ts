@@ -8,12 +8,6 @@ import {
   mapObjectValues,
   omit,
 } from "@binder/utils";
-import {
-  type FieldKey,
-  type Fieldset,
-  type FieldValue,
-  systemFields,
-} from "./entity.ts";
 import type {
   EntityNsKey,
   EntityNsRef,
@@ -22,6 +16,12 @@ import type {
 } from "./namespace.ts";
 import type { NodeUid } from "./node.ts";
 import type { ConfigKey } from "./config.ts";
+import {
+  type FieldKey,
+  type Fieldset,
+  type FieldValue,
+  systemFields,
+} from "./field.ts";
 
 export type ListMutation =
   | [kind: "insert", inserted: FieldValue, position?: number]

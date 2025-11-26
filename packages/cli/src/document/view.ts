@@ -3,15 +3,18 @@ import {
   err,
   type ErrorObject,
   isErr,
-  type JsonValue,
   ok,
   type Result,
 } from "@binder/utils";
 import {
-  coreFields,
+  type FieldKey,
   type FieldsetNested,
-  getAllFieldsForType,
+  formatFieldValue,
+  getFieldDef,
+  getNestedValue,
   type NodeSchema,
+  parseFieldValue,
+  setNestedValue,
 } from "@binder/db";
 import type { Nodes, Parent, Text } from "mdast";
 import { visit } from "unist-util-visit";
@@ -24,74 +27,21 @@ import {
 import type { ViewSlot } from "./remark-view-slot.ts";
 
 type SimplifiedViewNode = ViewSlot | Text;
-type FieldDef = {
-  dataType: string;
-  allowMultiple?: boolean;
-  range?: string[];
-};
-
-const getNestedValue = (
-  fieldset: FieldsetNested,
-  path: string,
-): Result<unknown> => {
-  const keys = path.split(".");
-  let current: Record<string, unknown> = fieldset;
-
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i]!;
-
-    if (i > 0 && (current === null || current === undefined))
-      return err(
-        createError("field-not-found", `Field path '${path}' not found`),
-      );
-
-    if (i > 0 && typeof current !== "object")
-      return err(
-        createError("field-not-found", `Field path '${path}' not found`),
-      );
-
-    if (!(key in current)) return ok(undefined);
-
-    current = current[key] as Record<string, unknown>;
-  }
-
-  return ok(current);
-};
-
-const formatValue = (value: unknown): string => {
-  if (value === null || value === undefined) return "";
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "";
-    return value.join(", ");
-  }
-  if (typeof value === "boolean") return value ? "true" : "false";
-  return String(value);
-};
 
 export const renderView = (
-  schema: NodeSchema,
+  _schema: NodeSchema,
   view: ViewAST,
   fieldset: FieldsetNested,
 ): Result<string> => {
-  // we clone the view ast and replace slots with data
   const ast = structuredClone(view) as Nodes;
-  let error: ErrorObject | undefined = undefined;
 
   visit(
     ast,
     "viewSlot",
     (node: ViewSlot, index: number | undefined, parent: Parent | undefined) => {
-      if (error) return;
-
-      const fieldPath = node.value;
-      const valueResult = getNestedValue(fieldset, fieldPath);
-
-      if (isErr(valueResult)) {
-        error = valueResult.error;
-        return;
-      }
-
-      const textValue = formatValue(valueResult.data);
+      const fieldPath = node.value.split(".");
+      const value = getNestedValue(fieldset, fieldPath);
+      const textValue = formatFieldValue(value);
 
       if (parent && typeof index === "number") {
         parent.children[index] = { type: "text", value: textValue };
@@ -99,140 +49,7 @@ export const renderView = (
     },
   );
 
-  if (error) return err(error);
-
   return ok(renderAstToMarkdown(ast));
-};
-
-const getFieldDef = (schema: NodeSchema, path: string): Result<FieldDef> => {
-  const keys = path.split(".");
-  const firstKey = keys[0]!;
-
-  if (keys.length === 1 && firstKey in coreFields) {
-    return ok(coreFields[firstKey as keyof typeof coreFields]);
-  }
-
-  let currentField = schema.fields[firstKey as keyof typeof schema.fields];
-
-  if (!currentField)
-    return err(
-      createError("field-not-found", `Field '${firstKey}' not found in schema`),
-    );
-
-  for (let i = 1; i < keys.length; i++) {
-    if (currentField.dataType !== "relation")
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${keys[i - 1]}' is not a relation`,
-        ),
-      );
-
-    if (!currentField.range || currentField.range.length === 0)
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${keys[i - 1]}' has no range defined`,
-        ),
-      );
-
-    const rangeType = currentField.range[0]! as keyof typeof schema.types;
-    const typeDef = schema.types[rangeType];
-
-    if (!typeDef)
-      return err(
-        createError(
-          "field-not-found",
-          `Type '${rangeType}' not found in schema`,
-        ),
-      );
-
-    const nextFieldKey = keys[i]!;
-    const nextFieldDef =
-      schema.fields[nextFieldKey as keyof typeof schema.fields];
-
-    if (!nextFieldDef)
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${nextFieldKey}' not found in schema`,
-        ),
-      );
-
-    const allFields = getAllFieldsForType(rangeType, schema);
-    if (!allFields.includes(nextFieldKey))
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${nextFieldKey}' not in type '${rangeType}'`,
-        ),
-      );
-
-    currentField = nextFieldDef;
-  }
-
-  return ok(currentField);
-};
-
-const setNestedValue = (
-  fieldset: FieldsetNested,
-  path: string,
-  value: unknown,
-): void => {
-  const keys = path.split(".");
-  let current: FieldsetNested = fieldset;
-
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i]!;
-    if (!(key in current)) current[key] = {};
-    current = current[key] as FieldsetNested;
-  }
-
-  const lastKey = keys[keys.length - 1]!;
-  current[lastKey] = value as JsonValue;
-};
-
-const parseFieldValue = (
-  rawValue: string,
-  fieldDef: FieldDef,
-): Result<unknown> => {
-  const trimmed = rawValue.trim();
-
-  if (fieldDef.allowMultiple) {
-    if (trimmed === "") return ok([]);
-    const items = trimmed.split(",").map((item) => item.trim());
-    return ok(items);
-  }
-
-  if (trimmed === "") return ok(null);
-
-  if (fieldDef.dataType === "seqId" || fieldDef.dataType === "integer") {
-    const parsed = parseInt(trimmed, 10);
-    if (isNaN(parsed))
-      return err(
-        createError("invalid-field-value", `Invalid integer: ${trimmed}`),
-      );
-    return ok(parsed);
-  }
-
-  if (fieldDef.dataType === "decimal") {
-    const parsed = parseFloat(trimmed);
-    if (isNaN(parsed))
-      return err(
-        createError("invalid-field-value", `Invalid decimal: ${trimmed}`),
-      );
-    return ok(parsed);
-  }
-
-  if (fieldDef.dataType === "boolean") {
-    if (trimmed === "true") return ok(true);
-    if (trimmed === "false") return ok(false);
-    return err(
-      createError("invalid-field-value", `Invalid boolean: ${trimmed}`),
-    );
-  }
-
-  return ok(trimmed);
 };
 
 type MatchState = {
@@ -262,7 +79,7 @@ export const extractFields = (
     state: MatchState,
     viewChildren: SimplifiedViewNode[],
   ): boolean => {
-    const fieldPath = viewChild.value;
+    const fieldPath = viewChild.value.split(".") as FieldKey[];
     const fieldDefResult = getFieldDef(schema, fieldPath);
 
     if (isErr(fieldDefResult)) {
