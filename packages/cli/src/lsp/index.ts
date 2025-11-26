@@ -14,12 +14,10 @@ import {
   type Hover,
   type HoverParams,
   type InitializeParams,
-  MarkupKind,
   ProposedFeatures,
   ResponseError,
   TextDocuments,
   TextDocumentSyncKind,
-  TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { type ErrorObject, isErr } from "@binder/utils";
@@ -50,6 +48,7 @@ import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
 import { handleHover } from "./hover.ts";
 import { handleCompletion } from "./completion.ts";
 import { handleCodeAction } from "./code-actions.ts";
+import { handleInlayHints } from "./inlay-hints.ts";
 
 const throwLspError = (
   error: ErrorObject,
@@ -180,6 +179,7 @@ export const createLspServer = (
         codeActionProvider: {
           codeActionKinds: [CodeActionKind.QuickFix],
         },
+        inlayHintProvider: true,
       },
     };
   });
@@ -357,6 +357,12 @@ export const createLspServer = (
       );
     },
   );
+
+  connection.languages.inlayHint.on(async (params) => {
+    log.debug("Inlay hints request received", { uri: params.textDocument.uri });
+    if (!runtime) return [];
+    return handleInlayHints(params, lspDocuments, documentCache, runtime, log);
+  });
 
   lspDocuments.listen(connection);
   connection.listen();
