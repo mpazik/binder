@@ -26,6 +26,7 @@ import { parseMarkdown, parseView } from "./markdown.ts";
 import { extractFields } from "./view.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 import { getDocumentFileType } from "./document.ts";
+import { normalizeReferences, normalizeReferencesList } from "./reference.ts";
 
 export { diffNodeTrees } from "../utils/node-diff.ts";
 
@@ -156,20 +157,29 @@ const extractFromFile = async (
 ): ResultAsync<ParsedFileResult> => {
   const fileType = getDocumentFileType(filePath);
 
+  let result: ResultAsync<ParsedFileResult>;
+
   if (fileType === "yaml") {
-    if (navItem.includes)
-      return extractFromYamlSingle(kg, navItem, content, pathFields, namespace);
-    if (navItem.query)
-      return extractFromYamlList(kg, navItem, content, pathFields, namespace);
-    return err(
-      createError(
-        "invalid_yaml_config",
-        "YAML navigation item must have includes or query",
-      ),
-    );
-  }
-  if (fileType === "markdown")
-    return extractFromMarkdown(
+    if (navItem.includes) {
+      result = extractFromYamlSingle(
+        kg,
+        navItem,
+        content,
+        pathFields,
+        namespace,
+      );
+    } else if (navItem.query) {
+      result = extractFromYamlList(kg, navItem, content, pathFields, namespace);
+    } else {
+      return err(
+        createError(
+          "invalid_yaml_config",
+          "YAML navigation item must have includes or query",
+        ),
+      );
+    }
+  } else if (fileType === "markdown") {
+    result = extractFromMarkdown(
       kg,
       schema,
       navItem,
@@ -177,12 +187,34 @@ const extractFromFile = async (
       pathFields,
       namespace,
     );
+  } else {
+    return err(
+      createError("unsupported_file_type", "Unsupported file type", {
+        path: filePath,
+      }),
+    );
+  }
 
-  return err(
-    createError("unsupported_file_type", "Unsupported file type", {
-      path: filePath,
-    }),
+  const extracted = await result;
+  if (isErr(extracted)) return extracted;
+
+  if (extracted.data.kind === "single") {
+    const normalizedFile = await normalizeReferences(
+      extracted.data.file,
+      schema,
+      kg,
+    );
+    if (isErr(normalizedFile)) return normalizedFile;
+    return ok({ ...extracted.data, file: normalizedFile.data });
+  }
+
+  const normalizedFile = await normalizeReferencesList(
+    extracted.data.file,
+    schema,
+    kg,
   );
+  if (isErr(normalizedFile)) return normalizedFile;
+  return ok({ ...extracted.data, file: normalizedFile.data });
 };
 
 export const synchronizeFile = async (
@@ -232,9 +264,7 @@ export const synchronizeFile = async (
       : diffNodeLists(data.file, data.kg);
   if (isErr(diffResult)) return diffResult;
 
-  if (diffResult.data.length === 0) {
-    return ok(null);
-  }
+  if (diffResult.data.length === 0) return ok(null);
 
   return ok({
     author: config.author,

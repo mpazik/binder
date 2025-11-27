@@ -9,6 +9,7 @@ import {
 } from "@binder/db";
 import {
   mockNodeSchema,
+  mockProjectKey,
   mockProjectNode,
   mockTask1Node,
   mockTask2Node,
@@ -291,7 +292,10 @@ describe("navigation", () => {
         [
           {
             path: "all-tasks.yaml",
-            yamlList: [mockTask1Node, mockTask2Node],
+            yamlList: [
+              mockTask1Node,
+              { ...mockTask2Node, project: mockProjectKey },
+            ],
           },
         ],
       );
@@ -314,7 +318,7 @@ describe("navigation", () => {
         [
           {
             path: `projects/${mockProjectNode.title}/tasks.yaml`,
-            yamlList: [mockTask2Node],
+            yamlList: [{ ...mockTask2Node, project: mockProjectKey }],
           },
         ],
       );

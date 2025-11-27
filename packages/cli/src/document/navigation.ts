@@ -39,6 +39,7 @@ import { type ConfigPaths } from "../config.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
+import { formatReferences, formatReferencesList } from "./reference.ts";
 import {
   type FileType,
   getFileType,
@@ -203,9 +204,19 @@ const renderContent = async (
       const queryResult = await kg.search(interpolatedQuery.data, namespace);
       if (isErr(queryResult)) return queryResult;
 
-      return ok(renderYamlList(queryResult.data.items));
+      const formattedItems = await formatReferencesList(
+        queryResult.data.items,
+        schema,
+        kg,
+      );
+      if (isErr(formattedItems)) return formattedItems;
+
+      return ok(renderYamlList(formattedItems.data));
     } else {
-      return ok(renderYamlEntity(entity));
+      const formattedEntity = await formatReferences(entity, schema, kg);
+      if (isErr(formattedEntity)) return formattedEntity;
+
+      return ok(renderYamlEntity(formattedEntity.data));
     }
   }
 };
