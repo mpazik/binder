@@ -29,6 +29,9 @@ const getEntityFieldValue = (
   const value = entity[fieldName];
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value as string[];
+  if (typeof value === "object" && value !== null && "uid" in value) {
+    return value.uid as string;
+  }
   return undefined;
 };
 
@@ -118,6 +121,15 @@ const applyFieldSelection = (
   });
 };
 
+const getNestedIncludes = (
+  fieldInclude: NestedIncludes | Includes,
+): Includes | undefined => {
+  if ("includes" in fieldInclude) return fieldInclude.includes;
+  if ("filters" in fieldInclude && Object.keys(fieldInclude).length === 1)
+    return undefined;
+  return fieldInclude as Includes;
+};
+
 const cleanRelatedEntities = (
   entities: Fieldset[],
   includes: Includes,
@@ -126,12 +138,15 @@ const cleanRelatedEntities = (
     for (const [fieldKey, fieldValue] of Object.entries(entity)) {
       const fieldInclude = includes[fieldKey];
 
-      if (isNestedInclude(fieldInclude) && fieldInclude.includes) {
+      if (isNestedInclude(fieldInclude)) {
+        const nestedIncludes = getNestedIncludes(fieldInclude);
+        if (!nestedIncludes) continue;
+
         if (Array.isArray(fieldValue)) {
           entity[fieldKey] = (fieldValue as Fieldset[]).map((relatedEntity) => {
             const cleaned: Fieldset = {};
             for (const [key, val] of Object.entries(relatedEntity)) {
-              if (key in fieldInclude.includes!) {
+              if (key in nestedIncludes) {
                 cleaned[key] = val;
               }
             }
@@ -140,7 +155,7 @@ const cleanRelatedEntities = (
         } else if (typeof fieldValue === "object" && fieldValue !== null) {
           const cleaned: Fieldset = {};
           for (const [key, val] of Object.entries(fieldValue)) {
-            if (key in fieldInclude.includes!) {
+            if (key in nestedIncludes) {
               cleaned[key] = val;
             }
           }
@@ -178,9 +193,12 @@ export const resolveIncludes = async (
     ];
     if (!field || field.dataType !== "relation") continue;
 
-    const { filters: nestedFilters, includes: nestedIncludes } = nestedInclude
-      ? (includeValue as NestedIncludes)
-      : {};
+    const nestedFilters = nestedInclude
+      ? (includeValue as NestedIncludes).filters
+      : undefined;
+    const nestedIncludes = nestedInclude
+      ? getNestedIncludes(includeValue as NestedIncludes)
+      : undefined;
 
     let relatedFilters: Filters = {};
 
@@ -213,7 +231,13 @@ export const resolveIncludes = async (
     const resolvedRelatedEntitiesResult = await resolveIncludes(
       tx,
       relatedEntitiesResult.data,
-      nestedIncludes ? { ...nestedIncludes, uid: true } : nestedIncludes,
+      nestedIncludes
+        ? {
+            ...nestedIncludes,
+            uid: true,
+            ...(field.inverseOf ? { [field.inverseOf]: true } : {}),
+          }
+        : nestedIncludes,
       namespace,
       schema,
       searchFn,

@@ -166,7 +166,10 @@ status: in_progress
 title: My Task
 favorite: not-a-boolean
 `,
-      [{ code: "invalid-value", severity: "error" }],
+      [
+        { code: "extra-field", severity: "warning" },
+        { code: "invalid-value", severity: "error" },
+      ],
     );
   });
 
@@ -176,7 +179,7 @@ favorite: not-a-boolean
 title: My Task
 favorite: true
 `,
-      [],
+      [{ code: "extra-field", severity: "warning" }],
     );
   });
 
@@ -200,7 +203,197 @@ owners:
   - valid-ref
   - 123
 `,
-      [{ code: "invalid-value", severity: "error" }],
+      [
+        { code: "extra-field", severity: "warning" },
+        { code: "invalid-value", severity: "error" },
+      ],
     );
+  });
+
+  describe("nested relations", () => {
+    const mockNestedNavigationItem = {
+      path: "test.yaml",
+      query: {
+        filters: { type: "Task" },
+        includes: {
+          title: true,
+          assignedTo: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    };
+
+    it("validates nested relation fields", async () => {
+      await check(
+        `
+items:
+  - title: My Task
+    assignedTo:
+      name: John Doe
+      email: john@example.com
+`,
+        [],
+        mockNestedNavigationItem,
+      );
+    });
+
+    it("detects invalid field in nested relation", async () => {
+      await check(
+        `
+items:
+  - title: My Task
+    assignedTo:
+      name: John Doe
+      invalidField: should error
+`,
+        [{ code: "invalid-field", severity: "error" }],
+        mockNestedNavigationItem,
+      );
+    });
+
+    it("detects extra field not part of related type", async () => {
+      await check(
+        `
+items:
+  - title: My Task
+    assignedTo:
+      name: John Doe
+      title: Should warn - not part of User type
+`,
+        [{ code: "extra-field", severity: "warning" }],
+        mockNestedNavigationItem,
+      );
+    });
+
+    it("detects invalid value type in nested relation", async () => {
+      await check(
+        `
+items:
+  - title: My Task
+    assignedTo:
+      name: John Doe
+      email: 12345
+`,
+        [{ code: "invalid-value", severity: "error" }],
+        mockNestedNavigationItem,
+      );
+    });
+
+    it("validates deeply nested relations", async () => {
+      const deepNestedNav = {
+        path: "test.yaml",
+        query: {
+          filters: { type: "Project" },
+          includes: {
+            title: true,
+            tasks: {
+              title: true,
+              assignedTo: {
+                name: true,
+              },
+            },
+          },
+        },
+      };
+      await check(
+        `
+items:
+  - title: My Project
+    tasks:
+      - title: Task 1
+        assignedTo:
+          name: John
+      - title: Task 2
+        assignedTo:
+          invalidField: should error
+`,
+        [{ code: "invalid-field", severity: "error" }],
+        deepNestedNav,
+      );
+    });
+  });
+
+  describe("directory shape validation", () => {
+    it("allows only items field in directory", async () => {
+      await check(
+        `
+items:
+  - type: Task
+    title: My Task
+`,
+        [],
+        mockDirectoryNavigationItem,
+      );
+    });
+
+    it("detects unexpected field in directory", async () => {
+      await check(
+        `
+foo: bar
+items:
+  - type: Task
+    title: My Task
+`,
+        [{ code: "unexpected-field", severity: "error" }],
+        mockDirectoryNavigationItem,
+      );
+    });
+
+    it("detects multiple unexpected fields in directory", async () => {
+      await check(
+        `
+foo: bar
+baz: qux
+items:
+  - type: Task
+    title: My Task
+`,
+        [
+          { code: "unexpected-field", severity: "error" },
+          { code: "unexpected-field", severity: "error" },
+        ],
+        mockDirectoryNavigationItem,
+      );
+    });
+
+    it("detects items field that is not a sequence", async () => {
+      await check(
+        `
+items: not-a-sequence
+`,
+        [{ code: "invalid-structure", severity: "error" }],
+        mockDirectoryNavigationItem,
+      );
+    });
+
+    it("detects items field that is a map instead of sequence", async () => {
+      await check(
+        `
+items:
+  key: value
+`,
+        [{ code: "invalid-structure", severity: "error" }],
+        mockDirectoryNavigationItem,
+      );
+    });
+
+    it("validates directory even with unexpected fields", async () => {
+      await check(
+        `
+foo: bar
+items:
+  - type: Task
+    title: My Task
+    unknownField: value
+`,
+        [
+          { code: "unexpected-field", severity: "error" },
+          { code: "invalid-field", severity: "error" },
+        ],
+        mockDirectoryNavigationItem,
+      );
+    });
   });
 });

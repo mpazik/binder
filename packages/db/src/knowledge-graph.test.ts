@@ -4,7 +4,7 @@ import "@binder/utils/tests";
 import { getTestDatabase } from "./db.mock";
 import { openKnowledgeGraph } from "./knowledge-graph.ts";
 import type { Database } from "./db.ts";
-import { createEntity, fetchEntity } from "./entity-store.ts";
+import { createEntity, fetchEntity, updateEntity } from "./entity-store.ts";
 import {
   mockProjectNode,
   mockTask1Key,
@@ -13,6 +13,7 @@ import {
   mockTask2Node,
   mockTask3Node,
   mockTaskNode1Updated,
+  mockUserNode,
   NONEXISTENT_NODE_UID,
 } from "./model/node.mock.ts";
 import {
@@ -23,7 +24,6 @@ import {
 } from "./model/transaction.mock.ts";
 import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
 import {
-  configSchema,
   type ConfigUid,
   GENESIS_VERSION,
   type Transaction,
@@ -112,13 +112,10 @@ describe("knowledge graph", () => {
           await kg.fetchNode(mockTask2Node.uid, { uid: true, project: true }),
         );
 
-        expect(result.uid).toBe(mockTask2Node.uid);
-        expect(result.project).toEqual(
-          expect.objectContaining({
-            uid: mockProjectNode.uid,
-            title: mockProjectNode.title,
-          }),
-        );
+        expect(result).toEqual({
+          uid: mockTask2Node.uid,
+          project: mockProjectNode,
+        });
       });
 
       it("applies field selection with includes", async () => {
@@ -132,6 +129,38 @@ describe("knowledge graph", () => {
         expect(result).toEqual({
           title: mockTask2Node.title,
           project: { title: mockProjectNode.title },
+        });
+      });
+
+      it("applies field selection with two levels of nested includes", async () => {
+        await db.transaction(async (tx) => {
+          await createEntity(tx, "node", mockUserNode);
+          await updateEntity(tx, "node", mockTask2Node.uid, {
+            assignedTo: mockUserNode.uid,
+          });
+        });
+
+        const result = throwIfError(
+          await kg.fetchNode(mockProjectNode.uid, {
+            title: true,
+            tasks: {
+              filters: { uid: mockTask2Node.uid },
+              includes: {
+                title: true,
+                assignedTo: { uid: true, name: true },
+              },
+            },
+          }),
+        );
+
+        expect(result).toEqual({
+          title: mockProjectNode.title,
+          tasks: [
+            {
+              title: mockTask2Node.title,
+              assignedTo: { uid: mockUserNode.uid, name: mockUserNode.name },
+            },
+          ],
         });
       });
     });
@@ -285,7 +314,7 @@ describe("knowledge graph", () => {
             filters: { type: "Task", key: mockTask2Node.key },
             includes: {
               title: true,
-              project: { includes: { uid: true, title: true } },
+              project: { uid: true, title: true },
             },
           }),
         );
@@ -294,13 +323,48 @@ describe("knowledge graph", () => {
         const task = result.items[0]!;
         expect(task.title).toBe(mockTask2Node.title);
         expect(task.description).toBeUndefined();
-        expect(task.project).toEqual(
-          expect.objectContaining({
-            uid: mockProjectNode.uid,
-            title: mockProjectNode.title,
+        expect(task.project).toEqual({
+          uid: mockProjectNode.uid,
+          title: mockProjectNode.title,
+        });
+        expect((task.project as any).description).toBeUndefined();
+      });
+
+      it("applies field selection with two levels of nested includes", async () => {
+        await db.transaction(async (tx) => {
+          await createEntity(tx, "node", mockUserNode);
+          await updateEntity(tx, "node", mockTask2Node.uid, {
+            assignedTo: mockUserNode.uid,
+          });
+        });
+
+        const result = throwIfError(
+          await kg.search({
+            filters: { type: "Project" },
+            includes: {
+              title: true,
+              tasks: {
+                filters: { uid: mockTask2Node.uid },
+                includes: {
+                  title: true,
+                  assignedTo: { uid: true, name: true },
+                },
+              },
+            },
           }),
         );
-        expect((task.project as any).description).toBeUndefined();
+
+        expect(result.items).toEqual([
+          {
+            title: mockProjectNode.title,
+            tasks: [
+              {
+                title: mockTask2Node.title,
+                assignedTo: { uid: mockUserNode.uid, name: mockUserNode.name },
+              },
+            ],
+          },
+        ]);
       });
     });
 

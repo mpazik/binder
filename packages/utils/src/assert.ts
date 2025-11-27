@@ -76,9 +76,10 @@ export function assertIsArray<T>(
 }
 
 export function assertNotEmpty<T>(
-  array: T[],
+  array: undefined | null | T[],
   name?: string,
 ): asserts array is [T, ...T[]] {
+  assertDefined(array, name);
   if (array.length > 0) return;
   assertFailed(name ? `${name} is empty` : "Array is empty");
 }

@@ -46,10 +46,15 @@ export type ValidationContext<N extends NamespaceEditable> = {
   kg: KnowledgeGraph;
 };
 
+export const zeroRange: ValidationRange = {
+  start: { line: 0, character: 0 },
+  end: { line: 0, character: 0 },
+};
+
 export const createValidationError = (
   code: string,
   message: string,
-  range: ValidationRange,
+  range: ValidationRange = zeroRange,
   severity: ValidationSeverity = "error",
   data?: unknown,
 ): ValidationError => ({

@@ -8,6 +8,7 @@ pids
 *.seed
 *.pid.lock
 *.db
+.DS_store
 
 # Binder local data
 .binder/
@@ -16,7 +17,6 @@ docs-test/
 # Dependency directories
 node_modules/
 jspm_packages/
-
 
 # TypeScript cache
 *.tsbuildinfo

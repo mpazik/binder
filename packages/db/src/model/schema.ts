@@ -1,4 +1,4 @@
-import { createError, err, includes, ok, type Result } from "@binder/utils";
+import { includes } from "@binder/utils";
 import type { EntityId, EntityKey, EntityUid } from "./entity.ts";
 import {
   type CoreDataType,
@@ -418,76 +418,43 @@ export const getAllFieldsForType = <N extends NamespaceEditable>(
 };
 
 export const getFieldDef = (
-  schema: NodeSchema,
+  schema: EntitySchema,
+  field: FieldKey,
+): FieldDef<CoreDataType> | undefined => {
+  return (schema.fields as any)[field] as FieldDef<CoreDataType>;
+};
+
+export const getFieldDefNested = (
+  schema: EntitySchema,
   path: FieldPath,
-): Result<FieldDef<CoreDataType>> => {
+): FieldDef<CoreDataType> | undefined => {
   const firstKey = path[0]!;
+  let currentField = (schema.fields as any)[firstKey] as FieldDef<CoreDataType>;
 
-  if (path.length === 1 && firstKey in coreFields) {
-    return ok(coreFields[firstKey as keyof typeof coreFields]);
-  }
-
-  let currentField = schema.fields[
-    firstKey as keyof typeof schema.fields
-  ] as FieldDef<CoreDataType>;
-
-  if (!currentField)
-    return err(
-      createError("field-not-found", `Field '${firstKey}' not found in schema`),
-    );
+  if (path.length === 1) return currentField;
 
   for (let i = 1; i < path.length; i++) {
-    if (currentField.dataType !== "relation")
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${path[i - 1]}' is not a relation`,
-        ),
-      );
+    if (currentField.dataType !== "relation") return;
 
-    if (!currentField.range || currentField.range.length === 0)
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${path[i - 1]}' has no range defined`,
-        ),
-      );
+    if (!currentField.range || currentField.range.length === 0) return;
 
     const rangeType = currentField.range[0]! as keyof typeof schema.types;
-    const typeDef = schema.types[rangeType];
+    const typeDef = (schema.types as any)[rangeType];
 
-    if (!typeDef)
-      return err(
-        createError(
-          "field-not-found",
-          `Type '${rangeType}' not found in schema`,
-        ),
-      );
+    if (!typeDef) return;
 
     const nextFieldKey = path[i]!;
-    const nextFieldDef = schema.fields[
-      nextFieldKey as keyof typeof schema.fields
+    const nextFieldDef = (schema.fields as any)[
+      nextFieldKey
     ] as FieldDef<CoreDataType>;
 
-    if (!nextFieldDef)
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${nextFieldKey}' not found in schema`,
-        ),
-      );
+    if (!nextFieldDef) return;
 
     const allFields = getAllFieldsForType(rangeType, schema);
-    if (!allFields.includes(nextFieldKey))
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${nextFieldKey}' not in type '${rangeType}'`,
-        ),
-      );
+    if (!allFields.includes(nextFieldKey)) return;
 
     currentField = nextFieldDef;
   }
 
-  return ok(currentField);
+  return currentField;
 };

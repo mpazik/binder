@@ -5,6 +5,7 @@ import {
   emptyFieldset,
   type Fieldset,
   type FieldsetNested,
+  type Filters,
   FiltersSchema,
   formatFieldValue,
   type GraphVersion,
@@ -83,7 +84,7 @@ const NavigationConfigSchema = z.object({
 
 export type NavigationItem = {
   path: string;
-  where?: QueryParams["filters"];
+  where?: Filters;
   view?: string;
   includes?: Includes;
   query?: QueryParams;

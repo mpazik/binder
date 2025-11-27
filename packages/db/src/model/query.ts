@@ -39,22 +39,24 @@ export type Filter = z.infer<typeof FilterSchema>;
 export const FiltersSchema = z.record(z.string(), FilterSchema);
 export type Filters = z.infer<typeof FiltersSchema>;
 
-const IncludesBaseSchema: z.ZodType<any> = z.lazy(() =>
-  z.record(
-    z.string(),
-    z.union([
-      z.boolean(),
-      IncludesBaseSchema,
-      z.object({
-        includes: IncludesBaseSchema.optional(),
-        filters: FiltersSchema.optional(),
-      }),
-    ]),
-  ),
+const IncludesValueSchema = z.lazy(() =>
+  z.union([
+    z.boolean(),
+    IncludesBaseSchema,
+    z.object({
+      includes: IncludesBaseSchema.optional(),
+      filters: FiltersSchema.optional(),
+    }),
+  ]),
+);
+const IncludesBaseSchema: z.ZodType<any> = z.record(
+  z.string(),
+  IncludesValueSchema,
 );
 
 export const IncludesSchema = IncludesBaseSchema;
 export type Includes = z.infer<typeof IncludesSchema>;
+export type IncludesValue = z.infer<typeof IncludesValueSchema>;
 
 const PaginationSchema = z.object({
   limit: z.number().int().positive().optional(),

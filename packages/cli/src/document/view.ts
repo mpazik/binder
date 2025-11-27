@@ -10,7 +10,7 @@ import {
   type FieldKey,
   type FieldsetNested,
   formatFieldValue,
-  getFieldDef,
+  getFieldDefNested,
   getNestedValue,
   type NodeSchema,
   parseFieldValue,
@@ -80,14 +80,16 @@ export const extractFields = (
     viewChildren: SimplifiedViewNode[],
   ): boolean => {
     const fieldPath = viewChild.value.split(".") as FieldKey[];
-    const fieldDefResult = getFieldDef(schema, fieldPath);
+    const fieldDef = getFieldDefNested(schema, fieldPath);
 
-    if (isErr(fieldDefResult)) {
-      error = fieldDefResult.error;
+    if (fieldDef === undefined) {
+      error = createError(
+        "field-not-found",
+        `Field '${fieldPath}' was not found in schema`,
+      );
       return false;
     }
 
-    const fieldDef = fieldDefResult.data;
     let snapText = "";
 
     if (
