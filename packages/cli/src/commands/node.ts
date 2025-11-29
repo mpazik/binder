@@ -1,7 +1,7 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import { type NodeRef, type NodeType, normalizeEntityRef } from "@binder/db";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { parsePatches, patchesDescription } from "../lib/patch-parser.ts";
 import { types } from "./types.ts";
 
@@ -86,7 +86,7 @@ const NodeCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDb(nodeCreateHandler),
+          handler: runtimeWithDb(nodeCreateHandler),
         }),
       )
       .command(
@@ -102,7 +102,7 @@ const NodeCommand = types({
               coerce: (value: string) => normalizeEntityRef<"node">(value),
             });
           },
-          handler: bootstrapWithDb(nodeReadHandler),
+          handler: runtimeWithDb(nodeReadHandler),
         }),
       )
       .command(
@@ -124,7 +124,7 @@ const NodeCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDb(nodeUpdateHandler),
+          handler: runtimeWithDb(nodeUpdateHandler),
         }),
       )
       .command(

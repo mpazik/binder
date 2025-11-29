@@ -10,7 +10,7 @@ import {
   type NodeType,
   normalizeEntityRef,
 } from "@binder/db";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchemaByTypes } from "../schema/schema-filter.ts";
 import { printTransaction } from "../ui.ts";
@@ -145,7 +145,7 @@ const ConfigCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDb(configCreateHandler),
+          handler: runtimeWithDb(configCreateHandler),
         }),
       )
       .command(
@@ -161,7 +161,7 @@ const ConfigCommand = types({
               coerce: (value: string) => normalizeEntityRef<"config">(value),
             });
           },
-          handler: bootstrapWithDb(configReadHandler),
+          handler: runtimeWithDb(configReadHandler),
         }),
       )
       .command(
@@ -183,7 +183,7 @@ const ConfigCommand = types({
                 default: [],
               });
           },
-          handler: bootstrapWithDb(configUpdateHandler),
+          handler: runtimeWithDb(configUpdateHandler),
         }),
       )
       .command(
@@ -214,7 +214,7 @@ const ConfigCommand = types({
               coerce: (value: string) => value as ConfigType,
             });
           },
-          handler: bootstrapWithDb(configListHandler),
+          handler: runtimeWithDb(configListHandler),
         }),
       )
       .command(
@@ -244,7 +244,7 @@ const ConfigCommand = types({
                 alias: "n",
               });
           },
-          handler: bootstrapWithDb(configSchemaHandler),
+          handler: runtimeWithDb(configSchemaHandler),
         }),
       )
       .demandCommand(

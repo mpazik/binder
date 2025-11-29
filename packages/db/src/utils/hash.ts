@@ -1,7 +1,14 @@
-import { binaryToHex, type Brand, type HexString } from "@binder/utils";
+import {
+  type Base64Uri,
+  binaryToBase64Uri,
+  binaryToHex,
+  type Brand,
+  type HexString,
+} from "@binder/utils";
 
 type HashBin = Brand<ArrayBuffer, "HashBin">;
 type HashHex = Brand<HexString, "HashHex">;
+type HashBase64Uri = Brand<Base64Uri, "HashBase64Uri">;
 type HashingAlgorithm = "sha-1" | "sha-256" | "sha-384" | "sha-512";
 type HashReference = [HashBin, HashingAlgorithm];
 
@@ -14,6 +21,9 @@ export const isHashUri = (uri: string): uri is HashUri =>
 
 export const hashToHex = (hash: HashBin): HashHex =>
   binaryToHex(hash) as HashHex;
+
+export const hashToBase64Uri = (hash: HashBin): HashBase64Uri =>
+  binaryToBase64Uri(new Uint8Array(hash)) as HashBase64Uri;
 
 export const referenceToHashUri = ([hash, alg]: HashReference): HashUri =>
   `${hashUriScheme}:${alg};${hashToHex(hash)}` as HashUri;

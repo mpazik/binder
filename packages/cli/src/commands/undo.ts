@@ -1,6 +1,6 @@
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { undoTransactions } from "../lib/orchestrator.ts";
 import { types } from "./types.ts";
 
@@ -50,7 +50,7 @@ const UndoCommand = types({
       default: 1,
     });
   },
-  handler: bootstrapWithDb(undoHandler),
+  handler: runtimeWithDb(undoHandler),
 });
 
 export default UndoCommand;

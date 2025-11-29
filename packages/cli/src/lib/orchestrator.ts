@@ -50,8 +50,17 @@ export const verifySync = async (
   kg: KnowledgeGraph,
   binderPath: string,
 ): ResultAsync<VerifySync> => {
+  const configSchema = kg.getConfigSchema();
+  const nodeSchemaResult = await kg.getNodeSchema();
+  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+
   const logPath = join(binderPath, TRANSACTION_LOG_FILE);
-  const logVerifyResult = await verifyLog(fs, logPath);
+  const logVerifyResult = await verifyLog(
+    fs,
+    configSchema,
+    nodeSchemaResult.data,
+    logPath,
+  );
   if (isErr(logVerifyResult)) return logVerifyResult;
 
   const versionResult = await kg.version();
@@ -447,7 +456,14 @@ export const squashTransactions = async (
         );
     }
 
-    const squashedTransaction = await mergeTransactions(dbTransactions);
+    const nodeSchemaResult = await kg.getNodeSchema();
+    if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+
+    const squashedTransaction = await mergeTransactions(
+      dbTransactions,
+      nodeSchemaResult.data,
+      kg.getConfigSchema(),
+    );
 
     const removeResult = await removeLastFromLog(fs, transactionLogPath, count);
     if (isErr(removeResult)) return removeResult;

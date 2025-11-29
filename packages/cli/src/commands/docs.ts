@@ -3,7 +3,7 @@ import type { Argv } from "yargs";
 import type { EntityNsSchema, NamespaceEditable } from "@binder/db";
 import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import {
-  bootstrapWithDb,
+  runtimeWithDb,
   type CommandHandlerWithDb,
   type RuntimeContextWithDb,
 } from "../runtime.ts";
@@ -232,7 +232,7 @@ const DocsCommand = types({
         types({
           command: "render",
           describe: "render documents to markdown files",
-          handler: bootstrapWithDb(docsRenderHandler),
+          handler: runtimeWithDb(docsRenderHandler),
         }),
       )
       .command(
@@ -248,7 +248,7 @@ const DocsCommand = types({
               demandOption: false,
             });
           },
-          handler: bootstrapWithDb(docsSyncHandler),
+          handler: runtimeWithDb(docsSyncHandler),
         }),
       )
       .command(
@@ -273,7 +273,7 @@ const DocsCommand = types({
                 default: false,
               });
           },
-          handler: bootstrapWithDb(docsLintHandler),
+          handler: runtimeWithDb(docsLintHandler),
         }),
       )
       .demandCommand(1, "You need to specify a subcommand: render, sync, lint");

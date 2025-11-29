@@ -3,8 +3,10 @@
  */
 
 import {
+  type ConfigSchema,
   GENESIS_VERSION,
   hashTransaction,
+  type NodeSchema,
   type Transaction,
   type TransactionHash,
   transactionToCanonical,
@@ -267,6 +269,8 @@ export const clearLog = async (
 
 export const verifyLog = async (
   fs: FileSystem,
+  configSchema: ConfigSchema,
+  nodeSchema: NodeSchema,
   path: string,
   options?: { verifyIntegrity?: boolean },
 ): ResultAsync<{ count: number }> => {
@@ -306,7 +310,11 @@ export const verifyLog = async (
       );
 
     if (options?.verifyIntegrity) {
-      const canonical = transactionToCanonical(transaction);
+      const canonical = transactionToCanonical(
+        configSchema,
+        nodeSchema,
+        transaction,
+      );
       const expectedHash = await hashTransaction(canonical);
 
       if (expectedHash !== transaction.hash)
@@ -332,6 +340,8 @@ export const verifyLog = async (
 
 export const rehashLog = async (
   fs: FileSystem,
+  configSchema: ConfigSchema,
+  nodeSchema: NodeSchema,
   path: string,
 ): ResultAsync<{ transactionsRehashed: number; backupPath: string }> => {
   if (!(await fs.exists(path)))
@@ -357,7 +367,12 @@ export const rehashLog = async (
     if (isErr(result)) return result;
 
     const tx = { ...result.data, previous: previousHash };
-    const rehashedTx = await withHashTransaction(tx, tx.id);
+    const rehashedTx = await withHashTransaction(
+      configSchema,
+      nodeSchema,
+      tx,
+      tx.id,
+    );
     const logResult = await logTransaction(fs, path, rehashedTx);
     if (isErr(logResult)) return logResult;
     previousHash = rehashedTx.hash;

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import {
+  mockNodeSchema,
   mockTransaction3,
   mockTransaction4,
   mockTransactionInit,
   mockTransactionUpdate,
 } from "@binder/db/mocks";
 import {
+  configSchema,
   type Database,
   GENESIS_VERSION,
   type KnowledgeGraph,
@@ -110,6 +112,8 @@ describe("orchestrator", () => {
 
     it("detects divergence when hashes differ", async () => {
       const divergedTx = await withHashTransaction(
+        configSchema,
+        mockNodeSchema,
         {
           ...mockTransactionUpdate,
           author: "different-user",
@@ -199,6 +203,8 @@ describe("orchestrator", () => {
         [
           mockTransactionInit,
           await withHashTransaction(
+            configSchema,
+            mockNodeSchema,
             {
               ...mockTransactionUpdate,
               author: "different-user",

@@ -10,7 +10,7 @@ import {
   tryCatch,
 } from "@binder/utils";
 import { openDb } from "@binder/db";
-import { runtime, type CommandHandler } from "../runtime.ts";
+import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import {
   DB_FILE,
   LOCK_FILE,
@@ -21,7 +21,12 @@ import { repairDbFromLog } from "../lib/orchestrator.ts";
 import { verifyLog } from "../lib/journal.ts";
 import { types } from "./types.ts";
 
-export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
+export const backupHandler: CommandHandlerWithDb = async ({
+  ui,
+  kg,
+  fs,
+  config,
+}) => {
   const binderPath = config.paths.binder;
   const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
   const backupPath = join(binderPath, `${TRANSACTION_LOG_FILE}.bac`);
@@ -33,9 +38,19 @@ export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
       }),
     );
 
-  const verifyResult = await verifyLog(fs, transactionLogPath, {
-    verifyIntegrity: false,
-  });
+  const configSchema = kg.getConfigSchema();
+  const nodeSchemaResult = await kg.getNodeSchema();
+  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+
+  const verifyResult = await verifyLog(
+    fs,
+    configSchema,
+    nodeSchemaResult.data,
+    transactionLogPath,
+    {
+      verifyIntegrity: false,
+    },
+  );
   if (isErr(verifyResult)) {
     return err(
       createError(
@@ -95,8 +110,9 @@ export const backupHandler: CommandHandler = async ({ ui, fs, config }) => {
   return ok(undefined);
 };
 
-export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
+export const resetHandler: CommandHandlerWithDb<{ yes?: boolean }> = async ({
   ui,
+  kg,
   fs,
   config,
   log,
@@ -114,9 +130,19 @@ export const resetHandler: CommandHandler<{ yes?: boolean }> = async ({
       ),
     );
 
-  const verifyResult = await verifyLog(fs, backupPath, {
-    verifyIntegrity: true,
-  });
+  const configSchema = kg.getConfigSchema();
+  const nodeSchemaResult = await kg.getNodeSchema();
+  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+
+  const verifyResult = await verifyLog(
+    fs,
+    configSchema,
+    nodeSchemaResult.data,
+    backupPath,
+    {
+      verifyIntegrity: true,
+    },
+  );
   if (isErr(verifyResult))
     return err(
       createError(
@@ -227,7 +253,7 @@ const DevCommand = types({
         types({
           command: "backup",
           describe: "create a backup of the transaction log",
-          handler: runtime(backupHandler),
+          handler: runtimeWithDb(backupHandler),
         }),
       )
       .command(
@@ -242,7 +268,7 @@ const DevCommand = types({
               default: false,
             });
           },
-          handler: runtime(resetHandler),
+          handler: runtimeWithDb(resetHandler),
         }),
       )
       .demandCommand(

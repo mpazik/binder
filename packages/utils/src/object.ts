@@ -23,23 +23,30 @@ export const groupByToObject = <T, K extends string>(
   >;
 };
 
+export const transformEntries = <K extends string, V, K2 extends string, V2>(
+  obj: Record<K, V>,
+  transform: (entries: [K, V][]) => [K2, V2][],
+): Record<K2, V2> =>
+  Object.fromEntries(transform(Object.entries(obj) as [K, V][])) as Record<
+    K2,
+    V2
+  >;
+
 export const mapObjectValues = <T, K>(
   obj: Record<string, T>,
   fn: (value: T, key: string) => K,
-): Record<string, K> => {
-  return Object.fromEntries(
-    Object.entries(obj).map(([key, value]) => [key, fn(value, key)]),
+): Record<string, K> =>
+  transformEntries(obj, (entries) =>
+    entries.map(([key, value]) => [key, fn(value, key)]),
   );
-};
 
 export const filterObjectValues = <T, O extends Record<string, T>>(
   obj: Record<string, T>,
   fn: (value: T, key: keyof O) => boolean,
-): O => {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([key, value]) => fn(value, key)),
+): O =>
+  transformEntries(obj, (entries) =>
+    entries.filter(([key, value]) => fn(value, key)),
   ) as O;
-};
 
 export const objectFromKeys = <T>(keys: string[], fn: (key: string) => T) => {
   return Object.fromEntries(keys.map((key) => [key, fn(key)]));

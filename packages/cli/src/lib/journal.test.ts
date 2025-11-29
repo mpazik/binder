@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
-import { type Transaction, type TransactionHash } from "@binder/db";
+import {
+  configSchema,
+  type Transaction,
+  type TransactionHash,
+} from "@binder/db";
 import {
   mockAuthor2,
+  mockNodeSchema,
   mockTransaction3,
   mockTransaction4,
   mockTransactionInit,
@@ -117,7 +122,13 @@ describe("journal", () => {
         throwIfError(await logTransactions(fs, verifyPath, txs));
       }
 
-      const result = await verifyLog(fs, verifyPath, options);
+      const result = await verifyLog(
+        fs,
+        configSchema,
+        mockNodeSchema,
+        verifyPath,
+        options,
+      );
 
       if (typeof expected === "number") {
         expect(result).toBeOk();
@@ -244,7 +255,12 @@ describe("journal", () => {
         await logTransactions(fs, rehashPath, transactionsWithBadHashes),
       );
 
-      const result = await rehashLog(fs, rehashPath);
+      const result = await rehashLog(
+        fs,
+        configSchema,
+        mockNodeSchema,
+        rehashPath,
+      );
 
       expect(result).toBeOkWith({
         transactionsRehashed: 2,

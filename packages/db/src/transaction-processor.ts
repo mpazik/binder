@@ -10,7 +10,6 @@ import {
 import { and, desc, gte, lte } from "drizzle-orm";
 import {
   type ChangesetsInput,
-  configSchema,
   type ConfigUid,
   type FieldChangeset,
   incrementEntityId,
@@ -21,6 +20,7 @@ import {
   type TransactionInput,
   invertTransaction,
   withHashTransaction,
+  type ConfigSchema,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 import {
@@ -36,6 +36,7 @@ export const processTransactionInput = async (
   tx: DbTransaction,
   input: TransactionInput,
   nodeSchema: NodeSchema,
+  configSchema: ConfigSchema,
 ): ResultAsync<Transaction> => {
   const createdAt = input.createdAt ?? newIsoTimestamp();
 
@@ -69,8 +70,15 @@ export const processTransactionInput = async (
   );
   if (isErr(nodesResult)) return nodesResult;
 
+  const updatedSchema = applyConfigChangesetToSchema(
+    nodeSchema,
+    configurationsResult.data,
+  );
+
   return ok(
     await withHashTransaction(
+      configSchema,
+      updatedSchema,
       {
         previous: versionResult.data.hash,
         author: input.author ?? "",

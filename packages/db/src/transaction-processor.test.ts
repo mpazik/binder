@@ -13,6 +13,7 @@ import {
   mockTransactionUpdate,
 } from "./model/transaction.mock.ts";
 import {
+  configSchema,
   emptyNodeSchema,
   fieldConfigType,
   type TransactionId,
@@ -54,6 +55,7 @@ describe("transaction processor", () => {
             tx,
             mockTransactionInputUpdate,
             mockNodeSchema,
+            configSchema,
           ),
         ),
       );
@@ -68,6 +70,7 @@ describe("transaction processor", () => {
             tx,
             mockTransactionInitInput,
             emptyNodeSchema,
+            configSchema,
           ),
         ),
       );
@@ -103,6 +106,7 @@ describe("transaction processor", () => {
             author: "test",
           },
           mockNodeSchema,
+          configSchema,
         ),
       );
 
@@ -132,6 +136,7 @@ describe("transaction processor", () => {
           author: "test",
         },
         mockNodeSchema,
+        configSchema,
       ),
     );
 
@@ -161,7 +166,12 @@ describe("transaction processor", () => {
     const applyTransactionInput = async (input: TransactionInput) =>
       await db.transaction(async (tx) => {
         const transaction = throwIfError(
-          await processTransactionInput(tx, input, mockNodeSchema),
+          await processTransactionInput(
+            tx,
+            input,
+            mockNodeSchema,
+            configSchema,
+          ),
         );
         throwIfError(await applyAndSaveTransaction(tx, transaction));
       });

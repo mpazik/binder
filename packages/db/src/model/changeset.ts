@@ -7,10 +7,12 @@ import {
   isEqual,
   mapObjectValues,
   omit,
+  transformEntries,
 } from "@binder/utils";
 import type {
   EntityNsKey,
   EntityNsRef,
+  EntityNsSchema,
   EntityNsType,
   NamespaceEditable,
 } from "./namespace.ts";
@@ -22,6 +24,7 @@ import {
   type FieldValue,
   systemFields,
 } from "./field.ts";
+import { type EntitySchema, getFieldDef } from "./schema.ts";
 
 export type ListMutation =
   | [kind: "insert", inserted: FieldValue, position?: number]
@@ -166,22 +169,14 @@ const rebaseChange = (
 export const rebaseChangeset = (
   base: FieldChangeset,
   changeset: FieldChangeset,
-): FieldChangeset => {
-  return Object.entries(changeset).reduce(
-    (acc, [attributeKey, change]) => {
-      const key = attributeKey as FieldKey;
-      const baseChange = base[key];
-      const normalizedChange = normalizeValueChange(change);
-
-      acc[key] = baseChange
-        ? rebaseChange(normalizeValueChange(baseChange), normalizedChange)
-        : normalizedChange;
-
-      return acc;
-    },
-    {} as Record<FieldKey, ValueChange>,
-  );
-};
+): FieldChangeset =>
+  mapObjectValues(changeset, (change, key) => {
+    const baseChange = base[key];
+    const normalizedChange = normalizeValueChange(change);
+    return baseChange
+      ? rebaseChange(normalizeValueChange(baseChange), normalizedChange)
+      : normalizedChange;
+  });
 
 export const applyChange = (
   current: FieldValue,
@@ -242,15 +237,10 @@ export const applyChangeset = (
   fields: Fieldset,
   changeset: FieldChangeset,
 ): Fieldset => {
-  const applied = {} as Fieldset;
-  for (const [key, change] of Object.entries(changeset)) {
-    applied[key as FieldKey] = applyChange(
-      fields[key],
-      normalizeValueChange(change),
-    );
-  }
-  const result = { ...fields, ...applied };
-  return filterObjectValues(result, (value, key) => {
+  const applied = mapObjectValues(changeset, (change, key) =>
+    applyChange(fields[key], normalizeValueChange(change)),
+  );
+  return filterObjectValues({ ...fields, ...applied }, (value, key) => {
     if (key in applied) {
       if (value === null) {
         const change = normalizeValueChange(changeset[key]);
@@ -410,3 +400,55 @@ export const isListMutationArray = (
   Array.isArray(input) &&
   input.length > 0 &&
   input.every((item) => item !== undefined && isListMutation(item));
+
+const compareListMutations = (a: ListMutation, b: ListMutation): number => {
+  const posA = a[2] ?? Infinity;
+  const posB = b[2] ?? Infinity;
+  if (posA !== posB) return posA - posB;
+  if (a[0] === "insert" && b[0] === "remove") return -1;
+  if (a[0] === "remove" && b[0] === "insert") return 1;
+  return 0;
+};
+
+const canonicalizeValueChange = (change: ValueChange): ValueChange => {
+  if (change.op === "seq") {
+    return {
+      op: "seq",
+      mutations: [...change.mutations].sort(compareListMutations),
+    };
+  }
+  return change;
+};
+
+export const canonicalizeFieldChangeset = (
+  schema: EntitySchema,
+  changeset: FieldChangeset,
+): FieldChangeset =>
+  transformEntries(changeset, (entries) =>
+    entries
+      .map(([key, value]) => {
+        const fieldDef = getFieldDef(schema, key);
+        if (fieldDef === undefined) return null;
+        const normalized = normalizeValueChange(value);
+        const canonical = canonicalizeValueChange(normalized);
+        return [key, fieldDef.id, compactValueChange(canonical)] as const;
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+      .sort((a, b) => a[1] - b[1])
+      .map(
+        ([key, _, value]) => [key, value] as [string, ValueChange | FieldValue],
+      ),
+  );
+
+export const canonicalizeEntitiesChangeset = <N extends NamespaceEditable>(
+  schema: EntityNsSchema[N],
+  changeset: EntitiesChangeset<N>,
+): EntitiesChangeset<N> =>
+  transformEntries(changeset, (entries) =>
+    entries
+      .map(([ref, fieldChangeset]): [string, FieldChangeset] => [
+        ref,
+        canonicalizeFieldChangeset(schema, fieldChangeset),
+      ])
+      .sort((a, b) => a[0].localeCompare(b[0])),
+  ) as EntitiesChangeset<N>;

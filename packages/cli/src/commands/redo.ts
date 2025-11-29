@@ -1,6 +1,6 @@
 import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { redoTransactions } from "../lib/orchestrator.ts";
 import { types } from "./types.ts";
 
@@ -47,7 +47,7 @@ const RedoCommand = types({
       default: 1,
     });
   },
-  handler: bootstrapWithDb(redoHandler),
+  handler: runtimeWithDb(redoHandler),
 });
 
 export default RedoCommand;

@@ -15,7 +15,7 @@ import {
   type TransactionRef,
 } from "@binder/db";
 import * as YAML from "yaml";
-import { bootstrapWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import {
   verifySync,
   repairDbFromLog,
@@ -235,9 +235,19 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
   fs,
 }) => {
   const transactionLogPath = join(config.paths.binder, "transactions.jsonl");
-  const logIntegrityResult = await verifyLog(fs, transactionLogPath, {
-    verifyIntegrity: true,
-  });
+  const configSchema = kg.getConfigSchema();
+  const nodeSchemaResult = await kg.getNodeSchema();
+  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+
+  const logIntegrityResult = await verifyLog(
+    fs,
+    configSchema,
+    nodeSchemaResult.data,
+    transactionLogPath,
+    {
+      verifyIntegrity: true,
+    },
+  );
   if (isErr(logIntegrityResult)) {
     if (logIntegrityResult.error.key === "hash-mismatch") {
       ui.block(() => {
@@ -337,7 +347,16 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
 
     ui.info("Reading transaction log...");
 
-    const rehashResult = await rehashLog(fs, transactionLogPath);
+    const configSchema = kg.getConfigSchema();
+    const nodeSchemaResult = await kg.getNodeSchema();
+    if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+
+    const rehashResult = await rehashLog(
+      fs,
+      configSchema,
+      nodeSchemaResult.data,
+      transactionLogPath,
+    );
     if (isErr(rehashResult)) {
       log.error("Failed to rehash log", { error: rehashResult.error });
       return rehashResult;
@@ -523,7 +542,7 @@ const TransactionCommand = types({
               demandOption: true,
             });
           },
-          handler: bootstrapWithDb(transactionCreateHandler),
+          handler: runtimeWithDb(transactionCreateHandler),
         }),
       )
       .command(
@@ -540,7 +559,7 @@ const TransactionCommand = types({
                 normalizeEntityRef<"transaction">(value),
             });
           },
-          handler: bootstrapWithDb(transactionReadHandler),
+          handler: runtimeWithDb(transactionReadHandler),
         }),
       )
       .command(
@@ -554,7 +573,7 @@ const TransactionCommand = types({
               default: 1,
             });
           },
-          handler: bootstrapWithDb(transactionRollbackHandler),
+          handler: runtimeWithDb(transactionRollbackHandler),
         }),
       )
       .command(
@@ -575,14 +594,14 @@ const TransactionCommand = types({
                 default: false,
               });
           },
-          handler: bootstrapWithDb(transactionSquashHandler),
+          handler: runtimeWithDb(transactionSquashHandler),
         }),
       )
       .command(
         types({
           command: "verify",
           describe: "verify database and log are in sync",
-          handler: bootstrapWithDb(transactionVerifyHandler),
+          handler: runtimeWithDb(transactionVerifyHandler),
         }),
       )
       .command(
@@ -611,7 +630,7 @@ const TransactionCommand = types({
                 default: false,
               });
           },
-          handler: bootstrapWithDb(transactionRepairHandler),
+          handler: runtimeWithDb(transactionRepairHandler),
         }),
       )
       .command(
@@ -650,7 +669,7 @@ const TransactionCommand = types({
                 default: false,
               });
           },
-          handler: bootstrapWithDb(transactionLogHandler),
+          handler: runtimeWithDb(transactionLogHandler),
         }),
       )
       .demandCommand(

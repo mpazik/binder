@@ -14,13 +14,16 @@ import {
   mockTaskNode1Updated,
 } from "./node.mock.ts";
 import { inverseChangeset } from "./changeset.ts";
+import { mockNodeSchema } from "./schema.mock.ts";
+import { configSchema } from "./schema.ts";
 
 describe("squashTransactions", () => {
   it("squashes two transactions", async () => {
-    const result = await squashTransactions([
-      mockTransactionInit,
-      mockTransactionUpdate,
-    ]);
+    const result = await squashTransactions(
+      [mockTransactionInit, mockTransactionUpdate],
+      mockNodeSchema,
+      configSchema,
+    );
 
     expect(result).toEqual({
       ...mockTransactionInit,
@@ -31,55 +34,57 @@ describe("squashTransactions", () => {
         ...mockTransactionInit.nodes,
         [mockTask1Uid]: {
           ...mockTask1Node,
-          title: {
-            op: "set",
-            value: mockTaskNode1Updated.title,
-          },
-          tags: {
-            op: "set",
-            value: mockTaskNode1Updated.tags,
-          },
+          title: mockTaskNode1Updated.title,
+          tags: mockTaskNode1Updated.tags,
         },
       },
     });
   });
 
   it("squashes changes that cancel out", async () => {
-    const result = await squashTransactions([
-      mockTransactionUpdate,
-      {
-        ...mockTransactionUpdate,
-        previous: mockTransactionUpdate.hash,
-        nodes: {
-          [mockTask1Uid]: inverseChangeset(
-            mockTransactionUpdate.nodes[mockTask1Uid],
-          ),
+    const result = await squashTransactions(
+      [
+        mockTransactionUpdate,
+        {
+          ...mockTransactionUpdate,
+          previous: mockTransactionUpdate.hash,
+          nodes: {
+            [mockTask1Uid]: inverseChangeset(
+              mockTransactionUpdate.nodes[mockTask1Uid],
+            ),
+          },
         },
-      },
-    ]);
+      ],
+      mockNodeSchema,
+      configSchema,
+    );
 
-    expect(result.nodes[mockTask1Uid]).toEqual({});
+    expect(result.nodes[mockTask1Uid]).toBeUndefined();
   });
 
   it("squashes multiple transactions", async () => {
-    const result = await squashTransactions([
-      mockTransactionInit,
-      mockTransactionUpdate,
-      {
-        ...mockTransactionUpdate,
-        id: 3 as TransactionId,
-        previous: mockTransactionUpdate.hash,
-        nodes: {
-          [mockTask1Uid]: {
-            title: {
-              op: "set",
-              previous: mockTaskNode1Updated.title,
-              value: "Third",
+    const result = await squashTransactions(
+      [
+        mockTransactionInit,
+        mockTransactionUpdate,
+        {
+          ...mockTransactionUpdate,
+          id: 3 as TransactionId,
+          previous: mockTransactionUpdate.hash,
+          nodes: {
+            [mockTask1Uid]: {
+              title: {
+                op: "set",
+                previous: mockTaskNode1Updated.title,
+                value: "Third",
+              },
             },
           },
         },
-      },
-    ]);
+      ],
+      mockNodeSchema,
+      configSchema,
+    );
 
     expect(result).toEqual({
       ...mockTransactionInit,
@@ -90,14 +95,8 @@ describe("squashTransactions", () => {
         ...mockTransactionInit.nodes,
         [mockTask1Uid]: {
           ...mockTask1Node,
-          title: {
-            op: "set",
-            value: "Third",
-          },
-          tags: {
-            op: "set",
-            value: mockTaskNode1Updated.tags,
-          },
+          title: "Third",
+          tags: mockTaskNode1Updated.tags,
         },
       },
     });

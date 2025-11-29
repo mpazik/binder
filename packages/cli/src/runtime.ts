@@ -294,7 +294,7 @@ export const runtime = <TArgs extends object = object>(
   );
 };
 
-export const bootstrapWithDb = <TArgs extends object = object>(
+export const runtimeWithDb = <TArgs extends object = object>(
   handler: CommandHandlerWithDb<TArgs>,
   options?: CommandOptions,
 ): ((args: TArgs & GlobalOptions) => Promise<void>) => {

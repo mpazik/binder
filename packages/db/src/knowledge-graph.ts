@@ -311,6 +311,7 @@ export const openKnowledgeGraph = (
           tx,
           input,
           nodeSchemaResult.data,
+          configSchema,
         );
 
         if (isErr(processedResult)) return processedResult;

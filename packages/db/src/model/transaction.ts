@@ -1,19 +1,24 @@
 import {
   type Brand,
   type BrandDerived,
+  filterObjectValues,
   type IsoTimestamp,
   mapObjectValues,
-  pick,
 } from "@binder/utils";
 import { z } from "zod";
-import { hashString, hashToHex } from "../utils/hash.ts";
+import { hashString, hashToBase64Uri } from "../utils/hash.ts";
 import { type EntityId, GENESIS_ENTITY_ID } from "./entity.ts";
 import type {
   ChangesetsInput,
   ConfigurationsChangeset,
+  FieldChangeset,
   NodesChangeset,
 } from "./changeset.ts";
-import squashChangesets, { inverseChangeset } from "./changeset.ts";
+import squashChangesets, {
+  canonicalizeEntitiesChangeset,
+  inverseChangeset,
+} from "./changeset.ts";
+import { type ConfigSchema, type NodeSchema } from "./schema.ts";
 
 export type TransactionId = BrandDerived<EntityId, "TransactionId">;
 export type TransactionHash = Brand<string, "TransactionHash">;
@@ -54,45 +59,64 @@ type CanonicalTransaction = {
   previous: TransactionHash;
   createdAt: IsoTimestamp;
   author: string;
-  nodes: NodesChangeset;
-  configurations: ConfigurationsChangeset;
+  nodes?: NodesChangeset;
+  configurations?: ConfigurationsChangeset;
 };
 
-const canonicalTxKeysOrder: (keyof CanonicalTransaction)[] = [
-  "previous",
-  "createdAt",
-  "author",
-  "nodes",
-  "configurations",
-];
+const isNonEmptyChangeset = (changeset: FieldChangeset): boolean =>
+  Object.keys(changeset).length > 0;
 
 export const transactionToCanonical = (
+  configSchema: ConfigSchema,
+  nodeSchema: NodeSchema,
   tx: Pick<
     Transaction,
     "previous" | "author" | "createdAt" | "nodes" | "configurations"
   >,
 ): CanonicalTransaction => {
-  // we assume that changeset is always in succinct form, later perhaps we should do something here
-  return pick(tx, canonicalTxKeysOrder);
+  const nodes = filterObjectValues(
+    canonicalizeEntitiesChangeset(nodeSchema, tx.nodes),
+    isNonEmptyChangeset,
+  );
+  const configurations = filterObjectValues(
+    canonicalizeEntitiesChangeset(configSchema, tx.configurations),
+    isNonEmptyChangeset,
+  );
+
+  return {
+    previous: tx.previous,
+    createdAt: tx.createdAt,
+    author: tx.author,
+    ...(Object.keys(nodes).length > 0 && { nodes }),
+    ...(Object.keys(configurations).length > 0 && { configurations }),
+  };
 };
 
 export const hashTransaction = async (
   canonical: CanonicalTransaction,
 ): Promise<TransactionHash> =>
-  hashToHex(await hashString(JSON.stringify(canonical))) as TransactionHash;
+  hashToBase64Uri(
+    await hashString(JSON.stringify(canonical)),
+  ) as TransactionHash;
 
 export const withHashTransaction = async (
+  configSchema: ConfigSchema,
+  nodeSchema: NodeSchema,
   tx: Pick<
     Transaction,
     "previous" | "author" | "createdAt" | "nodes" | "configurations"
   >,
   id: TransactionId,
 ): Promise<Transaction> => {
-  const canonical = transactionToCanonical(tx);
+  const canonical = transactionToCanonical(configSchema, nodeSchema, tx);
   return {
     id,
     hash: await hashTransaction(canonical),
-    ...canonical,
+    previous: canonical.previous,
+    createdAt: canonical.createdAt,
+    author: canonical.author,
+    nodes: canonical.nodes ?? {},
+    configurations: canonical.configurations ?? {},
   };
 };
 
@@ -112,7 +136,7 @@ export const versionFromTransaction = (tx: Transaction): GraphVersion => {
 
 export const GENESIS_VERSION: GraphVersion = {
   id: GENESIS_ENTITY_ID as TransactionId,
-  hash: "0".repeat(64) as TransactionHash,
+  hash: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" as TransactionHash,
   updatedAt: "2025-10-01T00:00:00.000Z" as IsoTimestamp,
 };
 
@@ -129,6 +153,8 @@ export const shortTransactionHash = (
 
 export const squashTransactions = async (
   transactions: Transaction[],
+  nodeSchema: NodeSchema,
+  configSchema: ConfigSchema,
 ): Promise<Transaction> => {
   const oldest = transactions[0]!;
   const newest = transactions[transactions.length - 1]!;
@@ -153,6 +179,8 @@ export const squashTransactions = async (
   }
 
   return withHashTransaction(
+    configSchema,
+    nodeSchema,
     {
       previous: oldest.previous,
       author: newest.author,
