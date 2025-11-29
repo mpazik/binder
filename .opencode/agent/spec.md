@@ -1,7 +1,7 @@
 ---
 description: Build agent for implementing features in Bun + TypeScript codebases following strict guidelines
 mode: subagent
-model: "anthropic/claude-sonnet-4-5-20250929"
+model: "anthropic/claude-opus-4-5"
 tools:
   writespec: true
   "*": false

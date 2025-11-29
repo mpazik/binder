@@ -12,6 +12,7 @@ const context7Map = {
   sqlite: "websites/www_sqlite_org-docs.html",
   node: "nodejs/node",
   typescript: "microsoft/typescript",
+  yaml: "eemeli/yaml",
 };
 
 export default tool({

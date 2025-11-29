@@ -421,6 +421,9 @@ export const getFieldDef = (
   schema: EntitySchema,
   field: FieldKey,
 ): FieldDef<CoreDataType> | undefined => {
+  if (field in coreFields) {
+    return coreFields[field as keyof typeof coreFields];
+  }
   return (schema.fields as any)[field] as FieldDef<CoreDataType>;
 };
 
@@ -429,6 +432,11 @@ export const getFieldDefNested = (
   path: FieldPath,
 ): FieldDef<CoreDataType> | undefined => {
   const firstKey = path[0]!;
+
+  if (path.length === 1 && firstKey in coreFields) {
+    return coreFields[firstKey as keyof typeof coreFields];
+  }
+
   let currentField = (schema.fields as any)[firstKey] as FieldDef<CoreDataType>;
 
   if (path.length === 1) return currentField;

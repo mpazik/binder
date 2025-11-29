@@ -2,7 +2,7 @@
 description: Implements code strictly following specification steps and style guidelines
 mode: primary
 quickSwitch: true
-model: "anthropic/claude-sonnet-4-5-20250929"
+model: "anthropic/claude-opus-4-5"
 tools:
   glob: true
   grep: true
