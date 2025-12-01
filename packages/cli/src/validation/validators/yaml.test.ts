@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { mockNodeSchema } from "@binder/db/mocks";
 import type { KnowledgeGraph } from "@binder/db";
 import { parseYamlDocument } from "../../document/yaml-cst.ts";
@@ -30,7 +30,8 @@ describe("createYamlValidator", () => {
     const content = parseYamlDocument(text);
     const errors = await validator.validate(content, {
       filePath: "test.yaml",
-      navigationItem: navigationItem as any,
+      navigationItem,
+      namespace: "node",
       schema: mockNodeSchema,
       ruleConfig: {},
       kg: mockKg,

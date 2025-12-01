@@ -6,7 +6,11 @@ import {
   assertNotEmpty,
   createError,
   err,
+  fail,
+  includes,
   isErr,
+  objEntries,
+  objKeys,
   ok,
   type Result,
   type ResultAsync,
@@ -24,27 +28,29 @@ import {
   type EntityChangesetInput,
   type EntityChangesetRef,
   type EntityId,
+  type EntityKey,
   type EntityNsRef,
-  type EntityNsSchema,
-  type EntityNsType,
   type EntityNsUid,
+  type EntitySchema,
+  type EntityType,
   type EntityUid,
   type FieldAttrDefs,
   type FieldChangeset,
   type FieldKey,
-  fieldNodeTypes,
+  fieldTypes,
   incrementEntityId,
   isEntityUpdate,
   isListMutation,
   isListMutationArray,
   type NamespaceEditable,
-  normalizeValueChange,
-  type NodeFieldDefinition,
+  type NamespaceSchema,
+  type NodeFieldDef,
   type NodeKey,
   type NodeSchema,
-  type NodeTypeDefinition,
-  typeConfigType,
+  normalizeValueChange,
   resolveEntityRefType,
+  type TypeDef,
+  typeSystemType,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 import {
@@ -73,16 +79,16 @@ export type ChangesetValidationError = {
   message: string;
 };
 
-const collectMandatoryFields = <N extends NamespaceEditable>(
-  schema: EntityNsSchema[N],
-  typeKey: EntityNsType[N],
+const collectMandatoryFields = (
+  schema: EntitySchema,
+  type: EntityType,
   mandatorySet: Set<FieldKey>,
-  visited = new Set<EntityNsType[N]>(),
+  visited = new Set<EntityType>(),
 ): void => {
-  if (visited.has(typeKey)) return;
-  visited.add(typeKey);
+  if (visited.has(type)) return;
+  visited.add(type);
 
-  const typeDef = (schema.types as any)[typeKey];
+  const typeDef = schema.types[type];
   if (!typeDef) return;
 
   if (typeDef.extends) {
@@ -93,40 +99,38 @@ const collectMandatoryFields = <N extends NamespaceEditable>(
     for (const [fieldKey, attrs] of Object.entries(
       typeDef.fields_attrs as FieldAttrDefs,
     )) {
-      if (attrs.required) mandatorySet.add(fieldKey);
+      if (attrs.required) mandatorySet.add(fieldKey as EntityKey);
     }
   }
 };
 
-const getMandatoryFields = <N extends NamespaceEditable>(
-  schema: EntityNsSchema[N],
-  typeKey: EntityNsType[N],
+const getMandatoryFields = (
+  schema: EntitySchema,
+  typeKey: EntityType,
 ): FieldKey[] => {
   const mandatorySet = new Set<FieldKey>();
   collectMandatoryFields(schema, typeKey, mandatorySet);
   return Array.from(mandatorySet);
 };
 
-const getFieldAttrs = <N extends NamespaceEditable>(
-  schema: EntityNsSchema[N],
-  typeKey: EntityNsType[N],
+const getFieldAttrs = (
+  schema: EntitySchema,
+  typeKey: EntityType,
 ): Map<FieldKey, FieldAttrDefs[FieldKey]> => {
   const attrsMap = new Map<FieldKey, FieldAttrDefs[FieldKey]>();
-  const visited = new Set<EntityNsType[N]>();
+  const visited = new Set<EntityType>();
 
-  let currentTypeKey: EntityNsType[N] | undefined = typeKey;
+  let currentTypeKey: EntityType | undefined = typeKey;
   while (currentTypeKey && !visited.has(currentTypeKey)) {
     visited.add(currentTypeKey);
 
-    const typeDef: any = (schema.types as any)[currentTypeKey];
+    const typeDef = schema.types[currentTypeKey] as TypeDef;
     if (!typeDef) break;
 
     currentTypeKey = typeDef.extends;
     if (!typeDef.fields_attrs) continue;
 
-    for (const [fieldKey, attrs] of Object.entries(
-      typeDef.fields_attrs as FieldAttrDefs,
-    )) {
+    for (const [fieldKey, attrs] of objEntries(typeDef.fields_attrs)) {
       if (attrsMap.has(fieldKey)) continue;
       attrsMap.set(fieldKey, attrs);
     }
@@ -136,12 +140,13 @@ const getFieldAttrs = <N extends NamespaceEditable>(
 };
 
 const validateChangesetInput = <N extends NamespaceEditable>(
+  namespace: N,
   input: EntityChangesetInput<N>,
-  schema: EntityNsSchema[N],
+  schema: EntitySchema,
 ): ChangesetValidationError[] => {
   const errors: ChangesetValidationError[] = [];
 
-  for (const fieldKey of Object.keys(input)) {
+  for (const fieldKey of objKeys(input)) {
     if (systemFieldsToExcludeFromValidation.includes(fieldKey as any)) {
       continue;
     }
@@ -186,6 +191,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
         const [kind, mutationValue] = mutation;
         const singleValueFieldDef = { ...fieldDef, allowMultiple: false };
         const validationResult = validateDataType(
+          namespace,
           singleValueFieldDef,
           mutationValue,
         );
@@ -203,6 +209,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       const [kind, mutationValue] = value;
       const singleValueFieldDef = { ...fieldDef, allowMultiple: false };
       const validationResult = validateDataType(
+        namespace,
         singleValueFieldDef,
         mutationValue,
       );
@@ -223,7 +230,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       continue;
     }
 
-    const validationResult = validateDataType(fieldDef, value);
+    const validationResult = validateDataType(namespace, fieldDef, value);
 
     if (isErr(validationResult)) {
       errors.push({
@@ -278,7 +285,7 @@ const validateUniquenessConstraints = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
   input: EntityChangesetInput<N>,
-  schema: EntityNsSchema[N],
+  schema: EntitySchema,
   currentEntityUid?: EntityNsUid[N],
 ): ResultAsync<ChangesetValidationError[]> => {
   const errors: ChangesetValidationError[] = [];
@@ -385,8 +392,8 @@ export const applyConfigChangesetToSchema = (
   baseSchema: NodeSchema,
   configurationsChangeset: EntitiesChangeset<"config">,
 ): NodeSchema => {
-  const newFields: Record<string, NodeFieldDefinition> = {};
-  const newTypes: Record<string, NodeTypeDefinition> = {};
+  const newFields: NodeSchema["fields"] = { ...baseSchema.fields };
+  const newTypes: NodeSchema["types"] = { ...baseSchema.types };
 
   for (const changeset of Object.values(configurationsChangeset)) {
     const idChange = changeset.id ? normalizeValueChange(changeset.id) : null;
@@ -397,19 +404,19 @@ export const applyConfigChangesetToSchema = (
     ) {
       const entity = applyChangesetModel(emptyFieldset, changeset);
 
-      if (fieldNodeTypes.includes(entity.type as any)) {
-        const field = entity as unknown as NodeFieldDefinition;
+      if (includes(fieldTypes, entity.type)) {
+        const field = entity as NodeFieldDef;
         newFields[field.key] = field;
-      } else if (entity.type === typeConfigType) {
-        const type = entity as unknown as NodeTypeDefinition;
-        newTypes[type.key] = type;
+      } else if (entity.type === typeSystemType) {
+        const type = entity as TypeDef;
+        newTypes[type.key as EntityType] = type;
       }
     }
   }
 
   return {
-    fields: { ...baseSchema.fields, ...newFields },
-    types: { ...baseSchema.types, ...newTypes },
+    fields: newFields,
+    types: newTypes,
   };
 };
 
@@ -417,7 +424,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
   input: ChangesetsInput<N>,
-  schema: EntityNsSchema[N],
+  schema: NamespaceSchema<N>,
   lastEntityId: EntityId,
 ): ResultAsync<EntitiesChangeset<N>> => {
   let lastId = lastEntityId;
@@ -436,7 +443,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
         ),
       );
 
-    const validationErrors = validateChangesetInput(input, schema);
+    const validationErrors = validateChangesetInput(namespace, input, schema);
     if (validationErrors.length > 0)
       return validationError(index, namespace, validationErrors);
 
@@ -498,7 +505,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
         ]);
       }
 
-      const typeKey = input.type as EntityNsType[N];
+      const typeKey = input.type as EntityType;
       const fieldAttrs = getFieldAttrs(schema, typeKey);
       const fieldsWithValues: Record<string, any> = {};
       for (const [fieldKey, attrs] of fieldAttrs.entries()) {
@@ -561,13 +568,9 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
         flattenedErrors.push(error);
       }
     }
-    return err(
-      createError(
-        "changeset-input-process-failed",
-        "failed creating changeset",
-        { errors: flattenedErrors },
-      ),
-    );
+    return fail("changeset-input-process-failed", "failed creating changeset", {
+      errors: flattenedErrors,
+    });
   }
 
   return ok(

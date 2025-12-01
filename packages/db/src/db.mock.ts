@@ -10,13 +10,11 @@ export const getTestDatabase = (): Database => {
 };
 
 export const insertNode = async (db: Database, entity: Fieldset) => {
-  await db
-    .insert(editableEntityTables.node)
-    .values(entityToDbModel<"node">(entity));
+  await db.insert(editableEntityTables.node).values(entityToDbModel(entity));
 };
 
 export const insertConfig = async (db: Database, config: Fieldset) => {
-  const dbModel = entityToDbModel<"config">(config);
+  const dbModel = entityToDbModel(config);
   await db.insert(editableEntityTables.config).values({
     ...dbModel,
     key: dbModel.key!,

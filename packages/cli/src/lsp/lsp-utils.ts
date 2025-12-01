@@ -1,17 +1,17 @@
 import type {
-  Range as LspRange,
   Position as LspPosition,
+  Range as LspRange,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { isMap, isPair, isScalar, type LineCounter } from "yaml";
 import type {
+  EntitySchema,
   FieldAttrDef,
+  FieldDef,
+  FieldKey,
   NamespaceEditable,
-  NodeFieldDefinition,
-  NodeFieldKey,
-  NodeSchema,
   NodeType,
-  NodeTypeDefinition,
+  TypeDef,
 } from "@binder/db";
 import { getAllFieldsForType, isFieldInSchema } from "@binder/db";
 import { isErr } from "@binder/utils";
@@ -30,9 +30,9 @@ export type DocumentContext = {
   parsed: ParsedDocument;
   uri: string;
   namespace: NamespaceEditable;
-  schema: NodeSchema;
+  schema: EntitySchema;
   navigationItem: NavigationItem;
-  typeDef?: NodeTypeDefinition;
+  typeDef?: TypeDef;
 };
 
 export const yamlRangeToLspRange = (
@@ -95,8 +95,8 @@ export const lspPositionToYamlPosition = (
 
 const extractTypeFromYaml = (
   parsed: ParsedYaml,
-  schema: NodeSchema,
-): NodeTypeDefinition | undefined => {
+  schema: EntitySchema,
+): TypeDef | undefined => {
   const { doc } = parsed;
   if (!doc.contents || !isMap(doc.contents)) return undefined;
 
@@ -145,20 +145,20 @@ export const getDocumentContext = async (
 };
 
 export const getAllowedFields = (
-  typeDef: NodeTypeDefinition | undefined,
-  schema: NodeSchema,
+  typeDef: TypeDef | undefined,
+  schema: EntitySchema,
 ): string[] => {
   if (!typeDef) return Object.keys(schema.fields);
   return getAllFieldsForType(typeDef.key as NodeType, schema);
 };
 
 export const getFieldDefForType = (
-  fieldKey: NodeFieldKey,
-  typeDef: NodeTypeDefinition | undefined,
-  schema: NodeSchema,
+  fieldKey: FieldKey,
+  typeDef: TypeDef | undefined,
+  schema: EntitySchema,
 ):
   | {
-      def: NodeFieldDefinition;
+      def: FieldDef;
       attrs?: FieldAttrDef;
     }
   | undefined => {

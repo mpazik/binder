@@ -11,27 +11,27 @@ import {
 import { and, asc, desc, inArray, or, sql } from "drizzle-orm";
 import {
   type ConfigRef,
-  configSchema,
   type ConfigSchema,
-  type EntityNsSchema,
-  fieldNodeTypes,
+  coreConfigSchema,
   type Fieldset,
+  fieldTypes,
   type Filters,
   type GraphVersion,
   type Includes,
   isFieldInSchema,
   type NamespaceEditable,
-  type NodeFieldDefinition,
+  type NamespaceSchema,
+  type NodeFieldDef,
   type NodeRef,
   type NodeSchema,
-  type NodeTypeDefinition,
   type PaginationInfo,
   type QueryParams,
   type Transaction,
   type TransactionId,
   type TransactionInput,
   type TransactionRef,
-  typeConfigType,
+  type TypeDef,
+  typeSystemType,
 } from "./model";
 import type { Database, DbTransaction } from "./db.ts";
 import { configTable, nodeTable } from "./schema.ts";
@@ -64,7 +64,7 @@ export type KnowledgeGraph = {
   getConfigSchema: () => ConfigSchema;
   getSchema: <N extends NamespaceEditable>(
     namespace: N,
-  ) => ResultAsync<EntityNsSchema[N]>;
+  ) => ResultAsync<NamespaceSchema<N>>;
 };
 
 export type TransactionRollback = () => ResultAsync<void>;
@@ -110,21 +110,19 @@ export const openKnowledgeGraph = (
         tx
           .select()
           .from(configTable)
-          .where(
-            or(inArray(configTable.type, [...fieldNodeTypes, typeConfigType])),
-          )
+          .where(or(inArray(configTable.type, [...fieldTypes, typeSystemType])))
           .then((rows) => rows.map((row) => dbModelToEntity(row))),
       );
 
       if (isErr(configsResult)) return configsResult;
 
       const fields = configsResult.data.filter((config) =>
-        fieldNodeTypes.includes(config.type as any),
-      ) as unknown as NodeFieldDefinition[];
+        fieldTypes.includes(config.type as any),
+      ) as unknown as NodeFieldDef[];
 
       const types = configsResult.data.filter(
-        (config) => config.type === typeConfigType,
-      ) as unknown as NodeTypeDefinition[];
+        (config) => config.type === typeSystemType,
+      ) as unknown as TypeDef[];
 
       const schema: NodeSchema = {
         fields: groupByToObject(fields, (f) => f.key),
@@ -139,7 +137,7 @@ export const openKnowledgeGraph = (
   const getSchema = async (
     namespace: NamespaceEditable,
   ): ResultAsync<NodeSchema | ConfigSchema> => {
-    return namespace === "config" ? ok(configSchema) : getNodeSchema();
+    return namespace === "config" ? ok(coreConfigSchema) : getNodeSchema();
   };
 
   const fetchEntityWithIncludes = async <N extends NamespaceEditable>(
@@ -311,7 +309,7 @@ export const openKnowledgeGraph = (
           tx,
           input,
           nodeSchemaResult.data,
-          configSchema,
+          coreConfigSchema,
         );
 
         if (isErr(processedResult)) return processedResult;
@@ -340,10 +338,10 @@ export const openKnowledgeGraph = (
       return ok(undefined);
     },
     getNodeSchema,
-    getConfigSchema: () => configSchema,
+    getConfigSchema: () => coreConfigSchema,
     getSchema: async <N extends NamespaceEditable>(namespace: N) =>
       (namespace === "node"
         ? await getNodeSchema()
-        : ok(configSchema)) as Result<EntityNsSchema[N]>,
+        : ok(coreConfigSchema)) as Result<NamespaceSchema<N>>,
   };
 };

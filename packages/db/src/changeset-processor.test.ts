@@ -21,12 +21,12 @@ import { type Database } from "./db.ts";
 import { applyChangeset, processChangesetInput } from "./changeset-processor";
 import {
   type ConfigKey,
-  configSchema,
   type ConfigType,
+  coreConfigSchema,
   type EntitiesChangeset,
   type EntityChangesetInput,
-  fieldConfigType,
   type FieldKey,
+  fieldSystemType,
   GENESIS_ENTITY_ID,
   inverseChangeset,
   type NamespaceEditable,
@@ -153,7 +153,7 @@ describe("processChangesetInput", () => {
     inputs: EntityChangesetInput<any>[],
     namespace: NamespaceEditable = "node",
   ): ResultAsync<EntitiesChangeset<any>> => {
-    const schema = namespace === "config" ? configSchema : mockNodeSchema;
+    const schema = namespace === "config" ? coreConfigSchema : mockNodeSchema;
     return await db.transaction(async (tx) =>
       processChangesetInput(tx, namespace, inputs, schema, GENESIS_ENTITY_ID),
     );
@@ -215,8 +215,8 @@ describe("processChangesetInput", () => {
         await processChangesetInput(
           tx,
           "config",
-          [{ type: fieldConfigType, key: testFieldKey, dataType: "string" }],
-          configSchema,
+          [{ type: fieldSystemType, key: testFieldKey, dataType: "string" }],
+          coreConfigSchema,
           GENESIS_ENTITY_ID,
         ),
       ),
@@ -226,7 +226,7 @@ describe("processChangesetInput", () => {
     expect(changeset).toMatchObject({
       uid: expect.any(String),
       key: testFieldKey,
-      type: fieldConfigType,
+      type: fieldSystemType,
       dataType: "string",
     });
   });
@@ -245,7 +245,7 @@ describe("processChangesetInput", () => {
 
     it("validates successful create changeset for config", () =>
       checkProcessingSucceeds(
-        [{ type: fieldConfigType, key: testFieldKey, dataType: "string" }],
+        [{ type: fieldSystemType, key: testFieldKey, dataType: "string" }],
         "config",
       ));
 
@@ -302,7 +302,7 @@ describe("processChangesetInput", () => {
 
     it("rejects create missing multiple mandatory properties", async () => {
       await checkHasValidationErrors(
-        [{ type: fieldConfigType }],
+        [{ type: fieldSystemType }],
         [
           {
             changesetIndex: 0,
@@ -370,7 +370,7 @@ describe("processChangesetInput", () => {
 
     it("validates field data types", async () => {
       await checkHasValidationErrors(
-        [{ type: fieldConfigType, key: testFieldKey, dataType: 123 as any }],
+        [{ type: fieldSystemType, key: testFieldKey, dataType: 123 as any }],
         [
           {
             changesetIndex: 0,
@@ -407,7 +407,7 @@ describe("processChangesetInput", () => {
       await checkHasValidationErrors(
         [
           {
-            type: fieldConfigType,
+            type: fieldSystemType,
             key: testFieldKey,
             dataType: "invalidDataType" as any,
           },

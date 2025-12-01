@@ -7,13 +7,13 @@ import {
   parseFieldValue,
   setNestedValue,
 } from "./field.ts";
-import type { CoreDataType, FieldDef, FieldsetNested } from "./index.ts";
+import type { FieldDef, FieldsetNested } from "./index.ts";
 
 describe("field-value", () => {
   describe("parseFieldValue", () => {
     const check = (
       raw: string,
-      fieldDef: Pick<FieldDef<CoreDataType>, "dataType" | "allowMultiple">,
+      fieldDef: Pick<FieldDef, "dataType" | "allowMultiple">,
       expected: JsonValue,
     ) => {
       const result = throwIfError(parseFieldValue(raw, fieldDef));
@@ -97,10 +97,6 @@ describe("field-value", () => {
         { dataType: "datetime" },
         "2024-01-15T10:30:00Z",
       );
-    });
-
-    it("parses option values as string", () => {
-      check("todo", { dataType: "option" }, "todo");
     });
 
     it("parses relation values as string", () => {

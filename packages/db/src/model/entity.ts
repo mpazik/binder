@@ -13,7 +13,8 @@ import { type Fieldset } from "./field.ts";
 
 export type EntityId = Brand<number, "EntityId">;
 export type EntityUid = BrandDerived<Uid, "EntityUid">;
-export type EntityKey = string;
+export type EntityKey = Brand<string, "EntityKey">;
+export type EntityType = EntityKey;
 export type EntityRef = EntityId | EntityUid | EntityKey;
 
 export const emptyFieldset: Fieldset = {};

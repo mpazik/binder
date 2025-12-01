@@ -13,9 +13,9 @@ import {
   mockTransactionUpdate,
 } from "./model/transaction.mock.ts";
 import {
-  configSchema,
+  coreConfigSchema,
   emptyNodeSchema,
-  fieldConfigType,
+  fieldSystemType,
   type TransactionId,
   type TransactionInput,
 } from "./model";
@@ -55,7 +55,7 @@ describe("transaction processor", () => {
             tx,
             mockTransactionInputUpdate,
             mockNodeSchema,
-            configSchema,
+            coreConfigSchema,
           ),
         ),
       );
@@ -70,7 +70,7 @@ describe("transaction processor", () => {
             tx,
             mockTransactionInitInput,
             emptyNodeSchema,
-            configSchema,
+            coreConfigSchema,
           ),
         ),
       );
@@ -102,11 +102,11 @@ describe("transaction processor", () => {
         processTransactionInput(
           tx,
           {
-            configurations: [{ type: fieldConfigType, dataType: "string" }],
+            configurations: [{ type: fieldSystemType, dataType: "string" }],
             author: "test",
           },
           mockNodeSchema,
-          configSchema,
+          coreConfigSchema,
         ),
       );
 
@@ -136,7 +136,7 @@ describe("transaction processor", () => {
           author: "test",
         },
         mockNodeSchema,
-        configSchema,
+        coreConfigSchema,
       ),
     );
 
@@ -170,7 +170,7 @@ describe("transaction processor", () => {
             tx,
             input,
             mockNodeSchema,
-            configSchema,
+            coreConfigSchema,
           ),
         );
         throwIfError(await applyAndSaveTransaction(tx, transaction));

@@ -6,7 +6,7 @@ import type {
 import { InlayHintKind } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { isMap, isPair, isScalar, isSeq, type YAMLMap } from "yaml";
-import type { NodeFieldDefinition, NodeRef } from "@binder/db";
+import type { EntitySchema, NodeRef } from "@binder/db";
 import { isErr } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
@@ -22,7 +22,7 @@ type RelationValue = {
 
 const collectRelationValuesFromMap = (
   mapNode: YAMLMap.Parsed,
-  schema: { fields: Record<string, NodeFieldDefinition> },
+  schema: EntitySchema,
   values: RelationValue[],
 ): void => {
   for (const item of mapNode.items) {
@@ -55,7 +55,7 @@ const collectRelationValuesFromMap = (
 
 const collectRelationValues = (
   parsed: ParsedYaml,
-  schema: { fields: Record<string, NodeFieldDefinition> },
+  schema: EntitySchema,
 ): RelationValue[] => {
   const values: RelationValue[] = [];
   const doc = parsed.doc;

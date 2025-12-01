@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import {
-  configSchema,
+  coreConfigSchema,
   type Transaction,
   type TransactionHash,
 } from "@binder/db";
@@ -124,7 +124,7 @@ describe("journal", () => {
 
       const result = await verifyLog(
         fs,
-        configSchema,
+        coreConfigSchema,
         mockNodeSchema,
         verifyPath,
         options,
@@ -257,7 +257,7 @@ describe("journal", () => {
 
       const result = await rehashLog(
         fs,
-        configSchema,
+        coreConfigSchema,
         mockNodeSchema,
         rehashPath,
       );

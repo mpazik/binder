@@ -4,8 +4,8 @@ import {
   type ConfigId,
   type ConfigKey,
   type ConfigUid,
-  fieldConfigType,
-  type NodeFieldDefinition,
+  fieldSystemType,
+  type NodeFieldDef,
   type NodeSchema,
 } from "@binder/db";
 import { renderSchemaPreview } from "./schema-preview.ts";
@@ -116,33 +116,19 @@ describe("renderSchemaPreview", () => {
   });
 
   describe("field helper", () => {
-    const field = (
-      key: string,
-      dataType: NodeFieldDefinition["dataType"],
-      opts?: Partial<NodeFieldDefinition>,
-    ): NodeFieldDefinition => ({
-      id: 1 as ConfigId,
-      key,
-      uid: "fld001" as ConfigUid,
-      type: fieldConfigType,
-      name: key,
-      dataType,
-      ...opts,
-    });
-
     const check = (
       key: string,
-      dataType: NodeFieldDefinition["dataType"],
-      opts: Partial<NodeFieldDefinition> | undefined,
+      dataType: NodeFieldDef["dataType"],
+      opts: Partial<NodeFieldDef> | undefined,
       expected: string,
     ) => {
       const result = renderSchemaPreview({
         fields: {
-          [key as ConfigKey]: {
+          [key]: {
             id: 1 as ConfigId,
-            key,
+            key: key as ConfigKey,
             uid: "fld001" as ConfigUid,
-            type: fieldConfigType,
+            type: fieldSystemType,
             name: key,
             dataType,
             ...opts,

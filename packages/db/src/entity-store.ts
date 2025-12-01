@@ -3,6 +3,7 @@ import {
   assertNotEmpty,
   type JsonObject,
   objectFromKeys,
+  objKeys,
   ok,
   partition,
   pick,
@@ -11,13 +12,10 @@ import {
 } from "@binder/utils";
 import { eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import {
+  type EntityId,
   type EntityKey,
-  type EntityNsId,
-  type EntityNsKey,
-  type EntityNsRef,
-  type EntityNsType,
-  type EntityNsUid,
   type EntityRef,
+  type EntityType,
   type EntityUid,
   type FieldKey,
   type Fieldset,
@@ -26,6 +24,7 @@ import {
   isEntityUid,
   type Namespace,
   type NamespaceEditable,
+  type TransactionHash,
   type TransactionId,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
@@ -35,34 +34,35 @@ import {
   tableStoredFields,
 } from "./schema.ts";
 
-export type EntityDb<N extends NamespaceEditable> = {
-  id: EntityNsId[N];
-  uid: EntityNsUid[N];
-  key?: EntityNsKey[N];
-  type: EntityNsType[N];
+export type EntityDb = {
+  id: EntityId;
+  uid: EntityUid;
+  key: EntityKey | null;
+  type: EntityType;
   txIds: TransactionId[];
   fields: JsonObject;
 };
 
 const entityRefClause = <N extends Namespace>(
   namespace: N,
-  ref: EntityNsRef[N],
+  ref: EntityRef,
 ): SQL => {
   if (isEntityId(ref)) return eq(entityTables[namespace].id, ref);
   if (namespace === "transaction")
-    return eq(entityTables[namespace as "transaction"].hash, ref as any);
+    return eq(
+      entityTables[namespace as "transaction"].hash,
+      ref as TransactionHash,
+    );
 
   const editableTable = entityTables[namespace as "config" | "node"];
   if (isEntityUid(ref)) {
     return eq(editableTable.uid, ref);
   }
-  return eq(editableTable.key, ref as EntityNsKey["node" | "config"]);
+  return eq(editableTable.key, ref as EntityKey);
 };
 
-export const entityToDbModel = <N extends NamespaceEditable>(
-  entity: Fieldset,
-): EntityDb<N> => {
-  const keys = Object.keys(entity) as FieldKey[];
+export const entityToDbModel = (entity: Fieldset): EntityDb => {
+  const keys = objKeys(entity);
   const [storedKeys, fieldKeys] = partition(keys, (key) =>
     tableStoredFields.includes(key),
   );
@@ -70,23 +70,21 @@ export const entityToDbModel = <N extends NamespaceEditable>(
   return {
     ...pick(entity, storedKeys),
     fields: pick(entity, fieldKeys),
-  } as EntityDb<N>;
+  } as EntityDb;
 };
 
-export const dbModelToEntity = (db: EntityDb<any>): Fieldset => {
-  return {
-    ...objectFromKeys(
-      tableStoredFields.filter((key) => key !== "txIds"),
-      (key) => db[key as keyof EntityDb<any>],
-    ),
-    ...db.fields,
-  };
-};
+export const dbModelToEntity = (db: EntityDb): Fieldset => ({
+  id: db.id,
+  uid: db.uid,
+  key: db.key,
+  type: db.type,
+  ...db.fields,
+});
 
 export const fetchEntityFieldset = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-  ref: EntityNsRef[N],
+  ref: EntityRef,
   keys: FieldKey[],
 ): ResultAsync<Fieldset> => {
   const table = editableEntityTables[namespace];
@@ -119,7 +117,7 @@ export const fetchEntityFieldset = async <N extends NamespaceEditable>(
 export const fetchEntity = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-  ref: EntityNsRef[N],
+  ref: EntityRef,
 ): ResultAsync<Fieldset> => {
   const table = editableEntityTables[namespace];
   return tryCatch(
@@ -138,7 +136,7 @@ export const fetchEntity = async <N extends NamespaceEditable>(
 export const updateEntity = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-  ref: EntityNsRef[N],
+  ref: EntityRef,
   patch: Fieldset,
 ): ResultAsync<void> => {
   const table = editableEntityTables[namespace];
@@ -175,7 +173,7 @@ export const createEntity = async <N extends NamespaceEditable>(
 export const deleteEntity = async <N extends Namespace>(
   tx: DbTransaction,
   namespace: N,
-  ref: EntityNsRef[N],
+  ref: EntityRef,
 ): ResultAsync<void> => {
   const table = entityTables[namespace];
   return tryCatch(
@@ -186,7 +184,7 @@ export const deleteEntity = async <N extends Namespace>(
 export const entityExists = async <N extends Namespace>(
   tx: DbTransaction,
   namespace: N,
-  ref: EntityNsRef[N],
+  ref: EntityRef,
 ): ResultAsync<boolean> => {
   const table = entityTables[namespace];
   return tryCatch(
@@ -250,7 +248,7 @@ export const resolveEntityRefs = async (
 export const getLastEntityId = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-): ResultAsync<EntityNsId[N]> => {
+): ResultAsync<EntityId> => {
   const table = editableEntityTables[namespace];
   return tryCatch(
     tx
@@ -262,5 +260,5 @@ export const getLastEntityId = async <N extends NamespaceEditable>(
         if (result.length === 0) return GENESIS_ENTITY_ID;
         return result[0].id;
       }),
-  ) as ResultAsync<EntityNsId[N]>;
+  );
 };

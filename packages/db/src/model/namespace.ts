@@ -1,5 +1,13 @@
-import type { NodeId, NodeKey, NodeRef, NodeType, NodeUid } from "./node.ts";
 import type {
+  NodeDataType,
+  NodeId,
+  NodeKey,
+  NodeRef,
+  NodeType,
+  NodeUid,
+} from "./node.ts";
+import type {
+  ConfigDataType,
   ConfigId,
   ConfigKey,
   ConfigRef,
@@ -7,7 +15,8 @@ import type {
   ConfigUid,
 } from "./config.ts";
 import type { TransactionId, TransactionRef } from "./transaction.ts";
-import type { ConfigSchema, NodeSchema } from "./schema.ts";
+import type { CoreDataType } from "./data-type.ts";
+import type { EntitySchema } from "./schema.ts";
 
 export const entityNamespaces = ["node", "config", "transaction"] as const;
 export const namespacesEditable = ["node", "config"] as const;
@@ -36,7 +45,10 @@ export type EntityNsRef = {
   config: ConfigRef;
   transaction: TransactionRef;
 };
-export type EntityNsSchema = {
-  node: NodeSchema;
-  config: ConfigSchema;
+export type DataTypeNs = {
+  node: NodeDataType;
+  config: ConfigDataType;
+  transaction: CoreDataType;
 };
+
+export type NamespaceSchema<N extends Namespace> = EntitySchema<DataTypeNs[N]>;

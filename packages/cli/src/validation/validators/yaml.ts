@@ -9,13 +9,14 @@ import {
 } from "yaml";
 import { assertNotEmpty, includes, isErr, type JsonValue } from "@binder/utils";
 import {
-  type EntityNsType,
+  type DataTypeNs,
+  type EntityType,
   getAllFieldsForType,
   getFieldDef,
   type Includes,
   type IncludesValue,
   isFieldInSchema,
-  type NamespaceEditable,
+  type Namespace,
   systemFieldKeys,
   validateDataType,
 } from "@binder/db";
@@ -101,9 +102,9 @@ const getNestedIncludes = (
   return includesValue as Includes;
 };
 
-const visitEntityNode = <N extends NamespaceEditable>(
+const visitEntityNode = <N extends Namespace>(
   node: unknown,
-  entityType: EntityNsType[N],
+  entityType: EntityType,
   context: ValidationContext<N>,
   lc: LineCounter,
   currentIncludes?: Includes,
@@ -164,7 +165,7 @@ const visitEntityNode = <N extends NamespaceEditable>(
 
     if (includes(systemFieldKeys, fieldKey)) continue;
 
-    const fieldDef = getFieldDef(schema, fieldKey);
+    const fieldDef = getFieldDef<DataTypeNs[N]>(schema, fieldKey);
     if (!fieldDef) {
       errors.push(
         createValidationError(
@@ -187,7 +188,7 @@ const visitEntityNode = <N extends NamespaceEditable>(
     if (fieldDef.dataType === "relation" && nestedIncludes) {
       const range = fieldDef.range;
       assertNotEmpty(range, `${fieldKey}'s range`);
-      const relatedType = range![0] as EntityNsType[N];
+      const relatedType = range![0] as EntityType;
 
       const visit = fieldDef.allowMultiple
         ? visitEntityNodeSeq
@@ -199,7 +200,11 @@ const visitEntityNode = <N extends NamespaceEditable>(
       const jsonValue = yamlNodeToJson(valueNode as ParsedNode);
       if (jsonValue === undefined || jsonValue === null) continue;
 
-      const validationResult = validateDataType(fieldDef, jsonValue);
+      const validationResult = validateDataType(
+        context.namespace,
+        fieldDef,
+        jsonValue,
+      );
       if (isErr(validationResult)) {
         errors.push(
           createValidationError(
@@ -217,9 +222,9 @@ const visitEntityNode = <N extends NamespaceEditable>(
   return errors;
 };
 
-const visitEntityNodeSeq = <N extends NamespaceEditable>(
+const visitEntityNodeSeq = <N extends Namespace>(
   yamlNode: unknown,
-  entityType: EntityNsType[N],
+  entityType: EntityType,
   context: ValidationContext<N>,
   lc: LineCounter,
   currentIncludes?: Includes,
@@ -238,9 +243,9 @@ const visitEntityNodeSeq = <N extends NamespaceEditable>(
   );
 };
 
-const visitDirectoryNode = <N extends NamespaceEditable>(
+const visitDirectoryNode = <N extends Namespace>(
   node: ParsedNode,
-  entityType: EntityNsType[N],
+  entityType: EntityType,
   context: ValidationContext<N>,
   lc: LineCounter,
   currentIncludes?: Includes,
@@ -264,7 +269,7 @@ const visitDirectoryNode = <N extends NamespaceEditable>(
 };
 
 export const createYamlValidator = (): Validator<ParsedYaml> => ({
-  validate: <N extends NamespaceEditable>(
+  validate: <N extends Namespace>(
     { doc, lineCounter: lc }: ParsedYaml,
     context: ValidationContext<N>,
   ) => {
@@ -302,10 +307,10 @@ export const createYamlValidator = (): Validator<ParsedYaml> => ({
 
     const entityType = isDirectory
       ? context.navigationItem.query?.filters
-        ? getTypeFromFilters<N>(context.navigationItem.query?.filters)
+        ? getTypeFromFilters(context.navigationItem.query?.filters)
         : undefined
       : context.navigationItem.where
-        ? getTypeFromFilters<N>(context.navigationItem.where)
+        ? getTypeFromFilters(context.navigationItem.where)
         : undefined;
     if (!entityType)
       return [

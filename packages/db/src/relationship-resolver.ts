@@ -6,7 +6,6 @@ import type {
   Filters,
   Includes,
   NamespaceEditable,
-  NodeFieldDefinition,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 
@@ -188,9 +187,7 @@ export const resolveIncludes = async (
     const shouldProcessField = includeValue === true || nestedInclude;
     if (!shouldProcessField) continue;
 
-    const field = (schema.fields as Record<string, NodeFieldDefinition>)[
-      fieldKey
-    ];
+    const field = schema.fields[fieldKey];
     if (!field || field.dataType !== "relation") continue;
 
     const nestedFilters = nestedInclude

@@ -12,9 +12,9 @@ import {
 import type {
   EntityNsKey,
   EntityNsRef,
-  EntityNsSchema,
   EntityNsType,
   NamespaceEditable,
+  NamespaceSchema,
 } from "./namespace.ts";
 import type { NodeUid } from "./node.ts";
 import type { ConfigKey } from "./config.ts";
@@ -25,6 +25,7 @@ import {
   systemFields,
 } from "./field.ts";
 import { type EntitySchema, getFieldDef } from "./schema.ts";
+import type { EntityKey } from "./entity.ts";
 
 export type ListMutation =
   | [kind: "insert", inserted: FieldValue, position?: number]
@@ -336,7 +337,8 @@ const squashChangesets = (
   changeset: FieldChangeset,
 ): FieldChangeset => {
   const squashedChanges = { ...base };
-  for (const [key, change] of Object.entries(changeset)) {
+  for (const [objKey, change] of Object.entries(changeset)) {
+    const key = objKey as EntityKey;
     const normalizedChange = normalizeValueChange(change);
     if (squashedChanges[key]) {
       const squashed = squashChange(
@@ -441,7 +443,7 @@ export const canonicalizeFieldChangeset = (
   );
 
 export const canonicalizeEntitiesChangeset = <N extends NamespaceEditable>(
-  schema: EntityNsSchema[N],
+  schema: NamespaceSchema<N>,
   changeset: EntitiesChangeset<N>,
 ): EntitiesChangeset<N> =>
   transformEntries(changeset, (entries) =>

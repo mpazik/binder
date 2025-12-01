@@ -1,37 +1,36 @@
 import { describe, expect, it } from "bun:test";
 import {
-  mockNodeSchema,
-  mockTaskTypeKey,
-  mockUserTypeKey,
-  mockProjectTypeKey,
-  mockWorkItemTypeKey,
-  mockNotExistingNodeTypeKey,
-  mockWorkItemType,
-  mockTaskType,
-  mockProjectType,
-  mockUserType,
-  mockDueDateField,
-  mockTagsField,
   mockAssignedToField,
-  mockTitleField,
   mockDescriptionField,
-  mockStatusField,
-  mockTasksField,
-  mockNameField,
+  mockDueDateField,
   mockEmailField,
+  mockNameField,
+  mockNodeSchema,
+  mockNotExistingNodeTypeKey,
+  mockProjectType,
+  mockProjectTypeKey,
+  mockStatusField,
+  mockTagsField,
+  mockTasksField,
+  mockTaskType,
+  mockTaskTypeKey,
+  mockTitleField,
+  mockUserType,
+  mockUserTypeKey,
+  mockWorkItemType,
+  mockWorkItemTypeKey,
 } from "@binder/db/mocks";
-import type {
-  NodeFieldDefinition,
-  NodeType,
-  NodeTypeDefinition,
-} from "@binder/db";
+import type { FieldDef, NodeType, TypeDef } from "@binder/db";
 import { groupByToObject } from "@binder/utils";
 import { filterSchemaByTypes } from "./schema-filter.ts";
 
 describe("filterSchemaByTypes", () => {
   const check = (
     types: NodeType[],
-    expected: { types: NodeTypeDefinition[]; fields: NodeFieldDefinition[] },
+    expected: {
+      types: TypeDef[];
+      fields: FieldDef[];
+    },
   ) => {
     const filtered = filterSchemaByTypes(mockNodeSchema, types);
     expect(filtered).toEqual({

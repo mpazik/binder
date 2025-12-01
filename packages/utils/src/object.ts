@@ -32,10 +32,10 @@ export const transformEntries = <K extends string, V, K2 extends string, V2>(
     V2
   >;
 
-export const mapObjectValues = <T, K>(
-  obj: Record<string, T>,
-  fn: (value: T, key: string) => K,
-): Record<string, K> =>
+export const mapObjectValues = <T, S, K extends string>(
+  obj: Record<K, T>,
+  fn: (value: T, key: K) => S,
+): Record<K, S> =>
   transformEntries(obj, (entries) =>
     entries.map(([key, value]) => [key, fn(value, key)]),
   );
@@ -121,6 +121,45 @@ export const redactFromObject = <T extends Record<string, any>>(
 
   return result;
 };
+
+export const objKeys = <K extends string>(obj: Record<K, unknown>): K[] =>
+  Object.keys(obj) as K[];
+
+export const objEntries = <K extends string, V>(obj: Record<K, V>): [K, V][] =>
+  Object.entries(obj) as [K, V][];
+
+// ObjTuple: Single-key object representing a key-value pair { [key]: value }
+// Used for external APIs where YAML ergonomics matter
+// Example: { "user-2": { role: "lead" } } represents ["user-2", { role: "lead" }]
+
+export type ObjTuple<K extends string = string, V = unknown> = {
+  [key in K]: V;
+};
+
+export const isObjTuple = <V = unknown>(
+  item: unknown,
+): item is ObjTuple<string, V> =>
+  typeof item === "object" &&
+  item !== null &&
+  !Array.isArray(item) &&
+  Object.keys(item).length === 1;
+
+export const objTupleKey = <K extends string>(obj: ObjTuple<K, unknown>): K =>
+  Object.keys(obj)[0] as K;
+
+export const objTupleValue = <V>(obj: ObjTuple<string, V>): V =>
+  Object.values(obj)[0] as V;
+
+export const objTupleToTuple = <K extends string, V>(
+  obj: ObjTuple<K, V>,
+): [K, V] => {
+  const key = Object.keys(obj)[0] as K;
+  return [key, obj[key]];
+};
+
+export const tupleToObjTuple = <K extends string, V>(
+  tuple: [K, V],
+): ObjTuple<K, V> => ({ [tuple[0]]: tuple[1] }) as ObjTuple<K, V>;
 
 export const isEqual = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;

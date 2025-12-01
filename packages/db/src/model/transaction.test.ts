@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
-  squashTransactions,
   invertTransaction,
+  squashTransactions,
   type TransactionId,
 } from "./transaction.ts";
 import {
@@ -15,14 +15,15 @@ import {
 } from "./node.mock.ts";
 import { inverseChangeset } from "./changeset.ts";
 import { mockNodeSchema } from "./schema.mock.ts";
-import { configSchema } from "./schema.ts";
+
+import { coreConfigSchema } from "./config.ts";
 
 describe("squashTransactions", () => {
   it("squashes two transactions", async () => {
     const result = await squashTransactions(
       [mockTransactionInit, mockTransactionUpdate],
       mockNodeSchema,
-      configSchema,
+      coreConfigSchema,
     );
 
     expect(result).toEqual({
@@ -56,7 +57,7 @@ describe("squashTransactions", () => {
         },
       ],
       mockNodeSchema,
-      configSchema,
+      coreConfigSchema,
     );
 
     expect(result.nodes[mockTask1Uid]).toBeUndefined();
@@ -83,7 +84,7 @@ describe("squashTransactions", () => {
         },
       ],
       mockNodeSchema,
-      configSchema,
+      coreConfigSchema,
     );
 
     expect(result).toEqual({

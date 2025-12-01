@@ -1,5 +1,4 @@
 import {
-  type Brand,
   type BrandDerived,
   filterObjectValues,
   type IsoTimestamp,
@@ -7,7 +6,7 @@ import {
 } from "@binder/utils";
 import { z } from "zod";
 import { hashString, hashToBase64Uri } from "../utils/hash.ts";
-import { type EntityId, GENESIS_ENTITY_ID } from "./entity.ts";
+import { type EntityId, type EntityKey, GENESIS_ENTITY_ID } from "./entity.ts";
 import type {
   ChangesetsInput,
   ConfigurationsChangeset,
@@ -18,10 +17,11 @@ import squashChangesets, {
   canonicalizeEntitiesChangeset,
   inverseChangeset,
 } from "./changeset.ts";
-import { type ConfigSchema, type NodeSchema } from "./schema.ts";
+import type { NodeSchema } from "./node.ts";
+import type { ConfigSchema } from "./config.ts";
 
 export type TransactionId = BrandDerived<EntityId, "TransactionId">;
-export type TransactionHash = Brand<string, "TransactionHash">;
+export type TransactionHash = BrandDerived<EntityKey, "TransactionHash">;
 export type TransactionRef = TransactionId | TransactionHash;
 
 export const isTransactionId = (ref: TransactionRef): ref is TransactionId =>

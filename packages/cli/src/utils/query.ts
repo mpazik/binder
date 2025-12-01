@@ -1,9 +1,8 @@
 import type {
-  EntityNsType,
+  EntityType,
   Fieldset,
   Filter,
   Filters,
-  NamespaceEditable,
   QueryParams,
 } from "@binder/db";
 import { createError, err, isErr, ok, type Result } from "@binder/utils";
@@ -221,13 +220,13 @@ export const extractFieldsetFromQuery = (params: QueryParams): Fieldset => {
   return fieldset;
 };
 
-export const getTypeFromFilters = <N extends NamespaceEditable>(
+export const getTypeFromFilters = (
   filters: Filters,
-): EntityNsType[N] | undefined => {
+): EntityType | undefined => {
   const typeFilter = filters?.type;
   if (!typeFilter) return undefined;
-  if (typeof typeFilter === "string") return typeFilter as EntityNsType[N];
+  if (typeof typeFilter === "string") return typeFilter as EntityType;
   if (typeof typeFilter === "object" && "value" in typeFilter)
-    return String(typeFilter.value) as EntityNsType[N];
+    return String(typeFilter.value) as EntityType;
   return undefined;
 };

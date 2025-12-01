@@ -10,6 +10,7 @@ export type * from "./json.ts";
 export type * from "./function.ts";
 export * from "./assert.ts";
 export * from "./object.ts";
+export type * from "./object.ts";
 export type * from "./encoding.ts";
 export * from "./encoding.ts";
 export * from "./json-rpc.ts";

@@ -22,15 +22,9 @@ export const coreDataTypes = {
   },
   date: { name: "Date" },
   datetime: { name: "Date Time" },
-  option: { name: "Option", description: "Option value" },
-  object: { name: "Object" },
-  formula: { name: "Formula" },
-  condition: { name: "Condition" },
-  query: { name: "Query" },
-  optionSet: {
-    name: "Option Set",
-    description: "Set of options to choose from",
-  },
+  // formula: { name: "Formula" },
+  // condition: { name: "Condition" },
+  // query: { name: "Query" },
 } as const satisfies DataTypeDefs;
 
 export const dataTypeDefsToOptions = (

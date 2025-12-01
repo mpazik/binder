@@ -1,6 +1,6 @@
-import type { FieldAttrDef, NodeFieldDefinition, NodeSchema } from "@binder/db";
+import type { EntitySchema, FieldAttrDef, FieldDef } from "@binder/db";
 
-const formatFieldType = (field: NodeFieldDefinition): string => {
+const formatFieldType = (field: FieldDef): string => {
   const { dataType, allowMultiple, range, options } = field;
 
   if (dataType === "relation") {
@@ -55,7 +55,7 @@ const formatFieldAttributes = (attrs?: FieldAttrDef): string => {
   return parts.length > 0 ? `{${parts.join(", ")}}` : "";
 };
 
-export const renderSchemaPreview = (schema: NodeSchema): string => {
+export const renderSchemaPreview = (schema: EntitySchema): string => {
   let result = "FIELDS:\n";
 
   for (const [fieldKey, fieldDef] of Object.entries(schema.fields)) {

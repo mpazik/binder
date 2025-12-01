@@ -7,9 +7,11 @@ import { CompletionItemKind } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { isMap } from "yaml";
 import type {
-  NodeFieldDefinition,
+  EntitySchema,
+  FieldDef,
+  NodeFieldDef,
   NodeType,
-  NodeTypeDefinition,
+  TypeDef,
 } from "@binder/db";
 import { isErr } from "@binder/utils";
 import type { Logger } from "../log.ts";
@@ -30,8 +32,8 @@ import {
 const createFieldNameCompletions = (
   allowedFields: string[],
   existingFields: string[],
-  schema: { fields: Record<string, NodeFieldDefinition> },
-  typeDef: NodeTypeDefinition | undefined,
+  schema: EntitySchema,
+  typeDef: TypeDef | undefined,
 ): CompletionItem[] => {
   const availableFields = allowedFields.filter(
     (field) => !existingFields.includes(field),
@@ -53,9 +55,7 @@ const createFieldNameCompletions = (
   });
 };
 
-const createOptionCompletions = (
-  fieldDef: NodeFieldDefinition,
-): CompletionItem[] => {
+const createOptionCompletions = (fieldDef: NodeFieldDef): CompletionItem[] => {
   if (fieldDef.dataType !== "option" || !fieldDef.options) return [];
 
   return fieldDef.options.map((opt) => ({
@@ -73,7 +73,7 @@ const createBooleanCompletions = (): CompletionItem[] => {
 };
 
 const createRelationCompletions = async (
-  fieldDef: NodeFieldDefinition,
+  fieldDef: FieldDef,
   runtime: RuntimeContextWithDb,
   log: Logger,
 ): Promise<CompletionItem[]> => {
@@ -114,15 +114,15 @@ const createRelationCompletions = async (
 
 const createValueCompletions = async (
   fieldKey: string,
-  schema: { fields: Record<string, NodeFieldDefinition> },
+  schema: EntitySchema,
   runtime: RuntimeContextWithDb,
   log: Logger,
 ): Promise<CompletionItem[]> => {
-  const fieldDef = schema.fields[fieldKey as never];
+  const fieldDef = schema.fields[fieldKey];
   if (!fieldDef) return [];
 
   if (fieldDef.dataType === "option") {
-    return createOptionCompletions(fieldDef);
+    return createOptionCompletions(fieldDef as FieldDef<"option">);
   }
 
   if (fieldDef.dataType === "boolean") {

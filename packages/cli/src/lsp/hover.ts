@@ -6,7 +6,7 @@ import type {
 import { MarkupKind } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { LineCounter } from "yaml";
-import type { FieldAttrDef, NodeFieldDefinition } from "@binder/db";
+import type { FieldAttrDef, FieldDef } from "@binder/db";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import {
@@ -22,7 +22,7 @@ import {
 } from "./lsp-utils.ts";
 
 const buildConstraintsSection = (
-  fieldDef: NodeFieldDefinition,
+  fieldDef: FieldDef,
   attrs: FieldAttrDef | undefined,
 ): string => {
   const constraints: string[] = [];
@@ -38,12 +38,12 @@ const buildConstraintsSection = (
   return `\n\n---\n\n**Constraints:**\n${constraints.map((c) => `- ${c}`).join("\n")}`;
 };
 
-const buildRangeSection = (fieldDef: NodeFieldDefinition): string => {
+const buildRangeSection = (fieldDef: FieldDef): string => {
   if (fieldDef.dataType !== "relation" || !fieldDef.range) return "";
   return `\n\n**Range:** ${fieldDef.range.join(", ")}`;
 };
 
-const buildOptionsSection = (fieldDef: NodeFieldDefinition): string => {
+const buildOptionsSection = (fieldDef: FieldDef): string => {
   if (fieldDef.dataType !== "option" || !fieldDef.options) return "";
 
   const optionsList = fieldDef.options
@@ -54,7 +54,7 @@ const buildOptionsSection = (fieldDef: NodeFieldDefinition): string => {
 };
 
 const buildFieldHover = (
-  fieldDef: NodeFieldDefinition,
+  fieldDef: FieldDef,
   attrs: FieldAttrDef | undefined,
   context: YamlContext,
   lineCounter: LineCounter,

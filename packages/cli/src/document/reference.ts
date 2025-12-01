@@ -1,12 +1,10 @@
 import type {
+  EntitySchema,
+  FieldDef,
   FieldKey,
   FieldsetNested,
   FieldValue,
   KnowledgeGraph,
-  NodeFieldDefinition,
-  NodeFieldKey,
-  NodeKey,
-  NodeSchema,
 } from "@binder/db";
 import { isErr, ok, type ResultAsync } from "@binder/utils";
 
@@ -14,16 +12,16 @@ type ReferenceMap = Map<string, { uid: string; key: string }>;
 
 const isRelationField = (
   fieldKey: FieldKey,
-  schema: NodeSchema,
-): NodeFieldDefinition | undefined => {
-  const field = schema.fields[fieldKey as NodeFieldKey];
+  schema: EntitySchema,
+): FieldDef | undefined => {
+  const field = schema.fields[fieldKey];
   if (!field || field.dataType !== "relation") return undefined;
   return field;
 };
 
 const collectReferenceValues = (
   entities: FieldsetNested[],
-  schema: NodeSchema,
+  schema: EntitySchema,
 ): Set<string> => {
   const refs = new Set<string>();
 
@@ -139,7 +137,7 @@ const transformValue = (
 
 const transformEntity = (
   entity: FieldsetNested,
-  schema: NodeSchema,
+  schema: EntitySchema,
   refMap: ReferenceMap,
   targetField: "uid" | "key",
 ): FieldsetNested => {
@@ -185,7 +183,7 @@ const transformEntity = (
 
 export const normalizeReferences = async (
   entity: FieldsetNested,
-  schema: NodeSchema,
+  schema: EntitySchema,
   kg: KnowledgeGraph,
 ): ResultAsync<FieldsetNested> => {
   const refs = collectReferenceValues([entity], schema);
@@ -197,7 +195,7 @@ export const normalizeReferences = async (
 
 export const formatReferences = async (
   entity: FieldsetNested,
-  schema: NodeSchema,
+  schema: EntitySchema,
   kg: KnowledgeGraph,
 ): ResultAsync<FieldsetNested> => {
   const refs = collectReferenceValues([entity], schema);
@@ -209,7 +207,7 @@ export const formatReferences = async (
 
 export const normalizeReferencesList = async (
   entities: FieldsetNested[],
-  schema: NodeSchema,
+  schema: EntitySchema,
   kg: KnowledgeGraph,
 ): ResultAsync<FieldsetNested[]> => {
   const refs = collectReferenceValues(entities, schema);
@@ -225,7 +223,7 @@ export const normalizeReferencesList = async (
 
 export const formatReferencesList = async (
   entities: FieldsetNested[],
-  schema: NodeSchema,
+  schema: EntitySchema,
   kg: KnowledgeGraph,
 ): ResultAsync<FieldsetNested[]> => {
   const refs = collectReferenceValues(entities, schema);

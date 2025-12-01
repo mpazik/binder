@@ -1,17 +1,16 @@
-import { relative } from "path";
 import type { Argv } from "yargs";
-import type { EntityNsSchema, NamespaceEditable } from "@binder/db";
+import type { NamespaceEditable } from "@binder/db";
 import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import {
-  runtimeWithDb,
   type CommandHandlerWithDb,
   type RuntimeContextWithDb,
+  runtimeWithDb,
 } from "../runtime.ts";
 import { renderDocs } from "../document/repository.ts";
 import { synchronizeModifiedFiles } from "../document/synchronizer.ts";
 import {
-  loadNavigation,
   findNavigationItemByPath,
+  loadNavigation,
 } from "../document/navigation.ts";
 import {
   getRelativeSnapshotPath,
@@ -138,7 +137,8 @@ const lintNamespace = async <N extends NamespaceEditable>(
     const result = await validateDocument(content, {
       filePath,
       navigationItem,
-      schema: schemaResult.data as EntityNsSchema[N],
+      namespace,
+      schema: schemaResult.data,
       ruleConfig,
       kg,
     });

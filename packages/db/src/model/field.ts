@@ -5,7 +5,6 @@ import {
   ok,
   type Result,
 } from "@binder/utils";
-import type { CoreDataType } from "./data-type.ts";
 import type { FieldDef } from "./schema.ts";
 
 export type FieldKey = string;
@@ -65,7 +64,7 @@ export const setNestedValue = (
 
 export const parseFieldValue = (
   raw: string,
-  fieldDef: Pick<FieldDef<CoreDataType>, "dataType" | "allowMultiple">,
+  fieldDef: Pick<FieldDef, "dataType" | "allowMultiple">,
 ): Result<FieldValue> => {
   const trimmed = raw.trim();
 
@@ -111,7 +110,7 @@ export const parseFieldValue = (
 
 export const formatFieldValue = (
   value: FieldValue | undefined,
-  _fieldDef?: FieldDef<CoreDataType>,
+  _fieldDef?: FieldDef,
 ): string => {
   if (value === null || value === undefined) return "";
   if (Array.isArray(value)) {

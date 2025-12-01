@@ -7,9 +7,11 @@ import {
   type ResultAsync,
 } from "@binder/utils";
 import type {
-  EntityNsSchema,
+  EntitySchema,
   KnowledgeGraph,
+  Namespace,
   NamespaceEditable,
+  NamespaceSchema,
 } from "@binder/db";
 import {
   findNavigationItemByPath,
@@ -52,7 +54,7 @@ export const applyRuleConfig = (
     .filter((e): e is ValidationError => e !== null);
 };
 
-export const validateDocument = async <N extends NamespaceEditable>(
+export const validateDocument = async <N extends Namespace>(
   content: ParsedDocument,
   context: ValidationContext<N>,
 ): Promise<ValidationResult> => {
@@ -81,7 +83,8 @@ export const validateFile = async <N extends NamespaceEditable>(
   kg: KnowledgeGraph,
   filePath: string,
   navigationItems: NavigationItem[],
-  schema: EntityNsSchema[N],
+  namespace: N,
+  schema: NamespaceSchema<N>,
   paths: ConfigPaths,
   ruleConfig: ValidationRuleConfig,
 ): ResultAsync<ValidationResult> => {
@@ -107,6 +110,7 @@ export const validateFile = async <N extends NamespaceEditable>(
   return ok(
     await validateDocument(content, {
       filePath,
+      namespace,
       navigationItem,
       schema,
       ruleConfig,

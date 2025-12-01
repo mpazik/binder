@@ -298,6 +298,7 @@ export const createLspServer = (
     const validationResult = await validateDocument(content, {
       filePath,
       navigationItem,
+      namespace,
       schema: schemaResult.data,
       ruleConfig,
       kg,

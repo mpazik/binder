@@ -18,7 +18,8 @@ import {
   mockUserType,
   mockWorkItemType,
 } from "./config.mock.ts";
-import type { NodeSchema } from "./schema.ts";
+
+import type { NodeSchema } from "./node.ts";
 
 export const mockNodeSchema = {
   fields: {

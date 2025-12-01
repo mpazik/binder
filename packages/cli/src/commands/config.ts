@@ -3,14 +3,11 @@ import * as YAML from "yaml";
 import { isErr, ok } from "@binder/utils";
 import {
   type ConfigRef,
-  configSchema,
-  type ConfigSchema,
   type ConfigType,
-  type NodeSchema,
   type NodeType,
   normalizeEntityRef,
 } from "@binder/db";
-import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchemaByTypes } from "../schema/schema-filter.ts";
 import { printTransaction } from "../ui.ts";
@@ -89,14 +86,9 @@ export const configSchemaHandler: CommandHandlerWithDb<{
   namespace: "node" | "config";
   types?: NodeType[];
 }> = async ({ kg, ui, args }) => {
-  let schema: NodeSchema | ConfigSchema;
-  if ((args.namespace ?? "node") === "config") {
-    schema = configSchema;
-  } else {
-    const schemaResult = await kg.getNodeSchema();
-    if (isErr(schemaResult)) return schemaResult;
-    schema = schemaResult.data;
-  }
+  const schemaResult = await kg.getSchema(args.namespace);
+  if (isErr(schemaResult)) return schemaResult;
+  const schema = schemaResult.data;
 
   const filteredSchema = args.types
     ? filterSchemaByTypes(schema, args.types)

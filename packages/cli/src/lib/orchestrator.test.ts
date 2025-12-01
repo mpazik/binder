@@ -8,7 +8,7 @@ import {
   mockTransactionUpdate,
 } from "@binder/db/mocks";
 import {
-  configSchema,
+  coreConfigSchema,
   type Database,
   GENESIS_VERSION,
   type KnowledgeGraph,
@@ -112,7 +112,7 @@ describe("orchestrator", () => {
 
     it("detects divergence when hashes differ", async () => {
       const divergedTx = await withHashTransaction(
-        configSchema,
+        coreConfigSchema,
         mockNodeSchema,
         {
           ...mockTransactionUpdate,
@@ -203,7 +203,7 @@ describe("orchestrator", () => {
         [
           mockTransactionInit,
           await withHashTransaction(
-            configSchema,
+            coreConfigSchema,
             mockNodeSchema,
             {
               ...mockTransactionUpdate,

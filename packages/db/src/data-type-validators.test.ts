@@ -1,656 +1,397 @@
-import { describe, it, expect } from "bun:test";
-import { createError, err, okVoid, type JsonValue } from "@binder/utils";
+import { describe, expect, it } from "bun:test";
+import { createError, err, type JsonValue } from "@binder/utils";
 import {
-  dataTypeValidators,
+  configDataTypeValidators,
+  type DataTypeValidator,
+  nodeDataTypeValidators,
   validateDataType,
 } from "./data-type-validators.ts";
 import "@binder/utils/tests";
 import { createUid } from "./utils/uid.ts";
-import type { CoreDataType, EntityId, FieldDef } from "./model";
+import type { EntityId, EntityKey, FieldDef, Namespace } from "./model";
+
+const allValidators = {
+  ...nodeDataTypeValidators,
+  ...configDataTypeValidators,
+};
+
+type AllDataType = keyof typeof allValidators;
 
 describe("data-type-validators", () => {
-  const mockFieldDef = <T extends CoreDataType>(
+  const mockFieldDef = <T extends string>(
     dataType: T,
     partial?: Partial<FieldDef<T>>,
   ): FieldDef<T> => ({
     id: 1 as EntityId,
-    key: "test",
+    key: "test" as EntityKey,
     name: "Test",
     dataType,
     ...partial,
   });
 
+  const runValidator = (
+    dataType: AllDataType,
+    value: JsonValue,
+    fieldDefPartial?: Partial<FieldDef<string>>,
+  ) => {
+    const fieldDef = mockFieldDef(dataType, fieldDefPartial);
+    const validator = allValidators[dataType] as DataTypeValidator<string>;
+    return validator(value, fieldDef);
+  };
+
+  const checkOk = (
+    dataType: AllDataType,
+    value: JsonValue,
+    opts?: { fieldDef?: Partial<FieldDef<string>> },
+  ) => {
+    expect(runValidator(dataType, value, opts?.fieldDef)).toBeOk();
+  };
+
+  const checkErr = (
+    dataType: AllDataType,
+    value: JsonValue,
+    opts?: { fieldDef?: Partial<FieldDef<string>>; message?: string },
+  ) => {
+    const message = opts?.message
+      ? expect.stringContaining(opts.message)
+      : expect.any(String);
+    expect(runValidator(dataType, value, opts?.fieldDef)).toEqual(
+      err(createError("validation-error", message)),
+    );
+  };
+
   describe("seqId", () => {
     it("accepts non-negative integers", () => {
-      expect(dataTypeValidators.seqId(0, mockFieldDef("seqId"))).toEqual(
-        okVoid,
-      );
-      expect(dataTypeValidators.seqId(1, mockFieldDef("seqId"))).toEqual(
-        okVoid,
-      );
-      expect(dataTypeValidators.seqId(999, mockFieldDef("seqId"))).toEqual(
-        okVoid,
-      );
+      checkOk("seqId", 0);
+      checkOk("seqId", 1);
+      checkOk("seqId", 999);
     });
 
     it("rejects negative numbers", () => {
-      const result = dataTypeValidators.seqId(-1, mockFieldDef("seqId"));
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("non-negative integer"),
-          ),
-        ),
-      );
+      checkErr("seqId", -1, { message: "non-negative integer" });
     });
 
     it("rejects decimals", () => {
-      const result = dataTypeValidators.seqId(1.5, mockFieldDef("seqId"));
-      expect(result).toBeErr();
+      checkErr("seqId", 1.5);
     });
 
     it("rejects non-numbers", () => {
-      expect(
-        dataTypeValidators.seqId("123" as JsonValue, mockFieldDef("seqId")),
-      ).toBeErr();
-      expect(dataTypeValidators.seqId(null, mockFieldDef("seqId"))).toBeErr();
+      checkErr("seqId", "123");
+      checkErr("seqId", null);
     });
   });
 
   describe("uid", () => {
     it("accepts valid UIDs", () => {
-      expect(dataTypeValidators.uid(createUid(), mockFieldDef("uid"))).toEqual(
-        okVoid,
-      );
-      expect(dataTypeValidators.uid(createUid(8), mockFieldDef("uid"))).toEqual(
-        okVoid,
-      );
+      checkOk("uid", createUid());
+      checkOk("uid", createUid(8));
     });
 
     it("rejects invalid UIDs", () => {
-      expect(
-        dataTypeValidators.uid("not-a-uid", mockFieldDef("uid")),
-      ).toBeErr();
-      expect(dataTypeValidators.uid("", mockFieldDef("uid"))).toBeErr();
-      expect(
-        dataTypeValidators.uid(123 as JsonValue, mockFieldDef("uid")),
-      ).toBeErr();
+      checkErr("uid", "not-a-uid");
+      checkErr("uid", "");
+      checkErr("uid", 123);
     });
   });
 
   describe("relation", () => {
     it("accepts non-empty strings", () => {
-      expect(
-        dataTypeValidators.relation("rel-123", mockFieldDef("relation")),
-      ).toEqual(okVoid);
-      expect(
-        dataTypeValidators.relation(createUid(), mockFieldDef("relation")),
-      ).toEqual(okVoid);
+      checkOk("relation", "rel-123");
+      checkOk("relation", createUid());
     });
 
     it("rejects empty strings", () => {
-      const result = dataTypeValidators.relation("", mockFieldDef("relation"));
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("non-empty string"),
-          ),
-        ),
-      );
+      checkErr("relation", "", { message: "non-empty string" });
     });
 
     it("rejects non-strings", () => {
-      expect(
-        dataTypeValidators.relation(123 as JsonValue, mockFieldDef("relation")),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.relation(null, mockFieldDef("relation")),
-      ).toBeErr();
+      checkErr("relation", 123);
+      checkErr("relation", null);
     });
   });
 
   describe("boolean", () => {
     it("accepts booleans", () => {
-      expect(dataTypeValidators.boolean(true, mockFieldDef("boolean"))).toEqual(
-        okVoid,
-      );
-      expect(
-        dataTypeValidators.boolean(false, mockFieldDef("boolean")),
-      ).toEqual(okVoid);
+      checkOk("boolean", true);
+      checkOk("boolean", false);
     });
 
     it("rejects non-booleans", () => {
-      expect(
-        dataTypeValidators.boolean(
-          "true" as JsonValue,
-          mockFieldDef("boolean"),
-        ),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.boolean(1 as JsonValue, mockFieldDef("boolean")),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.boolean(null, mockFieldDef("boolean")),
-      ).toBeErr();
+      checkErr("boolean", "true");
+      checkErr("boolean", 1);
+      checkErr("boolean", null);
     });
   });
 
   describe("integer", () => {
     it("accepts integers", () => {
-      expect(dataTypeValidators.integer(0, mockFieldDef("integer"))).toEqual(
-        okVoid,
-      );
-      expect(dataTypeValidators.integer(-5, mockFieldDef("integer"))).toEqual(
-        okVoid,
-      );
-      expect(dataTypeValidators.integer(100, mockFieldDef("integer"))).toEqual(
-        okVoid,
-      );
+      checkOk("integer", 0);
+      checkOk("integer", -5);
+      checkOk("integer", 100);
     });
 
     it("rejects decimals", () => {
-      const result = dataTypeValidators.integer(1.5, mockFieldDef("integer"));
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("Expected integer"),
-          ),
-        ),
-      );
+      checkErr("integer", 1.5, { message: "Expected integer" });
     });
 
     it("rejects non-numbers", () => {
-      expect(
-        dataTypeValidators.integer("123" as JsonValue, mockFieldDef("integer")),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.integer(null, mockFieldDef("integer")),
-      ).toBeErr();
+      checkErr("integer", "123");
+      checkErr("integer", null);
     });
   });
 
   describe("decimal", () => {
     it("accepts numbers", () => {
-      expect(dataTypeValidators.decimal(0, mockFieldDef("decimal"))).toEqual(
-        okVoid,
-      );
-      expect(dataTypeValidators.decimal(-5.5, mockFieldDef("decimal"))).toEqual(
-        okVoid,
-      );
-      expect(
-        dataTypeValidators.decimal(100.123, mockFieldDef("decimal")),
-      ).toEqual(okVoid);
+      checkOk("decimal", 0);
+      checkOk("decimal", -5.5);
+      checkOk("decimal", 100.123);
     });
 
     it("rejects NaN", () => {
-      expect(
-        dataTypeValidators.decimal(NaN, mockFieldDef("decimal")),
-      ).toBeErr();
+      checkErr("decimal", NaN);
     });
 
     it("rejects Infinity", () => {
-      expect(
-        dataTypeValidators.decimal(Infinity, mockFieldDef("decimal")),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.decimal(-Infinity, mockFieldDef("decimal")),
-      ).toBeErr();
+      checkErr("decimal", Infinity);
+      checkErr("decimal", -Infinity);
     });
 
     it("rejects non-numbers", () => {
-      expect(
-        dataTypeValidators.decimal(
-          "123.45" as JsonValue,
-          mockFieldDef("decimal"),
-        ),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.decimal(null, mockFieldDef("decimal")),
-      ).toBeErr();
+      checkErr("decimal", "123.45");
+      checkErr("decimal", null);
     });
   });
 
   describe("string", () => {
     it("accepts strings", () => {
-      expect(dataTypeValidators.string("", mockFieldDef("string"))).toEqual(
-        okVoid,
-      );
-      expect(
-        dataTypeValidators.string("hello", mockFieldDef("string")),
-      ).toEqual(okVoid);
-      expect(dataTypeValidators.string("123", mockFieldDef("string"))).toEqual(
-        okVoid,
-      );
+      checkOk("string", "");
+      checkOk("string", "hello");
+      checkOk("string", "123");
     });
 
     it("rejects non-strings", () => {
-      expect(
-        dataTypeValidators.string(123 as JsonValue, mockFieldDef("string")),
-      ).toBeErr();
-      expect(dataTypeValidators.string(null, mockFieldDef("string"))).toBeErr();
-      expect(
-        dataTypeValidators.string(true as JsonValue, mockFieldDef("string")),
-      ).toBeErr();
+      checkErr("string", 123);
+      checkErr("string", null);
+      checkErr("string", true);
     });
   });
 
   describe("text", () => {
     it("accepts strings", () => {
-      expect(dataTypeValidators.text("", mockFieldDef("text"))).toEqual(okVoid);
-      expect(
-        dataTypeValidators.text("long text content", mockFieldDef("text")),
-      ).toEqual(okVoid);
+      checkOk("text", "");
+      checkOk("text", "long text content");
     });
 
     it("rejects non-strings", () => {
-      expect(
-        dataTypeValidators.text(123 as JsonValue, mockFieldDef("text")),
-      ).toBeErr();
-      expect(dataTypeValidators.text(null, mockFieldDef("text"))).toBeErr();
+      checkErr("text", 123);
+      checkErr("text", null);
     });
   });
 
   describe("date", () => {
     it("accepts ISO date format", () => {
-      expect(
-        dataTypeValidators.date("2025-01-15", mockFieldDef("date")),
-      ).toEqual(okVoid);
-      expect(
-        dataTypeValidators.date("2025-11-03", mockFieldDef("date")),
-      ).toEqual(okVoid);
+      checkOk("date", "2025-01-15");
+      checkOk("date", "2025-11-03");
     });
 
     it("rejects invalid date formats", () => {
-      expect(
-        dataTypeValidators.date("15-01-2025", mockFieldDef("date")),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.date("2025/01/15", mockFieldDef("date")),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.date("not-a-date", mockFieldDef("date")),
-      ).toBeErr();
+      checkErr("date", "15-01-2025");
+      checkErr("date", "2025/01/15");
+      checkErr("date", "not-a-date");
     });
 
     it("rejects non-strings", () => {
-      expect(
-        dataTypeValidators.date(20250115 as JsonValue, mockFieldDef("date")),
-      ).toBeErr();
+      checkErr("date", 20250115);
     });
   });
 
   describe("datetime", () => {
     it("accepts ISO timestamp format", () => {
-      expect(
-        dataTypeValidators.datetime(
-          "2025-01-15T10:30:00.000Z",
-          mockFieldDef("datetime"),
-        ),
-      ).toEqual(okVoid);
-      expect(
-        dataTypeValidators.datetime(
-          "2025-11-03T14:45:30.123Z",
-          mockFieldDef("datetime"),
-        ),
-      ).toEqual(okVoid);
+      checkOk("datetime", "2025-01-15T10:30:00.000Z");
+      checkOk("datetime", "2025-11-03T14:45:30.123Z");
     });
 
     it("rejects invalid timestamp formats", () => {
-      expect(
-        dataTypeValidators.datetime(
-          "2025-01-15 10:30:00",
-          mockFieldDef("datetime"),
-        ),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.datetime(
-          "not-a-timestamp",
-          mockFieldDef("datetime"),
-        ),
-      ).toBeErr();
+      checkErr("datetime", "2025-01-15 10:30:00");
+      checkErr("datetime", "not-a-timestamp");
     });
 
     it("rejects non-strings", () => {
-      expect(
-        dataTypeValidators.datetime(
-          1705316400000 as JsonValue,
-          mockFieldDef("datetime"),
-        ),
-      ).toBeErr();
+      checkErr("datetime", 1705316400000);
     });
   });
 
   describe("option", () => {
     it("accepts non-empty strings when no options defined", () => {
-      expect(
-        dataTypeValidators.option("any-value", mockFieldDef("option")),
-      ).toEqual(okVoid);
+      checkOk("option", "any-value");
     });
 
     it("accepts valid option keys", () => {
-      const fieldDef = mockFieldDef("option", {
+      const fieldDef = {
         options: [
           { key: "active", name: "Active" },
           { key: "inactive", name: "Inactive" },
         ],
-      });
-      expect(dataTypeValidators.option("active", fieldDef)).toEqual(okVoid);
-      expect(dataTypeValidators.option("inactive", fieldDef)).toEqual(okVoid);
+      };
+      checkOk("option", "active", { fieldDef });
+      checkOk("option", "inactive", { fieldDef });
     });
 
     it("rejects invalid option keys", () => {
-      const fieldDef = mockFieldDef("option", {
-        options: [{ key: "active", name: "Active" }],
+      checkErr("option", "invalid", {
+        fieldDef: { options: [{ key: "active", name: "Active" }] },
+        message: "Invalid option value",
       });
-      const result = dataTypeValidators.option("invalid", fieldDef);
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("Invalid option value"),
-          ),
-        ),
-      );
     });
 
     it("rejects empty strings", () => {
-      expect(dataTypeValidators.option("", mockFieldDef("option"))).toBeErr();
+      checkErr("option", "");
     });
 
     it("rejects non-strings", () => {
-      expect(
-        dataTypeValidators.option(123 as JsonValue, mockFieldDef("option")),
-      ).toBeErr();
+      checkErr("option", 123);
     });
   });
 
   describe("object", () => {
     it("accepts objects", () => {
-      expect(dataTypeValidators.object({}, mockFieldDef("object"))).toEqual(
-        okVoid,
-      );
-      expect(
-        dataTypeValidators.object({ key: "value" }, mockFieldDef("object")),
-      ).toEqual(okVoid);
+      checkOk("object", {});
+      checkOk("object", { key: "value" });
     });
 
     it("rejects arrays", () => {
-      expect(dataTypeValidators.object([], mockFieldDef("object"))).toBeErr();
+      checkErr("object", []);
     });
 
     it("rejects null", () => {
-      expect(dataTypeValidators.object(null, mockFieldDef("object"))).toBeErr();
+      checkErr("object", null);
     });
 
     it("rejects primitives", () => {
-      expect(
-        dataTypeValidators.object(
-          "string" as JsonValue,
-          mockFieldDef("object"),
-        ),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.object(123 as JsonValue, mockFieldDef("object")),
-      ).toBeErr();
-    });
-  });
-
-  describe("formula", () => {
-    it("accepts objects", () => {
-      expect(dataTypeValidators.formula({}, mockFieldDef("formula"))).toEqual(
-        okVoid,
-      );
-      expect(
-        dataTypeValidators.formula(
-          { formula: "x + y" },
-          mockFieldDef("formula"),
-        ),
-      ).toEqual(okVoid);
-    });
-
-    it("rejects arrays", () => {
-      expect(dataTypeValidators.formula([], mockFieldDef("formula"))).toBeErr();
-    });
-
-    it("rejects null", () => {
-      expect(
-        dataTypeValidators.formula(null, mockFieldDef("formula")),
-      ).toBeErr();
-    });
-  });
-
-  describe("condition", () => {
-    it("accepts valid filter objects", () => {
-      expect(
-        dataTypeValidators.condition({}, mockFieldDef("condition")),
-      ).toEqual(okVoid);
-      expect(
-        dataTypeValidators.condition(
-          {
-            title: "Simple Value",
-          },
-          mockFieldDef("condition"),
-        ),
-      ).toEqual(okVoid);
-      expect(
-        dataTypeValidators.condition(
-          {
-            title: { op: "eq", value: "Test" },
-          },
-          mockFieldDef("condition"),
-        ),
-      ).toEqual(okVoid);
-    });
-
-    it("rejects invalid filter structure", () => {
-      const result = dataTypeValidators.condition(
-        {
-          title: { op: "invalidOp" as any, value: "test" },
-        },
-        mockFieldDef("condition"),
-      );
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("Invalid condition structure"),
-          ),
-        ),
-      );
-    });
-
-    it("rejects arrays", () => {
-      expect(
-        dataTypeValidators.condition([], mockFieldDef("condition")),
-      ).toBeErr();
-    });
-
-    it("rejects null", () => {
-      expect(
-        dataTypeValidators.condition(null, mockFieldDef("condition")),
-      ).toBeErr();
+      checkErr("object", "string");
+      checkErr("object", 123);
     });
   });
 
   describe("query", () => {
     it("accepts valid query objects", () => {
-      expect(dataTypeValidators.query({}, mockFieldDef("query"))).toEqual(
-        okVoid,
-      );
-      expect(
-        dataTypeValidators.query(
-          {
-            filters: { title: { op: "eq", value: "Test" } },
-          },
-          mockFieldDef("query"),
-        ),
-      ).toEqual(okVoid);
-      expect(
-        dataTypeValidators.query(
-          {
-            filters: { title: "Simple" },
-            orderBy: ["name"],
-          },
-          mockFieldDef("query"),
-        ),
-      ).toEqual(okVoid);
+      checkOk("query", {});
+      checkOk("query", { filters: { title: { op: "eq", value: "Test" } } });
+      checkOk("query", { filters: { title: "Simple" }, orderBy: ["name"] });
     });
 
     it("rejects invalid query structure", () => {
-      const result = dataTypeValidators.query(
+      checkErr(
+        "query",
+        { filters: "invalid" },
         {
-          filters: "invalid",
-        } as JsonValue,
-        mockFieldDef("query"),
-      );
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("Invalid query structure"),
-          ),
-        ),
+          message: "Invalid query structure",
+        },
       );
     });
 
     it("rejects arrays", () => {
-      expect(dataTypeValidators.query([], mockFieldDef("query"))).toBeErr();
+      checkErr("query", []);
     });
 
     it("rejects null", () => {
-      expect(dataTypeValidators.query(null, mockFieldDef("query"))).toBeErr();
+      checkErr("query", null);
     });
   });
 
   describe("optionSet", () => {
     it("accepts valid option arrays", () => {
-      expect(
-        dataTypeValidators.optionSet([], mockFieldDef("optionSet")),
-      ).toEqual(okVoid);
-      expect(
-        dataTypeValidators.optionSet(
-          [
-            { key: "opt1", name: "Option 1" },
-            { key: "opt2", name: "Option 2" },
-          ],
-          mockFieldDef("optionSet"),
-        ),
-      ).toEqual(okVoid);
+      checkOk("optionSet", []);
+      checkOk("optionSet", [
+        { key: "opt1", name: "Option 1" },
+        { key: "opt2", name: "Option 2" },
+      ]);
     });
 
     it("rejects non-arrays", () => {
-      expect(
-        dataTypeValidators.optionSet(
-          {} as JsonValue,
-          mockFieldDef("optionSet"),
-        ),
-      ).toBeErr();
+      checkErr("optionSet", {});
     });
 
     it("rejects arrays with invalid objects", () => {
-      const result1 = dataTypeValidators.optionSet(
-        [{ key: "opt1" }] as JsonValue,
-        mockFieldDef("optionSet"),
-      );
-      expect(result1).toBeErr();
-      expect(result1).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("expected {key: string, name: string}"),
-          ),
-        ),
-      );
-
-      const result2 = dataTypeValidators.optionSet(
-        [{ name: "Option" }] as JsonValue,
-        mockFieldDef("optionSet"),
-      );
-      expect(result2).toBeErr();
+      checkErr("optionSet", [{ key: "opt1" }], {
+        message: "expected {key: string, name: string}",
+      });
+      checkErr("optionSet", [{ name: "Option" }]);
     });
 
     it("rejects arrays with non-objects", () => {
-      expect(
-        dataTypeValidators.optionSet(
-          ["string"] as JsonValue,
-          mockFieldDef("optionSet"),
-        ),
-      ).toBeErr();
-      expect(
-        dataTypeValidators.optionSet(
-          [123] as JsonValue,
-          mockFieldDef("optionSet"),
-        ),
-      ).toBeErr();
+      checkErr("optionSet", ["string"]);
+      checkErr("optionSet", [123]);
     });
   });
 
   describe("validateDataType", () => {
+    const checkOk = (
+      dataType: AllDataType,
+      value: JsonValue,
+      opts?: {
+        namespace?: Namespace;
+        fieldDef?: Partial<FieldDef<AllDataType>>;
+      },
+    ) => {
+      const result = validateDataType(
+        opts?.namespace ?? "node",
+        mockFieldDef(dataType, opts?.fieldDef),
+        value,
+      );
+      expect(result).toBeOk();
+    };
+
+    const checkErr = (
+      dataType: AllDataType,
+      value: JsonValue,
+      opts?: {
+        namespace?: Namespace;
+        fieldDef?: Partial<FieldDef<AllDataType>>;
+        message?: string;
+      },
+    ) => {
+      const result = validateDataType(
+        opts?.namespace ?? "node",
+        mockFieldDef(dataType, opts?.fieldDef),
+        value,
+      );
+      const message = opts?.message
+        ? expect.stringContaining(opts.message)
+        : expect.any(String);
+      expect(result).toMatchObject(
+        err(createError("validation-error", message)),
+      );
+    };
+
     it("validates single values", () => {
-      const result = validateDataType(mockFieldDef("string"), "test");
-      expect(result).toEqual(okVoid);
+      checkOk("string", "test");
     });
 
     it("validates multiple values when allowMultiple is true", () => {
-      const result = validateDataType(
-        mockFieldDef("string", { allowMultiple: true }),
-        ["test1", "test2"],
-      );
-      expect(result).toEqual(okVoid);
+      checkOk("string", ["test1", "test2"], {
+        fieldDef: { allowMultiple: true },
+      });
     });
 
     it("rejects non-array when allowMultiple is true", () => {
-      const result = validateDataType(
-        mockFieldDef("string", { allowMultiple: true }),
-        "test",
-      );
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining(
-              "Expected array when allowMultiple is true",
-            ),
-          ),
-        ),
-      );
+      checkErr("string", "test", {
+        fieldDef: { allowMultiple: true },
+        message: "Expected array when allowMultiple is true",
+      });
     });
 
     it("rejects invalid values in array", () => {
-      const result = validateDataType(
-        mockFieldDef("integer", { allowMultiple: true }),
-        [1, 2.5, 3],
-      );
-      expect(result).toBeErr();
-      expect(result).toMatchObject(
-        err(
-          createError(
-            "validation-error",
-            expect.stringContaining("Invalid value at index 1"),
-          ),
-        ),
-      );
+      checkErr("integer", [1, 2.5, 3], {
+        fieldDef: { allowMultiple: true },
+        message: "Invalid value at index 1",
+      });
     });
 
     it("returns error for unknown data type", () => {
-      const result = validateDataType(
-        mockFieldDef("unknown" as CoreDataType),
-        "test",
-      );
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        err(createError("validation-error", "Unknown data type: unknown")),
-      );
+      checkErr("unknown" as AllDataType, "test", {
+        message: "Unknown data type: unknown",
+      });
     });
   });
 });

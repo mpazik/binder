@@ -1,4 +1,5 @@
 import type {
+  EntitySchema,
   Fieldset,
   FieldsetNested,
   KnowledgeGraph,
@@ -106,7 +107,7 @@ const extractFromYamlList = async (
 
 const extractFromMarkdown = async (
   kg: KnowledgeGraph,
-  schema: NodeSchema,
+  schema: EntitySchema,
   navItem: NavigationItem,
   markdown: string,
   pathFields: Fieldset,
@@ -148,7 +149,7 @@ const extractFromMarkdown = async (
 
 const extractFromFile = async (
   kg: KnowledgeGraph,
-  schema: NodeSchema,
+  schema: EntitySchema,
   navItem: NavigationItem,
   content: string,
   pathFields: Fieldset,
@@ -222,7 +223,7 @@ export const synchronizeFile = async (
   kg: KnowledgeGraph,
   config: AppConfig,
   navigationItems: NavigationItem[],
-  schema: NodeSchema,
+  schema: EntitySchema,
   relativePath: string,
   namespace: NamespaceEditable = "node",
   _txVersion?: TransactionId, // we should later use it to fetch data for a given version for fair comparison

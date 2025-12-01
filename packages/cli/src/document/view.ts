@@ -7,6 +7,7 @@ import {
   type Result,
 } from "@binder/utils";
 import {
+  type EntitySchema,
   type FieldKey,
   type FieldsetNested,
   formatFieldValue,
@@ -59,7 +60,7 @@ type MatchState = {
 };
 
 export const extractFields = (
-  schema: NodeSchema,
+  schema: EntitySchema,
   view: ViewAST,
   snapshot: BlockAST,
 ): Result<FieldsetNested> => {

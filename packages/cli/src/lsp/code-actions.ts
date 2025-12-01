@@ -8,17 +8,14 @@ import type {
 } from "vscode-languageserver/node";
 import { CodeActionKind, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { FieldAttrDef, NodeFieldDefinition } from "@binder/db";
+import type { FieldAttrDef, FieldDef } from "@binder/db";
 import { findSimilar } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { DocumentCache } from "./document-cache.ts";
 import { getAllowedFields, getDocumentContext } from "./lsp-utils.ts";
 
-const getDefaultValue = (
-  fieldDef: NodeFieldDefinition,
-  attrs?: FieldAttrDef,
-): string => {
+const getDefaultValue = (fieldDef: FieldDef, attrs?: FieldAttrDef): string => {
   if (attrs?.default !== undefined) {
     return String(attrs.default);
   }
