@@ -5,6 +5,8 @@ agent: troubleshoot
 
 Run codecheck to identify issues in the codebase and propose solutions.
 
+$ARGUMENTS
+
 Follow these steps:
 1. Run codecheck to identify linting, formatting, type errors, and test failures
 2. Analyze the errors and determine root causes

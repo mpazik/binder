@@ -15,8 +15,8 @@ tools:
   addpackage: true
   codecheck: true
   documentation: true
-  taskread: true
-  taskwrite: true
+  todoread: true
+  todowrite: true
   "*": false
 ---
 

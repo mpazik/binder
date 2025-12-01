@@ -127,7 +127,6 @@ export const systemFieldKeys = [
   "uid" as FieldKey,
   "key" as FieldKey,
   "type" as FieldKey,
-  "fields_attrs" as FieldKey, // temporary hack
 ] as const satisfies FieldKey[];
 export type SystemFieldKeys = "id" | "uid" | "key" | "type";
 export const fieldSystemType = "Field" as EntityType;

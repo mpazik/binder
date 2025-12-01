@@ -5,6 +5,7 @@ subtask: false
 ---
 
 Create an implementation specification
+$ARGUMENTS
 
 Write a concise specification focused on behavior and outcomes, not implementation details.
 
