@@ -5,16 +5,20 @@ import {
   mockChangesetInvert,
   mockChangesetUpdateTask1,
   mockRemoveChange,
+  mockTitleSetChange,
 } from "./changeset.mock.ts";
-import squashChangesets, {
+import {
   applyChange,
   applyChangeset,
   emptyChangeset,
   type FieldChangeset,
   inverseChange,
   inverseChangeset,
+  inverseMutation,
+  type ListMutationPatch,
   normalizeValueChange,
   rebaseChangeset,
+  squashChangesets,
   type ValueChange,
 } from "./changeset.ts";
 import { mockTask1Node, mockTaskNode1Updated } from "./node.mock.ts";
@@ -29,60 +33,37 @@ describe("normalize", () => {
     expect(result).toEqual(expected);
   };
 
-  test("normalizes string FieldValue to ValueChange with op:set", () =>
-    checkNormalized("hello", {
-      op: "set",
-      value: "hello",
-      previous: undefined,
-    }));
+  test("normalizes string FieldValue to ValueChange with set", () =>
+    checkNormalized("hello", ["set", "hello"]));
 
-  test("normalizes number FieldValue to ValueChange with op:set", () =>
-    checkNormalized(42, {
-      op: "set",
-      value: 42,
-      previous: undefined,
-    }));
+  test("normalizes number FieldValue to ValueChange with set", () =>
+    checkNormalized(42, ["set", 42]));
 
-  test("normalizes null FieldValue to ValueChange with op:set", () =>
-    checkNormalized(null, {
-      op: "set",
-      value: null,
-      previous: undefined,
-    }));
+  test("normalizes null FieldValue to ValueChange with set", () =>
+    checkNormalized(null, ["set", null]));
 
-  test("normalizes array FieldValue to ValueChange with op:set", () =>
-    checkNormalized([1, 2, 3], {
-      op: "set",
-      value: [1, 2, 3],
-      previous: undefined,
-    }));
+  test("normalizes array FieldValue to ValueChange with set", () =>
+    checkNormalized([1, 2, 3], ["set", [1, 2, 3]]));
 
-  test("passes through ValueChange with op:set unchanged", () => {
-    const valueChange: ValueChange = {
-      op: "set",
-      value: "world",
-      previous: "hello",
-    };
+  test("passes through ValueChange with set unchanged", () => {
+    const valueChange: ValueChange = ["set", "world", "hello"];
     checkNormalized(valueChange, valueChange);
   });
 
-  test("passes through ValueChange with op:seq unchanged", () => {
-    const valueChange: ValueChange = {
-      op: "seq",
-      mutations: [["insert", "item", 0]],
-    };
+  test("passes through ValueChange with seq unchanged", () => {
+    const valueChange: ValueChange = ["seq", [["insert", "item", 0]]];
     checkNormalized(valueChange, valueChange);
   });
 });
 
 describe("inverseChange", () => {
   test("inverts set change", () => {
-    const result = inverseChange(mockChangesetUpdateTask1.title);
-    expect(result).toEqual({
-      op: "set",
-      value: mockTask1Node.title,
-      previous: mockTaskNode1Updated.title,
-    });
+    const result = inverseChange(mockTitleSetChange);
+    expect(result).toEqual([
+      "set",
+      mockTask1Node.title,
+      mockTaskNode1Updated.title,
+    ]);
   });
 
   test("inverts remove change to add", () => {
@@ -90,11 +71,57 @@ describe("inverseChange", () => {
     expect(result).toEqual(mockChangesetUpdateTask1.tags);
   });
 
+  test("inverts seq patch mutation", () => {
+    const mutation: ListMutationPatch = [
+      "patch",
+      "user-1",
+      { role: ["set", "admin", "viewer"] },
+    ];
+
+    expect(inverseMutation(mutation)).toEqual([
+      "patch",
+      "user-1",
+      { role: ["set", "viewer", "admin"] },
+    ]);
+  });
+
+  test("inverts single relation patch", () => {
+    const change: ValueChange = ["patch", { role: ["set", "admin", "viewer"] }];
+
+    expect(inverseChange(change)).toEqual([
+      "patch",
+      { role: ["set", "viewer", "admin"] },
+    ]);
+  });
+
+  test("applying seq patch then its inverse returns original", () => {
+    const original: FieldValue = [["user-1", { role: "viewer" }]];
+    const change: ValueChange = [
+      "seq",
+      [["patch", "user-1", { role: ["set", "admin", "viewer"] }]],
+    ];
+
+    const patched = applyChange(original, change);
+    const restored = applyChange(patched, inverseChange(change));
+
+    expect(restored).toEqual(original);
+  });
+
+  test("applying single relation patch then its inverse returns original", () => {
+    const original: FieldValue = ["user-1", { role: "viewer" }];
+    const change: ValueChange = ["patch", { role: ["set", "admin", "viewer"] }];
+
+    const patched = applyChange(original, change);
+    const restored = applyChange(patched, inverseChange(change));
+
+    expect(restored).toEqual(original);
+  });
+
   test("applying change then its inverse returns original value", () => {
     expect(
       applyChange(
         mockTaskNode1Updated.title,
-        inverseChange(mockChangesetUpdateTask1.title),
+        inverseChange(mockTitleSetChange),
       ),
     ).toEqual(mockTask1Node.title);
   });
@@ -134,7 +161,7 @@ describe("applyChange", () => {
   test("applies set change", () => {
     checkApply(
       mockTask1Node.title,
-      mockChangesetUpdateTask1.title,
+      mockTitleSetChange,
       mockTaskNode1Updated.title,
     );
   });
@@ -145,75 +172,44 @@ describe("applyChange", () => {
 
   test("throws when remove mutation targets missing value", () => {
     expect(() =>
-      applyChange(mockTask1Node.tags, {
-        op: "seq",
-        mutations: [["remove", "completed", 1]],
-      }),
+      applyChange(mockTask1Node.tags, ["seq", [["remove", "completed", 1]]]),
     ).toThrowError();
   });
 
   test("applies insert with undefined position (append)", () =>
     checkApply(
       ["a", "b", "c"],
-      {
-        op: "seq",
-        mutations: [["insert", "d"]],
-      },
+      ["seq", [["insert", "d"]]],
       ["a", "b", "c", "d"],
     ));
 
   test("applies remove with undefined position (remove last)", () =>
-    checkApply(
-      ["a", "b", "c"],
-      {
-        op: "seq",
-        mutations: [["remove", "c"]],
-      },
-      ["a", "b"],
-    ));
+    checkApply(["a", "b", "c"], ["seq", [["remove", "c"]]], ["a", "b"]));
 
   test("applies multiple appends in sequence", () =>
     checkApply(
       ["a"],
-      {
-        op: "seq",
-        mutations: [
+      [
+        "seq",
+        [
           ["insert", "b"],
           ["insert", "c"],
         ],
-      },
+      ],
       ["a", "b", "c"],
     ));
 
   test("throws when remove-last targets wrong value", () => {
     expect(() =>
-      applyChange(["a", "b", "c"], {
-        op: "seq",
-        mutations: [["remove", "wrong"]],
-      }),
+      applyChange(["a", "b", "c"], ["seq", [["remove", "wrong"]]]),
     ).toThrowError();
   });
 
   test("removes field by applying inverted field creation", () =>
-    checkApply(
-      mockTask1Node.title,
-      {
-        op: "set",
-        value: undefined,
-        previous: mockTask1Node.title,
-      },
-      null,
-    ));
+    checkApply(mockTask1Node.title, ["clear", mockTask1Node.title], null));
 
   test("removes field when all array elements are removed", () => {
-    checkApply(
-      ["a"],
-      {
-        op: "seq",
-        mutations: [["remove", "a", 0]],
-      },
-      null,
-    );
+    checkApply(["a"], ["seq", [["remove", "a", 0]]], null);
   });
 
   test("applies set change with object values (deep equality)", () => {
@@ -222,17 +218,83 @@ describe("applyChange", () => {
         title: { required: true },
         description: { required: true },
       },
-      {
-        op: "set",
-        value: { title: { required: false }, description: { required: true } },
-        previous: {
-          title: { required: true },
-          description: { required: true },
-        },
-      },
+      [
+        "set",
+        { title: { required: false }, description: { required: true } },
+        { title: { required: true }, description: { required: true } },
+      ],
       { title: { required: false }, description: { required: true } },
     );
   });
+
+  test("patches attributes on a simple ref (converts to tuple)", () =>
+    checkApply(
+      ["user-1", "user-2"],
+      ["seq", [["patch", "user-1", { role: "admin" }]]],
+      [["user-1", { role: "admin" }], "user-2"],
+    ));
+
+  test("patches attributes on existing tuple", () =>
+    checkApply(
+      [["user-1", { role: "viewer" }], "user-2"],
+      ["seq", [["patch", "user-1", { role: ["set", "admin", "viewer"] }]]],
+      [["user-1", { role: "admin" }], "user-2"],
+    ));
+
+  test("patches multiple attributes", () =>
+    checkApply(
+      [["user-1", { role: "viewer" }]],
+      [
+        "seq",
+        [
+          [
+            "patch",
+            "user-1",
+            {
+              role: ["set", "admin", "viewer"],
+              percentage: ["set", 50],
+            },
+          ],
+        ],
+      ],
+      [["user-1", { role: "admin", percentage: 50 }]],
+    ));
+
+  test("throws when patching non-existent ref", () => {
+    expect(() =>
+      applyChange(
+        ["user-1", "user-2"],
+        ["seq", [["patch", "user-3", { role: "admin" }]]],
+      ),
+    ).toThrowError(/not found/);
+  });
+
+  test("combines patch with insert/remove", () =>
+    checkApply(
+      ["user-1"],
+      [
+        "seq",
+        [
+          ["insert", "user-2"],
+          ["patch", "user-1", { role: "lead" }],
+        ],
+      ],
+      [["user-1", { role: "lead" }], "user-2"],
+    ));
+
+  test("applies patch on single relation value", () =>
+    checkApply(
+      "user-1",
+      ["patch", { role: "admin" }],
+      ["user-1", { role: "admin" }],
+    ));
+
+  test("applies patch on existing single relation tuple", () =>
+    checkApply(
+      ["user-1", { role: "viewer" }],
+      ["patch", { role: ["set", "admin", "viewer"] }],
+      ["user-1", { role: "admin" }],
+    ));
 });
 
 describe("applyChangeset", () => {
@@ -265,15 +327,8 @@ describe("applyChangeset", () => {
 
   test("preserves null values in patch to signal field deletion to SQL layer", () => {
     const inverseCset: FieldChangeset = {
-      description: {
-        op: "set",
-        value: undefined,
-        previous: "Product feature",
-      },
-      txIds: {
-        op: "seq",
-        mutations: [["remove", 17]],
-      },
+      description: ["clear", "Product feature"],
+      txIds: ["seq", [["remove", 17]]],
     };
 
     const currentValues: Fieldset = {
@@ -296,18 +351,12 @@ describe("applyChangeset", () => {
     };
 
     const tx17Changeset: FieldChangeset = {
-      description: {
-        op: "set",
-        value: "Product feature",
-      },
+      description: ["set", "Product feature"],
     };
 
     const inverseWithTxIds: FieldChangeset = {
       ...inverseChangeset(tx17Changeset),
-      txIds: {
-        op: "seq",
-        mutations: [["remove", 17]],
-      },
+      txIds: ["seq", [["remove", 17]]],
     };
 
     checkApply(entity, inverseWithTxIds, {
@@ -322,18 +371,14 @@ describe("applyChangeset", () => {
     checkApply(
       mockTask1Node,
       {
-        description: {
-          op: "set",
-          value: undefined,
-          previous: mockTask1Node.description,
-        },
-        tags: {
-          op: "seq",
-          mutations: [
+        description: ["clear", mockTask1Node.description],
+        tags: [
+          "seq",
+          [
             ["remove", "urgent", 0],
             ["remove", "important", 0],
           ],
-        },
+        ],
       },
       omit({ ...mockTask1Node, description: null }, ["tags"]),
     );
@@ -342,18 +387,14 @@ describe("applyChangeset", () => {
 
 const finalTitle = "Final";
 const baseTitleChangeset: FieldChangeset = {
-  title: mockChangesetUpdateTask1.title,
+  title: mockTitleSetChange,
 };
 const baseSeqAddChangeset: FieldChangeset = {
   tags: mockChangesetUpdateTask1.tags,
 };
 const baseSeqRemoveChangeset: FieldChangeset = { tags: mockRemoveChange };
 const secondTitleChangeset: FieldChangeset = {
-  title: {
-    op: "set",
-    previous: mockTaskNode1Updated.title,
-    value: finalTitle,
-  },
+  title: ["set", finalTitle, mockTaskNode1Updated.title],
 };
 
 describe("rebaseChangeset", () => {
@@ -376,10 +417,7 @@ describe("rebaseChangeset", () => {
 
   test("rebases set change sharing the same ancestor", () => {
     const changeset: FieldChangeset = {
-      title: {
-        ...mockChangesetUpdateTask1.title,
-        value: finalTitle,
-      },
+      title: ["set", finalTitle, mockTask1Node.title],
     };
 
     checkRebase(baseTitleChangeset, changeset, secondTitleChangeset);
@@ -387,11 +425,7 @@ describe("rebaseChangeset", () => {
 
   test("throws when rebasing a conflicting set change", () => {
     const changeset: FieldChangeset = {
-      title: {
-        op: "set",
-        previous: "Other",
-        value: finalTitle,
-      },
+      title: ["set", finalTitle, "Other"],
     };
 
     expect(() => rebaseChangeset(baseTitleChangeset, changeset)).toThrowError(
@@ -401,42 +435,27 @@ describe("rebaseChangeset", () => {
 
   test("adjusts positions when rebasing add operations", () => {
     const changeset: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "beta", 3]],
-      },
+      tags: ["seq", [["insert", "beta", 3]]],
     };
 
     checkRebase(baseSeqAddChangeset, changeset, {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "beta", 4]],
-      },
+      tags: ["seq", [["insert", "beta", 4]]],
     });
   });
 
   test("adjusts positions when rebasing remove operations", () => {
     const changeset: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["remove", "gamma", 3]],
-      },
+      tags: ["seq", [["remove", "gamma", 3]]],
     };
 
     checkRebase(baseSeqRemoveChangeset, changeset, {
-      tags: {
-        op: "seq",
-        mutations: [["remove", "gamma", 2]],
-      },
+      tags: ["seq", [["remove", "gamma", 2]]],
     });
   });
 
   test("throws when rebasing remove operations targeting the same element", () => {
     const conflictingRemoval: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["remove", "completed", 1]],
-      },
+      tags: ["seq", [["remove", "completed", 1]]],
     };
 
     expect(() =>
@@ -446,33 +465,70 @@ describe("rebaseChangeset", () => {
 
   test("keeps undefined position when rebasing append", () => {
     const changeset: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "new"]],
-      },
+      tags: ["seq", [["insert", "new"]]],
     };
 
     checkRebase(baseSeqAddChangeset, changeset, {
-      tags: {
-        op: "seq",
-        mutations: [["insert", "new", undefined]],
-      },
+      tags: ["seq", [["insert", "new", undefined]]],
     });
   });
 
   test("keeps undefined position when rebasing remove-last", () => {
     const changeset: FieldChangeset = {
-      tags: {
-        op: "seq",
-        mutations: [["remove", "last"]],
-      },
+      tags: ["seq", [["remove", "last"]]],
     };
 
     checkRebase(baseSeqAddChangeset, changeset, {
-      tags: {
-        op: "seq",
-        mutations: [["remove", "last", undefined]],
-      },
+      tags: ["seq", [["remove", "last", undefined]]],
+    });
+  });
+
+  test("rebases patch when no conflict", () => {
+    const base: FieldChangeset = {
+      owners: ["seq", [["insert", "user-3"]]],
+    };
+
+    const changeset: FieldChangeset = {
+      owners: ["seq", [["patch", "user-1", { role: "admin" }]]],
+    };
+
+    checkRebase(base, changeset, changeset);
+  });
+
+  test("rebases seq patch on same ref by rebasing nested changeset", () => {
+    const base: FieldChangeset = {
+      owners: [
+        "seq",
+        [["patch", "user-1", { role: ["set", "editor", "viewer"] }]],
+      ],
+    };
+
+    const changeset: FieldChangeset = {
+      owners: [
+        "seq",
+        [["patch", "user-1", { role: ["set", "admin", "viewer"] }]],
+      ],
+    };
+
+    checkRebase(base, changeset, {
+      owners: [
+        "seq",
+        [["patch", "user-1", { role: ["set", "admin", "editor"] }]],
+      ],
+    });
+  });
+
+  test("rebases single relation patch on same field", () => {
+    const base: FieldChangeset = {
+      owner: ["patch", { role: ["set", "editor", "viewer"] }],
+    };
+
+    const changeset: FieldChangeset = {
+      owner: ["patch", { role: ["set", "admin", "viewer"] }],
+    };
+
+    checkRebase(base, changeset, {
+      owner: ["patch", { role: ["set", "admin", "editor"] }],
     });
   });
 });
@@ -495,30 +551,21 @@ describe("squashChangesets", () => {
 
   test("squashes set changes on same attribute", () =>
     checkSquash(baseTitleChangeset, secondTitleChangeset, {
-      title: {
-        op: "set",
-        previous: mockTask1Node.title,
-        value: finalTitle,
-      },
+      title: ["set", finalTitle, mockTask1Node.title],
     }));
 
   test("squashes sequence operations", () =>
     checkSquash(
       baseSeqAddChangeset,
+      { tags: ["seq", [["insert", "beta", 1]]] },
       {
-        tags: {
-          op: "seq",
-          mutations: [["insert", "beta", 1]],
-        },
-      },
-      {
-        tags: {
-          op: "seq",
-          mutations: [
+        tags: [
+          "seq",
+          [
             ["insert", "completed", 1],
             ["insert", "beta", 2],
           ],
-        },
+        ],
       },
     ));
 
@@ -531,26 +578,9 @@ describe("squashChangesets", () => {
 
   test("squashes set followed by seq operations", () =>
     checkSquash(
-      {
-        tags: {
-          op: "set",
-          value: ["a", "b"],
-          previous: undefined,
-        },
-      },
-      {
-        tags: {
-          op: "seq",
-          mutations: [["insert", "c", 2]],
-        },
-      },
-      {
-        tags: {
-          op: "set",
-          value: ["a", "b", "c"],
-          previous: undefined,
-        },
-      },
+      { tags: ["set", ["a", "b"]] },
+      { tags: ["seq", [["insert", "c", 2]]] },
+      { tags: ["set", ["a", "b", "c"]] },
     ));
 
   test("squash of changeset and its inverse is empty", () =>
@@ -574,51 +604,99 @@ describe("squashChangesets", () => {
 
   test("squashes multiple appends", () =>
     checkSquash(
+      { tags: ["seq", [["insert", "first"]]] },
+      { tags: ["seq", [["insert", "second"]]] },
       {
-        tags: {
-          op: "seq",
-          mutations: [["insert", "first"]],
-        },
-      },
-      {
-        tags: {
-          op: "seq",
-          mutations: [["insert", "second"]],
-        },
-      },
-      {
-        tags: {
-          op: "seq",
-          mutations: [
+        tags: [
+          "seq",
+          [
             ["insert", "first", undefined],
             ["insert", "second", undefined],
           ],
-        },
+        ],
       },
     ));
 
   test("adjusts positions of remaining mutations after cancellation", () =>
     checkSquash(
       {
-        items: {
-          op: "seq",
-          mutations: [
+        items: [
+          "seq",
+          [
             ["insert", 17, 2],
             ["remove", 15, 6],
           ],
-        },
+        ],
+      },
+      { items: ["seq", [["remove", 17, 2]]] },
+      { items: ["seq", [["remove", 15, 5]]] },
+    ));
+
+  test("squashes consecutive seq patches on same ref", () =>
+    checkSquash(
+      {
+        owners: [
+          "seq",
+          [["patch", "user-1", { role: ["set", "editor", "viewer"] }]],
+        ],
       },
       {
-        items: {
-          op: "seq",
-          mutations: [["remove", 17, 2]],
-        },
+        owners: [
+          "seq",
+          [["patch", "user-1", { role: ["set", "admin", "editor"] }]],
+        ],
       },
       {
-        items: {
-          op: "seq",
-          mutations: [["remove", 15, 5]],
-        },
+        owners: [
+          "seq",
+          [["patch", "user-1", { role: ["set", "admin", "viewer"] }]],
+        ],
       },
+    ));
+
+  test("squashes consecutive single relation patches", () =>
+    checkSquash(
+      { owner: ["patch", { role: ["set", "editor", "viewer"] }] },
+      { owner: ["patch", { role: ["set", "admin", "editor"] }] },
+      { owner: ["patch", { role: ["set", "admin", "viewer"] }] },
+    ));
+
+  test("squashes set followed by single relation patch", () =>
+    checkSquash(
+      { owner: ["set", "user-1"] },
+      { owner: ["patch", { role: "admin" }] },
+      { owner: ["set", ["user-1", { role: "admin" }]] },
+    ));
+
+  test("keeps patches on different refs separate", () =>
+    checkSquash(
+      { owners: ["seq", [["patch", "user-1", { role: "admin" }]]] },
+      { owners: ["seq", [["patch", "user-2", { role: "viewer" }]]] },
+      {
+        owners: [
+          "seq",
+          [
+            ["patch", "user-1", { role: "admin" }],
+            ["patch", "user-2", { role: "viewer" }],
+          ],
+        ],
+      },
+    ));
+
+  test("squashes patch that undoes previous patch leaves empty patch", () =>
+    checkSquash(
+      {
+        owners: [
+          "seq",
+          [["patch", "user-1", { role: ["set", "admin", "viewer"] }]],
+        ],
+      },
+      {
+        owners: [
+          "seq",
+          [["patch", "user-1", { role: ["set", "viewer", "admin"] }]],
+        ],
+      },
+      { owners: ["seq", [["patch", "user-1", {}]]] },
     ));
 });

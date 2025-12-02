@@ -9,11 +9,11 @@ import {
   coreIdsLimit,
   type EntitySchema,
   type EntityTypeBuilder,
-  type FieldAttrDefs,
   type FieldDef,
   fieldSystemType,
   newId,
   type SystemFieldKeys,
+  type TypeFieldRef,
   typeSystemType,
 } from "./schema.ts";
 import { nodeDataTypes } from "./node.ts";
@@ -49,12 +49,17 @@ export const configSchemaIds = {
   disabled: newId<ConfigId>(9, coreIdsLimit),
   extends: newId<ConfigId>(10, coreIdsLimit),
   unique: newId<ConfigId>(11, coreIdsLimit),
-  fields_attrs: newId<ConfigId>(12, coreIdsLimit),
-  Field: newId<ConfigId>(14, coreIdsLimit),
-  Type: newId<ConfigId>(15, coreIdsLimit),
-  RelationField: newId<ConfigId>(16, coreIdsLimit),
-  StringField: newId<ConfigId>(17, coreIdsLimit),
-  OptionField: newId<ConfigId>(18, coreIdsLimit),
+  attributes: newId<ConfigId>(12, coreIdsLimit),
+  Field: newId<ConfigId>(13, coreIdsLimit),
+  Type: newId<ConfigId>(14, coreIdsLimit),
+  RelationField: newId<ConfigId>(15, coreIdsLimit),
+  StringField: newId<ConfigId>(16, coreIdsLimit),
+  OptionField: newId<ConfigId>(17, coreIdsLimit),
+  required: newId<ConfigId>(18, coreIdsLimit),
+  default: newId<ConfigId>(19, coreIdsLimit),
+  value: newId<ConfigId>(20, coreIdsLimit),
+  exclude: newId<ConfigId>(21, coreIdsLimit),
+  only: newId<ConfigId>(22, coreIdsLimit),
 } as const;
 
 export const relationFieldConfigType = "RelationField" as ConfigType;
@@ -152,13 +157,51 @@ export const configFields = {
     description: "Whether the field value must be unique",
     immutable: true,
   },
-  fields_attrs: {
-    id: configSchemaIds.fields_attrs,
-    key: "fields_attrs" as ConfigKey,
-    name: "Fields Attrs",
-    dataType: "object",
-    description: "Temporary hack field for fields attributes",
-    immutable: true,
+  attributes: {
+    id: configSchemaIds.attributes,
+    key: "attributes" as ConfigKey,
+    name: "Attributes",
+    dataType: "relation",
+    description: "Allowed attribute fields for this field when used in types",
+    range: [fieldSystemType],
+    allowMultiple: true,
+  },
+  required: {
+    id: configSchemaIds.required,
+    key: "required" as ConfigKey,
+    name: "Required",
+    dataType: "boolean",
+    description: "Whether the field is required",
+  },
+  default: {
+    id: configSchemaIds.default,
+    key: "default" as ConfigKey,
+    name: "Default",
+    dataType: "string",
+    description: "Default value for the field",
+  },
+  value: {
+    id: configSchemaIds.value,
+    key: "value" as ConfigKey,
+    name: "Value",
+    dataType: "string",
+    description: "Fixed value constraint for the field",
+  },
+  exclude: {
+    id: configSchemaIds.exclude,
+    key: "exclude" as ConfigKey,
+    name: "Exclude",
+    dataType: "string",
+    description: "Excluded option values",
+    allowMultiple: true,
+  },
+  only: {
+    id: configSchemaIds.only,
+    key: "only" as ConfigKey,
+    name: "Only",
+    dataType: "string",
+    description: "Allowed option values",
+    allowMultiple: true,
   },
 } as const satisfies Record<FieldKey, ConfigFieldDef>;
 
@@ -170,8 +213,7 @@ export type ConfigTypeDefinition = {
   name: string;
   description: string;
   extends?: ConfigType;
-  fields: ConfigFieldKey[];
-  fields_attrs?: FieldAttrDefs;
+  fields: TypeFieldRef<ConfigFieldKey>[];
 };
 export type ConfigTypeDefinitions = Record<ConfigType, ConfigTypeDefinition>;
 /**
@@ -183,11 +225,14 @@ export const configTypeDefs: ConfigTypeDefinitions = {
     key: fieldSystemType,
     name: "Attribute",
     description: "Configuration field definition",
-    fields: ["key", "name", "dataType", "description", "allowMultiple"],
-    fields_attrs: {
-      key: { required: true },
-      dataType: { required: true },
-    },
+    fields: [
+      ["key", { required: true }],
+      "name",
+      ["dataType", { required: true }],
+      "description",
+      "allowMultiple",
+      "attributes",
+    ],
   },
   [relationFieldConfigType]: {
     id: configSchemaIds.RelationField,
@@ -195,10 +240,12 @@ export const configTypeDefs: ConfigTypeDefinitions = {
     name: "Attribute",
     description: "Configuration field definition",
     extends: fieldSystemType,
-    fields: ["domain", "range", "inverseOf"],
-    fields_attrs: {
-      dataType: { value: "relation" },
-    },
+    fields: [
+      "domain",
+      "range",
+      "inverseOf",
+      ["dataType", { value: "relation" }],
+    ],
   },
   [stringFieldConfigType]: {
     id: configSchemaIds.StringField,
@@ -206,10 +253,7 @@ export const configTypeDefs: ConfigTypeDefinitions = {
     name: "String Attribute",
     description: "String field with optional unique constraint",
     extends: fieldSystemType,
-    fields: ["unique"],
-    fields_attrs: {
-      dataType: { value: "string" },
-    },
+    fields: ["unique", ["dataType", { value: "string" }]],
   },
   [optionFieldConfigType]: {
     id: configSchemaIds.OptionField,
@@ -217,20 +261,20 @@ export const configTypeDefs: ConfigTypeDefinitions = {
     name: "Option Attribute",
     description: "Option field with predefined choices",
     extends: fieldSystemType,
-    fields: ["options"],
-    fields_attrs: {
-      dataType: { value: "option" },
-    },
+    fields: ["options", ["dataType", { value: "option" }]],
   },
   [typeSystemType]: {
     id: configSchemaIds.Type,
     key: typeSystemType,
     name: "Type",
     description: "Configuration entity type definition",
-    fields: ["key", "name", "description", "fields", "extends"],
-    fields_attrs: {
-      key: { required: true },
-    },
+    fields: [
+      ["key", { required: true }],
+      "name",
+      "description",
+      "fields",
+      "extends",
+    ],
   },
 } as const;
 export type ConfigTypeBuilder<

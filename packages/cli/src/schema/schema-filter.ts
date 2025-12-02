@@ -1,4 +1,9 @@
-import type { EntityKey, EntitySchema, EntityType } from "@binder/db";
+import {
+  getTypeFieldKey,
+  type EntityKey,
+  type EntitySchema,
+  type EntityType,
+} from "@binder/db";
 import { filterObjectValues } from "@binder/utils";
 
 const collectExtendedTypes = (
@@ -37,9 +42,8 @@ const collectTypeFields = (
     const typeDef = schema.types[typeKey];
     if (!typeDef) continue;
 
-    const fields = (typeDef.fields as EntityKey[]) ?? [];
-    for (const field of fields) {
-      result.add(field);
+    for (const fieldRef of typeDef.fields) {
+      result.add(getTypeFieldKey(fieldRef) as EntityKey);
     }
   }
 

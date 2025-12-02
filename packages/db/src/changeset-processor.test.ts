@@ -9,11 +9,11 @@ import "@binder/utils/tests";
 import {
   mockTask1Node,
   mockTaskNode1Updated,
+  mockTaskWithOwnersNode,
   mockUserNode,
 } from "./model/node.mock.ts";
 import {
   mockChangesetCreateTask1,
-  mockChangesetInputUpdateTask1,
   mockChangesetUpdateTask1,
 } from "./model/changeset.mock.ts";
 import { getTestDatabase, insertConfig, insertNode } from "./db.mock.ts";
@@ -42,6 +42,7 @@ import {
   mockTitleFieldKey,
   mockUserTypeKey,
 } from "./model/config.mock.ts";
+import { mockChangesetInputUpdateTask1 } from "./model/changeset-input.mock.ts";
 
 const mockTask1FieldKeys = Object.keys(mockTask1Node) as FieldKey[];
 
@@ -578,6 +579,86 @@ describe("processChangesetInput", () => {
         ],
         "config",
       );
+    });
+
+    it("creates Type with fields using ObjTuple format (YAML ergonomic input)", () =>
+      checkProcessingSucceeds(
+        [
+          {
+            type: typeSystemType,
+            key: "TestType" as ConfigKey,
+            name: "Test Type",
+            // ObjTuple format: { fieldKey: { attrs } } instead of [fieldKey, { attrs }]
+            fields: [{ title: { required: true } }, "description"] as any,
+          },
+        ],
+        "config",
+      ));
+
+    describe("patch validation", () => {
+      it("validates patch attrs against field attributes", async () => {
+        await insertNode(db, mockTaskWithOwnersNode);
+
+        await checkHasValidationErrors(
+          [
+            {
+              $ref: mockTaskWithOwnersNode.uid,
+              owners: [["patch", "user-1", { role: 123 }]],
+            },
+          ],
+          [
+            {
+              changesetIndex: 0,
+              namespace: "node",
+              fieldKey: "owners.role",
+              message: "Expected string, got: number",
+            },
+          ],
+        );
+      });
+
+      it("accepts valid patch attrs", async () => {
+        await insertNode(db, mockTaskWithOwnersNode);
+
+        await checkProcessingSucceeds([
+          {
+            $ref: mockTaskWithOwnersNode.uid,
+            owners: [["patch", "user-1", { role: "admin" }]],
+          },
+        ]);
+      });
+
+      it("ignores patch attrs not in field attributes", async () => {
+        await insertNode(db, mockTaskWithOwnersNode);
+
+        await checkProcessingSucceeds([
+          {
+            $ref: mockTaskWithOwnersNode.uid,
+            owners: [["patch", "user-1", { unknownAttr: "value" }]],
+          },
+        ]);
+      });
+
+      it("validates single patch mutation", async () => {
+        await insertNode(db, mockTaskWithOwnersNode);
+
+        await checkHasValidationErrors(
+          [
+            {
+              $ref: mockTaskWithOwnersNode.uid,
+              owners: ["patch", "user-1", { role: false }],
+            },
+          ],
+          [
+            {
+              changesetIndex: 0,
+              namespace: "node",
+              fieldKey: "owners.role",
+              message: "Expected string, got: boolean",
+            },
+          ],
+        );
+      });
     });
   });
 });

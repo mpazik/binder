@@ -74,11 +74,7 @@ describe("squashTransactions", () => {
           previous: mockTransactionUpdate.hash,
           nodes: {
             [mockTask1Uid]: {
-              title: {
-                op: "set",
-                previous: mockTaskNode1Updated.title,
-                value: "Third",
-              },
+              title: ["set", "Third", mockTaskNode1Updated.title],
             },
           },
         },

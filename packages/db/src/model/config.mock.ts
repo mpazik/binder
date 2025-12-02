@@ -76,6 +76,17 @@ export const mockAssignedToField = {
   range: [mockUserTypeKey, mockTeamTypeKey],
 } as const satisfies NodeFieldDef;
 
+export const mockRoleFieldKey = "role" as ConfigKey;
+export const mockRoleField = {
+  id: 14 as ConfigId,
+  uid: "fldRole0014" as ConfigUid,
+  key: mockRoleFieldKey,
+  type: fieldSystemType,
+  name: "Role",
+  description: "Role in relation",
+  dataType: "string",
+} as const satisfies NodeFieldDef;
+
 export const mockOwnersFieldKey = "owners" as ConfigKey;
 export const mockOwnersField = {
   id: 6 as ConfigId,
@@ -87,6 +98,7 @@ export const mockOwnersField = {
   dataType: "relation",
   range: [mockUserTypeKey, mockTeamTypeKey],
   allowMultiple: true,
+  attributes: [mockRoleFieldKey],
 } as const satisfies NodeFieldDef;
 
 export const mockMembersFieldKey = "members" as ConfigKey;
@@ -178,77 +190,69 @@ export const mockFavoriteField = {
 
 export const mockWorkItemTypeKey = "WorkItem" as NodeType;
 export const mockWorkItemType = {
-  id: 14 as ConfigId,
+  id: 15 as ConfigId,
   uid: "typWorkItm0" as ConfigUid,
   key: mockWorkItemTypeKey,
   type: typeSystemType,
   name: "Work Item",
   description: "Actionable item",
   fields: [
-    mockTitleFieldKey,
+    [mockTitleFieldKey, { required: true }],
     mockDescriptionFieldKey,
-    mockStatusFieldKey,
+    [mockStatusFieldKey, { default: "todo" }],
     mockAssignedToFieldKey,
     mockTagsFieldKey,
   ],
-  fields_attrs: {
-    title: { required: true },
-    status: { default: "todo" },
-  },
 } as const satisfies TypeDef;
 
 export const mockTaskType = {
-  id: 15 as ConfigId,
+  id: 16 as ConfigId,
   uid: "typTask0012" as ConfigUid,
   key: mockTaskTypeKey,
   type: typeSystemType,
   name: "Task",
   description: "Individual unit of work",
-  fields: [mockDueDateFieldKey, mockStatusFieldKey, mockAssignedToFieldKey],
+  fields: [
+    mockDueDateFieldKey,
+    [mockStatusFieldKey, { exclude: ["archived"] }],
+    [mockAssignedToFieldKey, { only: ["User"] }],
+  ],
   extends: mockWorkItemTypeKey,
-  fields_attrs: {
-    status: { exclude: ["archived"] },
-    assignedTo: { only: ["User"] },
-  },
 } as const satisfies TypeDef;
 
 export const mockProjectType = {
-  id: 16 as ConfigId,
+  id: 17 as ConfigId,
   uid: "typProjct13" as ConfigUid,
   key: mockProjectTypeKey,
   type: typeSystemType,
   name: "Project",
   description: "Container for related tasks",
-  fields: [mockTasksFieldKey, mockStatusFieldKey],
+  fields: [mockTasksFieldKey, [mockStatusFieldKey, { required: true }]],
   extends: mockWorkItemTypeKey,
-  fields_attrs: {
-    status: { required: true },
-  },
 } as const satisfies TypeDef;
 
 export const mockUserType = {
-  id: 17 as ConfigId,
+  id: 18 as ConfigId,
   uid: "typUser0014" as ConfigUid,
   key: mockUserTypeKey,
   type: typeSystemType,
   name: "User",
   description: "Individual user account",
-  fields: [mockNameFieldKey, mockEmailFieldKey],
-  fields_attrs: {
-    name: { required: true, description: "Full name" },
-  },
+  fields: [
+    [mockNameFieldKey, { required: true, description: "Full name" }],
+    mockEmailFieldKey,
+  ],
 } as const satisfies TypeDef;
 
 export const mockTeamType = {
-  id: 18 as ConfigId,
+  id: 19 as ConfigId,
   uid: "typTeam0015" as ConfigUid,
   key: mockTeamTypeKey,
   type: typeSystemType,
   name: "Team",
   description: "Collaborative group",
-  fields: [mockNameFieldKey, mockMembersFieldKey],
-  fields_attrs: {
-    name: { required: true },
-    members: { min: 1 },
-  },
+  fields: [
+    [mockNameFieldKey, { required: true }],
+    [mockMembersFieldKey, { min: 1 }],
+  ],
 } as const satisfies TypeDef;

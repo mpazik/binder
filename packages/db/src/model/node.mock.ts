@@ -27,6 +27,15 @@ export const mockTask1Node = {
   tags: ["urgent", "important"],
 } as const satisfies Fieldset;
 
+export const mockTaskWithOwnersUid = "taskOwners1" as NodeUid;
+export const mockTaskWithOwnersNode = {
+  id: 10 as NodeId,
+  uid: mockTaskWithOwnersUid,
+  type: mockTaskTypeKey,
+  title: "Task with owners",
+  owners: [["user-1", { role: "lead" }]],
+} as const satisfies Fieldset;
+
 export const mockTaskNode1Updated = {
   ...mockTask1Node,
   title: "Implement user authentication system",

@@ -13,7 +13,11 @@ import { findSimilar } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { DocumentCache } from "./document-cache.ts";
-import { getAllowedFields, getDocumentContext } from "./lsp-utils.ts";
+import {
+  getAllowedFields,
+  getDocumentContext,
+  getFieldDefForType,
+} from "./lsp-utils.ts";
 
 const getDefaultValue = (fieldDef: FieldDef, attrs?: FieldAttrDef): string => {
   if (attrs?.default !== undefined) {
@@ -135,11 +139,14 @@ const createAddFieldAction = (
   if (!data?.fieldKey) return undefined;
 
   const fieldKey = data.fieldKey;
-  const fieldDef = context.schema.fields[fieldKey as never];
-  if (!fieldDef) return undefined;
+  const fieldInfo = getFieldDefForType(
+    fieldKey as never,
+    context.typeDef,
+    context.schema,
+  );
+  if (!fieldInfo) return undefined;
 
-  const attrs = context.typeDef?.fields_attrs?.[fieldKey as never];
-  const defaultValue = getDefaultValue(fieldDef, attrs);
+  const defaultValue = getDefaultValue(fieldInfo.def, fieldInfo.attrs);
   const fieldText = `${fieldKey}: ${defaultValue}\n`;
 
   const insertPosition = findInsertPosition(document);

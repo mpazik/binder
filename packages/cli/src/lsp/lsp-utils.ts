@@ -13,7 +13,12 @@ import type {
   NodeType,
   TypeDef,
 } from "@binder/db";
-import { getAllFieldsForType, isFieldInSchema } from "@binder/db";
+import {
+  getAllFieldsForType,
+  getTypeFieldAttrs,
+  getTypeFieldKey,
+  isFieldInSchema,
+} from "@binder/db";
 import { isErr } from "@binder/utils";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedDocument } from "../document/document.ts";
@@ -152,6 +157,27 @@ export const getAllowedFields = (
   return getAllFieldsForType(typeDef.key as NodeType, schema);
 };
 
+const findFieldAttrsInType = (
+  fieldKey: FieldKey,
+  typeDef: TypeDef | undefined,
+  schema: EntitySchema,
+): FieldAttrDef | undefined => {
+  if (!typeDef) return undefined;
+
+  for (const fieldRef of typeDef.fields) {
+    if (getTypeFieldKey(fieldRef) === fieldKey) {
+      return getTypeFieldAttrs(fieldRef);
+    }
+  }
+
+  if (typeDef.extends) {
+    const parentTypeDef = schema.types[typeDef.extends as NodeType];
+    return findFieldAttrsInType(fieldKey, parentTypeDef, schema);
+  }
+
+  return undefined;
+};
+
 export const getFieldDefForType = (
   fieldKey: FieldKey,
   typeDef: TypeDef | undefined,
@@ -167,6 +193,6 @@ export const getFieldDefForType = (
   const def = schema.fields[fieldKey];
   if (!def) return undefined;
 
-  const attrs = typeDef?.fields_attrs?.[fieldKey];
+  const attrs = findFieldAttrsInType(fieldKey, typeDef, schema);
   return { def, attrs };
 };

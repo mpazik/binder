@@ -97,10 +97,7 @@ const addTxIdsToChangeset = (
   kind: "insert" | "remove",
 ): FieldChangeset => ({
   ...changeset,
-  txIds: {
-    op: "seq",
-    mutations: [kind === "insert" ? ["insert", txId] : ["remove", txId]],
-  },
+  txIds: ["seq", [kind === "insert" ? ["insert", txId] : ["remove", txId]]],
 });
 
 export const applyTransaction = async (

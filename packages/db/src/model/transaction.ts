@@ -4,18 +4,17 @@ import {
   type IsoTimestamp,
   mapObjectValues,
 } from "@binder/utils";
-import { z } from "zod";
 import { hashString, hashToBase64Uri } from "../utils/hash.ts";
 import { type EntityId, type EntityKey, GENESIS_ENTITY_ID } from "./entity.ts";
 import type {
-  ChangesetsInput,
   ConfigurationsChangeset,
   FieldChangeset,
   NodesChangeset,
 } from "./changeset.ts";
-import squashChangesets, {
+import {
   canonicalizeEntitiesChangeset,
   inverseChangeset,
+  squashChangesets,
 } from "./changeset.ts";
 import type { NodeSchema } from "./node.ts";
 import type { ConfigSchema } from "./config.ts";
@@ -36,24 +35,6 @@ export type Transaction = {
   author: string;
   createdAt: IsoTimestamp;
 };
-
-export const TransactionInput = z.object({
-  author: z.string(),
-  createdAt: z
-    .string()
-    .transform((val) => val as IsoTimestamp | undefined)
-    .optional(),
-  nodes: z
-    .array(z.record(z.string(), z.unknown()))
-    .transform((val) => val as ChangesetsInput<"node">)
-    .optional(),
-  configurations: z
-    .array(z.record(z.string(), z.unknown()))
-    .transform((val) => val as ChangesetsInput<"config">)
-    .optional(),
-});
-
-export type TransactionInput = z.infer<typeof TransactionInput>;
 
 type CanonicalTransaction = {
   previous: TransactionHash;

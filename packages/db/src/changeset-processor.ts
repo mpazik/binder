@@ -1,4 +1,5 @@
 import {
+  assert,
   assertDefined,
   assertDefinedPass,
   assertEqual,
@@ -9,8 +10,10 @@ import {
   fail,
   includes,
   isErr,
+  isObjTuple,
   objEntries,
   objKeys,
+  objTupleKey,
   ok,
   type Result,
   type ResultAsync,
@@ -34,19 +37,31 @@ import {
   type EntitySchema,
   type EntityType,
   type EntityUid,
-  type FieldAttrDefs,
+  type FieldAttrDef,
+  getTypeFieldAttrs,
+  getTypeFieldKey,
   type FieldChangeset,
+  type FieldDef,
   type FieldKey,
   fieldTypes,
+  type Fieldset,
+  type FieldValue,
+  getFieldDef,
+  getMutationInputRef,
   incrementEntityId,
+  isClearChange,
   isEntityUpdate,
-  isListMutation,
-  isListMutationArray,
+  isListMutationInput,
+  isListMutationInputArray,
+  type ListMutationInputPatch,
+  isSetChange,
   type NamespaceEditable,
   type NamespaceSchema,
   type NodeFieldDef,
   type NodeKey,
   type NodeSchema,
+  normalizeInputValue,
+  normalizeListMutationInput,
   normalizeValueChange,
   resolveEntityRefType,
   type TypeDef,
@@ -71,8 +86,19 @@ const systemFieldsToExcludeFromValidation = [
   "$ref",
   "type",
   "key",
-  "fields_attrs",
 ] as const;
+
+const normalizeValueForField = (
+  schema: EntitySchema,
+  fieldKey: FieldKey,
+  value: FieldValue,
+): FieldValue => {
+  const fieldDef = getFieldDef(schema, fieldKey);
+  if (fieldDef?.dataType === "relation") {
+    return normalizeInputValue(value);
+  }
+  return value;
+};
 
 export type ChangesetValidationError = {
   fieldKey: string;
@@ -95,11 +121,10 @@ const collectMandatoryFields = (
     collectMandatoryFields(schema, typeDef.extends, mandatorySet, visited);
   }
 
-  if (typeDef.fields_attrs) {
-    for (const [fieldKey, attrs] of Object.entries(
-      typeDef.fields_attrs as FieldAttrDefs,
-    )) {
-      if (attrs.required) mandatorySet.add(fieldKey as EntityKey);
+  for (const fieldRef of typeDef.fields) {
+    const attrs = getTypeFieldAttrs(fieldRef);
+    if (attrs?.required) {
+      mandatorySet.add(getTypeFieldKey(fieldRef) as EntityKey);
     }
   }
 };
@@ -116,8 +141,8 @@ const getMandatoryFields = (
 const getFieldAttrs = (
   schema: EntitySchema,
   typeKey: EntityType,
-): Map<FieldKey, FieldAttrDefs[FieldKey]> => {
-  const attrsMap = new Map<FieldKey, FieldAttrDefs[FieldKey]>();
+): Map<FieldKey, FieldAttrDef> => {
+  const attrsMap = new Map<FieldKey, FieldAttrDef>();
   const visited = new Set<EntityType>();
 
   let currentTypeKey: EntityType | undefined = typeKey;
@@ -128,16 +153,58 @@ const getFieldAttrs = (
     if (!typeDef) break;
 
     currentTypeKey = typeDef.extends;
-    if (!typeDef.fields_attrs) continue;
 
-    for (const [fieldKey, attrs] of objEntries(typeDef.fields_attrs)) {
-      if (attrsMap.has(fieldKey)) continue;
+    for (const fieldRef of typeDef.fields) {
+      const fieldKey = getTypeFieldKey(fieldRef);
+      const attrs = getTypeFieldAttrs(fieldRef);
+      if (!attrs || attrsMap.has(fieldKey)) continue;
       attrsMap.set(fieldKey, attrs);
     }
   }
 
   return attrsMap;
 };
+
+const validatePatchAttrs = <N extends NamespaceEditable>(
+  namespace: N,
+  fieldKey: FieldKey,
+  fieldDef: FieldDef,
+  attrs: Fieldset,
+  schema: EntitySchema,
+): ChangesetValidationError[] => {
+  const errors: ChangesetValidationError[] = [];
+  const allowedAttrs = fieldDef.attributes;
+
+  if (!allowedAttrs || allowedAttrs.length === 0) return errors;
+
+  for (const [attrKey, attrValue] of objEntries(attrs)) {
+    if (!allowedAttrs.includes(attrKey as FieldKey)) continue;
+
+    const attrFieldDef = schema.fields[attrKey as FieldKey];
+    if (!attrFieldDef) continue;
+
+    if (attrValue === undefined) continue;
+
+    const validationResult = validateDataType(
+      namespace,
+      attrFieldDef as FieldDef<never>,
+      attrValue,
+    );
+    if (isErr(validationResult)) {
+      errors.push({
+        fieldKey: `${fieldKey}.${attrKey}`,
+        message: validationResult.error.message ?? "validation failed",
+      });
+    }
+  }
+
+  return errors;
+};
+
+const isPatchMutationInput = (
+  mutation: unknown,
+): mutation is ListMutationInputPatch =>
+  Array.isArray(mutation) && mutation[0] === "patch";
 
 const validateChangesetInput = <N extends NamespaceEditable>(
   namespace: N,
@@ -186,14 +253,25 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       }
     }
 
-    if (isListMutationArray(value)) {
+    if (isListMutationInputArray(value)) {
       for (const mutation of value) {
+        if (isPatchMutationInput(mutation)) {
+          const patchErrors = validatePatchAttrs(
+            namespace,
+            fieldKey,
+            fieldDef,
+            mutation[2],
+            schema,
+          );
+          errors.push(...patchErrors);
+          continue;
+        }
         const [kind, mutationValue] = mutation;
         const singleValueFieldDef = { ...fieldDef, allowMultiple: false };
         const validationResult = validateDataType(
           namespace,
           singleValueFieldDef,
-          mutationValue,
+          getMutationInputRef(mutationValue),
         );
         if (isErr(validationResult)) {
           errors.push({
@@ -205,13 +283,24 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       continue;
     }
 
-    if (isListMutation(value)) {
+    if (isListMutationInput(value)) {
+      if (isPatchMutationInput(value)) {
+        const patchErrors = validatePatchAttrs(
+          namespace,
+          fieldKey,
+          fieldDef,
+          value[2],
+          schema,
+        );
+        errors.push(...patchErrors);
+        continue;
+      }
       const [kind, mutationValue] = value;
       const singleValueFieldDef = { ...fieldDef, allowMultiple: false };
       const validationResult = validateDataType(
         namespace,
         singleValueFieldDef,
-        mutationValue,
+        getMutationInputRef(mutationValue),
       );
       if (isErr(validationResult)) {
         errors.push({
@@ -230,7 +319,12 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       continue;
     }
 
-    const validationResult = validateDataType(namespace, fieldDef, value);
+    const normalizedValue = normalizeValueForField(schema, fieldKey, value);
+    const validationResult = validateDataType(
+      namespace,
+      fieldDef,
+      normalizedValue,
+    );
 
     if (isErr(validationResult)) {
       errors.push({
@@ -343,20 +437,21 @@ export const applyChangeset = async <N extends NamespaceEditable>(
 
   if ("id" in changeset) {
     const idChange = normalizeValueChange(changeset.id);
-    assertEqual(idChange.op, "set", "changeset.id.op");
+    assert(
+      isSetChange(idChange) || isClearChange(idChange),
+      "changeset.id must be set or clear",
+    );
 
-    if (idChange.op === "set") {
-      if (idChange.previous === undefined) {
-        assertDefined(changeset.type, "changeset.type");
-        const patch = applyChangesetModel(emptyFieldset, changeset);
-        return await createEntity(tx, namespace, {
-          ...patch,
-          [resolveEntityRefType(entityRef)]: entityRef,
-        });
-      }
-      if (idChange.value === undefined) {
-        return await deleteEntity(tx, namespace, entityRef);
-      }
+    if (isSetChange(idChange) && idChange.length === 2) {
+      assertDefined(changeset.type, "changeset.type");
+      const patch = applyChangesetModel(emptyFieldset, changeset);
+      return await createEntity(tx, namespace, {
+        ...patch,
+        [resolveEntityRefType(entityRef)]: entityRef,
+      });
+    }
+    if (isClearChange(idChange)) {
+      return await deleteEntity(tx, namespace, entityRef);
     }
     assertFailed("id can only be set or cleared");
   } else {
@@ -397,11 +492,7 @@ export const applyConfigChangesetToSchema = (
 
   for (const changeset of Object.values(configurationsChangeset)) {
     const idChange = changeset.id ? normalizeValueChange(changeset.id) : null;
-    if (
-      idChange?.op === "set" &&
-      idChange.previous === undefined &&
-      idChange.value !== undefined
-    ) {
+    if (idChange && isSetChange(idChange) && idChange.length === 2) {
       const entity = applyChangesetModel(emptyFieldset, changeset);
 
       if (includes(fieldTypes, entity.type)) {
@@ -473,16 +564,21 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
       for (const key of keys) {
         const currentValue = currentValues[key];
         const inputValue = input[key];
-        if (isListMutationArray(inputValue)) {
-          changeset[key] = { op: "seq", mutations: inputValue };
-        } else if (isListMutation(inputValue)) {
-          changeset[key] = { op: "seq", mutations: [inputValue] };
+        if (isListMutationInputArray(inputValue)) {
+          changeset[key] = ["seq", inputValue.map(normalizeListMutationInput)];
+        } else if (isListMutationInput(inputValue)) {
+          changeset[key] = ["seq", [normalizeListMutationInput(inputValue)]];
         } else {
-          changeset[key] = {
-            op: "set",
-            value: inputValue,
-            previous: currentValue,
-          };
+          const normalizedValue = normalizeValueForField(
+            schema,
+            key,
+            inputValue as FieldValue,
+          );
+          if (currentValue === undefined || currentValue === null) {
+            changeset[key] = ["set", normalizedValue];
+          } else {
+            changeset[key] = ["set", normalizedValue, currentValue];
+          }
         }
       }
       changesetRef = (
@@ -522,7 +618,11 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
       };
       const keys = Object.keys(entityData) as FieldKey[];
       for (const key of keys) {
-        changeset[key] = (entityData as any)[key];
+        changeset[key] = normalizeValueForField(
+          schema,
+          key,
+          (entityData as any)[key],
+        );
       }
       changesetRef = (
         namespace === "node"

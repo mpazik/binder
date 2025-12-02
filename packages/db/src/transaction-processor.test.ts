@@ -8,8 +8,6 @@ import {
 } from "./model/node.mock.ts";
 import {
   mockTransactionInit,
-  mockTransactionInitInput,
-  mockTransactionInputUpdate,
   mockTransactionUpdate,
 } from "./model/transaction.mock.ts";
 import {
@@ -34,6 +32,10 @@ import {
 } from "./transaction-store.ts";
 import { mockNodeSchema } from "./model/schema.mock.ts";
 import { mockTaskTypeKey } from "./model/config.mock.ts";
+import {
+  mockTransactionInitInput,
+  mockTransactionInputUpdate,
+} from "./model/transaction-input.mock.ts";
 
 describe("transaction processor", () => {
   let db: Database;
@@ -153,6 +155,42 @@ describe("transaction processor", () => {
           },
         ],
       },
+    });
+
+    it("normalizes ObjTuple relation values to tuple format in stored changeset", async () => {
+      const newFieldKey = "summary" as ConfigKey;
+      const newTypeKey = "Issue" as NodeType;
+
+      const result = await db.transaction(async (tx) =>
+        processTransactionInput(
+          tx,
+          {
+            configurations: [
+              {
+                type: fieldSystemType,
+                key: newFieldKey,
+                dataType: "string",
+              },
+              {
+                type: typeSystemType,
+                key: newTypeKey,
+                name: "Issue",
+                fields: [{ [newFieldKey]: { required: true } }, "description"],
+              },
+            ],
+            author: "test",
+          },
+          emptySchema(),
+          coreConfigSchema,
+        ),
+      );
+
+      expect(result).toBeOk();
+      const transaction = throwIfError(result);
+      expect(transaction.configurations[newTypeKey].fields).toEqual([
+        [newFieldKey, { required: true }],
+        "description",
+      ]);
     });
   });
 

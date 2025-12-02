@@ -5,6 +5,9 @@ import {
   type EntitiesChangeset,
   type FieldChangeset,
   type FieldValue,
+  isClearChange,
+  isSeqChange,
+  isSetChange,
   normalizeValueChange,
   shortTransactionHash,
   type Transaction,
@@ -226,11 +229,12 @@ export const printData = (data: unknown) => {
 
 const getEntityOperation = (changeset: FieldChangeset): string => {
   if ("type" in changeset) {
-    const createdAtChange = normalizeValueChange(changeset.type);
-    if (createdAtChange.op === "set") {
-      if (createdAtChange.previous === undefined) return "created";
-      if (createdAtChange.value === undefined) return "deleted";
+    const change = normalizeValueChange(changeset.type);
+    if (isSetChange(change)) {
+      if (change.length === 2) return "created";
+      if (isClearChange(change)) return "deleted";
     }
+    if (isClearChange(change)) return "deleted";
   }
   return "updated";
 };
@@ -239,8 +243,9 @@ const getEntityLabel = (changeset: FieldChangeset): string => {
   const change = normalizeValueChange(
     changeset.type ?? changeset.name ?? changeset.label,
   );
-  if (change.op !== "set") return `DUBIOUS CHANGE OPERATOR: '${change.op}'`;
-  const label = change.value ?? change.previous;
+  if (!isSetChange(change) && !isClearChange(change))
+    return `DUBIOUS CHANGE OPERATOR: '${change[0]}'`;
+  const label = change[1];
   return label ? ` (${label})` : "";
 };
 
@@ -320,16 +325,12 @@ const printFieldChange = (
   change: ValueChange,
   indent: string,
 ) => {
-  if (change.op === "set") {
-    const { value, previous } = change;
+  if (isSetChange(change)) {
+    const value = change[1];
+    const previous = change.length === 3 ? change[2] : undefined;
     if (previous === undefined && value !== undefined) {
       println(
         `${indent}${Style.TEXT_DIM}${fieldKey}:${Style.TEXT_NORMAL} ${formatFieldValue(value)}`,
-      );
-    } else if (previous !== undefined && value === undefined) {
-      println(
-        `${indent}${Style.TEXT_DIM}${fieldKey}: ` +
-          `${Style.TEXT_DANGER}${formatFieldValue(previous)} → (deleted)${Style.TEXT_NORMAL}`,
       );
     } else {
       println(
@@ -337,8 +338,14 @@ const printFieldChange = (
           `${formatFieldValue(previous)} → ${formatFieldValue(value)}`,
       );
     }
-  } else if (change.op === "seq") {
-    const { mutations } = change;
+  } else if (isClearChange(change)) {
+    const previous = change[1];
+    println(
+      `${indent}${Style.TEXT_DIM}${fieldKey}: ` +
+        `${Style.TEXT_DANGER}${formatFieldValue(previous)} → (deleted)${Style.TEXT_NORMAL}`,
+    );
+  } else if (isSeqChange(change)) {
+    const mutations = change[1];
     println(
       `${indent}${Style.TEXT_DIM}${fieldKey}:${Style.TEXT_NORMAL} list mutations:`,
     );

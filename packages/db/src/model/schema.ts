@@ -36,6 +36,7 @@ export type FieldDef<D extends string = string> = {
   internal?: boolean;
   userReadonly?: boolean;
   immutable?: boolean;
+  attributes?: FieldKey[];
 };
 
 export const newId = <T extends EntityId>(seq: number, offset: number) =>
@@ -105,7 +106,16 @@ export type FieldAttrDef = {
 };
 export type FieldAttrDefs = Record<string, FieldAttrDef>;
 
-export type TypeDef = {
+export type TypeFieldRef<K extends string = FieldKey> = K | [K, FieldAttrDef];
+
+export const getTypeFieldKey = <K extends string>(ref: TypeFieldRef<K>): K =>
+  Array.isArray(ref) ? ref[0] : ref;
+
+export const getTypeFieldAttrs = <K extends string>(
+  ref: TypeFieldRef<K>,
+): FieldAttrDef | undefined => (Array.isArray(ref) ? ref[1] : undefined);
+
+export type TypeDef<K extends string = FieldKey> = {
   id: EntityId;
   key: EntityType;
   uid?: EntityUid;
@@ -113,8 +123,7 @@ export type TypeDef = {
   name: string;
   description?: string;
   extends?: EntityType;
-  fields: FieldKey[];
-  fields_attrs?: FieldAttrDefs;
+  fields: TypeFieldRef<K>[];
 };
 
 export type EntitySchema<D extends string = string> = {
@@ -144,7 +153,7 @@ export const getAllFieldsForType = (
 ): FieldKey[] => {
   const typeDef = schema.types[type];
   if (!typeDef) return [];
-  const fields = [...typeDef.fields];
+  const fields = typeDef.fields.map(getTypeFieldKey);
   if (typeDef.extends) {
     fields.push(...getAllFieldsForType(typeDef.extends, schema, false));
   }

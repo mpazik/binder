@@ -100,6 +100,11 @@ describe("data-type-validators", () => {
       checkOk("relation", createUid());
     });
 
+    it("accepts [string, object] tuple format", () => {
+      checkOk("relation", ["title", { required: true }]);
+      checkOk("relation", ["email", {}]);
+    });
+
     it("rejects empty strings", () => {
       checkErr("relation", "", { message: "non-empty string" });
     });

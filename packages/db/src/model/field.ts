@@ -1,10 +1,4 @@
-import {
-  createError,
-  err,
-  type JsonValue,
-  ok,
-  type Result,
-} from "@binder/utils";
+import { fail, type JsonValue, ok, type Result } from "@binder/utils";
 import type { FieldDef } from "./schema.ts";
 
 export type FieldKey = string;
@@ -79,18 +73,14 @@ export const parseFieldValue = (
   if (fieldDef.dataType === "seqId" || fieldDef.dataType === "integer") {
     const parsed = parseInt(trimmed, 10);
     if (isNaN(parsed))
-      return err(
-        createError("invalid-field-value", `Invalid integer: ${trimmed}`),
-      );
+      return fail("invalid-field-value", `Invalid integer: ${trimmed}`);
     return ok(parsed);
   }
 
   if (fieldDef.dataType === "decimal") {
     const parsed = parseFloat(trimmed);
     if (isNaN(parsed))
-      return err(
-        createError("invalid-field-value", `Invalid decimal: ${trimmed}`),
-      );
+      return fail("invalid-field-value", `Invalid decimal: ${trimmed}`);
     return ok(parsed);
   }
 
@@ -100,9 +90,7 @@ export const parseFieldValue = (
       return ok(true);
     if (lower === "false" || lower === "no" || lower === "off" || lower === "0")
       return ok(false);
-    return err(
-      createError("invalid-field-value", `Invalid boolean: ${trimmed}`),
-    );
+    return fail("invalid-field-value", `Invalid boolean: ${trimmed}`);
   }
 
   return ok(trimmed);

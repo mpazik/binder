@@ -17,6 +17,7 @@ import {
 import type { DocumentCache } from "./document-cache.ts";
 import {
   getDocumentContext,
+  getFieldDefForType,
   lspPositionToYamlPosition,
   yamlRangeToLspRange,
 } from "./lsp-utils.ts";
@@ -127,13 +128,20 @@ export const handleHover = async (
 
   const fieldKey = String(yamlContext.node.value);
 
-  if (!(fieldKey in context.schema.fields)) {
+  const fieldInfo = getFieldDefForType(
+    fieldKey as never,
+    context.typeDef,
+    context.schema,
+  );
+  if (!fieldInfo) {
     log.debug("Field not found in schema", { fieldKey });
     return null;
   }
 
-  const fieldDef = context.schema.fields[fieldKey as never];
-  const attrs = context.typeDef?.fields_attrs?.[fieldKey as never];
-
-  return buildFieldHover(fieldDef, attrs, yamlContext, parsed.lineCounter);
+  return buildFieldHover(
+    fieldInfo.def,
+    fieldInfo.attrs,
+    yamlContext,
+    parsed.lineCounter,
+  );
 };

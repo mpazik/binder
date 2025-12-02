@@ -4,3 +4,7 @@ export * from "./model/config.mock.ts";
 export * from "./model/transaction.mock.ts";
 export * from "./model/changeset.mock.ts";
 export * from "./model/schema.mock.ts";
+export { mockTransactionInputUpdate } from "./model/transaction-input.mock.ts";
+export { mockTransactionInitInput } from "./model/transaction-input.mock.ts";
+export { mockChangesetInputUpdateTask1 } from "./model/changeset-input.mock.ts";
+export { mockChangesetInputCreateTask1 } from "./model/changeset-input.mock.ts";

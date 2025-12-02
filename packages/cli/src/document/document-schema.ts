@@ -146,10 +146,11 @@ const typeDocument = {
   type: typeSystemType,
   name: "Document",
   description: "A top-level note made of ordered blocks.",
-  fields: [fieldPathKey, fieldTitleKey, fieldBlockContentKey],
-  fields_attrs: {
-    [fieldBlockContentKey]: { required: true },
-  },
+  fields: [
+    fieldPathKey,
+    fieldTitleKey,
+    [fieldBlockContentKey, { required: true }],
+  ],
 } as const satisfies TypeDef;
 
 const typeDocumentBlock = {
@@ -172,11 +173,10 @@ const typeSection = {
   name: "Section",
   description: "A titled container with nested blocks.",
   extends: typeDocumentBlockKey,
-  fields: [fieldTitleKey, fieldBlockContentKey],
-  fields_attrs: {
-    [fieldTitleKey]: { required: true },
-    [fieldBlockContentKey]: { required: true },
-  },
+  fields: [
+    [fieldTitleKey, { required: true }],
+    [fieldBlockContentKey, { required: true }],
+  ],
 } as const satisfies TypeDef;
 
 export const typeParagraphUid = "l0Wy3xCdCfG" as ConfigUid;
@@ -189,10 +189,7 @@ const typeParagraph = {
   name: "Paragraph",
   description: "A text paragraph block.",
   extends: typeDocumentBlockKey,
-  fields: [fieldTextContentKey],
-  fields_attrs: {
-    [fieldTextContentKey]: { required: true },
-  },
+  fields: [[fieldTextContentKey, { required: true }]],
 } as const satisfies TypeDef;
 
 export const typeQuoteUid = "m1Xz4yDeDgH" as ConfigUid;
@@ -205,10 +202,7 @@ const typeQuote = {
   name: "Quote",
   description: "A quoted text block.",
   extends: typeDocumentBlockKey,
-  fields: [fieldTextContentKey, fieldCitationSourceKey],
-  fields_attrs: {
-    [fieldTextContentKey]: { required: true },
-  },
+  fields: [[fieldTextContentKey, { required: true }], fieldCitationSourceKey],
 } as const satisfies TypeDef;
 
 export const typeCodeUid = "n2Ya5zEfEhI" as ConfigUid;
@@ -221,11 +215,10 @@ const typeCode = {
   name: "Code",
   description: "A code block.",
   extends: typeDocumentBlockKey,
-  fields: [fieldCodeLanguageKey, fieldTextContentKey],
-  fields_attrs: {
-    [fieldCodeLanguageKey]: { required: true },
-    [fieldTextContentKey]: { required: true },
-  },
+  fields: [
+    [fieldCodeLanguageKey, { required: true }],
+    [fieldTextContentKey, { required: true }],
+  ],
 } as const satisfies TypeDef;
 
 export const typeDataviewUid = "o3Zb6aFgFiJ" as ConfigUid;
@@ -238,10 +231,7 @@ const typeDataview = {
   name: "Dataview",
   description: "A query-driven view block.",
   extends: typeDocumentBlockKey,
-  fields: [fieldQueryKey, fieldTemplateKey],
-  fields_attrs: {
-    [fieldQueryKey]: { required: true },
-  },
+  fields: [[fieldQueryKey, { required: true }], fieldTemplateKey],
 } as const satisfies TypeDef;
 
 export const typeListUid = "p4Ab7cGhGjK" as ConfigUid;
@@ -254,10 +244,7 @@ const typeList = {
   name: "List",
   description: "A list container.",
   extends: typeDocumentBlockKey,
-  fields: [fieldBlockContentKey],
-  fields_attrs: {
-    [fieldBlockContentKey]: { required: true },
-  },
+  fields: [[fieldBlockContentKey, { required: true }]],
 } as const satisfies TypeDef;
 
 export const typeListItemUid = "q5Bc8dHiHkL" as ConfigUid;
@@ -270,10 +257,7 @@ const typeListItem = {
   name: "List Item",
   description: "A list item.",
   extends: typeDocumentBlockKey,
-  fields: [fieldTextContentKey],
-  fields_attrs: {
-    [fieldTextContentKey]: { required: true },
-  },
+  fields: [[fieldTextContentKey, { required: true }]],
 } as const satisfies TypeDef;
 
 export const documentSchemaTransactionInput: TransactionInput = {

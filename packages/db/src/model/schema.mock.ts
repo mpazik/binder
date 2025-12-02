@@ -9,6 +9,7 @@ import {
   mockOwnersField,
   mockProjectField,
   mockProjectType,
+  mockRoleField,
   mockStatusField,
   mockTagsField,
   mockTasksField,
@@ -36,6 +37,7 @@ export const mockNodeSchema = {
     [mockEmailField.key]: mockEmailField,
     [mockProjectField.key]: mockProjectField,
     [mockFavoriteField.key]: mockFavoriteField,
+    [mockRoleField.key]: mockRoleField,
   },
   types: {
     [mockWorkItemType.key]: mockWorkItemType,

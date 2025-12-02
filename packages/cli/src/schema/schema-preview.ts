@@ -1,4 +1,10 @@
-import type { EntitySchema, FieldAttrDef, FieldDef } from "@binder/db";
+import {
+  getTypeFieldAttrs,
+  getTypeFieldKey,
+  type EntitySchema,
+  type FieldAttrDef,
+  type FieldDef,
+} from "@binder/db";
 
 const formatFieldType = (field: FieldDef): string => {
   const { dataType, allowMultiple, range, options } = field;
@@ -75,33 +81,32 @@ export const renderSchemaPreview = (schema: EntitySchema): string => {
         ? ` <${typeDef.extends}>`
         : "";
 
-    const fields = typeDef.fields || [];
-    const fieldAttrs = typeDef.fields_attrs || {};
+    const fieldRefs = typeDef.fields || [];
 
-    const countConstraints = fields.reduce((count, f) => {
-      const attrs = fieldAttrs[f];
+    const countConstraints = fieldRefs.reduce((count, ref) => {
+      const attrs = getTypeFieldAttrs(ref);
       if (!attrs) return count;
       return count + Object.keys(attrs).length;
     }, 0);
 
-    const totalComplexity = fields.length + countConstraints;
+    const totalComplexity = fieldRefs.length + countConstraints;
     const useMultiLine = totalComplexity > 4;
 
-    if (fields.length === 0) {
+    if (fieldRefs.length === 0) {
       result += `• ${typeKey}${extendsClause}${description}\n`;
     } else if (useMultiLine) {
-      const formattedFields = fields
-        .map((f) => {
-          const attrs = formatFieldAttributes(fieldAttrs[f]);
-          return `    ${f}${attrs}`;
+      const formattedFields = fieldRefs
+        .map((ref) => {
+          const attrs = formatFieldAttributes(getTypeFieldAttrs(ref));
+          return `    ${getTypeFieldKey(ref)}${attrs}`;
         })
         .join(",\n");
       result += `• ${typeKey}${extendsClause}${description} [\n${formattedFields}\n  ]\n`;
     } else {
-      const formattedFields = fields
-        .map((f) => {
-          const attrs = formatFieldAttributes(fieldAttrs[f]);
-          return `${f}${attrs}`;
+      const formattedFields = fieldRefs
+        .map((ref) => {
+          const attrs = formatFieldAttributes(getTypeFieldAttrs(ref));
+          return `${getTypeFieldKey(ref)}${attrs}`;
         })
         .join(", ");
       result += `• ${typeKey}${extendsClause}${description} [${formattedFields}]\n`;

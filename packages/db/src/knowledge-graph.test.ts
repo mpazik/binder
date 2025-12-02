@@ -18,8 +18,6 @@ import {
 } from "./model/node.mock.ts";
 import {
   mockTransactionInit,
-  mockTransactionInitInput,
-  mockTransactionInputUpdate,
   mockTransactionUpdate,
 } from "./model/transaction.mock.ts";
 import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
@@ -31,6 +29,10 @@ import {
 } from "./model";
 import { applyAndSaveTransaction } from "./transaction-processor.ts";
 import { mockNodeSchema } from "./model/schema.mock.ts";
+import {
+  mockTransactionInitInput,
+  mockTransactionInputUpdate,
+} from "./model/transaction-input.mock.ts";
 
 describe("knowledge-graph-setup", () => {
   let db: Database;

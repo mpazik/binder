@@ -41,9 +41,19 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
 
   relation: (value) => {
     if (typeof value === "string" && value.length > 0) return okVoid;
+    if (
+      Array.isArray(value) &&
+      value.length === 2 &&
+      typeof value[0] === "string" &&
+      value[0].length > 0 &&
+      typeof value[1] === "object" &&
+      value[1] !== null &&
+      !Array.isArray(value[1])
+    )
+      return okVoid;
     return fail(
       "validation-error",
-      `Expected non-empty string for relation`,
+      `Expected non-empty string or [string, object] tuple for relation`,
       undefined,
     );
   },
