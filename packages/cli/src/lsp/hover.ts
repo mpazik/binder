@@ -14,6 +14,7 @@ import {
   type ParsedYaml,
   type YamlContext,
 } from "../document/yaml-cst.ts";
+import { formatWhenCondition } from "../utils/query.ts";
 import type { DocumentCache } from "./document-cache.ts";
 import {
   getDocumentContext,
@@ -28,6 +29,8 @@ const buildConstraintsSection = (
 ): string => {
   const constraints: string[] = [];
 
+  if (fieldDef.when)
+    constraints.push(`When: ${formatWhenCondition(fieldDef.when)}`);
   if (attrs?.required) constraints.push("Required: yes");
   if (fieldDef.unique) constraints.push("Unique: yes");
   if (fieldDef.allowMultiple) constraints.push("Allow Multiple: yes");

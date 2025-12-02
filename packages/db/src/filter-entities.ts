@@ -1,16 +1,101 @@
 import { and, sql, type SQL } from "drizzle-orm";
 import { tableStoredFields, type nodeTable, type configTable } from "./schema";
-import type { ComplexFilter, Filter, Filters } from "./model";
+import type {
+  ComplexFilter,
+  Fieldset,
+  FieldValue,
+  Filter,
+  Filters,
+} from "./model";
 
 type EntityTable = typeof nodeTable | typeof configTable;
 
-const isComplexFilter = (filter: Filter): filter is ComplexFilter => {
+export const isComplexFilter = (filter: Filter): filter is ComplexFilter => {
   return (
     typeof filter === "object" &&
     filter !== null &&
     "op" in filter &&
     "value" in filter
   );
+};
+
+export const matchesFilter = (filter: Filter, value: FieldValue): boolean => {
+  if (!isComplexFilter(filter)) {
+    if (filter === null || filter === undefined) return value == null;
+    return value === filter;
+  }
+
+  const { op, value: filterValue } = filter;
+
+  switch (op) {
+    case "eq":
+      return value === filterValue;
+    case "not":
+      return value !== filterValue;
+    case "in":
+      return (
+        Array.isArray(filterValue) &&
+        (typeof value === "string" || typeof value === "number") &&
+        filterValue.includes(value)
+      );
+    case "notIn":
+      return (
+        Array.isArray(filterValue) &&
+        (typeof value === "string" || typeof value === "number") &&
+        !filterValue.includes(value)
+      );
+    case "contains":
+      return (
+        typeof value === "string" &&
+        typeof filterValue === "string" &&
+        value.includes(filterValue)
+      );
+    case "notContains":
+      return (
+        typeof value === "string" &&
+        typeof filterValue === "string" &&
+        !value.includes(filterValue)
+      );
+    case "match":
+      return (
+        typeof value === "string" &&
+        typeof filterValue === "string" &&
+        value.includes(filterValue)
+      );
+    case "lt":
+      return (
+        (typeof value === "number" || typeof value === "string") &&
+        value < (filterValue as number | string)
+      );
+    case "lte":
+      return (
+        (typeof value === "number" || typeof value === "string") &&
+        value <= (filterValue as number | string)
+      );
+    case "gt":
+      return (
+        (typeof value === "number" || typeof value === "string") &&
+        value > (filterValue as number | string)
+      );
+    case "gte":
+      return (
+        (typeof value === "number" || typeof value === "string") &&
+        value >= (filterValue as number | string)
+      );
+    case "empty":
+      return filterValue === true
+        ? value == null || value === ""
+        : value != null && value !== "";
+    default:
+      return false;
+  }
+};
+
+export const matchesFilters = (filters: Filters, entity: Fieldset): boolean => {
+  for (const [fieldKey, filter] of Object.entries(filters)) {
+    if (!matchesFilter(filter, entity[fieldKey])) return false;
+  }
+  return true;
 };
 
 const getFieldSql = (table: EntityTable, fieldKey: string): SQL => {

@@ -1,10 +1,4 @@
-import {
-  type ConfigId,
-  type ConfigKey,
-  type ConfigUid,
-  relationFieldConfigType,
-  stringFieldConfigType,
-} from "./config.ts";
+import { type ConfigId, type ConfigKey, type ConfigUid } from "./config.ts";
 import type { NodeFieldDef, NodeType } from "./node.ts";
 import { fieldSystemType, type TypeDef, typeSystemType } from "./schema.ts";
 
@@ -55,6 +49,7 @@ export const mockStatusField = {
     { key: "todo", name: "To Do" },
     { key: "in_progress", name: "In Progress" },
     { key: "done", name: "Done" },
+    { key: "cancelled", name: "Cancelled" },
     { key: "archived", name: "Archived" },
   ],
 } as const satisfies NodeFieldDef;
@@ -69,7 +64,7 @@ export const mockAssignedToField = {
   id: 5 as ConfigId,
   uid: "fldAssign05" as ConfigUid,
   key: mockAssignedToFieldKey,
-  type: relationFieldConfigType,
+  type: fieldSystemType,
   name: "Assigned To",
   description: "Responsible party",
   dataType: "relation",
@@ -92,7 +87,7 @@ export const mockOwnersField = {
   id: 6 as ConfigId,
   uid: "fldOwners06" as ConfigUid,
   key: mockOwnersFieldKey,
-  type: relationFieldConfigType,
+  type: fieldSystemType,
   name: "Owners",
   description: "Multiple responsible parties",
   dataType: "relation",
@@ -106,7 +101,7 @@ export const mockMembersField = {
   id: 7 as ConfigId,
   uid: "fldMembrs07" as ConfigUid,
   key: mockMembersFieldKey,
-  type: relationFieldConfigType,
+  type: fieldSystemType,
   name: "Members",
   description: "Team members",
   dataType: "relation",
@@ -121,7 +116,7 @@ export const mockTasksField = {
   id: 8 as ConfigId,
   uid: "fldTasks008" as ConfigUid,
   key: mockTasksFieldKey,
-  type: relationFieldConfigType,
+  type: fieldSystemType,
   name: "Tasks",
   description: "Related tasks",
   dataType: "relation",
@@ -135,7 +130,7 @@ export const mockTagsField = {
   id: 9 as ConfigId,
   uid: "fldTags0009" as ConfigUid,
   key: mockTagsFieldKey,
-  type: stringFieldConfigType,
+  type: fieldSystemType,
   name: "Tags",
   description: "Category labels",
   dataType: "string",
@@ -158,7 +153,7 @@ export const mockEmailField = {
   id: 11 as ConfigId,
   uid: "fldEmail011" as ConfigUid,
   key: mockEmailFieldKey,
-  type: stringFieldConfigType,
+  type: fieldSystemType,
   name: "Email",
   description: "Email address",
   dataType: "string",
@@ -170,17 +165,29 @@ export const mockProjectField = {
   id: 12 as ConfigId,
   uid: "fldProjct12" as ConfigUid,
   key: mockProjectFieldKey,
-  type: relationFieldConfigType,
+  type: fieldSystemType,
   name: "Project",
   description: "Part of project",
   dataType: "relation",
   range: [mockProjectTypeKey],
 } as const satisfies NodeFieldDef;
 
+export const mockCompletedAtFieldKey = "completedAt" as ConfigKey;
+export const mockCompletedAtField = {
+  id: 15 as ConfigId,
+  uid: "fldCompAt13" as ConfigUid,
+  key: mockCompletedAtFieldKey,
+  type: fieldSystemType,
+  name: "Completed At",
+  description: "When task was completed",
+  dataType: "datetime",
+  when: { status: "done" },
+} as const satisfies NodeFieldDef;
+
 export const mockFavoriteFieldKey = "favorite" as ConfigKey;
 export const mockFavoriteField = {
   id: 13 as ConfigId,
-  uid: "fldFavort13" as ConfigUid,
+  uid: "fldFavort14" as ConfigUid,
   key: mockFavoriteFieldKey,
   type: fieldSystemType,
   name: "Favorite",
@@ -188,51 +195,56 @@ export const mockFavoriteField = {
   dataType: "boolean",
 } as const satisfies NodeFieldDef;
 
-export const mockWorkItemTypeKey = "WorkItem" as NodeType;
-export const mockWorkItemType = {
-  id: 15 as ConfigId,
-  uid: "typWorkItm0" as ConfigUid,
-  key: mockWorkItemTypeKey,
-  type: typeSystemType,
-  name: "Work Item",
-  description: "Actionable item",
-  fields: [
-    [mockTitleFieldKey, { required: true }],
-    mockDescriptionFieldKey,
-    [mockStatusFieldKey, { default: "todo" }],
-    mockAssignedToFieldKey,
-    mockTagsFieldKey,
-  ],
-} as const satisfies TypeDef;
+export const mockCancelReasonFieldKey = "cancelReason" as ConfigKey;
+export const mockCancelReasonField = {
+  id: 16 as ConfigId,
+  uid: "fldCancRe20" as ConfigUid,
+  key: mockCancelReasonFieldKey,
+  type: fieldSystemType,
+  name: "Cancel Reason",
+  description: "Reason for cancellation",
+  dataType: "string",
+  when: { status: "cancelled" },
+} as const satisfies NodeFieldDef;
 
 export const mockTaskType = {
-  id: 16 as ConfigId,
+  id: 17 as ConfigId,
   uid: "typTask0012" as ConfigUid,
   key: mockTaskTypeKey,
   type: typeSystemType,
   name: "Task",
   description: "Individual unit of work",
   fields: [
-    mockDueDateFieldKey,
-    [mockStatusFieldKey, { exclude: ["archived"] }],
+    [mockTitleFieldKey, { required: true }],
+    mockDescriptionFieldKey,
+    [mockStatusFieldKey, { default: "todo", exclude: ["archived"] }],
     [mockAssignedToFieldKey, { only: ["User"] }],
+    mockTagsFieldKey,
+    mockDueDateFieldKey,
+    mockCompletedAtFieldKey,
+    [mockCancelReasonFieldKey, { required: true }],
   ],
-  extends: mockWorkItemTypeKey,
 } as const satisfies TypeDef;
 
 export const mockProjectType = {
-  id: 17 as ConfigId,
+  id: 18 as ConfigId,
   uid: "typProjct13" as ConfigUid,
   key: mockProjectTypeKey,
   type: typeSystemType,
   name: "Project",
   description: "Container for related tasks",
-  fields: [mockTasksFieldKey, [mockStatusFieldKey, { required: true }]],
-  extends: mockWorkItemTypeKey,
+  fields: [
+    [mockTitleFieldKey, { required: true }],
+    mockDescriptionFieldKey,
+    [mockStatusFieldKey, { default: "todo", required: true }],
+    mockAssignedToFieldKey,
+    mockTagsFieldKey,
+    mockTasksFieldKey,
+  ],
 } as const satisfies TypeDef;
 
 export const mockUserType = {
-  id: 18 as ConfigId,
+  id: 19 as ConfigId,
   uid: "typUser0014" as ConfigUid,
   key: mockUserTypeKey,
   type: typeSystemType,
@@ -245,7 +257,7 @@ export const mockUserType = {
 } as const satisfies TypeDef;
 
 export const mockTeamType = {
-  id: 19 as ConfigId,
+  id: 20 as ConfigId,
   uid: "typTeam0015" as ConfigUid,
   key: mockTeamTypeKey,
   type: typeSystemType,

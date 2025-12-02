@@ -30,7 +30,7 @@ describe("renderSchemaPreview", () => {
 
   it("should render option field with available options", () => {
     expect(result).toContain(
-      "• status: todo|in_progress|done|archived - Current state",
+      "• status: todo|in_progress|done|cancelled|archived - Current state",
     );
   });
 
@@ -61,22 +61,20 @@ describe("renderSchemaPreview", () => {
     expect(result).toContain("• favorite: boolean - Favorite item");
   });
 
-  it("should render types with inheritance", () => {
-    expect(result).toContain("• Task <WorkItem> - Individual unit of work");
-    expect(result).toContain(
-      "• Project <WorkItem> - Container for related tasks",
-    );
+  it("should render types without inheritance", () => {
+    expect(result).toContain("• Task - Individual unit of work");
+    expect(result).toContain("• Project - Container for related tasks");
   });
 
   it("should render types with field constraints", () => {
     expect(result).toContain("title{required}");
-    expect(result).toContain("status{default: todo}");
+    expect(result).toContain("status{default: todo, exclude: archived}");
   });
 
   it("should render multi-line format for complex types", () => {
-    // WorkItem has 5 fields + constraints, should use multi-line
+    // Task has 6 fields + constraints, should use multi-line
     expect(result).toContain(
-      "• WorkItem - Actionable item [\n    title{required}",
+      "• Task - Individual unit of work [\n    title{required}",
     );
   });
 
@@ -91,7 +89,7 @@ describe("renderSchemaPreview", () => {
     const result = renderSchemaPreview(mockNodeSchema);
 
     expect(result).toContain("title{required}");
-    expect(result).toContain("status{default: todo}");
+    expect(result).toContain("status{default: todo, exclude: archived}");
     expect(result).toContain("members{min: 1}");
     expect(result).toContain('name{required, description: "Full name"}');
   });
@@ -100,7 +98,13 @@ describe("renderSchemaPreview", () => {
     const result = renderSchemaPreview(mockNodeSchema);
 
     expect(result).toContain("assignedTo{only: User}");
-    expect(result).toContain("status{exclude: archived}");
+    expect(result).toContain("status{default: todo, exclude: archived}");
+  });
+
+  it("should render when constraint", () => {
+    const result = renderSchemaPreview(mockNodeSchema);
+
+    expect(result).toContain("completedAt: datetime {when: status=done}");
   });
 
   it("should handle empty schema", () => {

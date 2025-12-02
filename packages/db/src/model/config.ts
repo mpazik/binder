@@ -47,30 +47,19 @@ export const configSchemaIds = {
   fields: newId<ConfigId>(7, coreIdsLimit),
   immutable: newId<ConfigId>(8, coreIdsLimit),
   disabled: newId<ConfigId>(9, coreIdsLimit),
-  extends: newId<ConfigId>(10, coreIdsLimit),
   unique: newId<ConfigId>(11, coreIdsLimit),
   attributes: newId<ConfigId>(12, coreIdsLimit),
   Field: newId<ConfigId>(13, coreIdsLimit),
   Type: newId<ConfigId>(14, coreIdsLimit),
-  RelationField: newId<ConfigId>(15, coreIdsLimit),
-  StringField: newId<ConfigId>(16, coreIdsLimit),
-  OptionField: newId<ConfigId>(17, coreIdsLimit),
   required: newId<ConfigId>(18, coreIdsLimit),
   default: newId<ConfigId>(19, coreIdsLimit),
   value: newId<ConfigId>(20, coreIdsLimit),
   exclude: newId<ConfigId>(21, coreIdsLimit),
   only: newId<ConfigId>(22, coreIdsLimit),
+  when: newId<ConfigId>(23, coreIdsLimit),
 } as const;
 
-export const relationFieldConfigType = "RelationField" as ConfigType;
-export const stringFieldConfigType = "StringField" as ConfigType;
-export const optionFieldConfigType = "OptionField" as ConfigType;
-export const fieldTypes = [
-  fieldSystemType,
-  relationFieldConfigType,
-  stringFieldConfigType,
-  optionFieldConfigType,
-] as const;
+export const fieldTypes = [fieldSystemType] as const;
 
 export type ConfigFieldDef = FieldDef<ConfigDataType>;
 export const configFields = {
@@ -88,6 +77,7 @@ export const configFields = {
     key: "options" as ConfigKey,
     name: "options",
     dataType: "optionSet",
+    when: { dataType: "option" },
   },
   domain: {
     id: configSchemaIds.domain,
@@ -95,6 +85,7 @@ export const configFields = {
     name: "Domain",
     dataType: "relation",
     allowMultiple: true,
+    when: { dataType: "relation" },
   },
   range: {
     id: configSchemaIds.range,
@@ -102,6 +93,7 @@ export const configFields = {
     name: "range",
     dataType: "relation",
     allowMultiple: true,
+    when: { dataType: "relation" },
   },
   allowMultiple: {
     id: configSchemaIds.allowMultiple,
@@ -118,6 +110,7 @@ export const configFields = {
     dataType: "relation",
     description: "Attribute of which this attribute is an inverse relation of",
     immutable: true,
+    when: { dataType: "relation" },
   },
   // rangeQuery: { key: "rangeQuery", name: "Range Query", dataType: "query" },
   // formula: { key: "formula", name: "formula", dataType: "formula" },
@@ -142,13 +135,6 @@ export const configFields = {
     dataType: "boolean",
     description: "Indicates if this entity is disabled",
   },
-  extends: {
-    id: configSchemaIds.extends,
-    key: "extends" as ConfigKey,
-    name: "Extends",
-    dataType: "relation",
-    range: [typeSystemType],
-  },
   unique: {
     id: configSchemaIds.unique,
     key: "unique" as ConfigKey,
@@ -156,6 +142,7 @@ export const configFields = {
     dataType: "boolean",
     description: "Whether the field value must be unique",
     immutable: true,
+    when: { dataType: "string" },
   },
   attributes: {
     id: configSchemaIds.attributes,
@@ -203,6 +190,13 @@ export const configFields = {
     description: "Allowed option values",
     allowMultiple: true,
   },
+  when: {
+    id: configSchemaIds.when,
+    key: "when" as ConfigKey,
+    name: "When",
+    dataType: "object",
+    description: "Condition filters for when this field is applicable",
+  },
 } as const satisfies Record<FieldKey, ConfigFieldDef>;
 
 export type ConfigFieldDefinitions = typeof configFields;
@@ -212,7 +206,6 @@ export type ConfigTypeDefinition = {
   key: ConfigKey;
   name: string;
   description: string;
-  extends?: ConfigType;
   fields: TypeFieldRef<ConfigFieldKey>[];
 };
 export type ConfigTypeDefinitions = Record<ConfigType, ConfigTypeDefinition>;
@@ -232,49 +225,20 @@ export const configTypeDefs: ConfigTypeDefinitions = {
       "description",
       "allowMultiple",
       "attributes",
-    ],
-  },
-  [relationFieldConfigType]: {
-    id: configSchemaIds.RelationField,
-    key: relationFieldConfigType,
-    name: "Attribute",
-    description: "Configuration field definition",
-    extends: fieldSystemType,
-    fields: [
       "domain",
       "range",
       "inverseOf",
-      ["dataType", { value: "relation" }],
+      "unique",
+      "options",
+      "when",
     ],
-  },
-  [stringFieldConfigType]: {
-    id: configSchemaIds.StringField,
-    key: stringFieldConfigType,
-    name: "String Attribute",
-    description: "String field with optional unique constraint",
-    extends: fieldSystemType,
-    fields: ["unique", ["dataType", { value: "string" }]],
-  },
-  [optionFieldConfigType]: {
-    id: configSchemaIds.OptionField,
-    key: optionFieldConfigType,
-    name: "Option Attribute",
-    description: "Option field with predefined choices",
-    extends: fieldSystemType,
-    fields: ["options", ["dataType", { value: "option" }]],
   },
   [typeSystemType]: {
     id: configSchemaIds.Type,
     key: typeSystemType,
     name: "Type",
     description: "Configuration entity type definition",
-    fields: [
-      ["key", { required: true }],
-      "name",
-      "description",
-      "fields",
-      "extends",
-    ],
+    fields: [["key", { required: true }], "name", "description", "fields"],
   },
 } as const;
 export type ConfigTypeBuilder<

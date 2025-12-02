@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
   mockAssignedToField,
+  mockCancelReasonField,
+  mockCompletedAtField,
   mockDescriptionField,
   mockDueDateField,
   mockEmailField,
@@ -17,8 +19,6 @@ import {
   mockTitleField,
   mockUserType,
   mockUserTypeKey,
-  mockWorkItemType,
-  mockWorkItemTypeKey,
 } from "@binder/db/mocks";
 import type { FieldDef, NodeType, TypeDef } from "@binder/db";
 import { groupByToObject } from "@binder/utils";
@@ -53,9 +53,9 @@ describe("filterSchemaByTypes", () => {
     });
   });
 
-  it("should include type with parent", () => {
+  it("should include type with all its fields", () => {
     check([mockTaskTypeKey], {
-      types: [mockWorkItemType, mockTaskType],
+      types: [mockTaskType],
       fields: [
         mockTitleField,
         mockDescriptionField,
@@ -63,26 +63,15 @@ describe("filterSchemaByTypes", () => {
         mockAssignedToField,
         mockTagsField,
         mockDueDateField,
+        mockCompletedAtField,
+        mockCancelReasonField,
       ],
     });
   });
 
-  it("should include parent without children", () => {
-    check([mockWorkItemTypeKey], {
-      types: [mockWorkItemType],
-      fields: [
-        mockTitleField,
-        mockDescriptionField,
-        mockStatusField,
-        mockAssignedToField,
-        mockTagsField,
-      ],
-    });
-  });
-
-  it("should include multiple types with shared parent", () => {
+  it("should include multiple types with their fields", () => {
     check([mockTaskTypeKey, mockProjectTypeKey], {
-      types: [mockWorkItemType, mockTaskType, mockProjectType],
+      types: [mockTaskType, mockProjectType],
       fields: [
         mockTitleField,
         mockDescriptionField,
@@ -91,6 +80,8 @@ describe("filterSchemaByTypes", () => {
         mockTagsField,
         mockTasksField,
         mockDueDateField,
+        mockCompletedAtField,
+        mockCancelReasonField,
       ],
     });
   });

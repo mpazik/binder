@@ -6,32 +6,6 @@ import {
 } from "@binder/db";
 import { filterObjectValues } from "@binder/utils";
 
-const collectExtendedTypes = (
-  schema: EntitySchema,
-  typeKeys: EntityType[],
-): Set<EntityType> => {
-  const result = new Set<EntityType>();
-
-  const addTypeAndParents = (typeKey: EntityType) => {
-    if (result.has(typeKey)) return;
-    result.add(typeKey);
-
-    const typeDef = schema.types[typeKey];
-    if (!typeDef) return;
-
-    const extendsType = typeDef.extends;
-    if (extendsType) {
-      addTypeAndParents(extendsType as EntityType);
-    }
-  };
-
-  for (const typeKey of typeKeys) {
-    addTypeAndParents(typeKey);
-  }
-
-  return result;
-};
-
 const collectTypeFields = (
   schema: EntitySchema,
   typeKeys: Set<EntityType>,
@@ -54,15 +28,17 @@ export const filterSchemaByTypes = (
   schema: EntitySchema,
   typeKeys: EntityType[],
 ): EntitySchema => {
-  const allTypes = collectExtendedTypes(schema, typeKeys);
-  const allFields = collectTypeFields(schema, allTypes);
+  const validTypes = new Set(
+    typeKeys.filter((typeKey) => schema.types[typeKey]),
+  );
+  const allFields = collectTypeFields(schema, validTypes);
 
   return {
     fields: filterObjectValues(schema.fields, (_, key) =>
       allFields.has(key as EntityKey),
     ),
     types: filterObjectValues(schema.types, (_, key) =>
-      allTypes.has(key as EntityKey),
+      validTypes.has(key as EntityType),
     ),
   };
 };

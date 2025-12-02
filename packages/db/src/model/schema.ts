@@ -6,6 +6,7 @@ import {
   type OptionDef,
 } from "./data-type.ts";
 import type { FieldKey, FieldPath } from "./field.ts";
+import type { Filters } from "./query.ts";
 
 export type EntityTypeBuilder<
   D extends Record<string, unknown>,
@@ -37,6 +38,7 @@ export type FieldDef<D extends string = string> = {
   userReadonly?: boolean;
   immutable?: boolean;
   attributes?: FieldKey[];
+  when?: Filters;
 };
 
 export const newId = <T extends EntityId>(seq: number, offset: number) =>
@@ -122,7 +124,6 @@ export type TypeDef<K extends string = FieldKey> = {
   type?: EntityType;
   name: string;
   description?: string;
-  extends?: EntityType;
   fields: TypeFieldRef<K>[];
 };
 
@@ -154,13 +155,7 @@ export const getAllFieldsForType = (
   const typeDef = schema.types[type];
   if (!typeDef) return [];
   const fields = typeDef.fields.map(getTypeFieldKey);
-  if (typeDef.extends) {
-    fields.push(...getAllFieldsForType(typeDef.extends, schema, false));
-  }
-  if (includeSystemFields) {
-    return [...systemFieldKeys, ...fields];
-  }
-  return fields;
+  return includeSystemFields ? [...systemFieldKeys, ...fields] : fields;
 };
 
 export const getFieldDef = <D extends string = CoreDataType>(

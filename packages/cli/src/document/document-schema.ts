@@ -7,7 +7,6 @@ import {
   fieldSystemType,
   type NodeFieldDef,
   type NodeType,
-  relationFieldConfigType,
   type TransactionInput,
   type TypeDef,
   typeSystemType,
@@ -33,7 +32,7 @@ const fieldBlockContent = {
   id: 2 as ConfigId,
   uid: fieldBlockContentUid,
   key: fieldBlockContentKey,
-  type: relationFieldConfigType,
+  type: fieldSystemType,
   name: "Block Content",
   description: "Ordered list of child blocks.",
   dataType: "relation",
@@ -172,7 +171,6 @@ const typeSection = {
   type: typeSystemType,
   name: "Section",
   description: "A titled container with nested blocks.",
-  extends: typeDocumentBlockKey,
   fields: [
     [fieldTitleKey, { required: true }],
     [fieldBlockContentKey, { required: true }],
@@ -188,7 +186,6 @@ const typeParagraph = {
   type: typeSystemType,
   name: "Paragraph",
   description: "A text paragraph block.",
-  extends: typeDocumentBlockKey,
   fields: [[fieldTextContentKey, { required: true }]],
 } as const satisfies TypeDef;
 
@@ -201,7 +198,6 @@ const typeQuote = {
   type: typeSystemType,
   name: "Quote",
   description: "A quoted text block.",
-  extends: typeDocumentBlockKey,
   fields: [[fieldTextContentKey, { required: true }], fieldCitationSourceKey],
 } as const satisfies TypeDef;
 
@@ -214,7 +210,6 @@ const typeCode = {
   type: typeSystemType,
   name: "Code",
   description: "A code block.",
-  extends: typeDocumentBlockKey,
   fields: [
     [fieldCodeLanguageKey, { required: true }],
     [fieldTextContentKey, { required: true }],
@@ -230,7 +225,6 @@ const typeDataview = {
   type: typeSystemType,
   name: "Dataview",
   description: "A query-driven view block.",
-  extends: typeDocumentBlockKey,
   fields: [[fieldQueryKey, { required: true }], fieldTemplateKey],
 } as const satisfies TypeDef;
 
@@ -243,7 +237,6 @@ const typeList = {
   type: typeSystemType,
   name: "List",
   description: "A list container.",
-  extends: typeDocumentBlockKey,
   fields: [[fieldBlockContentKey, { required: true }]],
 } as const satisfies TypeDef;
 
@@ -256,7 +249,6 @@ const typeListItem = {
   type: typeSystemType,
   name: "List Item",
   description: "A list item.",
-  extends: typeDocumentBlockKey,
   fields: [[fieldTextContentKey, { required: true }]],
 } as const satisfies TypeDef;
 

@@ -5,6 +5,7 @@ import {
   type FieldAttrDef,
   type FieldDef,
 } from "@binder/db";
+import { formatWhenCondition } from "../utils/query.ts";
 
 const formatFieldType = (field: FieldDef): string => {
   const { dataType, allowMultiple, range, options } = field;
@@ -28,7 +29,6 @@ const formatFieldType = (field: FieldDef): string => {
       }
       return optionValues;
     }
-    // Show option without defined options
     return allowMultiple ? "option[]" : "option";
   }
 
@@ -66,20 +66,19 @@ export const renderSchemaPreview = (schema: EntitySchema): string => {
 
   for (const [fieldKey, fieldDef] of Object.entries(schema.fields)) {
     const typeInfo = formatFieldType(fieldDef);
+    const whenInfo = fieldDef.when
+      ? ` {when: ${formatWhenCondition(fieldDef.when)}}`
+      : "";
     const description = fieldDef.description
       ? ` - ${fieldDef.description}`
       : "";
-    result += `• ${fieldKey}: ${typeInfo}${description}\n`;
+    result += `• ${fieldKey}: ${typeInfo}${whenInfo}${description}\n`;
   }
 
   result += "\nTYPES:\n";
 
   for (const [typeKey, typeDef] of Object.entries(schema.types)) {
     const description = typeDef.description ? ` - ${typeDef.description}` : "";
-    const extendsClause =
-      typeDef.extends && typeDef.extends.length > 0
-        ? ` <${typeDef.extends}>`
-        : "";
 
     const fieldRefs = typeDef.fields || [];
 
@@ -93,7 +92,7 @@ export const renderSchemaPreview = (schema: EntitySchema): string => {
     const useMultiLine = totalComplexity > 4;
 
     if (fieldRefs.length === 0) {
-      result += `• ${typeKey}${extendsClause}${description}\n`;
+      result += `• ${typeKey}${description}\n`;
     } else if (useMultiLine) {
       const formattedFields = fieldRefs
         .map((ref) => {
@@ -101,7 +100,7 @@ export const renderSchemaPreview = (schema: EntitySchema): string => {
           return `    ${getTypeFieldKey(ref)}${attrs}`;
         })
         .join(",\n");
-      result += `• ${typeKey}${extendsClause}${description} [\n${formattedFields}\n  ]\n`;
+      result += `• ${typeKey}${description} [\n${formattedFields}\n  ]\n`;
     } else {
       const formattedFields = fieldRefs
         .map((ref) => {
@@ -109,7 +108,7 @@ export const renderSchemaPreview = (schema: EntitySchema): string => {
           return `${getTypeFieldKey(ref)}${attrs}`;
         })
         .join(", ");
-      result += `• ${typeKey}${extendsClause}${description} [${formattedFields}]\n`;
+      result += `• ${typeKey}${description} [${formattedFields}]\n`;
     }
   }
 

@@ -15,3 +15,8 @@ export {
   parseFieldValue,
   setNestedValue,
 } from "./model/field.ts";
+export {
+  isComplexFilter,
+  matchesFilter,
+  matchesFilters,
+} from "./filter-entities.ts";

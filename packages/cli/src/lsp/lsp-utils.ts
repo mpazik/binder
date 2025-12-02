@@ -160,7 +160,6 @@ export const getAllowedFields = (
 const findFieldAttrsInType = (
   fieldKey: FieldKey,
   typeDef: TypeDef | undefined,
-  schema: EntitySchema,
 ): FieldAttrDef | undefined => {
   if (!typeDef) return undefined;
 
@@ -168,11 +167,6 @@ const findFieldAttrsInType = (
     if (getTypeFieldKey(fieldRef) === fieldKey) {
       return getTypeFieldAttrs(fieldRef);
     }
-  }
-
-  if (typeDef.extends) {
-    const parentTypeDef = schema.types[typeDef.extends as NodeType];
-    return findFieldAttrsInType(fieldKey, parentTypeDef, schema);
   }
 
   return undefined;
@@ -193,6 +187,6 @@ export const getFieldDefForType = (
   const def = schema.fields[fieldKey];
   if (!def) return undefined;
 
-  const attrs = findFieldAttrsInType(fieldKey, typeDef, schema);
+  const attrs = findFieldAttrsInType(fieldKey, typeDef);
   return { def, attrs };
 };

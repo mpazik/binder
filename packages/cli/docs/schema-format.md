@@ -1,14 +1,14 @@
 # Schema Format for LLM Context
 
-A standardized schema format optimized for LLM comprehension, inspired by RDF principles where **fields** are reusable properties and **types** are entity classes with inheritance and constraints.
+A standardized schema format optimized for LLM comprehension, inspired by RDF principles where **fields** are reusable properties and **types** are entity classes with conditional constraints.
 
 ## Core Concepts
 
 - **System Fields** (SYSTEM FIELDS section) - Built-in fields available on all types (id, version, timestamps)
 - **Fields** (FIELDS section) - Reusable properties that can be used across multiple types
 - **Types** (TYPES section) - Entity classes composed of field references with optional constraints
-- **Inheritance** - Types extend parents (`<ParentType>`), inheriting all fields and constraints
 - **Constraints** - Types refine fields using HTML-style attributes: `{required}`, `{only: User}`, `{min: 1}`
+- **Conditional Fields** - Fields declare when they're relevant via `{when: field=value}` constraint
 - **Relations** - Directional (RDF-style), inverses not automatically inferred
 
 ## Key Design Principles
@@ -40,8 +40,7 @@ FIELDS:
 • fieldName: type - Description
 
 TYPES:
-• TypeName - Description [field1, field2]
-• ChildType <ParentType> - Description [field3{constraint}]
+• TypeName - Description [field1, field2{constraint}]
 ```
 
 **Formatting:**
@@ -85,18 +84,28 @@ option1|option2                         // Enum (lowercase values)
 {pattern: "regex"}            // Validation (or named: "email", "url")
 {only: Type1|Type2}           // Restrict union/enum to subset
 {exclude: value1|value2}      // Remove enum options
+{when: field=value}           // Field relevant only when condition met
 
 // Combine multiple
 title{required, minLength: 3, description: "Primary identifier"}
+completedAt{when: status=done}
+range{when: dataType=relation, required}
 ```
 
-### Inheritance
+### Conditional Fields
 
-- Children inherit all parent fields and constraints
-- Inheritance is transitive (grandchildren inherit from grandparents)
-- Children can add new fields and constraints (make stricter)
-- Children **cannot relax** parent constraints
-- Constraints are **additive** and merged
+- Fields can declare when they're relevant using `{when: field=value}`
+- Conditional fields appear in completions but validate only when condition met
+- A conditional `{required}` is only mandatory when the `when` condition is satisfied
+- Useful for fields that only make sense in certain contexts (e.g., `range` only for relation fields)
+
+**Examples:**
+```
+range{when: dataType=relation}     // Only relevant for relation fields
+options{when: dataType=option}     // Only relevant for option fields
+completedAt{when: status=done}     // Only relevant when task is done
+cancelReason{when: status=cancelled, required}  // Required only when cancelled
+```
 
 ### System Fields
 
@@ -124,20 +133,24 @@ FIELDS:
 • dueDate: date - When task is due
 
 TYPES:
-• WorkItem - Actionable item [
+• Task - Individual unit of work [
     title{required},
     description,
-    status{default: todo},
-    assignedTo,
+    status{default: todo, exclude: archived},
+    assignedTo{only: User},
     tags,
-  ]
-• Task <WorkItem> - Individual unit of work [
     dueDate,
     priority,
-    status{exclude: archived},
-    assignedTo{only: User}
+    completedAt{when: status=done},
   ]
-• Project <WorkItem> - Container for related tasks [tasks, status{required}]
+• Project - Container for related tasks [
+    title{required},
+    description,
+    status{required, default: todo},
+    assignedTo,
+    tags,
+    tasks,
+  ]
 • User - Individual user account [name{required, description: "Full name"}]
 • Team - Collaborative group [name{required}, members{min: 1}]
 ```

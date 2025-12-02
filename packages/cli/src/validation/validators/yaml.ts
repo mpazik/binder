@@ -11,11 +11,13 @@ import { assertNotEmpty, includes, isErr, type JsonValue } from "@binder/utils";
 import {
   type DataTypeNs,
   type EntityType,
+  type Fieldset,
   getAllFieldsForType,
   getFieldDef,
   type Includes,
   type IncludesValue,
   isFieldInSchema,
+  matchesFilters,
   type Namespace,
   systemFieldKeys,
   validateDataType,
@@ -68,7 +70,7 @@ const expectKeys = (
   });
 };
 
-const yamlNodeToJson = (node: ParsedNode | null): JsonValue | undefined => {
+const yamlNodeToJson = (node: unknown | null): JsonValue | undefined => {
   if (node === null) return undefined;
   if (isScalar(node)) return node.value as JsonValue;
   if (isSeq(node)) {
@@ -122,6 +124,7 @@ const visitEntityNode = <N extends Namespace>(
   const errors: ValidationError[] = [];
   const schema = context.schema;
   const allFieldsForType = getAllFieldsForType(entityType, schema);
+  const entityValues = yamlNodeToJson(node) as Fieldset;
 
   for (const item of node.items) {
     if (!isPair(item) || !isScalar(item.key)) {
@@ -177,6 +180,18 @@ const visitEntityNode = <N extends Namespace>(
         ),
       );
       continue;
+    }
+
+    if (fieldDef.when && !matchesFilters(fieldDef.when, entityValues)) {
+      errors.push(
+        createValidationError(
+          "conditional-field-mismatch",
+          `Field '${fieldKey}' is not applicable for current entity values`,
+          getRange(item.key, lc),
+          "warning",
+          { fieldKey, when: fieldDef.when },
+        ),
+      );
     }
 
     const valueNode = item.value;

@@ -1,12 +1,27 @@
-import type {
-  EntityType,
-  Fieldset,
-  Filter,
-  Filters,
-  QueryParams,
+import {
+  type EntityType,
+  type Fieldset,
+  type Filter,
+  type Filters,
+  isComplexFilter,
+  type QueryParams,
 } from "@binder/db";
 import { createError, err, isErr, ok, type Result } from "@binder/utils";
 import { extractFieldNames, interpolateFields } from "./interpolate-fields.ts";
+
+export const formatWhenCondition = (filters: Filters): string =>
+  Object.entries(filters)
+    .map(([field, filter]) => {
+      if (isComplexFilter(filter)) {
+        const { op, value } = filter;
+        if (op === "not") return `${field}!=${value}`;
+        if (op === "in" && Array.isArray(value))
+          return `${field}=${value.join("|")}`;
+        return `${field}=${value}`;
+      }
+      return `${field}=${filter}`;
+    })
+    .join(", ");
 
 export type NavigationContext = Fieldset[];
 

@@ -36,7 +36,6 @@ import {
   inverseChangeset,
   type NamespaceEditable,
   type NodeType,
-  stringFieldConfigType,
   typeSystemType,
 } from "./model";
 import { entityExists, fetchEntityFieldset } from "./entity-store.ts";
@@ -305,6 +304,74 @@ describe("processChangesetInput", () => {
       );
     });
 
+    it("accepts create without conditional required field when condition not met", () =>
+      checkProcessingSucceeds([
+        { type: mockTaskTypeKey, title: "Task", status: "todo" },
+      ]));
+
+    it("rejects create missing conditional required field when condition is met", async () => {
+      await checkHasValidationErrors(
+        [
+          {
+            type: mockTaskTypeKey,
+            title: "Cancelled Task",
+            status: "cancelled",
+          },
+        ],
+        [
+          {
+            changesetIndex: 0,
+            namespace: "node",
+            fieldKey: "cancelReason",
+            message: "mandatory property is missing or null",
+          },
+        ],
+      );
+    });
+
+    it("accepts create with conditional required field when condition is met", () =>
+      checkProcessingSucceeds([
+        {
+          type: mockTaskTypeKey,
+          title: "Cancelled Task",
+          status: "cancelled",
+          cancelReason: "No longer needed",
+        },
+      ]));
+
+    it("rejects update to status triggering conditional required field", async () => {
+      await insertNode(db, mockTask1Node);
+
+      await checkHasValidationErrors(
+        [
+          {
+            $ref: mockTask1Node.uid,
+            status: "cancelled",
+          },
+        ],
+        [
+          {
+            changesetIndex: 0,
+            namespace: "node",
+            fieldKey: "cancelReason",
+            message: "mandatory property is missing or null",
+          },
+        ],
+      );
+    });
+
+    it("accepts update to status with conditional required field provided", async () => {
+      await insertNode(db, mockTask1Node);
+
+      await checkProcessingSucceeds([
+        {
+          $ref: mockTask1Node.uid,
+          status: "cancelled",
+          cancelReason: "Project cancelled",
+        },
+      ]);
+    });
+
     it("rejects create missing multiple mandatory properties", async () => {
       await checkHasValidationErrors(
         [{ type: fieldSystemType }],
@@ -571,49 +638,30 @@ describe("processChangesetInput", () => {
       );
     });
 
-    it("auto-sets dataType to 'string' when creating StringField without specifying dataType", () =>
+    it("creates Field with dataType='string'", () =>
       checkProcessingSucceeds(
         [
           {
-            type: stringFieldConfigType,
+            type: fieldSystemType,
             key: "testStringField" as ConfigKey,
-          },
-        ],
-        "config",
-      ));
-
-    it("accepts StringField with dataType='string'", () =>
-      checkProcessingSucceeds(
-        [
-          {
-            type: stringFieldConfigType,
-            key: "testStringField2" as ConfigKey,
             dataType: "string",
           },
         ],
         "config",
       ));
 
-    it("rejects StringField with dataType='relation'", async () => {
-      await checkHasValidationErrors(
+    it("creates Field with dataType='string' and unique constraint", () =>
+      checkProcessingSucceeds(
         [
           {
-            type: stringFieldConfigType,
-            key: "testStringField3" as ConfigKey,
-            dataType: "relation",
-          },
-        ],
-        [
-          {
-            changesetIndex: 0,
-            namespace: "config",
-            fieldKey: "dataType",
-            message: 'field must have value "string", got: relation',
+            type: fieldSystemType,
+            key: "testStringField2" as ConfigKey,
+            dataType: "string",
+            unique: true,
           },
         ],
         "config",
-      );
-    });
+      ));
 
     it("creates Type with fields using ObjTuple format (YAML ergonomic input)", () =>
       checkProcessingSucceeds(

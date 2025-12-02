@@ -28,7 +28,6 @@ import {
   type EntityChangesetInput,
   type EntityChangesetRef,
   type EntityId,
-  type EntityKey,
   type EntityNsRef,
   type EntityUid,
   type EntityNsUid,
@@ -74,6 +73,7 @@ import {
 } from "./entity-store.ts";
 import { validateDataType } from "./data-type-validators.ts";
 import { editableEntityTables } from "./schema.ts";
+import { matchesFilters } from "./filter-entities.ts";
 
 const systemGeneratedFields = ["id", "txIds"] as const;
 
@@ -103,37 +103,25 @@ export type ChangesetValidationError = {
   message: string;
 };
 
-const collectMandatoryFields = (
-  schema: EntitySchema,
-  type: EntityType,
-  mandatorySet: Set<FieldKey>,
-  visited = new Set<EntityType>(),
-): void => {
-  if (visited.has(type)) return;
-  visited.add(type);
-
-  const typeDef = schema.types[type];
-  if (!typeDef) return;
-
-  if (typeDef.extends) {
-    collectMandatoryFields(schema, typeDef.extends, mandatorySet, visited);
-  }
-
-  for (const fieldRef of typeDef.fields) {
-    const attrs = getTypeFieldAttrs(fieldRef);
-    if (attrs?.required) {
-      mandatorySet.add(getTypeFieldKey(fieldRef) as EntityKey);
-    }
-  }
-};
-
 const getMandatoryFields = (
   schema: EntitySchema,
   typeKey: EntityType,
+  entityValues: Fieldset,
 ): FieldKey[] => {
-  const mandatorySet = new Set<FieldKey>();
-  collectMandatoryFields(schema, typeKey, mandatorySet);
-  return Array.from(mandatorySet);
+  const typeDef = schema.types[typeKey];
+  if (!typeDef) return [];
+
+  const mandatoryFields: FieldKey[] = [];
+  for (const fieldRef of typeDef.fields) {
+    const attrs = getTypeFieldAttrs(fieldRef);
+    if (!attrs?.required) continue;
+    const fieldKey = getTypeFieldKey(fieldRef) as FieldKey;
+    const fieldDef = schema.fields[fieldKey];
+    if (fieldDef?.when && !matchesFilters(fieldDef.when, entityValues))
+      continue;
+    mandatoryFields.push(fieldKey);
+  }
+  return mandatoryFields;
 };
 
 const getFieldAttrs = (
@@ -141,26 +129,46 @@ const getFieldAttrs = (
   typeKey: EntityType,
 ): Map<FieldKey, FieldAttrDef> => {
   const attrsMap = new Map<FieldKey, FieldAttrDef>();
-  const visited = new Set<EntityType>();
+  const typeDef = schema.types[typeKey];
+  if (!typeDef) return attrsMap;
 
-  let currentTypeKey: EntityType | undefined = typeKey;
-  while (currentTypeKey && !visited.has(currentTypeKey)) {
-    visited.add(currentTypeKey);
-
-    const typeDef = schema.types[currentTypeKey] as TypeDef;
-    if (!typeDef) break;
-
-    currentTypeKey = typeDef.extends;
-
-    for (const fieldRef of typeDef.fields) {
-      const fieldKey = getTypeFieldKey(fieldRef);
-      const attrs = getTypeFieldAttrs(fieldRef);
-      if (!attrs || attrsMap.has(fieldKey)) continue;
-      attrsMap.set(fieldKey, attrs);
-    }
+  for (const fieldRef of typeDef.fields) {
+    const fieldKey = getTypeFieldKey(fieldRef);
+    const attrs = getTypeFieldAttrs(fieldRef);
+    if (attrs) attrsMap.set(fieldKey, attrs);
   }
-
   return attrsMap;
+};
+
+const validateConditionalMandatoryFields = (
+  schema: EntitySchema,
+  typeKey: EntityType,
+  mergedValues: Fieldset,
+  inputKeys: FieldKey[],
+): ChangesetValidationError[] => {
+  const errors: ChangesetValidationError[] = [];
+  const typeDef = schema.types[typeKey];
+  if (!typeDef) return errors;
+
+  for (const fieldRef of typeDef.fields) {
+    const attrs = getTypeFieldAttrs(fieldRef);
+    if (!attrs?.required) continue;
+
+    const fieldKey = getTypeFieldKey(fieldRef) as FieldKey;
+    const fieldDef = schema.fields[fieldKey];
+    if (!fieldDef?.when) continue;
+
+    if (!matchesFilters(fieldDef.when, mergedValues)) continue;
+
+    if (mergedValues[fieldKey] != null) continue;
+    if (inputKeys.includes(fieldKey)) continue;
+
+    errors.push({
+      fieldKey,
+      message: "mandatory property is missing or null",
+    });
+  }
+  return errors;
 };
 
 const validatePatchAttrs = <N extends NamespaceEditable>(
@@ -211,12 +219,8 @@ const validateChangesetInput = <N extends NamespaceEditable>(
 ): ChangesetValidationError[] => {
   const errors: ChangesetValidationError[] = [];
 
-  const keyValue = input["key"];
-  if (
-    keyValue !== undefined &&
-    typeof keyValue === "string" &&
-    isReservedEntityKey(keyValue)
-  ) {
+  const keyValue = input["key"] as string;
+  if (keyValue !== undefined && isReservedEntityKey(keyValue)) {
     errors.push({
       fieldKey: "key",
       message: `key "${keyValue}" is reserved and cannot be used`,
@@ -365,8 +369,14 @@ const validateChangesetInput = <N extends NamespaceEditable>(
     return errors;
   }
 
-  const mandatoryFields = getMandatoryFields(schema, typeKey);
   const fieldAttrs = getFieldAttrs(schema, typeKey);
+  // For creates, input contains all entity values needed to evaluate `when` conditions.
+  // Updates are partial and skip mandatory validation, so this cast is safe.
+  const mandatoryFields = getMandatoryFields(
+    schema,
+    typeKey,
+    input as Fieldset,
+  );
 
   for (const fieldKey of mandatoryFields) {
     const attrs = fieldAttrs.get(fieldKey);
@@ -572,6 +582,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
         ...keys,
         "key",
         "uid",
+        "type",
       ]);
       if (isErr(selectResult)) return selectResult;
       const currentValues = selectResult.data;
@@ -585,6 +596,17 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
       if (isErr(uniquenessResult)) return uniquenessResult;
       if (uniquenessResult.data.length > 0)
         return validationError(index, namespace, uniquenessResult.data);
+
+      const typeKey = currentValues.type as EntityType;
+      const mergedValues = { ...currentValues, ...input } as Fieldset;
+      const mandatoryErrors = validateConditionalMandatoryFields(
+        schema,
+        typeKey,
+        mergedValues,
+        keys,
+      );
+      if (mandatoryErrors.length > 0)
+        return validationError(index, namespace, mandatoryErrors);
       for (const key of keys) {
         const currentValue = currentValues[key];
         const inputValue = input[key];
