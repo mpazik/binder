@@ -60,16 +60,24 @@ describe("patch-parser", () => {
   });
 
   describe("array operations", () => {
-    it("sets array with JSON", () => {
+    it("sets array with JSON/YAML", () => {
       check('field=["a","b","c"]', ["a", "b", "c"]);
       check("field=[]", []);
       check("field=[1,2,3]", [1, 2, 3]);
       check("field=[true,false,null]", [true, false, null]);
+      check("field=[a, b, c]", ["a", "b", "c"]);
     });
 
     it("sets array of objects", () => {
       check(
         'options=[{"key":"draft","name":"Draft"},{"key":"active","name":"Active"}]',
+        [
+          { key: "draft", name: "Draft" },
+          { key: "active", name: "Active" },
+        ],
+      );
+      check(
+        "options=[{key: draft, name: Draft}, {key: active, name: Active}]",
         [
           { key: "draft", name: "Draft" },
           { key: "active", name: "Active" },
@@ -94,33 +102,24 @@ describe("patch-parser", () => {
       ]);
     });
 
-    it("inserts at position", () => {
-      check("tags[0]+=critical", ["insert", "critical", 0]);
-      check("tags[2]+=important", ["insert", "important", 2]);
-      check("tags[last]+=urgent", ["insert", "urgent", "last"]);
-      check("tags[-1]+=urgent", ["insert", "urgent", "last"]);
+    it("inserts at position with :accessor", () => {
+      check("tags:0+=critical", ["insert", "critical", 0]);
+      check("tags:2+=important", ["insert", "important", 2]);
+      check("tags:first+=critical", ["insert", "critical", 0]);
+      check("tags:last+=urgent", ["insert", "urgent", "last"]);
     });
 
     it("removes by value", () => {
-      check("tags[last]-=urgent", ["remove", "urgent", "last"]);
-      check("tags[-1]-=urgent", ["remove", "urgent", "last"]);
-      check("tags[all]-=todo", ["remove", "todo", "all"]);
-      check("tags[1]-=urgent", ["remove", "urgent", 1]);
+      check("tags-=urgent", ["remove", "urgent"]);
+      check("tags:last-=urgent", ["remove", "urgent", "last"]);
+      check("tags:1-=urgent", ["remove", "urgent", 1]);
     });
 
-    it("removes multiple values", () => {
-      check("tags[all]-=a,b,c", [
-        ["remove", "a", "all"],
-        ["remove", "b", "all"],
-        ["remove", "c", "all"],
-      ]);
-    });
-
-    it("removes by position", () => {
-      check("tags[0]--", ["remove", null, 0]);
-      check("tags[2]--", ["remove", null, 2]);
-      check("tags[last]--", ["remove", null, "last"]);
-      check("tags[-1]--", ["remove", null, "last"]);
+    it("removes by position with :accessor", () => {
+      check("tags:0--", ["remove", null, 0]);
+      check("tags:2--", ["remove", null, 2]);
+      check("tags:first--", ["remove", null, 0]);
+      check("tags:last--", ["remove", null, "last"]);
     });
 
     it("handles quoted values", () => {
@@ -136,8 +135,47 @@ describe("patch-parser", () => {
 
     it("handles ref values", () => {
       check("links+=person/jan", ["insert", "person/jan"]);
-      check("links[0]+=note/beta", ["insert", "note/beta", 0]);
-      check("links[-1]-=note/stale", ["remove", "note/stale", "last"]);
+      check("links:0+=note/beta", ["insert", "note/beta", 0]);
+      check("links:last-=note/stale", ["remove", "note/stale", "last"]);
+    });
+  });
+
+  describe("patch operations", () => {
+    it("patches attrs on field with :stringKey accessor", () => {
+      check("fields:title={required: true}", [
+        "patch",
+        "title",
+        { required: true },
+      ]);
+      check("fields:status={default: todo}", [
+        "patch",
+        "status",
+        { default: "todo" },
+      ]);
+    });
+
+    it("patches multiple attrs", () => {
+      check("fields:title={required: true, default: Untitled}", [
+        "patch",
+        "title",
+        { required: true, default: "Untitled" },
+      ]);
+    });
+
+    it("patches with JSON syntax", () => {
+      check('fields:title={"required":true}', [
+        "patch",
+        "title",
+        { required: true },
+      ]);
+    });
+
+    it("removes attr with null", () => {
+      check("fields:title={required: null}", [
+        "patch",
+        "title",
+        { required: null },
+      ]);
     });
   });
 
@@ -173,17 +211,22 @@ describe("patch-parser", () => {
   });
 
   it("handles array operations in patches", () => {
+    checkArray(["tags+=a,b,c", "items:0--", "list=x,y,z"], {
+      tags: [
+        ["insert", "a"],
+        ["insert", "b"],
+        ["insert", "c"],
+      ],
+      items: ["remove", null, 0],
+      list: ["x", "y", "z"],
+    });
+  });
+
+  it("handles patch operations in patches", () => {
     checkArray(
-      ["tags+=a,b,c", "old[all]-=legacy", "items[0]--", "list=x,y,z"],
+      ["fields:title={required: true}", "fields:status={default: todo}"],
       {
-        tags: [
-          ["insert", "a"],
-          ["insert", "b"],
-          ["insert", "c"],
-        ],
-        old: ["remove", "legacy", "all"],
-        items: ["remove", null, 0],
-        list: ["x", "y", "z"],
+        fields: ["patch", "status", { default: "todo" }],
       },
     );
   });
@@ -195,19 +238,13 @@ describe("patch-parser", () => {
       );
     });
 
-    it("returns error for invalid array index", () => {
-      expect(parseFieldChange("tags[abc]+=urgent")).toBeErrWithKey(
-        "invalid-array-index",
-      );
+    it("returns error for remove by position without accessor", () => {
+      expect(parseFieldChange("tags--")).toBeErrWithKey("missing-accessor");
     });
 
-    it("returns error for remove by position without index", () => {
-      expect(parseFieldChange("tags--")).toBeErrWithKey("missing-index");
-    });
-
-    it("returns error for invalid JSON", () => {
-      expect(parseFieldChange("field={invalid json}")).toBeErrWithKey(
-        "invalid-json-format",
+    it("returns error for invalid YAML/JSON", () => {
+      expect(parseFieldChange("field={invalid: json: here}")).toBeErrWithKey(
+        "invalid-yaml-format",
       );
     });
 

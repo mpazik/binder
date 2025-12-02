@@ -369,6 +369,36 @@ describe("processChangesetInput", () => {
       );
     });
 
+    it("rejects reserved keys on create and update", async () => {
+      await insertConfig(db, mockTitleField);
+
+      await checkHasValidationErrors(
+        [
+          {
+            type: fieldSystemType,
+            key: "first" as ConfigKey,
+            dataType: "string",
+          },
+          { $ref: mockTitleFieldKey, key: "last" as ConfigKey },
+        ],
+        [
+          {
+            changesetIndex: 0,
+            namespace: "config",
+            fieldKey: "key",
+            message: 'key "first" is reserved and cannot be used',
+          },
+          {
+            changesetIndex: 1,
+            namespace: "config",
+            fieldKey: "key",
+            message: 'key "last" is reserved and cannot be used',
+          },
+        ],
+        "config",
+      );
+    });
+
     it("validates field data types", async () => {
       await checkHasValidationErrors(
         [{ type: fieldSystemType, key: testFieldKey, dataType: 123 as any }],

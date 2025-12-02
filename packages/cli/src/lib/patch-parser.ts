@@ -2,22 +2,37 @@ import type {
   FieldChangeInput,
   FieldChangesetInput,
   FieldKey,
+  Fieldset,
 } from "@binder/db";
 import {
   createError,
   err,
+  type ErrorObject,
+  fail,
   isErr,
   ok,
-  parseJson,
   type Result,
+  tryCatch,
 } from "@binder/utils";
+import * as YAML from "yaml";
 
-export const patchesDescription =
-  "field=value patches. Arrays: field=a,b,c | field+=item | field[0]+=item | field[last]-=item | field[all]-=item | field[0]--";
+export const patchesDescription = "field=value patches";
 
-type ArrayOperation = {
+export const createPatchExamples = (
+  command: string,
+): readonly [string, string][] => [
+  [`$0 ${command} title=Hello`, "Set field"],
+  [`$0 ${command} tags=a,b,c`, "Set array (comma-separated)"],
+  [`$0 ${command} tags+=urgent`, "Append to array"],
+  [`$0 ${command} tags-=old`, "Remove from array"],
+  [`$0 ${command} tags:0+=first`, "Insert at position"],
+  [`$0 ${command} tags:last--`, "Remove last"],
+  [`$0 ${command} 'fields:title={required: true}'`, "Patch attrs"],
+];
+
+type PatchOperation = {
   field: string;
-  index?: string | number;
+  accessor?: string;
   operator: "=" | "+=" | "-=" | "--";
   value: string;
 };
@@ -29,37 +44,47 @@ const trimSingleQuotes = (str: string): string => {
   return str;
 };
 
-const parseArrayOperation = (patch: string): ArrayOperation | null => {
+const parsePatchOperation = (patch: string): PatchOperation | null => {
   const patchHasOuterQuotes =
     (patch.startsWith("'") && patch.endsWith("'")) ||
     (patch.startsWith('"') && patch.endsWith('"'));
   const trimmedPatch = patchHasOuterQuotes ? patch.slice(1, -1) : patch;
-  const match = trimmedPatch.match(/^([\w]+)(?:\[([^\]]+)\])?([-+]*=|--)(.*)$/);
+  const match = trimmedPatch.match(/^([\w]+)(?::([^=+-]+))?([-+]*=|--)(.*)$/);
   if (!match) return null;
 
-  const [, field, index, operator, value] = match;
+  const [, field, accessor, operator, value] = match;
   return {
     field: field!,
-    index: index,
-    operator: operator as ArrayOperation["operator"],
+    accessor: accessor,
+    operator: operator as PatchOperation["operator"],
     value: trimSingleQuotes(value!),
   };
 };
 
-const normalizeIndex = (
-  index?: string | number,
-): Result<number | "last" | "all" | undefined> => {
-  if (index === undefined) return ok(undefined);
-  if (index === "last" || index === "-1") return ok("last");
-  if (index === "all") return ok("all");
-  const num = Number(index);
-  if (isNaN(num)) {
-    return err(
-      createError("invalid-array-index", "Invalid array index", { index }),
-    );
-  }
-  return ok(num);
+type NormalizedAccessor = number | "first" | "last" | string;
+
+const normalizeAccessor = (
+  accessor?: string,
+): Result<NormalizedAccessor | undefined> => {
+  if (accessor === undefined) return ok(undefined);
+  if (accessor === "first") return ok("first");
+  if (accessor === "last") return ok("last");
+  const num = Number(accessor);
+  if (!isNaN(num)) return ok(num);
+  return ok(accessor);
 };
+
+const accessorToPosition = (
+  accessor: NormalizedAccessor,
+): number | "last" | undefined => {
+  if (accessor === "first") return 0;
+  if (accessor === "last") return "last";
+  if (typeof accessor === "number") return accessor;
+  return undefined;
+};
+
+const isStringAccessor = (accessor: NormalizedAccessor): accessor is string =>
+  typeof accessor === "string" && accessor !== "first" && accessor !== "last";
 
 const parseQuotedValue = (value: string): string => {
   if (
@@ -83,7 +108,7 @@ const parseSimpleValue = (value: string): string => {
   return value;
 };
 
-const createPatchFormatError = (patch: string) => {
+const createPatchFormatError = (patch: string): ErrorObject => {
   const missingOperator = !patch.includes("=");
   const hasQuote = patch.includes('"') || patch.includes("'");
 
@@ -100,24 +125,44 @@ const createPatchFormatError = (patch: string) => {
   });
 };
 
+const parseYamlValue = (
+  value: string,
+  patch: string,
+): Result<FieldChangeInput> =>
+  tryCatch(
+    () => YAML.parse(value) as FieldChangeInput,
+    (error) =>
+      createError("invalid-yaml-format", "Invalid YAML/JSON format", {
+        patch,
+        error,
+      }),
+  );
+
 export const parseFieldChange = (
   fieldChange: string,
 ): Result<FieldChangeInput> => {
-  const arrayOp = parseArrayOperation(fieldChange);
-  if (!arrayOp) return err(createPatchFormatError(fieldChange));
+  const patchOp = parsePatchOperation(fieldChange);
+  if (!patchOp) return err(createPatchFormatError(fieldChange));
 
-  const { field, index, operator, value } = arrayOp;
+  const { accessor, operator, value } = patchOp;
+
+  const normalizedAccessorResult = normalizeAccessor(accessor);
+  if (isErr(normalizedAccessorResult)) return normalizedAccessorResult;
+  const normalizedAccessor = normalizedAccessorResult.data;
 
   if (value.startsWith("[") || value.startsWith("{")) {
-    const result = parseJson<FieldChangeInput>(value);
-    if (isErr(result)) {
-      return err(
-        createError("invalid-json-format", "Invalid JSON format", {
-          patch: fieldChange,
-        }),
-      );
+    const parsedResult = parseYamlValue(value, fieldChange);
+    if (isErr(parsedResult)) return parsedResult;
+    const parsedValue = parsedResult.data;
+
+    if (
+      normalizedAccessor !== undefined &&
+      isStringAccessor(normalizedAccessor)
+    ) {
+      return ok(["patch", normalizedAccessor, parsedValue as Fieldset]);
     }
-    return ok(result.data);
+
+    return ok(parsedValue);
   }
 
   if (operator === "=") {
@@ -146,75 +191,81 @@ export const parseFieldChange = (
   }
 
   if (operator === "+=") {
+    const position =
+      normalizedAccessor !== undefined
+        ? accessorToPosition(normalizedAccessor)
+        : undefined;
+
     const values = splitCommaSeparated(value);
-    const normalizedIndexResult = normalizeIndex(index);
-    if (isErr(normalizedIndexResult)) return normalizedIndexResult;
-    const normalizedIndex = normalizedIndexResult.data;
 
     if (values.length === 1) {
       const val = parseSimpleValue(values[0]!);
-      if (normalizedIndex === undefined) {
+      if (position === undefined) {
         return ok(["insert", val]);
       }
-      return ok(["insert", val, normalizedIndex]);
+      return ok(["insert", val, position]);
     }
 
     return ok(
       values.map((v) => {
         const val = parseSimpleValue(v);
-        if (normalizedIndex === undefined) {
+        if (position === undefined) {
           return ["insert", val];
         }
-        return ["insert", val, normalizedIndex];
+        return ["insert", val, position];
       }),
     );
   }
 
   if (operator === "-=") {
+    const position =
+      normalizedAccessor !== undefined
+        ? accessorToPosition(normalizedAccessor)
+        : undefined;
+
     const values = splitCommaSeparated(value);
-    const normalizedIndexResult = normalizeIndex(index);
-    if (isErr(normalizedIndexResult)) return normalizedIndexResult;
-    const normalizedIndex = normalizedIndexResult.data;
 
     if (values.length === 1) {
       const val = parseSimpleValue(values[0]!);
-      if (normalizedIndex === undefined) {
+      if (position === undefined) {
         return ok(["remove", val]);
       }
-      return ok(["remove", val, normalizedIndex]);
+      return ok(["remove", val, position]);
     }
 
     return ok(
       values.map((v) => {
         const val = parseSimpleValue(v);
-        if (normalizedIndex === undefined) {
+        if (position === undefined) {
           return ["remove", val];
         }
-        return ["remove", val, normalizedIndex];
+        return ["remove", val, position];
       }),
     );
   }
 
   if (operator === "--") {
-    const normalizedIndexResult = normalizeIndex(index);
-    if (isErr(normalizedIndexResult)) return normalizedIndexResult;
-    const normalizedIndex = normalizedIndexResult.data;
-    if (normalizedIndex === undefined) {
-      return err(
-        createError("missing-index", "Remove by position requires an index", {
+    const position =
+      normalizedAccessor !== undefined
+        ? accessorToPosition(normalizedAccessor)
+        : undefined;
+
+    if (position === undefined) {
+      return fail(
+        "missing-accessor",
+        "Remove by position requires an accessor (e.g., :0, :first, :last)",
+        {
           patch: fieldChange,
-        }),
+        },
       );
     }
-    return ok(["remove", null, normalizedIndex]);
+    return ok(["remove", null, position]);
   }
 
-  return err(
-    createError("invalid-operator", "Invalid operator", {
-      operator,
-      patch: fieldChange,
-    }),
-  );
+  return fail("invalid-operator", "Invalid operator", {
+    operator,
+    patch: fieldChange,
+  });
 };
 
 export const parsePatches = (
@@ -222,10 +273,10 @@ export const parsePatches = (
 ): Result<FieldChangesetInput> => {
   const result: Record<string, FieldChangeInput> = {};
   for (const patch of patches) {
-    const arrayOp = parseArrayOperation(patch);
-    if (!arrayOp) return err(createPatchFormatError(patch));
+    const patchOp = parsePatchOperation(patch);
+    if (!patchOp) return err(createPatchFormatError(patch));
 
-    const fieldKey = arrayOp.field as FieldKey;
+    const fieldKey = patchOp.field as FieldKey;
     const fieldChangeResult = parseFieldChange(patch);
     if (isErr(fieldChangeResult)) return fieldChangeResult;
     result[fieldKey] = fieldChangeResult.data;

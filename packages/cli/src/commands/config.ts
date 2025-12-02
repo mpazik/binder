@@ -11,7 +11,11 @@ import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchemaByTypes } from "../schema/schema-filter.ts";
 import { printTransaction } from "../ui.ts";
-import { parsePatches, patchesDescription } from "../lib/patch-parser.ts";
+import {
+  createPatchExamples,
+  parsePatches,
+  patchesDescription,
+} from "../lib/patch-parser.ts";
 import { types } from "./types.ts";
 
 export const configCreateHandler: CommandHandlerWithDb<{
@@ -121,11 +125,10 @@ const ConfigCommand = types({
           command: "create <type> [patches..]",
           aliases: ["add"],
           describe: "create a new config entity with field=value patches",
-          builder: (yargs: Argv) => {
-            return yargs
+          builder: (yargs: Argv) =>
+            yargs
               .positional("type", {
-                describe:
-                  "config entity type (Type, Field, Instruction, Integration, etc.)",
+                describe: "config entity type (Type, Field, etc.)",
                 type: "string",
                 demandOption: true,
                 coerce: (value: string) => value as ConfigType,
@@ -135,8 +138,8 @@ const ConfigCommand = types({
                 type: "string",
                 array: true,
                 default: [],
-              });
-          },
+              })
+              .example(createPatchExamples("config create Type")),
           handler: runtimeWithDb(configCreateHandler),
         }),
       )
@@ -160,8 +163,8 @@ const ConfigCommand = types({
         types({
           command: "update <ref> [patches..]",
           describe: "update a config entity with field=value patches",
-          builder: (yargs: Argv) => {
-            return yargs
+          builder: (yargs: Argv) =>
+            yargs
               .positional("ref", {
                 describe: "config entity reference (id | uid | key)",
                 type: "string",
@@ -173,8 +176,8 @@ const ConfigCommand = types({
                 type: "string",
                 array: true,
                 default: [],
-              });
-          },
+              })
+              .example(createPatchExamples("config update <ref>")),
           handler: runtimeWithDb(configUpdateHandler),
         }),
       )

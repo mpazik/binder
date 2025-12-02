@@ -33,10 +33,10 @@ import {
   type EntityId,
   type EntityKey,
   type EntityNsRef,
+  type EntityUid,
   type EntityNsUid,
   type EntitySchema,
   type EntityType,
-  type EntityUid,
   type FieldAttrDef,
   getTypeFieldAttrs,
   getTypeFieldKey,
@@ -54,6 +54,7 @@ import {
   isListMutationInput,
   isListMutationInputArray,
   type ListMutationInputPatch,
+  isReservedEntityKey,
   isSetChange,
   type NamespaceEditable,
   type NamespaceSchema,
@@ -212,6 +213,18 @@ const validateChangesetInput = <N extends NamespaceEditable>(
   schema: EntitySchema,
 ): ChangesetValidationError[] => {
   const errors: ChangesetValidationError[] = [];
+
+  const keyValue = input["key"];
+  if (
+    keyValue !== undefined &&
+    typeof keyValue === "string" &&
+    isReservedEntityKey(keyValue)
+  ) {
+    errors.push({
+      fieldKey: "key",
+      message: `key "${keyValue}" is reserved and cannot be used`,
+    });
+  }
 
   for (const fieldKey of objKeys(input)) {
     if (systemFieldsToExcludeFromValidation.includes(fieldKey as any)) {

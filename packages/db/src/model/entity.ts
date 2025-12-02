@@ -32,3 +32,24 @@ export const isEntityId = (id: EntityRef): id is EntityId =>
   typeof id === "number";
 
 export const isEntityUid = (id: EntityRef): id is EntityUid => isValidUid(id);
+
+export const reservedEntityKeys = [
+  "first",
+  "last",
+  "all",
+  "none",
+  "new",
+  "next",
+  "prev",
+  "self",
+  "root",
+  "latest",
+  "oldest",
+  "count",
+  "head",
+] as const;
+
+export type ReservedEntityKey = (typeof reservedEntityKeys)[number];
+
+export const isReservedEntityKey = (key: string): key is ReservedEntityKey =>
+  reservedEntityKeys.includes(key as ReservedEntityKey);

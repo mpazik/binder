@@ -2,7 +2,11 @@ import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import { type NodeRef, type NodeType, normalizeEntityRef } from "@binder/db";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
-import { parsePatches, patchesDescription } from "../lib/patch-parser.ts";
+import {
+  createPatchExamples,
+  parsePatches,
+  patchesDescription,
+} from "../lib/patch-parser.ts";
 import { types } from "./types.ts";
 
 export const nodeCreateHandler: CommandHandlerWithDb<{
@@ -71,8 +75,8 @@ const NodeCommand = types({
           command: "create <type> [patches..]",
           aliases: ["add"],
           describe: "create a new node with field=value patches",
-          builder: (yargs: Argv) => {
-            return yargs
+          builder: (yargs: Argv) =>
+            yargs
               .positional("type", {
                 describe: "node type",
                 type: "string",
@@ -84,8 +88,8 @@ const NodeCommand = types({
                 type: "string",
                 array: true,
                 default: [],
-              });
-          },
+              })
+              .example(createPatchExamples("node create Task")),
           handler: runtimeWithDb(nodeCreateHandler),
         }),
       )
@@ -109,8 +113,8 @@ const NodeCommand = types({
         types({
           command: "update <ref> [patches..]",
           describe: "update a node with field=value patches",
-          builder: (yargs: Argv) => {
-            return yargs
+          builder: (yargs: Argv) =>
+            yargs
               .positional("ref", {
                 describe: "node reference (id | uid | key)",
                 type: "string",
@@ -122,8 +126,8 @@ const NodeCommand = types({
                 type: "string",
                 array: true,
                 default: [],
-              });
-          },
+              })
+              .example(createPatchExamples("node update <ref>")),
           handler: runtimeWithDb(nodeUpdateHandler),
         }),
       )
