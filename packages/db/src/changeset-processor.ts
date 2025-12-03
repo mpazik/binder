@@ -2,7 +2,6 @@ import {
   assert,
   assertDefined,
   assertDefinedPass,
-  assertEqual,
   assertFailed,
   assertNotEmpty,
   createError,
@@ -10,10 +9,8 @@ import {
   fail,
   includes,
   isErr,
-  isObjTuple,
   objEntries,
   objKeys,
-  objTupleKey,
   ok,
   type Result,
   type ResultAsync,
@@ -503,8 +500,11 @@ export const applyConfigChangesetToSchema = (
   const newFields: NodeSchema["fields"] = { ...baseSchema.fields };
   const newTypes: NodeSchema["types"] = { ...baseSchema.types };
 
-  for (const changeset of Object.values(configurationsChangeset)) {
+  for (const [configKey, changeset] of Object.entries(
+    configurationsChangeset,
+  )) {
     const idChange = changeset.id ? normalizeValueChange(changeset.id) : null;
+
     if (idChange && isSetChange(idChange) && idChange.length === 2) {
       const entity = applyChangesetModel(emptyFieldset, changeset);
 
@@ -514,6 +514,17 @@ export const applyConfigChangesetToSchema = (
       } else if (entity.type === typeSystemType) {
         const type = entity as TypeDef;
         newTypes[type.key as EntityType] = type;
+      }
+    } else if (!idChange) {
+      const existingField = newFields[configKey as FieldKey];
+      const existingType = newTypes[configKey as EntityType];
+
+      if (existingField) {
+        const updated = applyChangesetModel(existingField, changeset);
+        newFields[configKey as FieldKey] = updated as NodeFieldDef;
+      } else if (existingType) {
+        const updated = applyChangesetModel(existingType, changeset);
+        newTypes[configKey as EntityType] = updated as TypeDef;
       }
     }
   }

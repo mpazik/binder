@@ -18,11 +18,16 @@ import {
 } from "./model/changeset.mock.ts";
 import { getTestDatabase, insertConfig, insertNode } from "./db.mock.ts";
 import { type Database } from "./db.ts";
-import { applyChangeset, processChangesetInput } from "./changeset-processor";
+import {
+  applyChangeset,
+  applyConfigChangesetToSchema,
+  processChangesetInput,
+} from "./changeset-processor";
 import {
   type ConfigKey,
   type ConfigType,
   coreConfigSchema,
+  emptyNodeSchema,
   type EntitiesChangeset,
   type EntityChangesetInput,
   type FieldKey,
@@ -30,13 +35,16 @@ import {
   GENESIS_ENTITY_ID,
   inverseChangeset,
   type NamespaceEditable,
+  type NodeType,
   stringFieldConfigType,
+  typeSystemType,
 } from "./model";
 import { entityExists, fetchEntityFieldset } from "./entity-store.ts";
 import { mockNodeSchema } from "./model/schema.mock.ts";
 import {
   mockEmailFieldKey,
   mockNotExistingNodeTypeKey,
+  mockTaskType,
   mockTaskTypeKey,
   mockTitleField,
   mockTitleFieldKey,
@@ -177,12 +185,8 @@ describe("processChangesetInput", () => {
     namespace?: NamespaceEditable,
   ) => {
     const result = await process(inputs, namespace);
-    expect(result).toBeErr();
+    expect(result).toBeErrWithKey("changeset-input-process-failed");
     const error = throwIfValue(result);
-    expect(error).toMatchObject({
-      key: "changeset-input-process-failed",
-      message: "failed creating changeset",
-    });
     expect((error.data as any).errors).toEqual(expectedErrors);
   };
 
@@ -690,5 +694,86 @@ describe("processChangesetInput", () => {
         );
       });
     });
+  });
+});
+
+describe("applyConfigChangesetToSchema", () => {
+  const newFieldKey = "priority" as ConfigKey;
+  const newTypeKey = "Bug" as NodeType;
+
+  it("adds new field to schema", () => {
+    const changeset: EntitiesChangeset<"config"> = {
+      [newFieldKey]: {
+        id: 1,
+        uid: "fldPriori01",
+        key: newFieldKey,
+        type: fieldSystemType,
+        dataType: "string",
+      },
+    };
+
+    const result = applyConfigChangesetToSchema(emptyNodeSchema, changeset);
+
+    expect(result.fields[newFieldKey]).toMatchObject({
+      key: newFieldKey,
+      dataType: "string",
+    });
+  });
+
+  it("adds new type to schema", () => {
+    const changeset: EntitiesChangeset<"config"> = {
+      [newTypeKey]: {
+        id: 1,
+        uid: "typBug0001",
+        key: newTypeKey,
+        type: typeSystemType,
+        name: "Bug",
+        fields: [[newFieldKey, { required: true }]],
+      },
+    };
+
+    const result = applyConfigChangesetToSchema(emptyNodeSchema, changeset);
+
+    expect(result.types[newTypeKey]).toMatchObject({
+      key: newTypeKey,
+      name: "Bug",
+      fields: [[newFieldKey, { required: true }]],
+    });
+  });
+
+  it("updates existing type fields", () => {
+    const changeset: EntitiesChangeset<"config"> = {
+      [mockTaskTypeKey]: {
+        fields: [
+          "set",
+          [
+            [mockTitleFieldKey, { required: true }],
+            [newFieldKey, { required: true }],
+          ],
+          mockTaskType.fields,
+        ],
+      },
+    };
+
+    const result = applyConfigChangesetToSchema(mockNodeSchema, changeset);
+
+    expect(result.types[mockTaskTypeKey]?.fields).toEqual([
+      [mockTitleFieldKey, { required: true }],
+      [newFieldKey, { required: true }],
+    ]);
+  });
+
+  it("updates existing field properties", () => {
+    const changeset: EntitiesChangeset<"config"> = {
+      [mockTitleFieldKey]: {
+        description: ["set", "Updated description", mockTitleField.description],
+      },
+    };
+
+    const result = applyConfigChangesetToSchema(mockNodeSchema, changeset);
+
+    expect(result.fields[mockTitleFieldKey]?.description).toBe(
+      "Updated description",
+    );
   });
 });

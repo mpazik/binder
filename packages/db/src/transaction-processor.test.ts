@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { throwIfError, throwIfValue } from "@binder/utils";
+import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import {
   mockTask1Node,
@@ -11,13 +11,16 @@ import {
   mockTransactionUpdate,
 } from "./model/transaction.mock.ts";
 import {
+  type ConfigKey,
   coreConfigSchema,
   emptyNodeSchema,
   fieldSystemType,
+  type NodeType,
   type TransactionId,
   type TransactionInput,
+  typeSystemType,
 } from "./model";
-import { getTestDatabase } from "./db.mock.ts";
+import { getTestDatabase, insertConfig } from "./db.mock.ts";
 import { type Database } from "./db.ts";
 import {
   applyAndSaveTransaction,
@@ -31,7 +34,11 @@ import {
   saveTransaction,
 } from "./transaction-store.ts";
 import { mockNodeSchema } from "./model/schema.mock.ts";
-import { mockTaskTypeKey } from "./model/config.mock.ts";
+import {
+  mockTaskType,
+  mockTaskTypeKey,
+  mockTitleFieldKey,
+} from "./model/config.mock.ts";
 import {
   mockTransactionInitInput,
   mockTransactionInputUpdate,
@@ -112,20 +119,7 @@ describe("transaction processor", () => {
         ),
       );
 
-      expect(throwIfValue(result)).toEqual({
-        key: "changeset-input-process-failed",
-        message: "failed creating changeset",
-        data: {
-          errors: [
-            {
-              changesetIndex: 0,
-              namespace: "config",
-              fieldKey: "key",
-              message: "mandatory property is missing or null",
-            },
-          ],
-        },
-      });
+      expect(result).toBeErrWithKey("changeset-input-process-failed");
     });
   });
 
@@ -142,19 +136,70 @@ describe("transaction processor", () => {
       ),
     );
 
-    expect(throwIfValue(result)).toEqual({
-      key: "changeset-input-process-failed",
-      message: "failed creating changeset",
-      data: {
-        errors: [
+    expect(result).toBeErrWithKey("changeset-input-process-failed");
+  });
+
+  describe("config and node changes in same transaction", () => {
+    it("validates node against newly added config from same transaction", async () => {
+      const newFieldKey = "priority" as ConfigKey;
+      const newTypeKey = "Bug" as NodeType;
+
+      const result = await db.transaction(async (tx) =>
+        processTransactionInput(
+          tx,
           {
-            changesetIndex: 0,
-            namespace: "node",
-            fieldKey: "title",
-            message: "mandatory property is missing or null",
+            configurations: [
+              {
+                type: fieldSystemType,
+                key: newFieldKey,
+                dataType: "string",
+              },
+              {
+                type: typeSystemType,
+                key: newTypeKey,
+                name: "Bug",
+                fields: [[newFieldKey, { required: true }]],
+              },
+            ],
+            nodes: [{ type: newTypeKey }],
+            author: "test",
           },
-        ],
-      },
+          emptyNodeSchema,
+          coreConfigSchema,
+        ),
+      );
+
+      expect(result).toBeErrWithKey("changeset-input-process-failed");
+    });
+
+    it("validates node against updated config from same transaction", async () => {
+      const newFieldKey = "severity" as ConfigKey;
+      await insertConfig(db, mockTaskType);
+
+      const result = await db.transaction(async (tx) =>
+        processTransactionInput(
+          tx,
+          {
+            configurations: [
+              {
+                type: fieldSystemType,
+                key: newFieldKey,
+                dataType: "string",
+              },
+              {
+                $ref: mockTaskTypeKey,
+                fields: [[newFieldKey, { required: true }]],
+              },
+            ],
+            nodes: [{ type: mockTaskTypeKey, title: "Test Task" }],
+            author: "test",
+          },
+          mockNodeSchema,
+          coreConfigSchema,
+        ),
+      );
+
+      expect(result).toBeErrWithKey("changeset-input-process-failed");
     });
 
     it("normalizes ObjTuple relation values to tuple format in stored changeset", async () => {
@@ -266,14 +311,7 @@ describe("transaction processor", () => {
         rollbackTransaction(tx, 1, 1 as TransactionId),
       );
 
-      expect(result).toBeErr();
-      expect(result).toEqual(
-        expect.objectContaining({
-          error: expect.objectContaining({
-            key: "version-mismatch",
-          }),
-        }),
-      );
+      expect(result).toBeErrWithKey("version-mismatch");
     });
 
     it("can rollback transaction 1 to genesis state", async () => {
