@@ -336,54 +336,56 @@ export const setupKnowledgeGraph = (services: Services): KnowledgeGraph => {
   } = services;
 
   const knowledgeGraph = openKnowledgeGraph(db, {
-    beforeTransaction: async () => {
-      const lockResult = await acquireLock(fs, paths.binder);
-      if (isErr(lockResult)) {
-        log.error("Failed to acquire lock", { error: lockResult.error });
-        return lockResult;
-      }
+    callbacks: {
+      beforeTransaction: async () => {
+        const lockResult = await acquireLock(fs, paths.binder);
+        if (isErr(lockResult)) {
+          log.error("Failed to acquire lock", { error: lockResult.error });
+          return lockResult;
+        }
 
-      log.debug("Lock acquired for transaction");
+        log.debug("Lock acquired for transaction");
 
-      return ok(async () => {
-        await releaseLock(fs, paths.binder);
-        log.debug("Lock released (rollback)");
+        return ok(async () => {
+          await releaseLock(fs, paths.binder);
+          log.debug("Lock released (rollback)");
+          return okVoid;
+        });
+      },
+      beforeCommit: async (transaction: Transaction) => {
+        const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
+        const logResult = await logTransaction(
+          fs,
+          transactionLogPath,
+          transaction,
+        );
+        if (isErr(logResult)) return logResult;
+        const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
+        const clearResult = await clearLog(fs, undoLogPath);
+        if (isErr(clearResult)) return clearResult;
         return okVoid;
-      });
-    },
-    beforeCommit: async (transaction: Transaction) => {
-      const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
-      const logResult = await logTransaction(
-        fs,
-        transactionLogPath,
-        transaction,
-      );
-      if (isErr(logResult)) return logResult;
-      const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
-      const clearResult = await clearLog(fs, undoLogPath);
-      if (isErr(clearResult)) return clearResult;
-      return okVoid;
-    },
-    afterCommit: async () => {
-      await releaseLock(fs, paths.binder);
-      log.debug("Lock released after commit");
+      },
+      afterCommit: async () => {
+        await releaseLock(fs, paths.binder);
+        log.debug("Lock released after commit");
 
-      renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
-        if (isErr(renderResult)) {
-          log.error("Failed to re-render docs after transaction", {
-            error: renderResult.error,
-          });
-        }
-      });
-    },
-    afterRollback: async () => {
-      renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
-        if (isErr(renderResult)) {
-          log.error("Failed to re-render docs after transaction", {
-            error: renderResult.error,
-          });
-        }
-      });
+        renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
+          if (isErr(renderResult)) {
+            log.error("Failed to re-render docs after transaction", {
+              error: renderResult.error,
+            });
+          }
+        });
+      },
+      afterRollback: async () => {
+        renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
+          if (isErr(renderResult)) {
+            log.error("Failed to re-render docs after transaction", {
+              error: renderResult.error,
+            });
+          }
+        });
+      },
     },
   });
   return knowledgeGraph;

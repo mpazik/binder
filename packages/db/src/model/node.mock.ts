@@ -1,6 +1,6 @@
 import type { NodeId, NodeKey, NodeUid } from "./node.ts";
 import {
-  mockEmailFieldKey,
+  mockFieldKeyEmail,
   mockProjectTypeKey,
   mockTaskTypeKey,
   mockUserTypeKey,
@@ -83,5 +83,5 @@ export const mockUserNode = {
   uid: mockUserUid,
   type: mockUserTypeKey,
   name: "Rick",
-  [mockEmailFieldKey]: "rick@example.com",
+  [mockFieldKeyEmail]: "rick@example.com",
 } as const satisfies Fieldset;

@@ -7,21 +7,22 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { sql, type Table } from "drizzle-orm";
 import type { IsoTimestamp, JsonObject } from "@binder/utils";
-import type {
-  ConfigId,
-  ConfigKey,
-  ConfigType,
-  ConfigUid,
-  ConfigurationsChangeset,
-  Namespace,
-  NamespaceEditable,
-  NodeId,
-  NodeKey,
-  NodesChangeset,
-  NodeType,
-  NodeUid,
-  TransactionHash,
-  TransactionId,
+import {
+  type ConfigId,
+  type ConfigKey,
+  type ConfigType,
+  type ConfigUid,
+  type ConfigurationsChangeset,
+  coreIdentityFieldKeys,
+  type Namespace,
+  type NamespaceEditable,
+  type NodeId,
+  type NodeKey,
+  type NodesChangeset,
+  type NodeType,
+  type NodeUid,
+  type TransactionHash,
+  type TransactionId,
 } from "./model";
 
 export const txIds = blob("tx_ids", { mode: "json" })
@@ -95,4 +96,4 @@ export const entityTables = {
   transaction: transactionTable,
 } as const satisfies Record<Namespace, Table>;
 
-export const tableStoredFields = ["id", "uid", "key", "type", "txIds"];
+export const tableStoredFields = [...coreIdentityFieldKeys, "txIds"] as const;

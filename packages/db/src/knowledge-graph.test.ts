@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { okVoid, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { getTestDatabase } from "./db.mock";
-import { openKnowledgeGraph } from "./knowledge-graph.ts";
+import openKnowledgeGraph from "./knowledge-graph.ts";
 import type { Database } from "./db.ts";
 import { createEntity, fetchEntity, updateEntity } from "./entity-store.ts";
 import {
@@ -193,9 +193,11 @@ describe("knowledge graph", () => {
       it("processes and applies transaction", async () => {
         let savedTransaction: Transaction | undefined;
         const kgWithCallback = openKnowledgeGraph(db, {
-          beforeCommit: async (tx: Transaction) => {
-            savedTransaction = tx;
-            return okVoid;
+          callbacks: {
+            beforeCommit: async (tx: Transaction) => {
+              savedTransaction = tx;
+              return okVoid;
+            },
           },
         });
 

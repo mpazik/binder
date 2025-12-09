@@ -1,6 +1,7 @@
 import {
   assertDefinedPass,
   assertNotEmpty,
+  includes,
   type JsonObject,
   objectFromKeys,
   objKeys,
@@ -64,7 +65,7 @@ const entityRefClause = <N extends Namespace>(
 export const entityToDbModel = (entity: Fieldset): EntityDb => {
   const keys = objKeys(entity);
   const [storedKeys, fieldKeys] = partition(keys, (key) =>
-    tableStoredFields.includes(key),
+    includes(tableStoredFields, key),
   );
 
   return {
@@ -92,7 +93,7 @@ export const fetchEntityFieldset = async <N extends NamespaceEditable>(
     tx
       .select({
         ...objectFromKeys(
-          keys.filter((key) => tableStoredFields.includes(key)),
+          keys.filter((key) => includes(tableStoredFields, key)),
           (key) => table[key as keyof typeof table],
         ),
         fields: table.fields,
@@ -105,7 +106,7 @@ export const fetchEntityFieldset = async <N extends NamespaceEditable>(
         const row = result[0];
         const parsedFields = row.fields as Fieldset;
         return objectFromKeys(keys, (key) => {
-          if (tableStoredFields.includes(key)) {
+          if (includes(tableStoredFields, key)) {
             return row[key as keyof typeof row];
           }
           return parsedFields[key];

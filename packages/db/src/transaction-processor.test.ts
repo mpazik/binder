@@ -13,7 +13,7 @@ import {
 import {
   type ConfigKey,
   coreConfigSchema,
-  emptyNodeSchema,
+  emptySchema,
   fieldSystemType,
   type NodeType,
   type TransactionId,
@@ -34,11 +34,7 @@ import {
   saveTransaction,
 } from "./transaction-store.ts";
 import { mockNodeSchema } from "./model/schema.mock.ts";
-import {
-  mockTaskType,
-  mockTaskTypeKey,
-  mockTitleFieldKey,
-} from "./model/config.mock.ts";
+import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
 import {
   mockTransactionInitInput,
   mockTransactionInputUpdate,
@@ -78,7 +74,7 @@ describe("transaction processor", () => {
           await processTransactionInput(
             tx,
             mockTransactionInitInput,
-            emptyNodeSchema,
+            emptySchema(),
             coreConfigSchema,
           ),
         ),
@@ -164,7 +160,7 @@ describe("transaction processor", () => {
             nodes: [{ type: newTypeKey }],
             author: "test",
           },
-          emptyNodeSchema,
+          emptySchema(),
           coreConfigSchema,
         ),
       );

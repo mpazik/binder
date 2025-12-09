@@ -19,12 +19,11 @@ describe("renderSchemaPreview", () => {
   });
 
   it("should render field with basic string type", () => {
-    expect(result).toContain("• name: string");
-    expect(result).toContain("• title: string");
+    expect(result).toContain("• email: string");
+    expect(result).toContain("• role: string");
   });
 
   it("should render field with description", () => {
-    expect(result).toContain("• description: text - Detailed description");
     expect(result).toContain("• dueDate: date - When task is due");
   });
 

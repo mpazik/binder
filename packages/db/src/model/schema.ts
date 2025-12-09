@@ -1,4 +1,4 @@
-import { includes } from "@binder/utils";
+import { assertCheck, groupByToObject } from "@binder/utils";
 import type { EntityId, EntityKey, EntityType, EntityUid } from "./entity.ts";
 import {
   type CoreDataType,
@@ -43,16 +43,33 @@ export type FieldDef<D extends string = string> = {
 
 export const newId = <T extends EntityId>(seq: number, offset: number) =>
   (offset + seq) as T;
+
+export const validateIdInRange = <T extends EntityId>(
+  id: T,
+  offset: number,
+  limit: number = Number.MAX_SAFE_INTEGER,
+): void =>
+  assertCheck(
+    id >= offset && id < limit,
+    "id",
+    `Expected id to be in range (${offset}-${limit}) but was ${id}`,
+  );
+
+export const ID_RANGE_CORE_LIMIT = 16;
+
 export const coreIds = {
   id: newId(1, 0),
   uid: newId(2, 0),
   key: newId(3, 0),
   type: newId(4, 0),
   name: newId(5, 0),
-  description: newId(6, 0),
+  title: newId(6, 0),
+  description: newId(7, 0),
 } as const;
-export const coreIdsLimit = 16;
 
+export const titleFieldKey = "title" as EntityKey;
+export const descriptionFieldKey = "description" as EntityKey;
+export const nameFieldKey = "name" as EntityKey;
 export const coreFields = {
   id: {
     id: coreIds.id,
@@ -85,13 +102,19 @@ export const coreFields = {
   },
   name: {
     id: coreIds.name,
-    key: "name" as EntityKey,
+    key: nameFieldKey,
     name: "name",
+    dataType: "string",
+  },
+  title: {
+    id: coreIds.title,
+    key: titleFieldKey,
+    name: "title",
     dataType: "string",
   },
   description: {
     id: coreIds.description,
-    key: "description" as EntityKey,
+    key: descriptionFieldKey,
     name: "description",
     dataType: "text",
   },
@@ -132,30 +155,28 @@ export type EntitySchema<D extends string = string> = {
   types: Record<FieldKey, TypeDef>;
 };
 
-export const systemFieldKeys = [
-  "id" as FieldKey,
-  "uid" as FieldKey,
-  "key" as FieldKey,
-  "type" as FieldKey,
-] as const satisfies FieldKey[];
-export type SystemFieldKeys = "id" | "uid" | "key" | "type";
+export const coreIdentityFieldKeys = ["id", "uid", "key", "type"] as const;
+export type CoreIdentityFieldKey = (typeof coreIdentityFieldKeys)[number];
+export type CoreFieldKey = keyof typeof coreFields;
+
+export const coreFieldKeys = Object.keys(coreFields) as CoreFieldKey[];
 export const fieldSystemType = "Field" as EntityType;
 export const typeSystemType = "Type" as EntityType;
 
 export const isFieldInSchema = (
   fieldKey: string,
   schema: EntitySchema,
-): boolean => includes(systemFieldKeys, fieldKey) || fieldKey in schema.fields;
+): boolean => fieldKey in coreFields || fieldKey in schema.fields;
 
 export const getAllFieldsForType = (
   type: EntityType,
   schema: EntitySchema,
-  includeSystemFields = true,
+  includeIdentityFields = true,
 ): FieldKey[] => {
   const typeDef = schema.types[type];
   if (!typeDef) return [];
   const fields = typeDef.fields.map(getTypeFieldKey);
-  return includeSystemFields ? [...systemFieldKeys, ...fields] : fields;
+  return includeIdentityFields ? [...coreIdentityFieldKeys, ...fields] : fields;
 };
 
 export const getFieldDef = <D extends string = CoreDataType>(
@@ -168,36 +189,71 @@ export const getFieldDef = <D extends string = CoreDataType>(
   return schema.fields[field];
 };
 
+const isCoreIdentityFieldKey = (key: string): key is CoreIdentityFieldKey =>
+  coreIdentityFieldKeys.includes(key as CoreIdentityFieldKey);
+
 export const getFieldDefNested = <D extends string = CoreDataType>(
   schema: EntitySchema<D>,
   path: FieldPath,
 ): FieldDef<D> | undefined => {
   const firstKey = path[0]!;
 
-  if (path.length === 1 && firstKey in coreFields) {
-    return coreFields[firstKey as keyof typeof coreFields] as FieldDef<D>;
+  if (path.length === 1) {
+    if (firstKey in coreFields) {
+      return coreFields[firstKey as keyof typeof coreFields] as FieldDef<D>;
+    }
+    return schema.fields[firstKey];
   }
 
   let currentField = schema.fields[firstKey];
-
-  if (path.length === 1) return currentField;
   if (!currentField) return;
 
   for (let i = 1; i < path.length; i++) {
     if (currentField.dataType !== "relation") return;
-
     if (!currentField.range || currentField.range.length === 0) return;
 
     const nextFieldKey = path[i]!;
-    const nextFieldDef = schema.fields[nextFieldKey];
-    if (!nextFieldDef) return;
-
     const rangeType = currentField.range[0]!;
     const allFields = getAllFieldsForType(rangeType, schema);
+
+    if (isCoreIdentityFieldKey(nextFieldKey)) {
+      currentField = coreFields[nextFieldKey] as FieldDef<D>;
+      continue;
+    }
+
     if (!allFields.includes(nextFieldKey)) return;
+
+    const nextFieldDef =
+      nextFieldKey in coreFields
+        ? (coreFields[nextFieldKey as keyof typeof coreFields] as FieldDef<D>)
+        : schema.fields[nextFieldKey];
+    if (!nextFieldDef) return;
 
     currentField = nextFieldDef;
   }
 
   return currentField;
 };
+
+export const emptySchema = <D extends string>(): EntitySchema<D> => ({
+  fields: {},
+  types: {},
+});
+
+export const mergeSchema = <D extends string>(
+  a: EntitySchema<D> = emptySchema(),
+  b: EntitySchema<D> = emptySchema(),
+): EntitySchema<D> => {
+  return {
+    fields: { ...a.fields, ...b.fields },
+    types: { ...a.types, ...b.types },
+  };
+};
+
+export const createSchema = <D extends string>(
+  fields: FieldDef<D>[],
+  types: TypeDef[],
+): EntitySchema<D> => ({
+  fields: groupByToObject(fields, (f) => f.key),
+  types: groupByToObject(types, (t) => t.key),
+});

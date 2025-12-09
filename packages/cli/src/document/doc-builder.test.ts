@@ -16,6 +16,7 @@ import {
   mockNodeSchema,
   mockTask1Node,
   mockTask2Node,
+  mockTransactionInitInput,
 } from "@binder/db/mocks";
 import {
   buildAstDoc,
@@ -24,7 +25,6 @@ import {
 } from "./doc-builder.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
-  mockCoreTransactionInputForDocs,
   mockDataviewUid,
   mockDocumentTransactionInput,
   mockDocumentUid,
@@ -59,7 +59,7 @@ describe("DocumentBuilder", () => {
       const db = getTestDatabase();
       kg = openKnowledgeGraph(db);
       throwIfError(await kg.update(documentSchemaTransactionInput));
-      throwIfError(await kg.update(mockCoreTransactionInputForDocs));
+      throwIfError(await kg.update(mockTransactionInitInput));
       throwIfError(await kg.update(mockDocumentTransactionInput));
     });
 
@@ -112,7 +112,7 @@ describe("DocumentBuilder", () => {
       throwIfError(await kg.update(documentSchemaTransactionInput));
       throwIfError(
         await kg.update({
-          ...mockCoreTransactionInputForDocs,
+          ...mockTransactionInitInput,
           nodes: [
             changesetInputForNewEntity(mockTask1Node),
             changesetInputForNewEntity(mockTask2Node),

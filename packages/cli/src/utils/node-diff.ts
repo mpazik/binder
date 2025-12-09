@@ -1,16 +1,21 @@
 import { isEqual, levenshteinSimilarity, ok, type Result } from "@binder/utils";
-import type {
-  ChangesetsInput,
-  EntityChangesetInput,
-  FieldsetNested,
-  QueryParams,
+import {
+  type ChangesetsInput,
+  coreIdentityFieldKeys,
+  type EntityChangesetInput,
+  type FieldsetNested,
+  type QueryParams,
 } from "@binder/db";
 import { extractFieldsetFromQuery } from "./query.ts";
 
 const POSITION_MATCH_THRESHOLD = 0.5;
 const FALLBACK_MATCH_THRESHOLD = 0.3;
 
-const SYSTEM_FIELDS = new Set(["blockContent", "data", "uid", "id", "version"]);
+const DIFF_EXCLUDED_FIELDS = new Set([
+  ...coreIdentityFieldKeys,
+  "blockContent",
+  "data",
+]);
 
 type NodeMatch = {
   newNode: FieldsetNested;
@@ -148,7 +153,7 @@ const generateNodeChangeset = (
 
     const fields: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(newNode)) {
-      if (!SYSTEM_FIELDS.has(key) && key !== "type") {
+      if (!DIFF_EXCLUDED_FIELDS.has(key) && key !== "type") {
         fields[key] = value;
       }
     }
@@ -159,7 +164,7 @@ const generateNodeChangeset = (
   const changes: Record<string, unknown> = {};
 
   for (const [key, newValue] of Object.entries(newNode)) {
-    if (SYSTEM_FIELDS.has(key)) continue;
+    if (DIFF_EXCLUDED_FIELDS.has(key)) continue;
 
     const oldValue = oldNode[key];
     if (!isEqual(newValue, oldValue)) {

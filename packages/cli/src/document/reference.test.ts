@@ -8,19 +8,15 @@ import {
   mockProjectKey,
   mockProjectNode,
   mockProjectUid,
-  mockTask2Key,
   mockTask2Node,
-  mockTask2Uid,
   mockTask3Node,
   mockTasksField,
+  mockTransactionInitInput,
 } from "@binder/db/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
-import {
-  mockCoreTransactionInputForDocs,
-  mockDocumentTransactionInput,
-} from "./document.mock.ts";
+import { mockDocumentTransactionInput } from "./document.mock.ts";
 import {
   formatReferences,
   formatReferencesList,
@@ -36,7 +32,7 @@ describe("reference", () => {
     ctx = await createMockRuntimeContextWithDb();
     kg = ctx.kg;
     throwIfError(await kg.update(documentSchemaTransactionInput));
-    throwIfError(await kg.update(mockCoreTransactionInputForDocs));
+    throwIfError(await kg.update(mockTransactionInitInput));
     throwIfError(await kg.update(mockDocumentTransactionInput));
   });
 

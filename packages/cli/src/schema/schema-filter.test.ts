@@ -3,10 +3,8 @@ import {
   mockAssignedToField,
   mockCancelReasonField,
   mockCompletedAtField,
-  mockDescriptionField,
   mockDueDateField,
   mockEmailField,
-  mockNameField,
   mockNodeSchema,
   mockNotExistingNodeTypeKey,
   mockProjectType,
@@ -16,7 +14,6 @@ import {
   mockTasksField,
   mockTaskType,
   mockTaskTypeKey,
-  mockTitleField,
   mockUserType,
   mockUserTypeKey,
 } from "@binder/db/mocks";
@@ -49,7 +46,7 @@ describe("filterSchemaByTypes", () => {
   it("should include simple type", () => {
     check([mockUserTypeKey], {
       types: [mockUserType],
-      fields: [mockNameField, mockEmailField],
+      fields: [mockEmailField],
     });
   });
 
@@ -57,8 +54,6 @@ describe("filterSchemaByTypes", () => {
     check([mockTaskTypeKey], {
       types: [mockTaskType],
       fields: [
-        mockTitleField,
-        mockDescriptionField,
         mockStatusField,
         mockAssignedToField,
         mockTagsField,
@@ -73,8 +68,6 @@ describe("filterSchemaByTypes", () => {
     check([mockTaskTypeKey, mockProjectTypeKey], {
       types: [mockTaskType, mockProjectType],
       fields: [
-        mockTitleField,
-        mockDescriptionField,
         mockStatusField,
         mockAssignedToField,
         mockTagsField,
@@ -96,7 +89,7 @@ describe("filterSchemaByTypes", () => {
   it("should ignore non-existent types", () => {
     check([mockUserTypeKey, mockNotExistingNodeTypeKey], {
       types: [mockUserType],
-      fields: [mockNameField, mockEmailField],
+      fields: [mockEmailField],
     });
   });
 });

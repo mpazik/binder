@@ -27,7 +27,7 @@ import {
   type ConfigKey,
   type ConfigType,
   coreConfigSchema,
-  emptyNodeSchema,
+  emptySchema,
   type EntitiesChangeset,
   type EntityChangesetInput,
   type FieldKey,
@@ -41,12 +41,12 @@ import {
 import { entityExists, fetchEntityFieldset } from "./entity-store.ts";
 import { mockNodeSchema } from "./model/schema.mock.ts";
 import {
-  mockEmailFieldKey,
+  mockFieldKeyEmail,
   mockNotExistingNodeTypeKey,
+  mockPriorityField,
+  mockPriorityFieldKey,
   mockTaskType,
   mockTaskTypeKey,
-  mockTitleField,
-  mockTitleFieldKey,
   mockUserTypeKey,
 } from "./model/config.mock.ts";
 import { mockChangesetInputUpdateTask1 } from "./model/changeset-input.mock.ts";
@@ -441,7 +441,7 @@ describe("processChangesetInput", () => {
     });
 
     it("rejects reserved keys on create and update", async () => {
-      await insertConfig(db, mockTitleField);
+      await insertConfig(db, mockPriorityField);
 
       await checkHasValidationErrors(
         [
@@ -450,7 +450,7 @@ describe("processChangesetInput", () => {
             key: "first" as ConfigKey,
             dataType: "string",
           },
-          { $ref: mockTitleFieldKey, key: "last" as ConfigKey },
+          { $ref: mockPriorityFieldKey, key: "last" as ConfigKey },
         ],
         [
           {
@@ -580,14 +580,14 @@ describe("processChangesetInput", () => {
           {
             type: mockUserTypeKey,
             name: "Richard",
-            [mockEmailFieldKey]: "rick@example.com",
+            [mockFieldKeyEmail]: "rick@example.com",
           },
         ],
         [
           {
             changesetIndex: 0,
             namespace: "node",
-            fieldKey: mockEmailFieldKey,
+            fieldKey: mockFieldKeyEmail,
             message: expect.stringContaining(
               "value must be unique, already exists",
             ),
@@ -597,20 +597,20 @@ describe("processChangesetInput", () => {
     });
 
     it("rejects updates to immutable fields", async () => {
-      await insertConfig(db, mockTitleField);
+      await insertConfig(db, mockPriorityField);
 
       await checkHasValidationErrors(
         [
           {
-            $ref: mockTitleFieldKey,
+            $ref: mockPriorityFieldKey,
             dataType: "integer",
           },
           {
-            $ref: mockTitleFieldKey,
+            $ref: mockPriorityFieldKey,
             allowMultiple: true,
           },
           {
-            $ref: mockTitleFieldKey,
+            $ref: mockPriorityFieldKey,
             unique: true,
           },
         ],
@@ -760,7 +760,7 @@ describe("applyConfigChangesetToSchema", () => {
       },
     };
 
-    const result = applyConfigChangesetToSchema(emptyNodeSchema, changeset);
+    const result = applyConfigChangesetToSchema(emptySchema(), changeset);
 
     expect(result.fields[newFieldKey]).toMatchObject({
       key: newFieldKey,
@@ -780,7 +780,7 @@ describe("applyConfigChangesetToSchema", () => {
       },
     };
 
-    const result = applyConfigChangesetToSchema(emptyNodeSchema, changeset);
+    const result = applyConfigChangesetToSchema(emptySchema(), changeset);
 
     expect(result.types[newTypeKey]).toMatchObject({
       key: newTypeKey,
@@ -795,7 +795,7 @@ describe("applyConfigChangesetToSchema", () => {
         fields: [
           "set",
           [
-            [mockTitleFieldKey, { required: true }],
+            [mockPriorityFieldKey, { required: true }],
             [newFieldKey, { required: true }],
           ],
           mockTaskType.fields,
@@ -806,21 +806,25 @@ describe("applyConfigChangesetToSchema", () => {
     const result = applyConfigChangesetToSchema(mockNodeSchema, changeset);
 
     expect(result.types[mockTaskTypeKey]?.fields).toEqual([
-      [mockTitleFieldKey, { required: true }],
+      [mockPriorityFieldKey, { required: true }],
       [newFieldKey, { required: true }],
     ]);
   });
 
   it("updates existing field properties", () => {
     const changeset: EntitiesChangeset<"config"> = {
-      [mockTitleFieldKey]: {
-        description: ["set", "Updated description", mockTitleField.description],
+      [mockPriorityFieldKey]: {
+        description: [
+          "set",
+          "Updated description",
+          mockPriorityField.description,
+        ],
       },
     };
 
     const result = applyConfigChangesetToSchema(mockNodeSchema, changeset);
 
-    expect(result.fields[mockTitleFieldKey]?.description).toBe(
+    expect(result.fields[mockPriorityFieldKey]?.description).toBe(
       "Updated description",
     );
   });

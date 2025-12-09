@@ -2,13 +2,12 @@ import {
   mockAssignedToField,
   mockCancelReasonField,
   mockCompletedAtField,
-  mockDescriptionField,
   mockDueDateField,
   mockEmailField,
   mockFavoriteField,
   mockMembersField,
-  mockNameField,
   mockOwnersField,
+  mockPriorityField,
   mockProjectField,
   mockProjectType,
   mockRoleField,
@@ -17,17 +16,13 @@ import {
   mockTasksField,
   mockTaskType,
   mockTeamType,
-  mockTitleField,
   mockUserType,
 } from "./config.mock.ts";
 
-import type { NodeSchema } from "./node.ts";
+import type { NodeSchema } from "./config.ts";
 
 export const mockNodeSchema = {
   fields: {
-    [mockNameField.key]: mockNameField,
-    [mockTitleField.key]: mockTitleField,
-    [mockDescriptionField.key]: mockDescriptionField,
     [mockStatusField.key]: mockStatusField,
     [mockAssignedToField.key]: mockAssignedToField,
     [mockOwnersField.key]: mockOwnersField,
@@ -41,6 +36,7 @@ export const mockNodeSchema = {
     [mockRoleField.key]: mockRoleField,
     [mockCompletedAtField.key]: mockCompletedAtField,
     [mockCancelReasonField.key]: mockCancelReasonField,
+    [mockPriorityField.key]: mockPriorityField,
   },
   types: {
     [mockTaskType.key]: mockTaskType,

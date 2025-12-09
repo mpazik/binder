@@ -10,15 +10,13 @@ import {
   mockTask2Node,
   mockTask2Uid,
   mockTaskTypeKey,
+  mockTransactionInitInput,
 } from "@binder/db/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { SnapshotChangeMetadata } from "../lib/snapshot.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { documentSchemaTransactionInput } from "./document-schema.ts";
-import {
-  mockCoreTransactionInputForDocs,
-  mockDocumentTransactionInput,
-} from "./document.mock.ts";
+import { mockDocumentTransactionInput } from "./document.mock.ts";
 import { synchronizeFile, synchronizeModifiedFiles } from "./synchronizer.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import { type NavigationItem } from "./navigation.ts";
@@ -72,7 +70,7 @@ describe("synchronizeFile", () => {
     ctx = await createMockRuntimeContextWithDb();
     kg = ctx.kg;
     throwIfError(await kg.update(documentSchemaTransactionInput));
-    throwIfError(await kg.update(mockCoreTransactionInputForDocs));
+    throwIfError(await kg.update(mockTransactionInitInput));
     throwIfError(await kg.update(mockDocumentTransactionInput));
   });
 

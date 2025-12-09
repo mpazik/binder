@@ -23,6 +23,7 @@ import {
   applyChangeset as applyChangesetModel,
   type ChangesetsInput,
   type ConfigKey,
+  coreIdentityFieldKeys,
   emptyFieldset,
   type EntitiesChangeset,
   type EntityChangesetInput,
@@ -63,6 +64,8 @@ import {
   resolveEntityRefType,
   type TypeDef,
   typeSystemType,
+  type DataTypeNs,
+  USER_CONFIG_ID_OFFSET,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 import {
@@ -77,13 +80,10 @@ import { matchesFilters } from "./filter-entities.ts";
 
 const systemGeneratedFields = ["id", "txIds"] as const;
 
-const systemFieldsToExcludeFromValidation = [
-  "id",
-  "uid",
+const fieldsToExcludeFromValidation = [
+  ...coreIdentityFieldKeys,
   "txIds",
   "$ref",
-  "type",
-  "key",
 ] as const;
 
 const normalizeValueForField = (
@@ -228,18 +228,19 @@ const validateChangesetInput = <N extends NamespaceEditable>(
   }
 
   for (const fieldKey of objKeys(input)) {
-    if (systemFieldsToExcludeFromValidation.includes(fieldKey as any)) {
+    if (fieldsToExcludeFromValidation.includes(fieldKey as any)) {
       continue;
     }
-    if (!(fieldKey in schema.fields)) {
+    const fieldDef = getFieldDef(schema, fieldKey) as
+      | FieldDef<DataTypeNs[N]>
+      | undefined;
+    if (!fieldDef) {
       errors.push({
         fieldKey,
         message: `field "${fieldKey}" is not defined in schema`,
       });
       continue;
     }
-
-    const fieldDef = (schema.fields as any)[fieldKey];
     const value = input[fieldKey];
 
     if (value == null) continue;
@@ -552,7 +553,10 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
   schema: NamespaceSchema<N>,
   lastEntityId: EntityId,
 ): ResultAsync<EntitiesChangeset<N>> => {
-  let lastId = lastEntityId;
+  let lastId =
+    namespace === "config"
+      ? (Math.max(lastEntityId, USER_CONFIG_ID_OFFSET - 1) as EntityId)
+      : lastEntityId;
   const buildChangeset = async (
     input: EntityChangesetInput<N>,
     index: number,

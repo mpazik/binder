@@ -16,8 +16,9 @@ import {
   inverseChangeset,
   squashChangesets,
 } from "./changeset.ts";
-import type { NodeSchema } from "./node.ts";
-import type { ConfigSchema } from "./config.ts";
+
+import type { ConfigSchema } from "./system.ts";
+import type { NodeSchema } from "./config.ts";
 
 export type TransactionId = BrandDerived<EntityId, "TransactionId">;
 export type TransactionHash = BrandDerived<EntityKey, "TransactionHash">;

@@ -1,22 +1,16 @@
+import type { NodeId, NodeKey, NodeRef, NodeType, NodeUid } from "./node.ts";
 import type {
-  NodeDataType,
-  NodeId,
-  NodeKey,
-  NodeRef,
-  NodeType,
-  NodeUid,
-} from "./node.ts";
-import type {
-  ConfigDataType,
   ConfigId,
   ConfigKey,
   ConfigRef,
   ConfigType,
   ConfigUid,
+  NodeDataType,
 } from "./config.ts";
 import type { TransactionId, TransactionRef } from "./transaction.ts";
 import type { CoreDataType } from "./data-type.ts";
 import type { EntitySchema } from "./schema.ts";
+import type { ConfigDataType } from "./system.ts";
 
 export const entityNamespaces = ["node", "config", "transaction"] as const;
 export const namespacesEditable = ["node", "config"] as const;

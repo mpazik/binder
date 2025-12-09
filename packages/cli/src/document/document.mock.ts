@@ -1,14 +1,5 @@
 import { newIsoTimestamp } from "@binder/utils";
 import type { NodeUid, TransactionInput } from "@binder/db";
-import { mockTransactionInitInput } from "@binder/db/mocks";
-
-export const mockCoreTransactionInputForDocs: TransactionInput = {
-  ...mockTransactionInitInput,
-  configurations: (mockTransactionInitInput.configurations ?? []).filter(
-    // remove title and description fields, to avoid conflict with the document schema
-    (config) => config.key !== "title" && config.key !== "description",
-  ),
-};
 
 export const mockDocumentUid = "BNupvr3JwPl" as NodeUid;
 export const mockSection1Uid = "n1G4RYLpqCy" as NodeUid;

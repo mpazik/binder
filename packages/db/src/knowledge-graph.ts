@@ -4,21 +4,23 @@ import {
   groupByToObject,
   isErr,
   ok,
-  type Result,
   type ResultAsync,
   tryCatch,
 } from "@binder/utils";
 import { and, asc, desc, inArray, or, sql } from "drizzle-orm";
 import {
+  type ConfigDataType,
   type ConfigRef,
-  type ConfigSchema,
+  type ConfigSchemaExtended,
   coreConfigSchema,
+  type EntitySchema,
   type Fieldset,
   fieldTypes,
   type Filters,
   type GraphVersion,
   type Includes,
   isFieldInSchema,
+  mergeSchema,
   type NamespaceEditable,
   type NamespaceSchema,
   type NodeFieldDef,
@@ -32,6 +34,7 @@ import {
   type TransactionRef,
   type TypeDef,
   typeSystemType,
+  validateAppConfigSchema,
 } from "./model";
 import type { Database, DbTransaction } from "./db.ts";
 import { configTable, nodeTable } from "./schema.ts";
@@ -45,7 +48,9 @@ import {
 import { buildWhereClause } from "./filter-entities.ts";
 import { resolveIncludes } from "./relationship-resolver.ts";
 
-export type KnowledgeGraph = {
+export type KnowledgeGraph<
+  C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
+> = {
   fetchNode: (ref: NodeRef, includes?: Includes) => ResultAsync<Fieldset>;
   fetchConfig: (ref: ConfigRef, includes?: Includes) => ResultAsync<Fieldset>;
   fetchTransaction: (ref: TransactionRef) => ResultAsync<Transaction>;
@@ -61,7 +66,7 @@ export type KnowledgeGraph = {
   apply: (transaction: Transaction) => ResultAsync<Transaction>;
   rollback: (count: number, version?: TransactionId) => ResultAsync<void>;
   getNodeSchema: () => ResultAsync<NodeSchema>;
-  getConfigSchema: () => ConfigSchema;
+  getConfigSchema: () => ConfigSchemaExtended<C>;
   getSchema: <N extends NamespaceEditable>(
     namespace: N,
   ) => ResultAsync<NamespaceSchema<N>>;
@@ -94,10 +99,23 @@ const internalSearch = async (
   );
 };
 
-export const openKnowledgeGraph = (
+const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
   db: Database,
-  callbacks?: KnowledgeGraphCallbacks,
-): KnowledgeGraph => {
+  options?: {
+    providerSchema?: NodeSchema;
+    configSchema?: C;
+    callbacks?: KnowledgeGraphCallbacks;
+  },
+): KnowledgeGraph<C> => {
+  const callbacks = options?.callbacks;
+  if (options?.configSchema) {
+    validateAppConfigSchema(options.configSchema);
+  }
+  const configSchema = mergeSchema(
+    coreConfigSchema,
+    options?.configSchema,
+  ) as ConfigSchemaExtended<C>;
+
   let nodeSchemaCache: NodeSchema | null = null;
 
   const getNodeSchema = async (): ResultAsync<NodeSchema> => {
@@ -124,21 +142,19 @@ export const openKnowledgeGraph = (
         (config) => config.type === typeSystemType,
       ) as unknown as TypeDef[];
 
-      const schema: NodeSchema = {
+      const schema: NodeSchema = mergeSchema(options?.providerSchema, {
         fields: groupByToObject(fields, (f) => f.key),
         types: groupByToObject(types, (t) => t.key),
-      };
+      });
 
       nodeSchemaCache = schema;
-
       return ok(schema);
     });
   };
   const getSchema = async (
     namespace: NamespaceEditable,
-  ): ResultAsync<NodeSchema | ConfigSchema> => {
-    return namespace === "config" ? ok(coreConfigSchema) : getNodeSchema();
-  };
+  ): ResultAsync<NodeSchema | ConfigSchemaExtended<C>> =>
+    namespace === "config" ? ok(configSchema) : getNodeSchema();
 
   const fetchEntityWithIncludes = async <N extends NamespaceEditable>(
     namespace: N,
@@ -309,7 +325,7 @@ export const openKnowledgeGraph = (
           tx,
           input,
           nodeSchemaResult.data,
-          coreConfigSchema,
+          configSchema,
         );
 
         if (isErr(processedResult)) return processedResult;
@@ -338,10 +354,9 @@ export const openKnowledgeGraph = (
       return ok(undefined);
     },
     getNodeSchema,
-    getConfigSchema: () => coreConfigSchema,
-    getSchema: async <N extends NamespaceEditable>(namespace: N) =>
-      (namespace === "node"
-        ? await getNodeSchema()
-        : ok(coreConfigSchema)) as Result<NamespaceSchema<N>>,
+    getConfigSchema: () => configSchema,
+    getSchema: <N extends NamespaceEditable>(namespace: N) =>
+      getSchema(namespace) as ResultAsync<NamespaceSchema<N>>,
   };
 };
+export default openKnowledgeGraph;

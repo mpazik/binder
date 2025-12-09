@@ -16,7 +16,7 @@ import {
 import { inverseChangeset } from "./changeset.ts";
 import { mockNodeSchema } from "./schema.mock.ts";
 
-import { coreConfigSchema } from "./config.ts";
+import { coreConfigSchema } from "./system.ts";
 
 describe("squashTransactions", () => {
   it("squashes two transactions", async () => {

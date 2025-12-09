@@ -10,13 +10,6 @@ export type FieldsetNested = {
   [key: FieldKey]: FieldValue | FieldsetNested;
 };
 
-export const systemFields = [
-  "id",
-  "version",
-  "createdAt",
-  "updatedAt",
-] as const;
-
 export const getNestedValue = (
   fieldset: FieldsetNested,
   path: FieldPath,

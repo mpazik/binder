@@ -9,6 +9,7 @@ import {
 } from "yaml";
 import { assertNotEmpty, includes, isErr, type JsonValue } from "@binder/utils";
 import {
+  coreIdentityFieldKeys,
   type DataTypeNs,
   type EntityType,
   type Fieldset,
@@ -19,7 +20,6 @@ import {
   isFieldInSchema,
   matchesFilters,
   type Namespace,
-  systemFieldKeys,
   validateDataType,
 } from "@binder/db";
 import type { ParsedYaml } from "../../document/yaml-cst.ts";
@@ -166,7 +166,7 @@ const visitEntityNode = <N extends Namespace>(
       );
     }
 
-    if (includes(systemFieldKeys, fieldKey)) continue;
+    if (includes(coreIdentityFieldKeys, fieldKey)) continue;
 
     const fieldDef = getFieldDef<DataTypeNs[N]>(schema, fieldKey);
     if (!fieldDef) {

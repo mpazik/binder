@@ -1,3 +1,4 @@
+import { includes } from "@binder/utils";
 import { and, sql, type SQL } from "drizzle-orm";
 import { tableStoredFields, type nodeTable, type configTable } from "./schema";
 import type {
@@ -99,7 +100,7 @@ export const matchesFilters = (filters: Filters, entity: Fieldset): boolean => {
 };
 
 const getFieldSql = (table: EntityTable, fieldKey: string): SQL => {
-  if (tableStoredFields.includes(fieldKey)) {
+  if (includes(tableStoredFields, fieldKey)) {
     const column = table[fieldKey as keyof EntityTable];
     return sql`${column}`;
   }
