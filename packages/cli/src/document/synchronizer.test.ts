@@ -15,7 +15,6 @@ import {
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { SnapshotChangeMetadata } from "../lib/snapshot.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
-import { documentSchemaTransactionInput } from "./document-schema.ts";
 import { mockDocumentTransactionInput } from "./document.mock.ts";
 import { synchronizeFile, synchronizeModifiedFiles } from "./synchronizer.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
@@ -69,7 +68,6 @@ describe("synchronizeFile", () => {
   beforeEach(async () => {
     ctx = await createMockRuntimeContextWithDb();
     kg = ctx.kg;
-    throwIfError(await kg.update(documentSchemaTransactionInput));
     throwIfError(await kg.update(mockTransactionInitInput));
     throwIfError(await kg.update(mockDocumentTransactionInput));
   });

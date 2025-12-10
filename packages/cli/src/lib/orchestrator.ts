@@ -19,6 +19,7 @@ import {
   okVoid,
   type ResultAsync,
 } from "@binder/utils";
+import { documentProviderSchema } from "../document/document-schema.ts";
 import {
   type AppConfig,
   TRANSACTION_LOG_FILE,
@@ -336,6 +337,7 @@ export const setupKnowledgeGraph = (services: Services): KnowledgeGraph => {
   } = services;
 
   const knowledgeGraph = openKnowledgeGraph(db, {
+    providerSchema: documentProviderSchema,
     callbacks: {
       beforeTransaction: async () => {
         const lockResult = await acquireLock(fs, paths.binder);

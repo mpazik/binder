@@ -9,21 +9,19 @@ import {
   type FieldsetNested,
   type KnowledgeGraph,
   type NodeSchema,
-  openKnowledgeGraph,
 } from "@binder/db";
 import {
-  getTestDatabase,
   mockNodeSchema,
   mockTask1Node,
   mockTask2Node,
   mockTransactionInitInput,
 } from "@binder/db/mocks";
+import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import {
   buildAstDoc,
   deconstructAstDocument,
   fetchDocumentNodes,
 } from "./doc-builder.ts";
-import { documentSchemaTransactionInput } from "./document-schema.ts";
 import {
   mockDataviewUid,
   mockDocumentTransactionInput,
@@ -56,9 +54,8 @@ describe("DocumentBuilder", () => {
   describe("fetchDocumentNodes", () => {
     let kg: KnowledgeGraph;
     beforeEach(async () => {
-      const db = getTestDatabase();
-      kg = openKnowledgeGraph(db);
-      throwIfError(await kg.update(documentSchemaTransactionInput));
+      const ctx = await createMockRuntimeContextWithDb();
+      kg = ctx.kg;
       throwIfError(await kg.update(mockTransactionInitInput));
       throwIfError(await kg.update(mockDocumentTransactionInput));
     });
@@ -107,9 +104,8 @@ describe("DocumentBuilder", () => {
   describe("buildAstDoc", () => {
     let kg: KnowledgeGraph;
     beforeEach(async () => {
-      const db = getTestDatabase();
-      kg = openKnowledgeGraph(db);
-      throwIfError(await kg.update(documentSchemaTransactionInput));
+      const ctx = await createMockRuntimeContextWithDb();
+      kg = ctx.kg;
       throwIfError(
         await kg.update({
           ...mockTransactionInitInput,

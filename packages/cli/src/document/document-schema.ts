@@ -1,14 +1,14 @@
-import { newIsoTimestamp } from "@binder/utils";
+import { groupByToObject } from "@binder/utils";
 import {
-  changesetInputForNewEntity,
   type ConfigKey,
   type ConfigUid,
-  titleFieldKey,
+  createSchema,
   fieldSystemType,
   newAppConfigId,
   type NodeFieldDef,
+  type NodeSchema,
   type NodeType,
-  type TransactionInput,
+  titleFieldKey,
   type TypeDef,
   typeSystemType,
 } from "@binder/db";
@@ -229,27 +229,26 @@ const typeListItem = {
   fields: [[fieldTextContentKey, { required: true }]],
 } as const satisfies TypeDef;
 
-export const documentSchemaTransactionInput: TransactionInput = {
-  author: "system",
-  createdAt: newIsoTimestamp("2024-10-05"),
-  nodes: [],
-  configurations: [
-    changesetInputForNewEntity(fieldBlockContent),
-    changesetInputForNewEntity(fieldTextContent),
-    changesetInputForNewEntity(fieldHeadingLevel),
-    changesetInputForNewEntity(fieldCitationSource),
-    changesetInputForNewEntity(fieldCodeLanguage),
-    changesetInputForNewEntity(fieldQuery),
-    changesetInputForNewEntity(fieldTemplate),
-    changesetInputForNewEntity(fieldPath),
-    changesetInputForNewEntity(typeDocument),
-    changesetInputForNewEntity(typeDocumentBlock),
-    changesetInputForNewEntity(typeSection),
-    changesetInputForNewEntity(typeParagraph),
-    changesetInputForNewEntity(typeQuote),
-    changesetInputForNewEntity(typeCode),
-    changesetInputForNewEntity(typeDataview),
-    changesetInputForNewEntity(typeList),
-    changesetInputForNewEntity(typeListItem),
+export const documentProviderSchema: NodeSchema = createSchema(
+  [
+    fieldBlockContent,
+    fieldTextContent,
+    fieldHeadingLevel,
+    fieldCitationSource,
+    fieldCodeLanguage,
+    fieldQuery,
+    fieldTemplate,
+    fieldPath,
   ],
-};
+  [
+    typeDocument,
+    typeDocumentBlock,
+    typeSection,
+    typeParagraph,
+    typeQuote,
+    typeCode,
+    typeDataview,
+    typeList,
+    typeListItem,
+  ],
+);

@@ -3,8 +3,7 @@ import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
 import { isErr, isOk, ok, type ResultAsync, tryCatch } from "@binder/utils";
-import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
-import { documentSchemaTransactionInput } from "../document/document-schema.ts";
+import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import {
   BINDER_DIR,
   CONFIG_FILE,
@@ -170,9 +169,6 @@ const initSchemaHandler: CommandHandlerWithDb = async ({
   config,
   fs,
 }) => {
-  const schemaResult = await kg.update(documentSchemaTransactionInput);
-  if (isErr(schemaResult)) return schemaResult;
-
   if (config.paths.docs !== config.paths.root) {
     const mkdirResult = await fs.mkdir(config.paths.docs, { recursive: true });
     if (isErr(mkdirResult)) {
