@@ -4,7 +4,7 @@ import {
   type ConfigUid,
   createSchema,
   fieldSystemType,
-  newAppConfigId,
+  newAppSystemId,
   type NodeFieldDef,
   type NodeSchema,
   type NodeType,
@@ -18,7 +18,7 @@ export const typeDocumentBlockKey = "DocumentBlock" as NodeType;
 export const fieldBlockContentUid = "b9Lm3nQrSvW" as ConfigUid;
 export const fieldBlockContentKey = "blockContent" as ConfigKey;
 const fieldBlockContent = {
-  id: newAppConfigId(1),
+  id: newAppSystemId(1),
   uid: fieldBlockContentUid,
   key: fieldBlockContentKey,
   type: fieldSystemType,
@@ -32,7 +32,7 @@ const fieldBlockContent = {
 export const fieldTextContentUid = "c1Np4oRsTwX" as ConfigUid;
 export const fieldTextContentKey = "textContent" as ConfigKey;
 const fieldTextContent = {
-  id: newAppConfigId(2),
+  id: newAppSystemId(2),
   uid: fieldTextContentUid,
   key: fieldTextContentKey,
   type: fieldSystemType,
@@ -44,7 +44,7 @@ const fieldTextContent = {
 export const fieldHeadingLevelUid = "d2Oq5pStUxY" as ConfigUid;
 export const fieldHeadingLevelKey = "headingLevel" as ConfigKey;
 const fieldHeadingLevel = {
-  id: newAppConfigId(3),
+  id: newAppSystemId(3),
   uid: fieldHeadingLevelUid,
   key: fieldHeadingLevelKey,
   type: fieldSystemType,
@@ -56,7 +56,7 @@ const fieldHeadingLevel = {
 export const fieldCitationSourceUid = "e3Pr6qTuVyZ" as ConfigUid;
 export const fieldCitationSourceKey = "citationSource" as ConfigKey;
 const fieldCitationSource = {
-  id: newAppConfigId(4),
+  id: newAppSystemId(4),
   uid: fieldCitationSourceUid,
   key: fieldCitationSourceKey,
   type: fieldSystemType,
@@ -68,7 +68,7 @@ const fieldCitationSource = {
 export const fieldCodeLanguageUid = "f4Qs7rVwWzA" as ConfigUid;
 export const fieldCodeLanguageKey = "codeLanguage" as ConfigKey;
 const fieldCodeLanguage = {
-  id: newAppConfigId(5),
+  id: newAppSystemId(5),
   uid: fieldCodeLanguageUid,
   key: fieldCodeLanguageKey,
   type: fieldSystemType,
@@ -80,7 +80,7 @@ const fieldCodeLanguage = {
 export const fieldQueryUid = "g5Rt8sWxXaB" as ConfigUid;
 export const fieldQueryKey = "query" as ConfigKey;
 const fieldQuery = {
-  id: newAppConfigId(6),
+  id: newAppSystemId(6),
   uid: fieldQueryUid,
   key: fieldQueryKey,
   type: fieldSystemType,
@@ -92,7 +92,7 @@ const fieldQuery = {
 export const fieldTemplateUid = "h6Su9tYzYbC" as ConfigUid;
 export const fieldTemplateKey = "template" as ConfigKey;
 const fieldTemplate = {
-  id: newAppConfigId(7),
+  id: newAppSystemId(7),
   uid: fieldTemplateUid,
   key: fieldTemplateKey,
   type: fieldSystemType,
@@ -104,7 +104,7 @@ const fieldTemplate = {
 export const fieldPathUid = "r6Cd9eIjIlM" as ConfigUid;
 export const fieldPathKey = "path" as ConfigKey;
 const fieldPath = {
-  id: newAppConfigId(8),
+  id: newAppSystemId(8),
   uid: fieldPathUid,
   key: fieldPathKey,
   type: fieldSystemType,
@@ -116,7 +116,7 @@ const fieldPath = {
 export const typeDocumentUid = "i7Tv0uZaZcD" as ConfigUid;
 export const typeDocumentKey = "Document" as NodeType;
 const typeDocument = {
-  id: newAppConfigId(9),
+  id: newAppSystemId(9),
   uid: typeDocumentUid,
   key: typeDocumentKey,
   type: typeSystemType,
@@ -130,7 +130,7 @@ const typeDocument = {
 } as const satisfies TypeDef;
 
 const typeDocumentBlock = {
-  id: newAppConfigId(10),
+  id: newAppSystemId(10),
   uid: typeDocumentBlockUid,
   key: typeDocumentBlockKey,
   type: typeSystemType,
@@ -142,7 +142,7 @@ const typeDocumentBlock = {
 export const typeSectionUid = "k9Vx2wBcBeF" as ConfigUid;
 export const typeSectionKey = "Section" as NodeType;
 const typeSection = {
-  id: newAppConfigId(11),
+  id: newAppSystemId(11),
   uid: typeSectionUid,
   key: typeSectionKey,
   type: typeSystemType,
@@ -157,7 +157,7 @@ const typeSection = {
 export const typeParagraphUid = "l0Wy3xCdCfG" as ConfigUid;
 export const typeParagraphKey = "Paragraph" as NodeType;
 const typeParagraph = {
-  id: newAppConfigId(12),
+  id: newAppSystemId(12),
   uid: typeParagraphUid,
   key: typeParagraphKey,
   type: typeSystemType,
@@ -169,7 +169,7 @@ const typeParagraph = {
 export const typeQuoteUid = "m1Xz4yDeDgH" as ConfigUid;
 export const typeQuoteKey = "Quote" as NodeType;
 const typeQuote = {
-  id: newAppConfigId(13),
+  id: newAppSystemId(13),
   uid: typeQuoteUid,
   key: typeQuoteKey,
   type: typeSystemType,
@@ -181,7 +181,7 @@ const typeQuote = {
 export const typeCodeUid = "n2Ya5zEfEhI" as ConfigUid;
 export const typeCodeKey = "Code" as NodeType;
 const typeCode = {
-  id: newAppConfigId(14),
+  id: newAppSystemId(14),
   uid: typeCodeUid,
   key: typeCodeKey,
   type: typeSystemType,
@@ -196,7 +196,7 @@ const typeCode = {
 export const typeDataviewUid = "o3Zb6aFgFiJ" as ConfigUid;
 export const typeDataviewKey = "Dataview" as NodeType;
 const typeDataview = {
-  id: newAppConfigId(15),
+  id: newAppSystemId(15),
   uid: typeDataviewUid,
   key: typeDataviewKey,
   type: typeSystemType,
@@ -208,7 +208,7 @@ const typeDataview = {
 export const typeListUid = "p4Ab7cGhGjK" as ConfigUid;
 export const typeListKey = "List" as NodeType;
 const typeList = {
-  id: newAppConfigId(16),
+  id: newAppSystemId(16),
   uid: typeListUid,
   key: typeListKey,
   type: typeSystemType,
@@ -220,7 +220,7 @@ const typeList = {
 export const typeListItemUid = "q5Bc8dHiHkL" as ConfigUid;
 export const typeListItemKey = "ListItem" as NodeType;
 const typeListItem = {
-  id: newAppConfigId(17),
+  id: newAppSystemId(17),
   uid: typeListItemUid,
   key: typeListItemKey,
   type: typeSystemType,

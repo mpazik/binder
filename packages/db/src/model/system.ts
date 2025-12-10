@@ -81,6 +81,10 @@ export const configSchemaIds = {
   exclude: newMetaSystemId(21),
   only: newMetaSystemId(22),
   when: newMetaSystemId(23),
+  query: newMetaSystemId(24),
+  children: newMetaSystemId(25),
+  parent: newMetaSystemId(26),
+  where: newMetaSystemId(27),
 } as const;
 export const fieldTypes = [fieldSystemType] as const;
 export type ConfigFieldDef = FieldDef<ConfigDataType>;
@@ -218,6 +222,36 @@ export const configFieldsDefs = {
     name: "When",
     dataType: "object",
     description: "Condition filters for when this field is applicable",
+  },
+  query: {
+    id: configSchemaIds.query,
+    key: "query" as SystemKey,
+    name: "Query",
+    dataType: "object",
+    description: "Query parameters for data retrieval",
+  },
+  children: {
+    id: configSchemaIds.children,
+    key: "children" as SystemKey,
+    name: "Children",
+    dataType: "relation",
+    description: "Child entities in hierarchical structure",
+    allowMultiple: true,
+  },
+  parent: {
+    id: configSchemaIds.parent,
+    key: "parent" as SystemKey,
+    name: "Parent",
+    dataType: "relation",
+    description: "Parent entity in hierarchical structure",
+    inverseOf: "children" as SystemKey,
+  },
+  where: {
+    id: configSchemaIds.where,
+    key: "where" as SystemKey,
+    name: "Where",
+    dataType: "object",
+    description: "Filter conditions for entity selection",
   },
 } as const satisfies Record<FieldKey, ConfigFieldDef>;
 export type ConfigFieldDefinitions = typeof configFieldsDefs;

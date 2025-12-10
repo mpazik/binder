@@ -27,7 +27,7 @@ export const handleDocumentSave = async (
   }
   const relativePath = getRelativeSnapshotPath(absolutePath, config.paths);
 
-  const navResult = await loadNavigation(fs, config.paths.binder, namespace);
+  const navResult = await loadNavigation(kg, namespace);
   if (isErr(navResult)) return navResult;
 
   const schemaResult = await kg.getSchema(namespace);

@@ -28,6 +28,7 @@ import {
 import { renderDocs } from "../document/repository.ts";
 import type { Logger } from "../log.ts";
 import type { DatabaseCli } from "../db";
+import { cliConfigSchema } from "../cli-config-schema.ts";
 import {
   clearLog,
   logTransaction,
@@ -338,6 +339,7 @@ export const setupKnowledgeGraph = (services: Services): KnowledgeGraph => {
 
   const knowledgeGraph = openKnowledgeGraph(db, {
     providerSchema: documentProviderSchema,
+    configSchema: cliConfigSchema,
     callbacks: {
       beforeTransaction: async () => {
         const lockResult = await acquireLock(fs, paths.binder);

@@ -21,7 +21,8 @@ import {
   createInMemoryFileSystem,
   type MockFileSystem,
 } from "../lib/filesystem.mock.ts";
-import { mockConfig } from "../runtime.mock.ts";
+import { createMockRuntimeContextWithDb, mockConfig } from "../runtime.mock.ts";
+import type { RuntimeContextWithDb } from "../runtime.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
@@ -29,9 +30,11 @@ import {
   CONFIG_NAVIGATION_ITEMS,
   DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
+  loadNavigation,
   type NavigationItem,
   renderNavigation,
 } from "./navigation.ts";
+import { mockNavigationConfigInput } from "./navigation.mock.ts";
 
 describe("navigation", () => {
   describe("findNavigationItemByPath", () => {
@@ -382,6 +385,42 @@ describe("navigation", () => {
           },
         ],
       );
+    });
+  });
+
+  describe("loadNavigation", () => {
+    let ctx: RuntimeContextWithDb;
+    let kg: KnowledgeGraph;
+
+    beforeEach(async () => {
+      ctx = await createMockRuntimeContextWithDb();
+      kg = ctx.kg;
+      throwIfError(
+        await kg.update({
+          author: "test",
+          configurations: mockNavigationConfigInput,
+        }),
+      );
+    });
+
+    it("loads navigation tree from config namespace", async () => {
+      const result = throwIfError(await loadNavigation(kg));
+      expect(result).toEqual([
+        {
+          path: "projects/{title}/",
+          where: { type: "Project" },
+          children: [
+            {
+              path: "tasks.yaml",
+              query: { filters: { type: "Task", project: "{uid}" } },
+            },
+          ],
+        },
+        {
+          path: "all-tasks.yaml",
+          query: { filters: { type: "Task" } },
+        },
+      ]);
     });
   });
 });

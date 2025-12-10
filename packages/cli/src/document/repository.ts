@@ -90,7 +90,7 @@ export const renderDocs = async (services: {
   );
   if (isErr(removeConfigResult)) return removeConfigResult;
 
-  const navigationResult = await loadNavigation(fs, paths.binder);
+  const navigationResult = await loadNavigation(kg);
   if (isErr(navigationResult)) return navigationResult;
 
   const renderNodeResult = await renderNavigation(

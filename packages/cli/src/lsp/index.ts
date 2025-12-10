@@ -272,11 +272,7 @@ export const createLspServer = (
       return EMPTY_DIAGNOSTICS;
     }
 
-    const navigationResult = await loadNavigation(
-      fs,
-      config.paths.binder,
-      namespace,
-    );
+    const navigationResult = await loadNavigation(kg, namespace);
     if (isErr(navigationResult)) {
       log.error("Failed to load navigation", navigationResult.error);
       return EMPTY_DIAGNOSTICS;

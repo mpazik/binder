@@ -1,31 +1,24 @@
 import { extname, join } from "path";
-import { z } from "zod";
-import * as YAML from "yaml";
 import {
   emptyFieldset,
   type Fieldset,
   type FieldsetNested,
   type Filters,
-  FiltersSchema,
   formatFieldValue,
   type GraphVersion,
   type Includes,
-  IncludesSchema,
   type KnowledgeGraph,
   type NamespaceEditable,
   type NodeSchema,
   type QueryParams,
-  QueryParamsSchema,
 } from "@binder/db";
 import {
   assertDefined,
-  includes,
   isErr,
   ok,
   okVoid,
   type Result,
   type ResultAsync,
-  tryCatch,
 } from "@binder/utils";
 import { sanitizeFilename } from "../utils/file.ts";
 import {
@@ -41,46 +34,7 @@ import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import { formatReferences, formatReferencesList } from "./reference.ts";
-import {
-  type FileType,
-  getFileType,
-  SUPPORTED_MARKDOWN_EXTS,
-  SUPPORTED_YAML_EXTS,
-} from "./document.ts";
-
-const NavigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() => {
-  const base = {
-    where: FiltersSchema.optional(),
-    children: z.array(NavigationItemSchema).optional(),
-  };
-  return z.union([
-    z.object({
-      ...base,
-      path: z
-        .string()
-        .refine((p) => includes(SUPPORTED_MARKDOWN_EXTS, extname(p))),
-      view: z.string(),
-    }),
-    z.object({
-      ...base,
-      path: z.string().refine((p) => includes(SUPPORTED_YAML_EXTS, extname(p))),
-      includes: IncludesSchema,
-    }),
-    z.object({
-      ...base,
-      path: z.string().refine((p) => includes(SUPPORTED_YAML_EXTS, extname(p))),
-      query: QueryParamsSchema,
-    }),
-    z.object({
-      ...base,
-      path: z.string().refine((p) => getFileType(p) === "directory"),
-    }),
-  ]);
-});
-
-const NavigationConfigSchema = z.object({
-  navigation: z.array(NavigationItemSchema),
-});
+import { type FileType, getFileType } from "./document.ts";
 
 export type NavigationItem = {
   path: string;
@@ -107,22 +61,49 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
 ];
 
 export const loadNavigation = async (
-  fs: FileSystem,
-  binderPath: string,
+  kg: KnowledgeGraph,
   namespace: NamespaceEditable = "node",
 ): ResultAsync<NavigationItem[]> => {
   if (namespace === "config") return ok(CONFIG_NAVIGATION_ITEMS);
-  const navigationPath = join(binderPath, "navigation.yaml");
 
-  const fileResult = await fs.readFile(navigationPath);
-  if (isErr(fileResult)) return fileResult;
-
-  const parseResult = tryCatch(() =>
-    NavigationConfigSchema.parse(YAML.parse(fileResult.data)),
+  const searchResult = await kg.search(
+    {
+      filters: { type: "Navigation" },
+    },
+    "config",
   );
-  if (isErr(parseResult)) return parseResult;
 
-  return ok(parseResult.data.navigation);
+  if (isErr(searchResult)) return searchResult;
+
+  const itemsByUid = new Map<string, any>();
+  for (const item of searchResult.data.items) {
+    itemsByUid.set(item.uid as string, item);
+  }
+
+  const buildTree = (item: any): NavigationItem => {
+    const children =
+      item.children && Array.isArray(item.children)
+        ? item.children
+            .map((childUid: string) => itemsByUid.get(childUid))
+            .filter((child: any) => child !== undefined)
+            .map((child: any) => buildTree(child))
+        : undefined;
+
+    return {
+      path: item.path,
+      where: item.where,
+      view: item.view,
+      includes: item.includes,
+      query: item.query,
+      ...(children && children.length > 0 ? { children } : {}),
+    };
+  };
+
+  const roots = searchResult.data.items
+    .filter((item) => !item.parent)
+    .map((root) => buildTree(root));
+
+  return ok(roots);
 };
 
 export const findNavigationItemByPath = (

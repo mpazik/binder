@@ -36,7 +36,7 @@ export const docsRenderHandler: CommandHandlerWithDb = async (context) => {
 export const docsSyncHandler: CommandHandlerWithDb<{
   path?: string;
 }> = async ({ kg, fs, ui, config, args, db }) => {
-  const navigationResult = await loadNavigation(fs, config.paths.binder);
+  const navigationResult = await loadNavigation(kg);
   if (isErr(navigationResult)) return navigationResult;
 
   const scopePath = resolveSnapshotPath(args.path, config.paths);
@@ -104,11 +104,7 @@ const lintNamespace = async <N extends NamespaceEditable>(
     ui.println(`  ${location} ${severity} ${error.message} (${error.code})`);
   };
 
-  const navigationResult = await loadNavigation(
-    fs,
-    config.paths.binder,
-    namespace,
-  );
+  const navigationResult = await loadNavigation(kg, namespace);
   if (isErr(navigationResult)) return navigationResult;
 
   let errors = 0;
