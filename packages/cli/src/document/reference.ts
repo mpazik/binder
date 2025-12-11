@@ -6,7 +6,13 @@ import type {
   FieldValue,
   KnowledgeGraph,
 } from "@binder/db";
-import { isErr, ok, type ResultAsync } from "@binder/utils";
+import {
+  isErr,
+  isTuple,
+  ok,
+  tupleToObjTuple,
+  type ResultAsync,
+} from "@binder/utils";
 
 type ReferenceMap = Map<string, { uid: string; key: string }>;
 
@@ -135,6 +141,30 @@ const transformValue = (
   return value;
 };
 
+const transformArrayValue = (
+  value: unknown[],
+  schema: EntitySchema,
+  refMap: ReferenceMap,
+  targetField: "uid" | "key",
+  isRelation: boolean,
+): FieldValue[] =>
+  value.map((v) => {
+    if (isRelation && typeof v === "string") {
+      const ref = refMap.get(v);
+      return ref ? ref[targetField] : v;
+    }
+
+    if (isTuple(v)) {
+      const objTuple = tupleToObjTuple(v) as FieldsetNested;
+      return transformEntity(objTuple, schema, refMap, targetField);
+    }
+
+    if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+      return transformEntity(v as FieldsetNested, schema, refMap, targetField);
+    }
+    return v as FieldValue;
+  });
+
 const transformEntity = (
   entity: FieldsetNested,
   schema: EntitySchema,
@@ -144,35 +174,25 @@ const transformEntity = (
   const result: FieldsetNested = {};
 
   for (const [fieldKey, value] of Object.entries(entity)) {
-    if (isRelationField(fieldKey, schema)) {
-      if (typeof value === "string") {
-        result[fieldKey] = transformValue(value, refMap, targetField);
-      } else if (Array.isArray(value)) {
-        result[fieldKey] = value.map((v) => {
-          if (typeof v === "string") {
-            const ref = refMap.get(v);
-            return ref ? ref[targetField] : v;
-          }
-          if (typeof v === "object" && v !== null) {
-            return transformEntity(
-              v as FieldsetNested,
-              schema,
-              refMap,
-              targetField,
-            );
-          }
-          return v;
-        });
-      } else if (typeof value === "object" && value !== null) {
-        result[fieldKey] = transformEntity(
-          value as FieldsetNested,
-          schema,
-          refMap,
-          targetField,
-        );
-      } else {
-        result[fieldKey] = value;
-      }
+    const isRelation = !!isRelationField(fieldKey, schema);
+
+    if (typeof value === "string" && isRelation) {
+      result[fieldKey] = transformValue(value, refMap, targetField);
+    } else if (Array.isArray(value)) {
+      result[fieldKey] = transformArrayValue(
+        value,
+        schema,
+        refMap,
+        targetField,
+        isRelation,
+      );
+    } else if (typeof value === "object" && value !== null) {
+      result[fieldKey] = transformEntity(
+        value as FieldsetNested,
+        schema,
+        refMap,
+        targetField,
+      );
     } else {
       result[fieldKey] = value;
     }

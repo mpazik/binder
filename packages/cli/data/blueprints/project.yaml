@@ -1,0 +1,97 @@
+# Project management blueprint
+# Provides: Task, Project, Milestone types
+
+# Schema: Core fields for project management
+- author: system
+  configurations:
+    - key: status
+      type: Field
+      name: Status
+      dataType: option
+      options:
+        - key: todo
+          name: Todo
+        - key: in-progress
+          name: In Progress
+        - key: done
+          name: Done
+
+    - key: priority
+      type: Field
+      name: Priority
+      dataType: option
+      options:
+        - key: low
+          name: Low
+        - key: medium
+          name: Medium
+        - key: high
+          name: High
+
+    - key: dueDate
+      type: Field
+      name: Due Date
+      dataType: date
+
+    - key: assignee
+      type: Field
+      name: Assignee
+      dataType: relation
+      allowMultiple: false
+
+    - key: project
+      type: Field
+      name: Project
+      dataType: relation
+      range:
+        - Project
+
+    - key: tasks
+      type: Field
+      name: Tasks
+      dataType: relation
+      allowMultiple: true
+      range:
+        - Task
+
+    - key: milestones
+      type: Field
+      name: Milestones
+      dataType: relation
+      allowMultiple: true
+      range:
+        - Milestone
+
+    - key: Task
+      type: Type
+      name: Task
+      fields:
+        - title:
+            required: true
+        - description
+        - status
+        - priority
+        - dueDate
+        - assignee
+        - project
+
+    - key: Project
+      type: Type
+      name: Project
+      fields:
+        - title:
+            required: true
+        - description
+        - status
+        - tasks
+        - milestones
+
+    - key: Milestone
+      type: Type
+      name: Milestone
+      fields:
+        - title:
+            required: true
+        - description
+        - dueDate
+        - tasks

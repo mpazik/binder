@@ -52,3 +52,11 @@ mkdirSync(cliMigrationsTarget, { recursive: true });
 cpSync(cliMigrationsSource, cliMigrationsTarget, { recursive: true });
 
 console.log(`✓ Copied CLI migrations to dist/migrations-cli`);
+
+const blueprintsSource = join(import.meta.dir, "data/blueprints");
+const blueprintsTarget = join(import.meta.dir, "dist/blueprints");
+
+mkdirSync(blueprintsTarget, { recursive: true });
+cpSync(blueprintsSource, blueprintsTarget, { recursive: true });
+
+console.log(`✓ Copied blueprints to dist/blueprints`);

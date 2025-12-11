@@ -24,6 +24,7 @@
   "dependencies": {
     "@binder/db": "workspace:*",
     "@binder/utils": "workspace:*",
+    "@clack/prompts": "^0.11.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "@types/mdast": "^4.0.4",
     "@types/yargs": "^17.0.33",

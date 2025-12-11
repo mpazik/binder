@@ -214,8 +214,9 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       return dbResult;
     }
 
-    if (callbacks?.afterCommit)
-      callbacks.afterCommit(transaction).catch(() => {});
+    if (callbacks?.afterCommit) {
+      await callbacks.afterCommit(transaction);
+    }
 
     return ok(transaction);
   };
@@ -349,7 +350,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       if (isErr(dbResult)) return dbResult;
 
       if (callbacks?.afterRollback) {
-        callbacks.afterRollback(dbResult.data, count).catch(() => {});
+        await callbacks.afterRollback(dbResult.data, count);
       }
       return ok(undefined);
     },

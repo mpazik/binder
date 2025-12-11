@@ -31,7 +31,7 @@ const removeSnapshotFiles = async (
     } else if (
       SUPPORTED_SNAPSHOT_EXTS.some((ext) => entry.name.endsWith(ext))
     ) {
-      const rmResult = await fs.rm(entryPath);
+      const rmResult = await fs.rm(entryPath, { force: true });
       if (isErr(rmResult)) return rmResult;
     }
   }

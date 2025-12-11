@@ -61,15 +61,15 @@ export type RuntimeContextWithDb = RuntimeContext & {
 
 export type CommandHandlerMinimal<TArgs = object> = (
   context: RuntimeContextInit & { args: TArgs & GlobalOptions },
-) => ResultAsync<string | undefined>;
+) => ResultAsync<string | void>;
 
 export type CommandHandler<TArgs = object> = (
   context: RuntimeContext & { args: TArgs & GlobalOptions },
-) => ResultAsync<string | undefined>;
+) => ResultAsync<string | void>;
 
 export type CommandHandlerWithDb<TArgs = object> = (
   context: RuntimeContextWithDb & { args: TArgs & GlobalOptions },
-) => ResultAsync<string | undefined>;
+) => ResultAsync<string | void>;
 
 const fatalError = (
   error: ErrorObject | Err<ErrorObject>,

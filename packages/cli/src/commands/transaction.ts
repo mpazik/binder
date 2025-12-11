@@ -10,8 +10,9 @@ import {
 } from "@binder/utils";
 import {
   normalizeEntityRef,
-  type Transaction,
   TransactionInput,
+  type Transaction,
+  type TransactionInput as TransactionInputType,
   type TransactionRef,
 } from "@binder/db";
 import * as YAML from "yaml";
@@ -30,27 +31,10 @@ import {
 import { TRANSACTION_LOG_FILE } from "../config.ts";
 import { types } from "./types.ts";
 
-type RawTransactionData = {
-  author?: string;
-  nodes?: unknown[] | Record<string, unknown>;
-  configurations?: unknown[] | Record<string, unknown>;
-};
-
-const transformToArray = (
-  data: unknown[] | Record<string, unknown> | undefined,
-): Record<string, unknown>[] => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data as Record<string, unknown>[];
-  return Object.entries(data).map(([key, value]) => ({
-    key,
-    ...(typeof value === "object" && value !== null ? value : {}),
-  }));
-};
-
 export const loadTransactionFromFile = async (
   path: string,
   defaultAuthor: string,
-): ResultAsync<TransactionInput> => {
+): ResultAsync<TransactionInputType> => {
   const fileResult = await tryCatch(async () => {
     const bunFile = Bun.file(path);
     const text = await bunFile.text();
@@ -65,25 +49,23 @@ export const loadTransactionFromFile = async (
       }),
     );
 
-  const rawData = fileResult.data as RawTransactionData;
-  const transactionInput = {
-    author: rawData.author || defaultAuthor,
-    nodes: transformToArray(rawData.nodes),
-    configurations: transformToArray(rawData.configurations),
-  };
-
-  const validationResult = tryCatch(() =>
-    TransactionInput.parse(transactionInput),
+  const raw = fileResult.data as Record<string, unknown>;
+  const parseResult = tryCatch(() =>
+    TransactionInput.parse({
+      ...raw,
+      author: raw.author ?? defaultAuthor,
+    }),
   );
 
-  if (isErr(validationResult))
+  if (isErr(parseResult))
     return err(
       createError("validation-error", "Invalid transaction format", {
-        error: validationResult.error,
+        path,
+        error: parseResult.error,
       }),
     );
 
-  return ok(validationResult.data);
+  return ok(parseResult.data);
 };
 
 export const transactionCreateHandler: CommandHandlerWithDb<{

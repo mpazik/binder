@@ -368,6 +368,12 @@ describe("navigation", () => {
         }),
       );
 
+      // formatReferencesList converts uid to key for yaml output
+      const expectedItems = tasksWithProject.items.map((item) => ({
+        ...item,
+        project: mockProjectKey,
+      }));
+
       await check(
         [
           {
@@ -381,7 +387,7 @@ describe("navigation", () => {
         [
           {
             path: "tasks-with-project.yaml",
-            yamlList: tasksWithProject.items,
+            yamlList: expectedItems,
           },
         ],
       );

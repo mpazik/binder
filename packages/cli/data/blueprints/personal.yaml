@@ -1,0 +1,320 @@
+# Personal knowledge management blueprint (PARA-based)
+# Provides: Area, Project, Task, Note, Resource types
+
+- author: system
+  configurations:
+    # Fields
+    - key: status
+      type: Field
+      name: Status
+      dataType: option
+      options:
+        - key: pending
+        - key: active
+        - key: complete
+        - key: cancelled
+        - key: archived
+
+    - key: priority
+      type: Field
+      dataType: option
+      options:
+        - key: low
+        - key: medium
+        - key: high
+
+    - key: dueDate
+      type: Field
+      name: Due Date
+      dataType: date
+
+    - key: completedAt
+      type: Field
+      name: Completed At
+      dataType: datetime
+      when: { status: complete }
+
+    - key: resourceType
+      type: Field
+      name: Resource Type
+      dataType: option
+      options:
+        - key: book
+        - key: article
+        - key: video
+        - key: podcast
+        - key: course
+        - key: paper
+
+    - key: url
+      type: Field
+      name: URL
+      dataType: string
+
+    - key: parent
+      type: Field
+      name: Parent
+      dataType: relation
+      inverseOf: children
+
+    - key: children
+      type: Field
+      name: Children
+      dataType: relation
+      allowMultiple: true
+      inverseOf: parent
+
+    - key: linksTo
+      type: Field
+      name: Links To
+      dataType: relation
+      allowMultiple: true
+      inverseOf: linkedFrom
+
+    - key: linkedFrom
+      type: Field
+      name: Linked From
+      dataType: relation
+      allowMultiple: true
+      inverseOf: linksTo
+
+    # Types
+    - key: Area
+      type: Type
+      description: Life area or responsibility
+      fields:
+        - title: { required: true }
+        - description
+        - children: { only: [Project, Note] }
+
+    - key: Task
+      type: Type
+      description: Personal action item
+      fields:
+        - title: { required: true }
+        - description
+        - status: { default: pending, exclude: [archived] }
+        - priority: { default: medium }
+        - dueDate
+        - completedAt
+        - parent: { only: [Task, Project] }
+        - children: { only: [Task] }
+        - tags
+        - linksTo
+        - linkedFrom
+
+    - key: Project
+      type: Type
+      description: Personal goal or initiative
+      fields:
+        - title: { required: true }
+        - description
+        - status: { default: pending }
+        - priority
+        - parent: { only: [Area] }
+        - children: { only: [Task] }
+        - tags
+        - linksTo
+        - linkedFrom
+
+    - key: Note
+      type: Type
+      description: Captured thought or information
+      fields:
+        - title: { required: true }
+        - textContent
+        - parent: { only: [Area] }
+        - tags
+        - linksTo
+        - linkedFrom
+
+    - key: Resource
+      type: Type
+      description: Content to consume or reference
+      fields:
+        - title: { required: true }
+        - description
+        - resourceType: { required: true }
+        - url
+        - status: { default: pending, exclude: [active] }
+        - tags
+        - linksTo
+        - linkedFrom
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Navigation Structure (PARA-based workspace)
+# ══════════════════════════════════════════════════════════════════════════════
+
+- author: system
+  configurations:
+    # Areas
+    - key: nav-areas-index
+      type: Navigation
+      path: areas/index
+      query:
+        filters: { type: Area }
+
+    - key: nav-areas-dir
+      type: Navigation
+      path: areas/{title}/
+      where: { type: Area }
+
+    - key: nav-area-entity
+      type: Navigation
+      path: area
+      parent: nav-areas-dir
+
+    - key: nav-area-projects
+      type: Navigation
+      path: projects
+      parent: nav-areas-dir
+      query:
+        filters: { type: Project, parent: "{uid}" }
+
+    - key: nav-area-notes-dir
+      type: Navigation
+      path: notes/
+      parent: nav-areas-dir
+
+    - key: nav-area-notes-index
+      type: Navigation
+      path: index
+      parent: nav-area-notes-dir
+      query:
+        filters: { type: Note, parent: "{uid}" }
+
+    - key: nav-area-notes-entity
+      type: Navigation
+      path: "{title}"
+      parent: nav-area-notes-dir
+      where: { type: Note, parent: "{uid}" }
+
+    - key: nav-area-resources
+      type: Navigation
+      path: resources
+      parent: nav-areas-dir
+      query:
+        filters: { type: Resource, linksTo: "{uid}" }
+
+    # Projects
+    - key: nav-projects-pending
+      type: Navigation
+      path: projects/pending
+      query:
+        filters: { type: Project, status: pending }
+
+    - key: nav-projects-active
+      type: Navigation
+      path: projects/active
+      query:
+        filters: { type: Project, status: active }
+
+#    - key: nav-projects-dir
+#      type: Navigation
+#      path: projects/{title}/
+#      where: { type: Project, status: [pending, active] }
+#
+#    - key: nav-project-entity
+#      type: Navigation
+#      path: project
+#      parent: nav-projects-dir
+#
+#    - key: nav-project-tasks
+#      type: Navigation
+#      path: tasks
+#      parent: nav-projects-dir
+#      query:
+#        filters: { type: Task, parent: "{uid}" }
+
+#    # Tasks
+#    - key: nav-tasks-pending
+#      type: Navigation
+#      path: tasks/pending
+#      query: { filters: { type: Task, status: pending } }
+#
+#    - key: nav-tasks-active
+#      type: Navigation
+#      path: tasks/active
+#      query: { filters: { type: Task, status: active } }
+
+#    # Resources
+#    - key: nav-resources-pending
+#      type: Navigation
+#      path: resources/pending
+#      query: { filters: { type: Resource, status: pending } }
+#
+#    - key: nav-resources-active
+#      type: Navigation
+#      path: resources/active
+#      query: { filters: { type: Resource, status: active } }
+#
+#    - key: nav-resources-books
+#      type: Navigation
+#      path: resources/books
+#      query: { filters: { type: Resource, resourceType: book, status: [pending, active] } }
+#
+#    - key: nav-resources-articles
+#      type: Navigation
+#      path: resources/articles
+#      query: { filters: { type: Resource, resourceType: article, status: [pending, active] } }
+#
+#    - key: nav-resources-videos
+#      type: Navigation
+#      path: resources/videos
+#      query: { filters: { type: Resource, resourceType: video, status: [pending, active] } }
+#
+#    - key: nav-resources-podcasts
+#      type: Navigation
+#      path: resources/podcasts
+#      query: { filters: { type: Resource, resourceType: podcast, status: [pending, active] } }
+#
+#    - key: nav-resources-courses
+#      type: Navigation
+#      path: resources/courses
+#      query: { filters: { type: Resource, resourceType: course, status: [pending, active] } }
+#
+#    - key: nav-resources-papers
+#      type: Navigation
+#      path: resources/papers
+#      query: { filters: { type: Resource, resourceType: paper, status: [pending, active] } }
+
+#    # Archive
+#    - key: nav-archive-projects
+#      type: Navigation
+#      path: archive/projects/{title}/
+#      where: { type: Project, status: [complete, cancelled, archived] }
+#
+#    - key: nav-archive-project
+#      type: Navigation
+#      path: project
+#      parent: nav-archive-projects-dir
+#
+#    - key: nav-archive-resources-books
+#      type: Navigation
+#      path: archive/resources/books
+#      query: { filters: { type: Resource, resourceType: book, status: complete } }
+#
+#    - key: nav-archive-resources-articles
+#      type: Navigation
+#      path: archive/resources/articles
+#      query: { filters: { type: Resource, resourceType: article, status: complete } }
+#
+#    - key: nav-archive-resources-videos
+#      type: Navigation
+#      path: archive/resources/videos
+#      query: { filters: { type: Resource, resourceType: video, status: complete } }
+#
+#    - key: nav-archive-resources-podcasts
+#      type: Navigation
+#      path: archive/resources/podcasts
+#      query: { filters: { type: Resource, resourceType: podcast, status: complete } }
+#
+#    - key: nav-archive-resources-courses
+#      type: Navigation
+#      path: archive/resources/courses
+#      query: { filters: { type: Resource, resourceType: course, status: complete } }
+#
+#    - key: nav-archive-resources-papers
+#      type: Navigation
+#      path: archive/resources/papers
+#      query: { filters: { type: Resource, resourceType: paper, status: complete } }

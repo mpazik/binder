@@ -166,4 +166,24 @@ describe("reference", () => {
       ]);
     });
   });
+
+  describe("tuple to ObjTuple conversion", () => {
+    it("converts TypeFieldRef tuple in array to ObjTuple format", async () => {
+      const result = throwIfError(
+        await formatReferences(
+          {
+            title: "Test",
+            fields: [["title", { required: true }]],
+          },
+          mockNodeSchema,
+          kg,
+        ),
+      );
+
+      expect(result).toEqual({
+        title: "Test",
+        fields: [{ title: { required: true } }],
+      });
+    });
+  });
 });

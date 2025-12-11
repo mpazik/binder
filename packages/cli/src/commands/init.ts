@@ -2,16 +2,34 @@ import { join } from "path";
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
-import { isErr, isOk, ok, type ResultAsync, tryCatch } from "@binder/utils";
-import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
+import { select, isCancel } from "@clack/prompts";
+import {
+  fail,
+  isErr,
+  isOk,
+  ok,
+  type ResultAsync,
+  tryCatch,
+} from "@binder/utils";
+import {
+  bootstrapMinimal,
+  type CommandHandlerMinimal,
+  type CommandHandlerWithDb,
+  runtimeWithDb,
+} from "../runtime.ts";
 import {
   BINDER_DIR,
   CONFIG_FILE,
   DEFAULT_DOCS_PATH,
   findBinderRoot,
 } from "../config.ts";
+import type { FileSystem } from "../lib/filesystem.ts";
+import {
+  listBlueprints,
+  loadBlueprint,
+  type BlueprintInfo,
+} from "../lib/blueprint.ts";
 import * as ui from "../ui.ts";
-import { createRealFileSystem, type FileSystem } from "../lib/filesystem.ts";
 import { types } from "./types.ts";
 
 const GITIGNORE_CONTENT = `*
@@ -39,85 +57,124 @@ const isDirectoryEmpty = async (
   return ok(filesResult.data.length === 0);
 };
 
-const initSetupHandler = async (args: {
+type InitSetupArgs = {
   docsPath?: string;
   author?: string;
-}): Promise<void> => {
+  force?: boolean;
+  blueprint?: string;
+};
+
+const NONE_BLUEPRINT: BlueprintInfo = {
+  name: "None",
+  path: "",
+  description: "Start with empty schema",
+  types: [],
+};
+
+const findBlueprint = (
+  blueprintArg: string,
+  blueprints: BlueprintInfo[],
+): BlueprintInfo | undefined =>
+  blueprints.find((bp) => bp.name.toLowerCase() === blueprintArg.toLowerCase());
+
+const initSetupHandler: CommandHandlerMinimal<InitSetupArgs> = async ({
+  fs,
+  args,
+}) => {
   const currentDir = process.cwd();
-  const fs = createRealFileSystem();
+  const binderDirPath = join(currentDir, BINDER_DIR);
+  const force = args.force ?? false;
 
   const existingRootResult = await findBinderRoot(fs, currentDir);
-  if (isErr(existingRootResult)) {
-    ui.error(
-      `Failed to check for existing workspace: ${existingRootResult.error.message}`,
-    );
-    process.exit(1);
-  }
+  if (isErr(existingRootResult)) return existingRootResult;
 
   if (existingRootResult.data !== null) {
-    if (existingRootResult.data === currentDir) {
-      ui.error("Binder workspace already initialized in current directory");
-      process.exit(1);
+    if (!force) {
+      const message =
+        existingRootResult.data === currentDir
+          ? "Binder workspace already initialized in current directory"
+          : `Cannot initialize nested workspace. Existing workspace at: ${existingRootResult.data}`;
+      return fail("workspace-exists", message);
     }
-    ui.error(
-      `Cannot initialize a nested binder workspace. Existing workspace found at: ${existingRootResult.data}`,
+
+    if (existingRootResult.data !== currentDir) {
+      return fail(
+        "nested-workspace",
+        `Cannot initialize nested workspace. Existing workspace at: ${existingRootResult.data}`,
+      );
+    }
+
+    const rmResult = await fs.rm(binderDirPath, {
+      recursive: true,
+      force: true,
+    });
+    if (isErr(rmResult)) return rmResult;
+  }
+
+  const blueprintsResult = await listBlueprints(fs);
+  const availableBlueprints = isOk(blueprintsResult)
+    ? blueprintsResult.data
+    : [];
+  const allBlueprints = [NONE_BLUEPRINT, ...availableBlueprints];
+
+  if (args.blueprint && !findBlueprint(args.blueprint, allBlueprints)) {
+    const available = allBlueprints.map((bp) => bp.name.toLowerCase());
+    return fail(
+      "invalid-blueprint",
+      `Unknown blueprint: ${args.blueprint}. Available: ${available.join(", ")}`,
     );
-    process.exit(1);
   }
 
   let author = args.author;
   if (!author) {
     const gitAuthor = await getAuthorNameFromGit();
-    const input = await ui.input(
-      `Author name ${gitAuthor ? `(default: ${gitAuthor}): ` : ""}`,
-    );
-    author = input.trim() || gitAuthor;
+    if (force) {
+      author = gitAuthor ?? "cli-user";
+    } else {
+      const input = await ui.input(
+        `Author name ${gitAuthor ? `(default: ${gitAuthor}): ` : ""}`,
+      );
+      author = input.trim() || gitAuthor;
+    }
   }
 
   let docsPath = args.docsPath;
   if (!docsPath) {
-    while (true) {
-      const input = await ui.input(
-        `Documents directory (default: ${DEFAULT_DOCS_PATH}): `,
-      );
-      docsPath = input.trim() || DEFAULT_DOCS_PATH;
+    if (force) {
+      docsPath = DEFAULT_DOCS_PATH;
+    } else {
+      while (true) {
+        const input = await ui.input(
+          `Documents directory (default: ${DEFAULT_DOCS_PATH}): `,
+        );
+        docsPath = input.trim() || DEFAULT_DOCS_PATH;
 
-      const fullPath = join(currentDir, docsPath);
-      const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
-      if (isErr(isEmptyResult)) {
+        const fullPath = join(currentDir, docsPath);
+        const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
+        if (isErr(isEmptyResult)) return isEmptyResult;
+        if (isOk(isEmptyResult) && isEmptyResult.data) break;
+
         ui.error(
-          `Failed to read directory status: ${isEmptyResult.error.message}`,
+          `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
         );
       }
-      if (isEmptyResult) break;
-
-      ui.error(
-        `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
-      );
     }
-  } else {
+  } else if (!force) {
     const fullPath = join(currentDir, docsPath);
-    if (!isDirectoryEmpty(fs, fullPath)) {
-      ui.error(
-        `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
+    const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
+    if (isErr(isEmptyResult)) return isEmptyResult;
+    if (isOk(isEmptyResult) && !isEmptyResult.data) {
+      return fail(
+        "directory-not-empty",
+        `Directory '${docsPath}' is not empty`,
       );
-      process.exit(1);
     }
   }
 
-  const config = {
-    author,
-    docsPath,
-  };
+  const config = { author, docsPath };
 
-  const binderDirPath = join(currentDir, BINDER_DIR);
   const mkdirResult = await fs.mkdir(binderDirPath, { recursive: true });
-  if (isErr(mkdirResult)) {
-    ui.error(
-      `Failed to create .binder directory: ${mkdirResult.error.message}`,
-    );
-    process.exit(1);
-  }
+  if (isErr(mkdirResult)) return mkdirResult;
 
   const configPath = join(binderDirPath, CONFIG_FILE);
   const configYaml = YAML.stringify(config, {
@@ -127,61 +184,82 @@ const initSetupHandler = async (args: {
   });
 
   const writeConfigResult = await fs.writeFile(configPath, configYaml);
-
-  if (isErr(writeConfigResult)) {
-    ui.error(`Failed to write config file: ${writeConfigResult.error.message}`);
-    process.exit(1);
-  }
+  if (isErr(writeConfigResult)) return writeConfigResult;
 
   const gitignorePath = join(binderDirPath, ".gitignore");
   const writeGitignoreResult = await fs.writeFile(
     gitignorePath,
     GITIGNORE_CONTENT,
   );
+  if (isErr(writeGitignoreResult)) return writeGitignoreResult;
 
-  if (isErr(writeGitignoreResult)) {
-    ui.error(
-      `Failed to write .gitignore: ${writeGitignoreResult.error.message}`,
-    );
-    process.exit(1);
+  let selectedBlueprint: BlueprintInfo;
+  if (args.blueprint) {
+    selectedBlueprint =
+      findBlueprint(args.blueprint, allBlueprints) ?? NONE_BLUEPRINT;
+  } else if (force) {
+    selectedBlueprint = NONE_BLUEPRINT;
+  } else {
+    const options = allBlueprints.map((bp) => ({
+      value: bp,
+      label: `${bp.name} - ${bp.description}`,
+    }));
+
+    const selection = await select({
+      message: "Select a blueprint:",
+      options,
+    });
+
+    if (isCancel(selection))
+      return fail("cancelled", "Initialization cancelled");
+
+    selectedBlueprint = selection as BlueprintInfo;
   }
 
-  if (docsPath !== ".") {
-    const docsDirPath = join(currentDir, docsPath);
-    if (!(await fs.exists(docsDirPath))) {
-      const mkdirDocsResult = await fs.mkdir(docsDirPath, { recursive: true });
-
-      if (isErr(mkdirDocsResult)) {
-        ui.error(
-          `Failed to create docs directory: ${mkdirDocsResult.error.message}`,
-        );
-        process.exit(1);
-      }
-    }
-  }
-
-  await runtimeWithDb(initSchemaHandler)({});
+  return ok(
+    await runtimeWithDb<InitSchemaArgs>(initSchemaHandler)({
+      blueprint: selectedBlueprint,
+    }),
+  );
 };
 
-const initSchemaHandler: CommandHandlerWithDb = async ({
+type InitSchemaArgs = {
+  blueprint: BlueprintInfo;
+};
+
+const initSchemaHandler: CommandHandlerWithDb<InitSchemaArgs> = async ({
   kg,
   ui,
   config,
   fs,
+  args,
 }) => {
+  if (args.blueprint.path) {
+    const blueprintResult = await loadBlueprint(
+      fs,
+      args.blueprint.path,
+      config.author,
+    );
+    if (isErr(blueprintResult)) return blueprintResult;
+
+    for (const tx of blueprintResult.data) {
+      const txResult = await kg.update(tx);
+      if (isErr(txResult)) return txResult;
+    }
+  }
+
   if (config.paths.docs !== config.paths.root) {
     const mkdirResult = await fs.mkdir(config.paths.docs, { recursive: true });
-    if (isErr(mkdirResult)) {
-      ui.error(`Failed to create docs directory: ${mkdirResult.error.message}`);
-      return mkdirResult;
-    }
+    if (isErr(mkdirResult)) return mkdirResult;
   }
 
   ui.block(() => {
     ui.success("Binder workspace initialized successfully");
+    if (args.blueprint.path) {
+      ui.info(`Applied blueprint: ${args.blueprint.name}`);
+    }
   });
 
-  process.exit(0);
   return ok(undefined);
 };
 
@@ -199,9 +277,20 @@ const InitCommand = types({
         describe: "path to documents directory",
         type: "string",
         alias: "d",
+      })
+      .option("blueprint", {
+        describe: "blueprint to apply (e.g., personal, project, or none)",
+        type: "string",
+        alias: "b",
+      })
+      .option("force", {
+        describe:
+          "remove existing .binder directory, skip prompts, use defaults",
+        type: "boolean",
+        alias: "f",
       });
   },
-  handler: initSetupHandler,
+  handler: bootstrapMinimal(initSetupHandler),
 });
 
 export default InitCommand;
