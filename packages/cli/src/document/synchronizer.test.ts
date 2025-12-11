@@ -22,7 +22,7 @@ import { type NavigationItem } from "./navigation.ts";
 
 const navigationItems: NavigationItem[] = [
   {
-    path: "tasks/{key}.md",
+    path: "tasks/{key}",
     view: `# {title}
 
 **Status:** {status}
@@ -33,11 +33,11 @@ const navigationItems: NavigationItem[] = [
 `,
   },
   {
-    path: "tasks/{key}.yaml",
+    path: "tasks/{key}",
     includes: { title: true, status: true, description: true },
   },
   {
-    path: "all-tasks.yaml",
+    path: "all-tasks",
     query: { filters: { type: "Task" } },
   },
 ];

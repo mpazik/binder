@@ -285,9 +285,9 @@ describe("extractFieldValues", () => {
 
 it("round-trips with resolvePath", () => {
   const item: Fieldset = { project: "binder-cli", title: "My Task" };
-  const template = "projects/{project}/{title}.md";
-  const path = throwIfError(resolvePath(template, item));
+  const navItem = { path: "projects/{project}/{title}", view: "# Test" };
+  const path = throwIfError(resolvePath(navItem, item));
   expect(path).toBe("projects/binder-cli/My Task.md");
-  const result = throwIfError(extractFieldValues(template, path));
+  const result = throwIfError(extractFieldValues(navItem.path + ".md", path));
   expect(result).toEqual({ project: "binder-cli", title: "My Task" });
 });

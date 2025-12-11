@@ -10,12 +10,12 @@ describe("createYamlValidator", () => {
   const mockKg = {} as KnowledgeGraph;
 
   const mockDirectoryNavigationItem = {
-    path: "test.yaml",
+    path: "test",
     query: { filters: { type: "Task" } },
   };
 
   const mockEntityNavigationItem = {
-    path: "test.yaml",
+    path: "test",
     where: { type: "Task" },
     includes: { id: true, title: true, status: true },
   };
@@ -213,7 +213,7 @@ owners:
 
   describe("nested relations", () => {
     const mockNestedNavigationItem = {
-      path: "test.yaml",
+      path: "test",
       query: {
         filters: { type: "Task" },
         includes: {
@@ -284,7 +284,7 @@ items:
 
     it("validates deeply nested relations", async () => {
       const deepNestedNav = {
-        path: "test.yaml",
+        path: "test",
         query: {
           filters: { type: "Project" },
           includes: {

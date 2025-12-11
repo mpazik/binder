@@ -21,6 +21,7 @@ import { type AppConfig } from "../config.ts";
 import {
   DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
+  getPathTemplate,
   type NavigationItem,
 } from "./navigation.ts";
 import { parseMarkdown, parseView } from "./markdown.ts";
@@ -239,7 +240,10 @@ export const synchronizeFile = async (
     );
   }
 
-  const pathFieldsResult = extractFieldValues(navItem.path, relativePath);
+  const pathFieldsResult = extractFieldValues(
+    getPathTemplate(navItem),
+    relativePath,
+  );
   if (isErr(pathFieldsResult)) return pathFieldsResult;
   const pathFields = pathFieldsResult.data;
 

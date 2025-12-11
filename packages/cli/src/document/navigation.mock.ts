@@ -26,7 +26,7 @@ export const mockNav2Entity = {
   uid: mockNav2Uid,
   key: "nav-project-tasks" as ConfigKey,
   type: typeNavigationKey,
-  path: "tasks.yaml",
+  path: "tasks",
   query: { filters: { type: "Task", project: "{uid}" } },
   parent: mockNav1Uid,
 } as const satisfies Fieldset;
@@ -36,7 +36,7 @@ export const mockNav3Entity = {
   uid: mockNav3Uid,
   key: "nav-all-tasks" as ConfigKey,
   type: typeNavigationKey,
-  path: "all-tasks.yaml",
+  path: "all-tasks",
   query: { filters: { type: "Task" } },
 } as const satisfies Fieldset;
 

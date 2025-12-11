@@ -49,7 +49,7 @@ describe("navigation", () => {
 
     it("matches markdown file by path template", () => {
       const item: NavigationItem = {
-        path: "tasks/{title}.md",
+        path: "tasks/{title}",
         view: DEFAULT_DYNAMIC_VIEW,
       };
       check([item], "tasks/my-task.md", item);
@@ -57,7 +57,7 @@ describe("navigation", () => {
 
     it("matches yaml file by path template", () => {
       const item: NavigationItem = {
-        path: "all-tasks.yaml",
+        path: "all-tasks",
         query: { filters: { type: "Task" } },
       };
       check([item], "all-tasks.yaml", item);
@@ -65,7 +65,7 @@ describe("navigation", () => {
 
     it("returns undefined when no match found", () => {
       const item: NavigationItem = {
-        path: "tasks/{title}.md",
+        path: "tasks/{title}",
         view: DEFAULT_DYNAMIC_VIEW,
       };
       check([item], "projects/my-project.md", undefined);
@@ -73,11 +73,11 @@ describe("navigation", () => {
 
     it("returns first matching item", () => {
       const first: NavigationItem = {
-        path: "tasks/{title}.md",
+        path: "tasks/{title}",
         view: DEFAULT_DYNAMIC_VIEW,
       };
       check(
-        [first, { path: "tasks/{key}.md", view: DEFAULT_DYNAMIC_VIEW }],
+        [first, { path: "tasks/{key}", view: DEFAULT_DYNAMIC_VIEW }],
         "tasks/my-task.md",
         first,
       );
@@ -85,7 +85,7 @@ describe("navigation", () => {
 
     it("matches nested child item", () => {
       const childItem: NavigationItem = {
-        path: "info.md",
+        path: "info",
         view: DEFAULT_DYNAMIC_VIEW,
       };
       check(
@@ -97,7 +97,7 @@ describe("navigation", () => {
 
     it("matches deeply nested child", () => {
       const deepChild: NavigationItem = {
-        path: "details.yaml",
+        path: "details",
         query: { filters: { type: "Detail" } },
       };
       check(
@@ -177,7 +177,7 @@ describe("navigation", () => {
     it("renders simple markdown without iteration", async () => {
       const staticView = "# Welcome\n\nStatic content\n";
       await check(
-        [{ path: "README.md", view: staticView }],
+        [{ path: "README", view: staticView }],
         [{ path: "README.md", content: staticView }],
       );
     });
@@ -186,7 +186,7 @@ describe("navigation", () => {
       await check(
         [
           {
-            path: "tasks/{title}.md",
+            path: "tasks/{title}",
             where: { type: "Task" },
             view: DEFAULT_DYNAMIC_VIEW,
           },
@@ -213,7 +213,7 @@ describe("navigation", () => {
             where: { type: "Task" },
             children: [
               {
-                path: "info.md",
+                path: "info",
                 view: infoView,
               },
             ],
@@ -238,12 +238,12 @@ describe("navigation", () => {
       await check(
         [
           {
-            path: "projects/{title}.md",
+            path: "projects/{title}",
             where: { type: "Project" },
             view: DEFAULT_DYNAMIC_VIEW,
             children: [
               {
-                path: "tasks/{title}.md",
+                path: "tasks/{title}",
                 where: { type: "Task" },
                 view: DEFAULT_DYNAMIC_VIEW,
               },
@@ -271,7 +271,7 @@ describe("navigation", () => {
       await check(
         [
           {
-            path: "projects/{title}.yaml",
+            path: "projects/{title}",
             where: { type: "Project" },
           },
         ],
@@ -288,7 +288,7 @@ describe("navigation", () => {
       await check(
         [
           {
-            path: "all-tasks.yaml",
+            path: "all-tasks",
             query: { filters: { type: "Task" } },
           },
         ],
@@ -312,7 +312,7 @@ describe("navigation", () => {
             where: { type: "Project" },
             children: [
               {
-                path: "tasks.yaml",
+                path: "tasks",
                 query: { filters: { type: "Task", project: "{uid}" } },
               },
             ],
@@ -339,11 +339,11 @@ describe("navigation", () => {
       await check(
         [
           {
-            path: "fields.yaml",
+            path: "fields",
             query: { filters: { type: "Field" } },
           },
           {
-            path: "types.yaml",
+            path: "types",
             query: { filters: { type: "Type" } },
           },
         ],
@@ -371,7 +371,7 @@ describe("navigation", () => {
       await check(
         [
           {
-            path: "tasks-with-project.yaml",
+            path: "tasks-with-project",
             query: {
               filters: { type: "Task", project: mockProjectNode.uid },
               includes: { project: true },
@@ -411,13 +411,13 @@ describe("navigation", () => {
           where: { type: "Project" },
           children: [
             {
-              path: "tasks.yaml",
+              path: "tasks",
               query: { filters: { type: "Task", project: "{uid}" } },
             },
           ],
         },
         {
-          path: "all-tasks.yaml",
+          path: "all-tasks",
           query: { filters: { type: "Task" } },
         },
       ]);

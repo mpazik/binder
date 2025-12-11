@@ -34,7 +34,22 @@ import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import { formatReferences, formatReferencesList } from "./reference.ts";
-import { type FileType, getFileType } from "./document.ts";
+import type { FileType } from "./document.ts";
+
+const inferFileType = (item: NavigationItem): FileType => {
+  if (item.path.endsWith("/")) return "directory";
+  if (item.view !== undefined) return "markdown";
+  return "yaml";
+};
+
+const getExtension = (fileType: FileType): string => {
+  if (fileType === "markdown") return ".md";
+  if (fileType === "yaml") return ".yaml";
+  return "";
+};
+
+export const getPathTemplate = (item: NavigationItem): string =>
+  item.path + getExtension(inferFileType(item));
 
 export type NavigationItem = {
   path: string;
@@ -47,13 +62,13 @@ export type NavigationItem = {
 
 export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
   {
-    path: ".binder/fields.yaml",
+    path: ".binder/fields",
     query: {
       filters: { type: "Field" },
     },
   },
   {
-    path: ".binder/types.yaml",
+    path: ".binder/types",
     query: {
       filters: { type: "Type" },
     },
@@ -111,7 +126,7 @@ export const findNavigationItemByPath = (
   path: string,
 ): NavigationItem | undefined => {
   for (const item of items) {
-    const fileType = getFileType(item.path);
+    const fileType = inferFileType(item);
 
     if (fileType === "directory") {
       if (!item.children) continue;
@@ -132,17 +147,24 @@ export const findNavigationItemByPath = (
       const found = findNavigationItemByPath(item.children, remainingPath);
       if (found) return found;
     } else {
-      const pathFieldsResult = extractFieldValues(item.path, path);
+      const pathTemplate = item.path + getExtension(fileType);
+      const pathFieldsResult = extractFieldValues(pathTemplate, path);
       if (isErr(pathFieldsResult)) continue;
       return item;
     }
   }
 };
 
-export const resolvePath = (template: string, item: Fieldset): Result<string> =>
-  interpolateFields(template, (key) =>
-    sanitizeFilename(formatFieldValue(item[key])),
+export const resolvePath = (
+  navItem: NavigationItem,
+  entity: Fieldset,
+): Result<string> => {
+  const fileType = inferFileType(navItem);
+  const extension = getExtension(fileType);
+  return interpolateFields(navItem.path + extension, (key) =>
+    sanitizeFilename(formatFieldValue(entity[key])),
   );
+};
 
 export const DEFAULT_DYNAMIC_VIEW = `# {title}
 
@@ -215,7 +237,7 @@ const renderNavigationItem = async (
   parentEntities: Fieldset[],
   namespace: NamespaceEditable,
 ): ResultAsync<void> => {
-  const fileType = getFileType(item.path);
+  const fileType = inferFileType(item);
 
   let entities: FieldsetNested[] = [];
   let shouldUpdateParentContext = false;
@@ -245,7 +267,7 @@ const renderNavigationItem = async (
   }
 
   for (const entity of entities) {
-    const resolvedPath = resolvePath(item.path, entity as Fieldset);
+    const resolvedPath = resolvePath(item, entity as Fieldset);
     if (isErr(resolvedPath)) return resolvedPath;
     const filePath = join(parentPath, resolvedPath.data);
 
