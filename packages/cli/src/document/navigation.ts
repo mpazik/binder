@@ -65,12 +65,34 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     path: ".binder/fields",
     query: {
       filters: { type: "Field" },
+      includes: [
+        "uid",
+        "key",
+        "name",
+        "description",
+        "dataType",
+        "when",
+        "allowMultiple",
+        "default",
+        "unique",
+        "range",
+        "inverseOf",
+        "options",
+      ],
     },
   },
   {
     path: ".binder/types",
     query: {
       filters: { type: "Type" },
+      includes: ["uid", "key", "name", "description", "fields"],
+    },
+  },
+  {
+    path: ".binder/navigation",
+    query: {
+      filters: { type: "Navigation" },
+      includes: ["uid", "key", "path", "where", "query", "parent", "children"],
     },
   },
 ];
