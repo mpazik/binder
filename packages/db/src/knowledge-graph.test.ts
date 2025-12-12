@@ -109,14 +109,14 @@ describe("knowledge graph", () => {
         expect(result).toBeErr();
       });
 
-      it("fetches node with relationship includes", async () => {
+      it("fetches node with relationship includes - returns uid without expansion", async () => {
         const result = throwIfError(
           await kg.fetchNode(mockTask2Node.uid, { uid: true, project: true }),
         );
 
         expect(result).toEqual({
           uid: mockTask2Node.uid,
-          project: mockProjectNode,
+          project: mockProjectNode.uid,
         });
       });
 
@@ -279,7 +279,7 @@ describe("knowledge graph", () => {
         expect(result.items.map((it) => it.key)).toEqual(types);
       });
 
-      it("resolves direct relationship with includes", async () => {
+      it("returns relation uid without expansion when includes is true", async () => {
         const result = throwIfError(
           await kg.search({
             filters: { type: "Task", key: mockTask2Node.key },
@@ -289,20 +289,46 @@ describe("knowledge graph", () => {
 
         expect(result.items.length).toBe(1);
         const task = result.items[0]!;
-        expect(task.project).toEqual(
-          expect.objectContaining({
-            uid: mockProjectNode.uid,
-            title: mockProjectNode.title,
-          }),
-        );
+        expect(task.project).toBe(mockProjectNode.uid);
       });
 
-      it("resolves inverse relationship with includes", async () => {
+      it("expands relation with nested includes", async () => {
+        const result = throwIfError(
+          await kg.search({
+            filters: { type: "Task", key: mockTask2Node.key },
+            includes: { project: { uid: true, title: true } },
+          }),
+        );
+
+        expect(result.items.length).toBe(1);
+        const task = result.items[0]!;
+        expect(task.project).toEqual({
+          uid: mockProjectNode.uid,
+          title: mockProjectNode.title,
+        });
+      });
+
+      it("does not expand inverse relationship without nested includes", async () => {
         const { mockTasksFieldKey } = await import("./model/config.mock.ts");
         const result = throwIfError(
           await kg.search({
             filters: { type: "Project" },
             includes: { [mockTasksFieldKey]: true },
+          }),
+        );
+
+        expect(result.items.length).toBe(1);
+        const project = result.items[0]!;
+        // Inverse relations without nested includes are not expanded
+        expect(project[mockTasksFieldKey]).toBeUndefined();
+      });
+
+      it("expands inverse relationship with nested includes", async () => {
+        const { mockTasksFieldKey } = await import("./model/config.mock.ts");
+        const result = throwIfError(
+          await kg.search({
+            filters: { type: "Project" },
+            includes: { [mockTasksFieldKey]: { uid: true, title: true } },
           }),
         );
 

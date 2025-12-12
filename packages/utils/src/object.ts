@@ -144,6 +144,16 @@ export const isObjTuple = <V = unknown>(
   !Array.isArray(item) &&
   Object.keys(item).length === 1;
 
+export const isTuple = <K extends string, V = unknown>(
+  item: unknown,
+): item is [K, V] =>
+  Array.isArray(item) &&
+  item.length === 2 &&
+  typeof item[0] === "string" &&
+  typeof item[1] === "object" &&
+  item[1] !== null &&
+  !Array.isArray(item[1]);
+
 export const objTupleKey = <K extends string>(obj: ObjTuple<K, unknown>): K =>
   Object.keys(obj)[0] as K;
 

@@ -3,6 +3,7 @@ import type {
   EntitySchema,
   FieldKey,
   Fieldset,
+  FieldValue,
   Filters,
   Includes,
   NamespaceEditable,
@@ -34,6 +35,14 @@ const getEntityFieldValue = (
   return undefined;
 };
 
+const extractRelationId = (value: unknown): string | undefined => {
+  if (typeof value === "string") return value;
+  // Handle tuple format [key, attrs] from TypeFieldRef
+  if (Array.isArray(value) && value.length >= 1 && typeof value[0] === "string")
+    return value[0];
+  return undefined;
+};
+
 const collectRelationshipIds = (
   entities: Fieldset[],
   fieldName: FieldKey,
@@ -44,9 +53,10 @@ const collectRelationshipIds = (
     const fieldValue = getEntityFieldValue(entity, fieldName);
     if (fieldValue) {
       if (Array.isArray(fieldValue)) {
-        fieldValue.forEach((id: string) => {
-          relationshipIds.add(id);
-        });
+        for (const item of fieldValue) {
+          const id = extractRelationId(item);
+          if (id) relationshipIds.add(id);
+        }
       } else {
         relationshipIds.add(fieldValue);
       }
@@ -61,6 +71,13 @@ const findRelatedEntityByUid = (
   relatedEntities: Fieldset[],
 ): Fieldset | undefined => {
   return relatedEntities.find((entity) => entity.uid === uid);
+};
+
+const findRelatedEntityByKey = (
+  key: string,
+  relatedEntities: Fieldset[],
+): Fieldset | undefined => {
+  return relatedEntities.find((entity) => entity.key === key);
 };
 
 const mergeRelationshipData = (
@@ -87,11 +104,19 @@ const mergeRelationshipData = (
       if (!fieldValue) continue;
 
       if (Array.isArray(fieldValue)) {
-        entity[fieldName] = fieldValue
-          .map((uid) => findRelatedEntityByUid(uid, relatedEntities))
-          .filter((e): e is Fieldset => e !== undefined);
+        const rawFieldValue = entity[fieldName] as FieldValue[];
+        entity[fieldName] = rawFieldValue.map((item, index) => {
+          const idStr = extractRelationId(fieldValue[index]);
+          if (!idStr) return item;
+          const found =
+            findRelatedEntityByUid(idStr, relatedEntities) ??
+            findRelatedEntityByKey(idStr, relatedEntities);
+          return found ?? item;
+        });
       } else {
-        const found = findRelatedEntityByUid(fieldValue, relatedEntities);
+        const found =
+          findRelatedEntityByUid(fieldValue, relatedEntities) ??
+          findRelatedEntityByKey(fieldValue, relatedEntities);
         if (found) entity[fieldName] = found;
       }
     }
@@ -183,19 +208,18 @@ export const resolveIncludes = async (
   const resolvedEntities = entities.map((entity) => ({ ...entity }));
 
   for (const [fieldKey, includeValue] of Object.entries(includes)) {
-    const nestedInclude = isNestedInclude(includeValue);
-    const shouldProcessField = includeValue === true || nestedInclude;
-    if (!shouldProcessField) continue;
+    // Only expand relations when there are nested includes (e.g., { project: { title: true } })
+    // Simple includes (e.g., { project: true }) just return the uid/key as-is
+    if (!isNestedInclude(includeValue)) continue;
 
     const field = schema.fields[fieldKey];
     if (!field || field.dataType !== "relation") continue;
+    // Skip relation fields without range - these are schema references (like TypeFieldRef)
+    // that store field keys, not entity UIDs
+    if (!field.range && !field.inverseOf) continue;
 
-    const nestedFilters = nestedInclude
-      ? (includeValue as NestedIncludes).filters
-      : undefined;
-    const nestedIncludes = nestedInclude
-      ? getNestedIncludes(includeValue as NestedIncludes)
-      : undefined;
+    const nestedFilters = (includeValue as NestedIncludes).filters;
+    const nestedIncludes = getNestedIncludes(includeValue as NestedIncludes);
 
     let relatedFilters: Filters = {};
 
@@ -205,9 +229,7 @@ export const resolveIncludes = async (
         .filter(Boolean);
       if (entityUids.length === 0) continue;
 
-      relatedFilters[field.inverseOf] = field.allowMultiple
-        ? { op: "in", value: entityUids }
-        : { op: "in", value: entityUids };
+      relatedFilters[field.inverseOf] = { op: "in", value: entityUids };
     } else {
       const relatedIds = Array.from(
         collectRelationshipIds(resolvedEntities, fieldKey),
@@ -219,11 +241,25 @@ export const resolveIncludes = async (
       };
     }
 
-    const relatedEntitiesResult = await searchFn(tx, namespace, {
+    let relatedEntitiesResult = await searchFn(tx, namespace, {
       ...nestedFilters,
       ...relatedFilters,
     });
     if (isErr(relatedEntitiesResult)) return relatedEntitiesResult;
+
+    // If no results found by uid, try searching by key (for field references)
+    if (
+      relatedEntitiesResult.data.length === 0 &&
+      !field.inverseOf &&
+      relatedFilters.uid
+    ) {
+      const keyFilters: Filters = {
+        ...nestedFilters,
+        key: relatedFilters.uid,
+      };
+      relatedEntitiesResult = await searchFn(tx, namespace, keyFilters);
+      if (isErr(relatedEntitiesResult)) return relatedEntitiesResult;
+    }
 
     const resolvedRelatedEntitiesResult = await resolveIncludes(
       tx,
