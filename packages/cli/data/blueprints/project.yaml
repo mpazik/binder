@@ -1,97 +1,279 @@
 # Project management blueprint
 # Provides: Task, Project, Milestone types
 
-# Schema: Core fields for project management
 - author: system
   configurations:
+    # Fields
     - key: status
       type: Field
       name: Status
       dataType: option
-      options:
-        - key: todo
-          name: Todo
-        - key: in-progress
-          name: In Progress
-        - key: done
-          name: Done
+      options: [todo, in-progress, done]
 
     - key: priority
       type: Field
-      name: Priority
       dataType: option
-      options:
-        - key: low
-          name: Low
-        - key: medium
-          name: Medium
-        - key: high
-          name: High
+      options: [low, medium, high]
 
     - key: dueDate
       type: Field
       name: Due Date
       dataType: date
 
-    - key: assignee
+    - key: parent
       type: Field
-      name: Assignee
+      name: Parent
       dataType: relation
-      allowMultiple: false
+      inverseOf: children
 
-    - key: project
+    - key: children
       type: Field
-      name: Project
-      dataType: relation
-      range:
-        - Project
-
-    - key: tasks
-      type: Field
-      name: Tasks
+      name: Children
       dataType: relation
       allowMultiple: true
-      range:
-        - Task
+      inverseOf: parent
 
-    - key: milestones
+    - key: linksTo
       type: Field
-      name: Milestones
+      name: Links To
       dataType: relation
       allowMultiple: true
-      range:
-        - Milestone
+      inverseOf: linkedFrom
 
+    - key: linkedFrom
+      type: Field
+      name: Linked From
+      dataType: relation
+      allowMultiple: true
+      inverseOf: linksTo
+
+    # Types
     - key: Task
       type: Type
       name: Task
       fields:
-        - title:
-            required: true
+        - title: { required: true }
         - description
         - status
         - priority
         - dueDate
-        - assignee
-        - project
+        - parent: { only: [Project, Task], required: true }
+        - children: { only: [Task] }
+        - linksTo: { only: [Milestone, Task] }
+        - linkedFrom
 
     - key: Project
       type: Type
       name: Project
       fields:
-        - title:
-            required: true
+        - title: { required: true }
         - description
         - status
-        - tasks
-        - milestones
+        - children: { only: [Milestone, Task] }
 
     - key: Milestone
       type: Type
       name: Milestone
       fields:
-        - title:
-            required: true
+        - title: { required: true }
         - description
+        - status
         - dueDate
-        - tasks
+        - parent: { only: [Project], required: true }
+        - linkedFrom: { only: [Task] }
+
+# Navigation Structure
+- author: system
+  configurations:
+    # Active Projects
+    - key: nav-projects-index
+      type: Navigation
+      path: projects/index
+      query:
+        filters: { type: Project, status: [todo, in-progress] }
+
+    - key: nav-projects-dir
+      type: Navigation
+      path: projects/{title}/
+      where: { type: Project, status: [todo, in-progress] }
+
+    - key: nav-project-entity
+      type: Navigation
+      path: project
+      parent: nav-projects-dir
+
+    - key: nav-project-milestones
+      type: Navigation
+      path: milestones
+      parent: nav-projects-dir
+      query:
+        filters:
+          { type: Milestone, parent: "{uid}", status: [todo, in-progress] }
+
+    - key: nav-project-tasks
+      type: Navigation
+      path: tasks
+      parent: nav-projects-dir
+      query:
+        filters: { type: Task, parent: "{uid}", status: [todo, in-progress] }
+
+    - key: nav-project-archive-dir
+      type: Navigation
+      path: archive/
+      parent: nav-projects-dir
+
+    - key: nav-project-archive-tasks
+      type: Navigation
+      path: tasks
+      parent: nav-project-archive-dir
+      query:
+        filters: { type: Task, parent: "{uid}", status: done }
+
+    - key: nav-project-archive-milestones
+      type: Navigation
+      path: milestones
+      parent: nav-project-archive-dir
+      query:
+        filters: { type: Milestone, parent: "{uid}", status: done }
+
+    # Archived Projects
+    - key: nav-archive-projects-dir
+      type: Navigation
+      path: archive/projects/{title}/
+      where: { type: Project, status: done }
+
+    - key: nav-archive-project-entity
+      type: Navigation
+      path: project
+      parent: nav-archive-projects-dir
+
+    - key: nav-archive-project-tasks
+      type: Navigation
+      path: tasks
+      parent: nav-archive-projects-dir
+      query:
+        filters: { type: Task, parent: "{uid}" }
+
+    - key: nav-archive-project-milestones
+      type: Navigation
+      path: milestones
+      parent: nav-archive-projects-dir
+      query:
+        filters: { type: Milestone, parent: "{uid}" }
+
+# Sample data for project management blueprint
+- author: system
+  nodes:
+    # Projects
+    - type: Project
+      key: website-redesign
+      title: Website Redesign
+      description: Redesign company website with modern UI/UX
+      status: in-progress
+
+    - type: Project
+      key: q1-marketing
+      title: Q1 Marketing Campaign
+      description: First quarter marketing initiatives
+      status: done
+
+    # Milestones - Website Redesign
+    - type: Milestone
+      key: design-phase
+      title: Design Phase
+      description: Complete all design mockups and prototypes
+      status: done
+      dueDate: 2025-01-15
+      parent: website-redesign
+
+    - type: Milestone
+      key: development-phase
+      title: Development Phase
+      description: Implement approved designs
+      status: in-progress
+      dueDate: 2025-02-28
+      parent: website-redesign
+
+    - type: Milestone
+      key: launch
+      title: Launch
+      description: Go live with new website
+      status: todo
+      dueDate: 2025-03-31
+      parent: website-redesign
+
+    # Milestones - Q1 Marketing
+    - type: Milestone
+      key: campaign-planning
+      title: Campaign Planning
+      description: Define strategy and assets
+      status: done
+      dueDate: 2025-01-10
+      parent: q1-marketing
+
+    - type: Milestone
+      key: campaign-execution
+      title: Campaign Execution
+      description: Run campaigns across channels
+      status: done
+      dueDate: 2025-03-15
+      parent: q1-marketing
+
+    # Tasks - Website Redesign
+    - type: Task
+      title: Create wireframes
+      description: Low-fidelity wireframes for all pages
+      status: done
+      priority: high
+      parent: website-redesign
+      linksTo: [design-phase]
+
+    - type: Task
+      title: Design homepage mockup
+      status: done
+      priority: high
+      parent: website-redesign
+      linksTo: [design-phase]
+
+    - type: Task
+      title: Build component library
+      status: in-progress
+      priority: high
+      parent: website-redesign
+      linksTo: [development-phase]
+
+    - type: Task
+      title: Implement responsive navigation
+      status: todo
+      priority: medium
+      parent: website-redesign
+      linksTo: [development-phase]
+
+    - type: Task
+      title: Set up CI/CD pipeline
+      status: todo
+      priority: low
+      parent: website-redesign
+      linksTo: [launch]
+
+    # Tasks - Q1 Marketing
+    - type: Task
+      title: Define target audience
+      status: done
+      priority: high
+      parent: q1-marketing
+      linksTo: [campaign-planning]
+
+    - type: Task
+      title: Create ad creatives
+      status: done
+      priority: high
+      parent: q1-marketing
+      linksTo: [campaign-execution]
+
+    - type: Task
+      title: Launch social media ads
+      status: done
+      priority: medium
+      parent: q1-marketing
+      linksTo: [campaign-execution]

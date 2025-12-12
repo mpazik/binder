@@ -247,6 +247,21 @@ describe("knowledge graph", () => {
         ]);
       });
 
+      it("filters by type using array shorthand", async () => {
+        const result = throwIfError(
+          await kg.search({
+            filters: { type: ["Task", "Project"] },
+          }),
+        );
+
+        expect(result.items).toEqual([
+          mockTask1Node,
+          mockProjectNode,
+          mockTask2Node,
+          mockTask3Node,
+        ]);
+      });
+
       it("respects pagination limit", async () => {
         const result = throwIfError(
           await kg.search({

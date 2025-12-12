@@ -50,6 +50,9 @@ describe("filter-entities", () => {
 
       it("works with numbers", () =>
         check({ op: "in", value: [1, 2, 3] }, 2, true));
+
+      it("is normalized from plain array", () =>
+        check(["a", "b", "c"], "b", true));
     });
 
     describe("notIn operator", () => {
@@ -142,6 +145,13 @@ describe("filter-entities", () => {
     it("works with complex filters", () =>
       check(
         { dataType: { op: "in", value: ["relation", "string"] } },
+        { dataType: "relation" },
+        true,
+      ));
+
+    it("works with array shorthand filters", () =>
+      check(
+        { dataType: ["relation", "string"] },
         { dataType: "relation" },
         true,
       ));

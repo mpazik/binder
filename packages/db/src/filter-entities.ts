@@ -1,5 +1,5 @@
 import { includes } from "@binder/utils";
-import { and, sql, type SQL } from "drizzle-orm";
+import { and, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import { tableStoredFields, type nodeTable, type configTable } from "./schema";
 import type {
   ComplexFilter,
@@ -20,13 +20,23 @@ export const isComplexFilter = (filter: Filter): filter is ComplexFilter => {
   );
 };
 
+/**
+ * Normalizes a filter to a complex filter format.
+ * Arrays are converted to { op: "in", value: array } for consistent handling.
+ */
+export const normalizeFilter = (filter: Filter): Filter => {
+  if (Array.isArray(filter)) return { op: "in", value: filter };
+  return filter;
+};
+
 export const matchesFilter = (filter: Filter, value: FieldValue): boolean => {
-  if (!isComplexFilter(filter)) {
-    if (filter === null || filter === undefined) return value == null;
-    return value === filter;
+  const normalized = normalizeFilter(filter);
+  if (!isComplexFilter(normalized)) {
+    if (normalized === null || normalized === undefined) return value == null;
+    return value === normalized;
   }
 
-  const { op, value: filterValue } = filter;
+  const { op, value: filterValue } = normalized;
 
   switch (op) {
     case "eq":
@@ -113,15 +123,16 @@ const buildFilterCondition = (
   filter: Filter,
 ): SQL | undefined => {
   const fieldSql = getFieldSql(table, fieldKey);
+  const normalized = normalizeFilter(filter);
 
-  if (!isComplexFilter(filter)) {
-    if (filter === null || filter === undefined) {
+  if (!isComplexFilter(normalized)) {
+    if (normalized === null || normalized === undefined) {
       return sql`${fieldSql} IS NULL`;
     }
-    return sql`${fieldSql} = ${filter}`;
+    return sql`${fieldSql} = ${normalized}`;
   }
 
-  const { op, value } = filter;
+  const { op, value } = normalized;
 
   switch (op) {
     case "eq":
@@ -131,12 +142,18 @@ const buildFilterCondition = (
       return sql`${fieldSql} != ${value}`;
 
     case "in":
-      if (!Array.isArray(value)) return undefined;
-      return sql`${fieldSql} IN ${value}`;
+      if (!Array.isArray(value) || value.length === 0) return undefined;
+      return sql`${fieldSql} IN (${sql.join(
+        value.map((v) => sql`${v}`),
+        sql`, `,
+      )})`;
 
     case "notIn":
-      if (!Array.isArray(value)) return undefined;
-      return sql`${fieldSql} NOT IN ${value}`;
+      if (!Array.isArray(value) || value.length === 0) return undefined;
+      return sql`${fieldSql} NOT IN (${sql.join(
+        value.map((v) => sql`${v}`),
+        sql`, `,
+      )})`;
 
     case "contains":
       if (typeof value !== "string") return undefined;

@@ -8,20 +8,12 @@
       type: Field
       name: Status
       dataType: option
-      options:
-        - key: pending
-        - key: active
-        - key: complete
-        - key: cancelled
-        - key: archived
+      options: [pending, active, complete, cancelled, archived]
 
     - key: priority
       type: Field
       dataType: option
-      options:
-        - key: low
-        - key: medium
-        - key: high
+      options: [low, medium, high]
 
     - key: dueDate
       type: Field
@@ -38,13 +30,7 @@
       type: Field
       name: Resource Type
       dataType: option
-      options:
-        - key: book
-        - key: article
-        - key: video
-        - key: podcast
-        - key: course
-        - key: paper
+      options: [book, article, video, podcast, course, paper]
 
     - key: url
       type: Field
@@ -141,10 +127,7 @@
         - linksTo
         - linkedFrom
 
-# ══════════════════════════════════════════════════════════════════════════════
 # Navigation Structure (PARA-based workspace)
-# ══════════════════════════════════════════════════════════════════════════════
-
 - author: system
   configurations:
     # Areas
@@ -209,112 +192,269 @@
       query:
         filters: { type: Project, status: active }
 
-#    - key: nav-projects-dir
-#      type: Navigation
-#      path: projects/{title}/
-#      where: { type: Project, status: [pending, active] }
-#
-#    - key: nav-project-entity
-#      type: Navigation
-#      path: project
-#      parent: nav-projects-dir
-#
-#    - key: nav-project-tasks
-#      type: Navigation
-#      path: tasks
-#      parent: nav-projects-dir
-#      query:
-#        filters: { type: Task, parent: "{uid}" }
+    - key: nav-projects-dir
+      type: Navigation
+      path: projects/{title}/
+      where: { type: Project, status: [pending, active] }
 
-#    # Tasks
-#    - key: nav-tasks-pending
-#      type: Navigation
-#      path: tasks/pending
-#      query: { filters: { type: Task, status: pending } }
-#
-#    - key: nav-tasks-active
-#      type: Navigation
-#      path: tasks/active
-#      query: { filters: { type: Task, status: active } }
+    - key: nav-project-entity
+      type: Navigation
+      path: project
+      parent: nav-projects-dir
 
-#    # Resources
-#    - key: nav-resources-pending
-#      type: Navigation
-#      path: resources/pending
-#      query: { filters: { type: Resource, status: pending } }
-#
-#    - key: nav-resources-active
-#      type: Navigation
-#      path: resources/active
-#      query: { filters: { type: Resource, status: active } }
-#
-#    - key: nav-resources-books
-#      type: Navigation
-#      path: resources/books
-#      query: { filters: { type: Resource, resourceType: book, status: [pending, active] } }
-#
-#    - key: nav-resources-articles
-#      type: Navigation
-#      path: resources/articles
-#      query: { filters: { type: Resource, resourceType: article, status: [pending, active] } }
-#
-#    - key: nav-resources-videos
-#      type: Navigation
-#      path: resources/videos
-#      query: { filters: { type: Resource, resourceType: video, status: [pending, active] } }
-#
-#    - key: nav-resources-podcasts
-#      type: Navigation
-#      path: resources/podcasts
-#      query: { filters: { type: Resource, resourceType: podcast, status: [pending, active] } }
-#
-#    - key: nav-resources-courses
-#      type: Navigation
-#      path: resources/courses
-#      query: { filters: { type: Resource, resourceType: course, status: [pending, active] } }
-#
-#    - key: nav-resources-papers
-#      type: Navigation
-#      path: resources/papers
-#      query: { filters: { type: Resource, resourceType: paper, status: [pending, active] } }
+    - key: nav-project-tasks
+      type: Navigation
+      path: tasks
+      parent: nav-projects-dir
+      query:
+        filters: { type: Task, parent: "{uid}" }
 
-#    # Archive
-#    - key: nav-archive-projects
-#      type: Navigation
-#      path: archive/projects/{title}/
-#      where: { type: Project, status: [complete, cancelled, archived] }
-#
-#    - key: nav-archive-project
-#      type: Navigation
-#      path: project
-#      parent: nav-archive-projects-dir
-#
-#    - key: nav-archive-resources-books
-#      type: Navigation
-#      path: archive/resources/books
-#      query: { filters: { type: Resource, resourceType: book, status: complete } }
-#
-#    - key: nav-archive-resources-articles
-#      type: Navigation
-#      path: archive/resources/articles
-#      query: { filters: { type: Resource, resourceType: article, status: complete } }
-#
-#    - key: nav-archive-resources-videos
-#      type: Navigation
-#      path: archive/resources/videos
-#      query: { filters: { type: Resource, resourceType: video, status: complete } }
-#
-#    - key: nav-archive-resources-podcasts
-#      type: Navigation
-#      path: archive/resources/podcasts
-#      query: { filters: { type: Resource, resourceType: podcast, status: complete } }
-#
-#    - key: nav-archive-resources-courses
-#      type: Navigation
-#      path: archive/resources/courses
-#      query: { filters: { type: Resource, resourceType: course, status: complete } }
-#
-#    - key: nav-archive-resources-papers
-#      type: Navigation
-#      path: archive/resources/papers
-#      query: { filters: { type: Resource, resourceType: paper, status: complete } }
+    # Tasks
+    - key: nav-tasks-pending
+      type: Navigation
+      path: tasks/pending
+      query:
+        filters: { type: Task, status: pending }
+
+    - key: nav-tasks-active
+      type: Navigation
+      path: tasks/active
+      query:
+        filters: { type: Task, status: active }
+
+    # Resources
+    - key: nav-resources-pending
+      type: Navigation
+      path: resources/pending
+      query:
+        filters: { type: Resource, status: pending }
+
+    - key: nav-resources-active
+      type: Navigation
+      path: resources/active
+      query:
+        filters: { type: Resource, status: active }
+
+    - key: nav-resources-books
+      type: Navigation
+      path: resources/books
+      query:
+        filters:
+          { type: Resource, resourceType: book, status: [pending, active] }
+
+    - key: nav-resources-articles
+      type: Navigation
+      path: resources/articles
+      query:
+        filters:
+          { type: Resource, resourceType: article, status: [pending, active] }
+
+    - key: nav-resources-others
+      type: Navigation
+      path: resources/others
+      query:
+        filters:
+          type: Resource
+          resourceType: [video, podcast, course, paper]
+          status: [pending, active]
+
+    # Archive
+    - key: nav-archive-projects
+      type: Navigation
+      path: archive/projects/{title}/
+      where: { type: Project, status: [complete, cancelled, archived] }
+
+    - key: nav-archive-project
+      type: Navigation
+      path: project
+      parent: nav-archive-projects-dir
+
+    - key: nav-archive-resources-books
+      type: Navigation
+      path: archive/resources/books
+      query:
+        filters: { type: Resource, resourceType: book, status: complete }
+
+    - key: nav-archive-resources-articles
+      type: Navigation
+      path: archive/resources/articles
+      query:
+        filters: { type: Resource, resourceType: article, status: complete }
+
+    - key: nav-archive-resources-others
+      type: Navigation
+      path: archive/resources/others
+      query:
+        filters:
+          type: Resource
+          resourceType: [video, podcast, course, paper]
+          status: complete
+
+# Sample data for personal knowledge management blueprint
+- author: system
+  nodes:
+    # Areas
+    - type: Area
+      key: health
+      title: Health
+      description: Physical and mental wellbeing
+
+    - type: Area
+      key: career
+      title: Career
+      description: Professional growth and work
+
+    # Projects
+    - type: Project
+      key: run-5km
+      title: Run first 5km race
+      description: Train for and complete a 5km running race
+      status: active
+      priority: high
+      parent: health
+
+    - type: Project
+      key: learn-typescript
+      title: Learn TypeScript
+      description: Master TypeScript for better code quality
+      status: pending
+      parent: career
+
+    # Tasks
+    - type: Task
+      title: Sign up for local 5km race
+      status: complete
+      priority: high
+      parent: run-5km
+
+    - type: Task
+      title: Buy running shoes
+      status: pending
+      parent: run-5km
+
+    - type: Task
+      title: Complete week 1 training plan
+      status: active
+      priority: high
+      parent: run-5km
+
+    - type: Task
+      title: Schedule rest days
+      status: pending
+      priority: low
+      parent: run-5km
+
+    - type: Task
+      title: Read TypeScript handbook
+      status: pending
+      parent: learn-typescript
+
+    - type: Task
+      title: Set up TypeScript project
+      status: pending
+      priority: high
+      parent: learn-typescript
+
+    - type: Task
+      title: Practice generics exercises
+      status: pending
+      parent: learn-typescript
+
+    # Notes
+    - type: Note
+      title: Sleep Tips
+      textContent: |
+        - Avoid screens 1 hour before bed
+        - Keep bedroom cool (65-68°F)
+        - Consistent sleep schedule
+      parent: health
+
+    - type: Note
+      title: Running Form Cues
+      textContent: |
+        - Land midfoot, not heel
+        - Keep cadence around 180 steps/min
+        - Relax shoulders, arms at 90°
+      parent: health
+
+    - type: Note
+      title: Career Goals 2025
+      textContent: |
+        - Get promoted to senior developer
+        - Learn TypeScript deeply
+        - Contribute to open source
+      parent: career
+
+    # Resources
+    - type: Resource
+      title: TypeScript Handbook
+      resourceType: article
+      url: https://www.typescriptlang.org/docs/handbook/
+      status: pending
+      linksTo: [career]
+
+    - type: Resource
+      title: Atomic Habits
+      description: Book by James Clear on building good habits
+      resourceType: book
+      status: active
+      linksTo: [health]
+
+    - type: Resource
+      title: Couch to 5K
+      description: Beginner running program guide
+      resourceType: article
+      url: https://www.nhs.uk/live-well/exercise/running-and-aerobic-exercises/get-running-with-couch-to-5k/
+      status: complete
+      linksTo: [health]
+
+    - type: Resource
+      title: The Pragmatic Programmer
+      description: Classic book on software craftsmanship
+      resourceType: book
+      status: pending
+      linksTo: [career]
+
+    - type: Resource
+      title: Why We Sleep
+      description: Book by Matthew Walker on sleep science
+      resourceType: book
+      status: pending
+      linksTo: [health]
+
+    - type: Resource
+      title: TypeScript Deep Dive
+      resourceType: article
+      url: https://basarat.gitbook.io/typescript/
+      status: active
+      linksTo: [career]
+
+    - type: Resource
+      title: Huberman Lab - Sleep Toolkit
+      description: Podcast episode on optimizing sleep
+      resourceType: podcast
+      url: https://www.hubermanlab.com/episode/toolkit-for-sleep
+      status: pending
+      linksTo: [health]
+
+    # Archived
+    - type: Project
+      key: learn-git
+      title: Learn Git basics
+      description: Understand version control fundamentals
+      status: complete
+      parent: career
+
+    - type: Resource
+      title: Pro Git
+      description: Comprehensive Git guide by Scott Chacon
+      resourceType: book
+      status: complete
+      linksTo: [career]
+
+    - type: Resource
+      title: Git Branching Tutorial
+      resourceType: video
+      url: https://www.youtube.com/watch?v=example
+      status: complete
+      linksTo: [career]
