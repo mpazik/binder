@@ -38,7 +38,7 @@ export const dataTypeDefsToOptions = (
 };
 export type OptionDef = {
   key: string;
-  name: string;
+  name?: string;
   description?: string;
 };
 export type CoreDataType = keyof typeof coreDataTypes;

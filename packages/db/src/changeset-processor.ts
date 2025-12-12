@@ -60,7 +60,9 @@ import {
   type NodeSchema,
   normalizeInputValue,
   normalizeListMutationInput,
+  normalizeOptionSet,
   normalizeValueChange,
+  type OptionDefInput,
   resolveEntityRefType,
   type TypeDef,
   typeSystemType,
@@ -94,6 +96,9 @@ const normalizeValueForField = (
   const fieldDef = getFieldDef(schema, fieldKey);
   if (fieldDef?.dataType === "relation") {
     return normalizeInputValue(value);
+  }
+  if (fieldDef?.dataType === "optionSet" && Array.isArray(value)) {
+    return normalizeOptionSet(value as OptionDefInput[]);
   }
   return value;
 };

@@ -212,17 +212,26 @@ export const configDataTypeValidators: {
       );
 
     for (const item of value) {
+      if (typeof item === "string") {
+        if (item.length === 0)
+          return fail(
+            "validation-error",
+            "Invalid option in optionSet: string key cannot be empty",
+            undefined,
+          );
+        continue;
+      }
       if (typeof item !== "object" || item === null || Array.isArray(item))
         return fail(
           "validation-error",
-          "Invalid option in optionSet: expected object with key and name",
+          "Invalid option in optionSet: expected string or object with key",
           undefined,
         );
       const obj = item as Record<string, unknown>;
-      if (typeof obj.key !== "string" || typeof obj.name !== "string")
+      if (typeof obj.key !== "string")
         return fail(
           "validation-error",
-          "Invalid option in optionSet: expected {key: string, name: string}",
+          "Invalid option in optionSet: expected {key: string}",
           undefined,
         );
     }

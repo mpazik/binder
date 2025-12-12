@@ -19,6 +19,7 @@ import type {
   ListMutationPatch,
   ListMutationRemove,
 } from "./changeset.ts";
+import type { OptionDef } from "./data-type.ts";
 
 // Input mutation types - accept ObjTuple for ergonomic YAML/CLI input
 // These get normalized to internal ListMutation types during processing
@@ -155,3 +156,11 @@ export const normalizeFieldChangesetInput = (
   }
   return result;
 };
+
+export type OptionDefInput = string | OptionDef;
+
+export const normalizeOptionDef = (item: OptionDefInput): OptionDef =>
+  typeof item === "string" ? { key: item } : item;
+
+export const normalizeOptionSet = (options: OptionDefInput[]): OptionDef[] =>
+  options.map(normalizeOptionDef);

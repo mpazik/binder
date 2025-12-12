@@ -313,20 +313,25 @@ describe("data-type-validators", () => {
       ]);
     });
 
+    it("accepts string shorthand for options", () => {
+      checkOk("optionSet", ["opt1", "opt2"]);
+      checkOk("optionSet", [{ key: "opt1" }, "opt2"]);
+    });
+
     it("rejects non-arrays", () => {
       checkErr("optionSet", {});
     });
 
     it("rejects arrays with invalid objects", () => {
-      checkErr("optionSet", [{ key: "opt1" }], {
-        message: "expected {key: string, name: string}",
+      checkErr("optionSet", [{ name: "Option" }], {
+        message: "expected {key: string}",
       });
-      checkErr("optionSet", [{ name: "Option" }]);
     });
 
-    it("rejects arrays with non-objects", () => {
-      checkErr("optionSet", ["string"]);
+    it("rejects arrays with invalid values", () => {
       checkErr("optionSet", [123]);
+      checkErr("optionSet", [""]);
+      checkErr("optionSet", [null]);
     });
   });
 
