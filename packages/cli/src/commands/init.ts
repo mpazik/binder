@@ -2,7 +2,7 @@ import { join } from "path";
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
-import { select, isCancel } from "@clack/prompts";
+import { isCancel, select } from "@clack/prompts";
 import {
   fail,
   isErr,
@@ -25,9 +25,9 @@ import {
 } from "../config.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import {
+  type BlueprintInfo,
   listBlueprints,
   loadBlueprint,
-  type BlueprintInfo,
 } from "../lib/blueprint.ts";
 import * as ui from "../ui.ts";
 import { types } from "./types.ts";
@@ -57,13 +57,6 @@ const isDirectoryEmpty = async (
   return ok(filesResult.data.length === 0);
 };
 
-type InitSetupArgs = {
-  docsPath?: string;
-  author?: string;
-  force?: boolean;
-  blueprint?: string;
-};
-
 const NONE_BLUEPRINT: BlueprintInfo = {
   name: "None",
   path: "",
@@ -77,38 +70,23 @@ const findBlueprint = (
 ): BlueprintInfo | undefined =>
   blueprints.find((bp) => bp.name.toLowerCase() === blueprintArg.toLowerCase());
 
-const initSetupHandler: CommandHandlerMinimal<InitSetupArgs> = async ({
-  fs,
-  args,
-}) => {
+const initSetupHandler: CommandHandlerMinimal<{
+  docsPath?: string;
+  author?: string;
+  blueprint?: string;
+}> = async ({ fs, args }) => {
   const currentDir = process.cwd();
   const binderDirPath = join(currentDir, BINDER_DIR);
-  const force = args.force ?? false;
 
   const existingRootResult = await findBinderRoot(fs, currentDir);
   if (isErr(existingRootResult)) return existingRootResult;
 
   if (existingRootResult.data !== null) {
-    if (!force) {
-      const message =
-        existingRootResult.data === currentDir
-          ? "Binder workspace already initialized in current directory"
-          : `Cannot initialize nested workspace. Existing workspace at: ${existingRootResult.data}`;
-      return fail("workspace-exists", message);
-    }
-
-    if (existingRootResult.data !== currentDir) {
-      return fail(
-        "nested-workspace",
-        `Cannot initialize nested workspace. Existing workspace at: ${existingRootResult.data}`,
-      );
-    }
-
-    const rmResult = await fs.rm(binderDirPath, {
-      recursive: true,
-      force: true,
-    });
-    if (isErr(rmResult)) return rmResult;
+    const message =
+      existingRootResult.data === currentDir
+        ? "Binder workspace already initialized in current directory"
+        : `Cannot initialize nested workspace. Existing workspace at: ${existingRootResult.data}`;
+    return fail("workspace-exists", message);
   }
 
   const blueprintsResult = await listBlueprints(fs);
@@ -128,38 +106,30 @@ const initSetupHandler: CommandHandlerMinimal<InitSetupArgs> = async ({
   let author = args.author;
   if (!author) {
     const gitAuthor = await getAuthorNameFromGit();
-    if (force) {
-      author = gitAuthor ?? "cli-user";
-    } else {
-      const input = await ui.input(
-        `Author name ${gitAuthor ? `(default: ${gitAuthor}): ` : ""}`,
-      );
-      author = input.trim() || gitAuthor;
-    }
+    const input = await ui.input(
+      `Author name ${gitAuthor ? `(default: ${gitAuthor}): ` : ""}`,
+    );
+    author = input.trim() || gitAuthor;
   }
 
   let docsPath = args.docsPath;
   if (!docsPath) {
-    if (force) {
-      docsPath = DEFAULT_DOCS_PATH;
-    } else {
-      while (true) {
-        const input = await ui.input(
-          `Documents directory (default: ${DEFAULT_DOCS_PATH}): `,
-        );
-        docsPath = input.trim() || DEFAULT_DOCS_PATH;
+    while (true) {
+      const input = await ui.input(
+        `Documents directory (default: ${DEFAULT_DOCS_PATH}): `,
+      );
+      docsPath = input.trim() || DEFAULT_DOCS_PATH;
 
-        const fullPath = join(currentDir, docsPath);
-        const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
-        if (isErr(isEmptyResult)) return isEmptyResult;
-        if (isOk(isEmptyResult) && isEmptyResult.data) break;
+      const fullPath = join(currentDir, docsPath);
+      const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
+      if (isErr(isEmptyResult)) return isEmptyResult;
+      if (isOk(isEmptyResult) && isEmptyResult.data) break;
 
-        ui.error(
-          `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
-        );
-      }
+      ui.error(
+        `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
+      );
     }
-  } else if (!force) {
+  } else {
     const fullPath = join(currentDir, docsPath);
     const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
     if (isErr(isEmptyResult)) return isEmptyResult;
@@ -197,8 +167,6 @@ const initSetupHandler: CommandHandlerMinimal<InitSetupArgs> = async ({
   if (args.blueprint) {
     selectedBlueprint =
       findBlueprint(args.blueprint, allBlueprints) ?? NONE_BLUEPRINT;
-  } else if (force) {
-    selectedBlueprint = NONE_BLUEPRINT;
   } else {
     const options = allBlueprints.map((bp) => ({
       value: bp,
@@ -282,12 +250,6 @@ const InitCommand = types({
         describe: "blueprint to apply (e.g., personal, project, or none)",
         type: "string",
         alias: "b",
-      })
-      .option("force", {
-        describe:
-          "remove existing .binder directory, skip prompts, use defaults",
-        type: "boolean",
-        alias: "f",
       });
   },
   handler: bootstrapMinimal(initSetupHandler),
