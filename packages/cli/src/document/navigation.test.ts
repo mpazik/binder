@@ -26,6 +26,7 @@ import type { RuntimeContextWithDb } from "../runtime.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
+import { BINDER_DIR } from "../config.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
   DEFAULT_DYNAMIC_VIEW,
@@ -115,7 +116,7 @@ describe("navigation", () => {
     it("matches config file", () => {
       check(
         CONFIG_NAVIGATION_ITEMS,
-        ".binder/fields.yaml",
+        `${BINDER_DIR}/fields.yaml`,
         CONFIG_NAVIGATION_ITEMS[0],
       );
     });

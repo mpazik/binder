@@ -10,9 +10,9 @@ pids
 *.db
 .DS_store
 
-# Binder local data
-.binder/
-docs-test/
+# Binder dev data
+.binder-dev/
+docs-dev/
 
 # Dependency directories
 node_modules/

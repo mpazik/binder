@@ -2,7 +2,7 @@ import { tool } from "@opencode-ai/plugin";
 import { executeCommand } from "../lib/execute";
 
 export default tool({
-  description: `Executes read-only SQL queries on the binder database (.binder/binder.db). Returns query results in a formatted table. Use this to inspect database state, schema, and data.`,
+  description: `Executes read-only SQL queries on the binder database (.binder-dev/binder.db). Returns query results in a formatted table. Use this to inspect database state, schema, and data.`,
   args: {
     query: tool.schema
       .string()
@@ -23,7 +23,7 @@ export default tool({
       return `❌ Only read-only queries are allowed (SELECT, PRAGMA, EXPLAIN). Query starts with: ${trimmedQuery.split(/\s+/)[0]}`;
     }
 
-    const dbPath = ".binder/binder.db";
+    const dbPath = ".binder-dev/binder.db";
     const cmd = ["sqlite3", "-header", "-column", dbPath, trimmedQuery];
 
     const result = await executeCommand(cmd, context.abort);

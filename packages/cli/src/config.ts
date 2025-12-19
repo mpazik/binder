@@ -11,12 +11,12 @@ import {
 } from "@binder/utils";
 import type { FileSystem } from "./lib/filesystem.ts";
 import { LOG_LEVELS, type LogLevel } from "./log.ts";
+import { isDevMode } from "./build-time.ts";
 
-const DEFAULT_DOCS_DIR = "./docs";
 const DEFAULT_AUTHOR = "cli-user";
-export const DEFAULT_DOCS_PATH = "docs";
+export const DEFAULT_DOCS_PATH = isDevMode() ? "docs-dev" : "docs";
 export const CONFIG_FILE = "config.yaml";
-export const BINDER_DIR = ".binder";
+export const BINDER_DIR = isDevMode() ? ".binder-dev" : ".binder";
 export const DB_FILE = "binder.db";
 export const TRANSACTION_LOG_FILE = "transactions.jsonl";
 export const UNDO_LOG_FILE = "undo.jsonl";
@@ -31,7 +31,7 @@ export const GlobalConfigSchema = z.object({
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 
 export const UserConfigSchema = GlobalConfigSchema.extend({
-  docsPath: z.string().default(DEFAULT_DOCS_DIR),
+  docsPath: z.string().default(DEFAULT_DOCS_PATH),
   validation: z
     .object({
       rules: z

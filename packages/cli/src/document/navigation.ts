@@ -30,7 +30,7 @@ import type { DatabaseCli } from "../db";
 import { interpolateQueryParams } from "../utils/query.ts";
 import { saveSnapshot } from "../lib/snapshot.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
-import { type ConfigPaths } from "../config.ts";
+import { BINDER_DIR, type ConfigPaths } from "../config.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
@@ -63,7 +63,7 @@ export type NavigationItem = {
 
 export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
   {
-    path: ".binder/fields",
+    path: `${BINDER_DIR}/fields`,
     query: {
       filters: { type: "Field" },
       includes: {
@@ -82,7 +82,7 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     },
   },
   {
-    path: ".binder/types",
+    path: `${BINDER_DIR}/types`,
     query: {
       filters: { type: "Type" },
       includes: {
@@ -94,7 +94,7 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     },
   },
   {
-    path: ".binder/navigation",
+    path: `${BINDER_DIR}/navigation`,
     query: {
       filters: { type: "Navigation" },
       includes: {
