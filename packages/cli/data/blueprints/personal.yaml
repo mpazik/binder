@@ -152,7 +152,7 @@
       path: projects
       parent: nav-areas-dir
       query:
-        filters: { type: Project, parent: "{uid}" }
+        filters: { type: Project, parent: "{parent.key}" }
 
     - key: nav-area-notes-dir
       type: Navigation
@@ -164,20 +164,20 @@
       path: index
       parent: nav-area-notes-dir
       query:
-        filters: { type: Note, parent: "{uid}" }
+        filters: { type: Note, parent: "{parent.key}" }
 
     - key: nav-area-notes-entity
       type: Navigation
       path: "{title}"
       parent: nav-area-notes-dir
-      where: { type: Note, parent: "{uid}" }
+      where: { type: Note, parent: "{parent.key}" }
 
     - key: nav-area-resources
       type: Navigation
       path: resources
       parent: nav-areas-dir
       query:
-        filters: { type: Resource, linksTo: "{uid}" }
+        filters: { type: Resource, linksTo: "{parent.key}" }
 
     # Projects
     - key: nav-projects-pending
@@ -207,7 +207,7 @@
       path: tasks
       parent: nav-projects-dir
       query:
-        filters: { type: Task, parent: "{uid}" }
+        filters: { type: Task, parent: "{parent.key}" }
 
     # Tasks
     - key: nav-tasks-pending

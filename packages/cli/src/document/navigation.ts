@@ -9,6 +9,7 @@ import {
   type Includes,
   type KnowledgeGraph,
   type NamespaceEditable,
+  type AncestralFieldsetChain,
   type NodeSchema,
   type QueryParams,
 } from "@binder/db";
@@ -23,7 +24,7 @@ import {
 import { sanitizeFilename } from "../utils/file.ts";
 import {
   extractFieldValues,
-  interpolateFields,
+  interpolateAncestralFields,
 } from "../utils/interpolate-fields.ts";
 import type { DatabaseCli } from "../db";
 import { interpolateQueryParams } from "../utils/query.ts";
@@ -66,7 +67,6 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     query: {
       filters: { type: "Field" },
       includes: {
-        uid: true,
         key: true,
         name: true,
         description: true,
@@ -86,7 +86,6 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     query: {
       filters: { type: "Type" },
       includes: {
-        uid: true,
         key: true,
         name: true,
         description: true,
@@ -99,7 +98,6 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     query: {
       filters: { type: "Navigation" },
       includes: {
-        uid: true,
         key: true,
         path: true,
         where: true,
@@ -126,31 +124,33 @@ export const loadNavigation = async (
 
   if (isErr(searchResult)) return searchResult;
 
-  const itemsByUid = new Map<string, any>();
-  for (const item of searchResult.data.items) {
-    itemsByUid.set(item.uid as string, item);
+  const items = searchResult.data.items;
+  const childrenByParentKey = new Map<string, FieldsetNested[]>();
+
+  for (const item of items) {
+    const parentKey = item.parent as string | undefined;
+    if (parentKey) {
+      const siblings = childrenByParentKey.get(parentKey) ?? [];
+      siblings.push(item);
+      childrenByParentKey.set(parentKey, siblings);
+    }
   }
 
-  const buildTree = (item: any): NavigationItem => {
-    const children =
-      item.children && Array.isArray(item.children)
-        ? item.children
-            .map((childUid: string) => itemsByUid.get(childUid))
-            .filter((child: any) => child !== undefined)
-            .map((child: any) => buildTree(child))
-        : undefined;
+  const buildTree = (item: FieldsetNested): NavigationItem => {
+    const childItems = childrenByParentKey.get(item.key as string);
+    const children = childItems?.map((child) => buildTree(child));
 
     return {
-      path: item.path,
-      where: item.where,
-      view: item.view,
-      includes: item.includes,
-      query: item.query,
+      path: item.path as string,
+      where: item.where as Filters | undefined,
+      view: item.view as string | undefined,
+      includes: item.includes as Includes | undefined,
+      query: item.query as QueryParams | undefined,
       ...(children && children.length > 0 ? { children } : {}),
     };
   };
 
-  const roots = searchResult.data.items
+  const roots = items
     .filter((item) => !item.parent)
     .map((root) => buildTree(root));
 
@@ -194,11 +194,15 @@ export const findNavigationItemByPath = (
 export const resolvePath = (
   navItem: NavigationItem,
   entity: Fieldset,
+  parentEntities: AncestralFieldsetChain = [],
 ): Result<string> => {
   const fileType = inferFileType(navItem);
   const extension = getExtension(fileType);
-  return interpolateFields(navItem.path + extension, (key) =>
-    sanitizeFilename(formatFieldValue(entity[key])),
+  const pathTemplate = navItem.path + extension;
+  const context = [entity, ...parentEntities];
+
+  return interpolateAncestralFields(pathTemplate, (fieldName, depth) =>
+    sanitizeFilename(formatFieldValue(context[depth]?.[fieldName])),
   );
 };
 
@@ -303,7 +307,7 @@ const renderNavigationItem = async (
   }
 
   for (const entity of entities) {
-    const resolvedPath = resolvePath(item, entity as Fieldset);
+    const resolvedPath = resolvePath(item, entity as Fieldset, parentEntities);
     if (isErr(resolvedPath)) return resolvedPath;
     const filePath = join(parentPath, resolvedPath.data);
 

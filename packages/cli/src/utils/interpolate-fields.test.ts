@@ -1,12 +1,15 @@
 import { describe, it, expect } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import type { Fieldset } from "@binder/db";
+import type { Fieldset, AncestralFieldValueProvider } from "@binder/db";
+import { mockProjectNode, mockUserNode } from "@binder/db/mocks";
 import { resolvePath } from "../document/navigation.ts";
 import {
   extractFieldNames,
   extractFieldValues,
   interpolateFields,
+  interpolateAncestralFields,
+  parseAncestralPlaceholder,
 } from "./interpolate-fields.ts";
 
 describe("interpolateFields", () => {
@@ -280,6 +283,98 @@ describe("extractFieldValues", () => {
 
   it("handles missing data at end", () => {
     checkError("tasks/{title}.md", "tasks/my-task", "path_template_mismatch");
+  });
+});
+
+describe("parseAncestralPlaceholder", () => {
+  const check = (
+    placeholder: string,
+    expected: { fieldName: string; depth: number },
+  ) => {
+    expect(parseAncestralPlaceholder(placeholder)).toEqual(expected);
+  };
+
+  it("parses simple field as depth 0", () => {
+    check("title", { fieldName: "title", depth: 0 });
+  });
+
+  it("parses parent.field as depth 1", () => {
+    check("parent.key", { fieldName: "key", depth: 1 });
+  });
+
+  it("parses parent2.field as depth 2", () => {
+    check("parent2.name", { fieldName: "name", depth: 2 });
+  });
+
+  it("parses parent10.field as depth 10", () => {
+    check("parent10.id", { fieldName: "id", depth: 10 });
+  });
+
+  it("handles nested field names after parent prefix", () => {
+    check("parent.nested.field", { fieldName: "nested.field", depth: 1 });
+  });
+});
+
+describe("interpolateAncestralFields", () => {
+  const check = (template: string, chain: Fieldset[], expected: string) => {
+    const result = throwIfError(interpolateAncestralFields(template, chain));
+    expect(result).toBe(expected);
+  };
+
+  it("interpolates depth 0 field from first fieldset", () => {
+    check("{title}", [{ title: "Current" }, { title: "Parent" }], "Current");
+  });
+
+  it("interpolates parent.field from second fieldset", () => {
+    check(
+      "{parent.title}",
+      [{ title: "Current" }, { title: "Parent" }],
+      "Parent",
+    );
+  });
+
+  it("interpolates parent2.field from third fieldset", () => {
+    check(
+      "{parent2.name}",
+      [{ name: "Current" }, { name: "Parent" }, { name: "Grandparent" }],
+      "Grandparent",
+    );
+  });
+
+  it("interpolates mixed depth placeholders", () => {
+    check(
+      "{key} in {parent.key} by {parent2.key}",
+      [{ key: "task-1" }, { key: "project-1" }, { key: "user-1" }],
+      "task-1 in project-1 by user-1",
+    );
+  });
+
+  it("returns empty string for missing field", () => {
+    check("{nonexistent}", [{ title: "Current" }], "");
+  });
+
+  it("returns empty string for out-of-bounds depth", () => {
+    check("{parent.title}", [{ title: "Current" }], "");
+  });
+
+  it("works with provider function", () => {
+    const provider: AncestralFieldValueProvider = (fieldName, depth) => {
+      if (depth === 0 && fieldName === "id") return 42;
+      if (depth === 1 && fieldName === "name") return "Parent Name";
+      return null;
+    };
+    const result = throwIfError(
+      interpolateAncestralFields("{id} - {parent.name}", provider),
+    );
+    expect(result).toBe("42 - Parent Name");
+  });
+
+  it("works with mock nodes", () => {
+    check(
+      "{key} by {parent.name}",
+      [mockProjectNode, mockUserNode],
+      "project-binder-system by Rick",
+    );
   });
 });
 

@@ -2,27 +2,24 @@ import { describe, expect, test } from "bun:test";
 import "@binder/utils/tests";
 import { mockProjectNode, mockUserNode } from "@binder/db/mocks";
 import { throwIfError } from "@binder/utils";
-import {
-  extractFieldsetFromQuery,
-  parseStringQuery,
-  type NavigationContext,
-} from "./query.ts";
+import type { AncestralFieldsetChain } from "@binder/db";
+import { extractFieldsetFromQuery, parseStringQuery } from "./query.ts";
 
 const check = (
   text: string,
-  query: NavigationContext | undefined,
+  parents: AncestralFieldsetChain | undefined,
   expected: Record<string, string>,
 ) => {
-  const result = parseStringQuery(text, query);
+  const result = parseStringQuery(text, parents);
   expect(result).toBeOkWith({ filters: expected });
 };
 
 const checkError = (
   text: string,
-  query: NavigationContext | undefined,
+  parents: AncestralFieldsetChain | undefined,
   errorKey: string,
 ) => {
-  const result = parseStringQuery(text, query);
+  const result = parseStringQuery(text, parents);
   expect(result).toBeErrWithKey(errorKey);
 };
 
@@ -133,12 +130,10 @@ describe("parseStringQuery", () => {
     );
   });
 
-  test("returns error when field doesn't exist in parent", () => {
-    checkError(
-      "type=Task AND milestone={parent.nonexistent}",
-      [mockProjectNode],
-      "field-not-found",
-    );
+  test("omits filter when parent field is missing", () => {
+    check("type=Task AND milestone={parent.nonexistent}", [mockProjectNode], {
+      type: "Task",
+    });
   });
 
   test("returns error when unrecognized placeholder syntax", () => {

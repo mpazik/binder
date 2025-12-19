@@ -10,6 +10,14 @@ export type FieldsetNested = {
   [key: FieldKey]: FieldValue | FieldsetNested;
 };
 
+// 0 is the current entity, 1 its parent, and so on
+export type AncestralFieldValueProvider = (
+  fieldName: string,
+  depth: number,
+) => FieldValue;
+
+export type AncestralFieldsetChain = Fieldset[];
+
 export const getNestedValue = (
   fieldset: FieldsetNested,
   path: FieldPath,

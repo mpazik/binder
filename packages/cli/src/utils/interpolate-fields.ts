@@ -1,14 +1,21 @@
-import { createError, err, ok, type Result } from "@binder/utils";
+import { fail, ok, type Result } from "@binder/utils";
 import {
   type Fieldset,
   type FieldValueProvider,
   formatFieldValue,
+  type AncestralFieldsetChain,
+  type AncestralFieldValueProvider,
 } from "@binder/db";
 
 export const interpolateFields = (
   template: string,
-  fieldset: Fieldset | FieldValueProvider,
+  provider: Fieldset | FieldValueProvider,
 ): Result<string> => {
+  const getFieldValue =
+    typeof provider === "function"
+      ? provider
+      : (fieldName: string) => provider[fieldName];
+
   let result = "";
   let i = 0;
 
@@ -30,11 +37,9 @@ export const interpolateFields = (
     if (char === "{") {
       const closeIndex = template.indexOf("}", i + 1);
       if (closeIndex === -1) {
-        return err(
-          createError("unclosed-bracket", "Unclosed bracket in template", {
-            position: i,
-          }),
-        );
+        return fail("unclosed-bracket", "Unclosed bracket in template", {
+          position: i,
+        });
       }
 
       const fieldName = template.slice(i + 1, closeIndex);
@@ -45,11 +50,7 @@ export const interpolateFields = (
         continue;
       }
 
-      const value = formatFieldValue(
-        typeof fieldset === "function"
-          ? fieldset(fieldName)
-          : fieldset[fieldName],
-      );
+      const value = formatFieldValue(getFieldValue(fieldName));
       result += value;
       i = closeIndex + 1;
       continue;
@@ -60,6 +61,36 @@ export const interpolateFields = (
   }
 
   return ok(result);
+};
+
+export const parseAncestralPlaceholder = (
+  placeholder: string,
+): {
+  fieldName: string;
+  depth: number;
+} => {
+  const match = placeholder.match(/^parent(\d*)\.(.+)$/);
+  if (!match) return { fieldName: placeholder, depth: 0 };
+
+  const [, indexStr, fieldName] = match;
+  const depth = indexStr === "" ? 1 : parseInt(indexStr, 10);
+
+  return { fieldName: fieldName!, depth };
+};
+
+export const interpolateAncestralFields = (
+  template: string,
+  provider: AncestralFieldsetChain | AncestralFieldValueProvider,
+): Result<string> => {
+  const getFieldValue: AncestralFieldValueProvider =
+    typeof provider === "function"
+      ? provider
+      : (fieldName, depth) => provider[depth]?.[fieldName];
+
+  return interpolateFields(template, (placeholder) => {
+    const { fieldName, depth } = parseAncestralPlaceholder(placeholder);
+    return getFieldValue(fieldName, depth);
+  });
 };
 
 export const extractFieldNames = (template: string): string[] => {
@@ -116,12 +147,14 @@ export const extractFieldValues = (
       const nextChar = template[templateIndex + 1];
       if (nextChar === "{" || nextChar === "}") {
         if (data[dataIndex] !== nextChar) {
-          return err(
-            createError(
-              "path_template_mismatch",
-              "Path does not match the template",
-              { template, data, position: dataIndex },
-            ),
+          return fail(
+            "path_template_mismatch",
+            "Path does not match the template",
+            {
+              template,
+              data,
+              position: dataIndex,
+            },
           );
         }
         templateIndex += 2;
@@ -129,12 +162,14 @@ export const extractFieldValues = (
         continue;
       }
       if (data[dataIndex] !== char) {
-        return err(
-          createError(
-            "path_template_mismatch",
-            "Path does not match the template",
-            { template, data, position: dataIndex },
-          ),
+        return fail(
+          "path_template_mismatch",
+          "Path does not match the template",
+          {
+            template,
+            data,
+            position: dataIndex,
+          },
         );
       }
       templateIndex++;
@@ -145,23 +180,19 @@ export const extractFieldValues = (
     if (char === "{") {
       const closeIndex = template.indexOf("}", templateIndex + 1);
       if (closeIndex === -1) {
-        return err(
-          createError("unclosed-bracket", "Unclosed bracket in template", {
-            position: templateIndex,
-          }),
-        );
+        return fail("unclosed-bracket", "Unclosed bracket in template", {
+          position: templateIndex,
+        });
       }
 
       const fieldName = template.slice(templateIndex + 1, closeIndex);
 
       if (!/^[\w.-]+$/.test(fieldName)) {
         if (data[dataIndex] !== char) {
-          return err(
-            createError(
-              "path_template_mismatch",
-              "Path does not match the template",
-              { template, data, position: dataIndex },
-            ),
+          return fail(
+            "path_template_mismatch",
+            "Path does not match the template",
+            { template, data, position: dataIndex },
           );
         }
         templateIndex++;
@@ -177,12 +208,10 @@ export const extractFieldValues = (
       if (nextLiteral) {
         const literalIndex = data.indexOf(nextLiteral, dataIndex);
         if (literalIndex === -1) {
-          return err(
-            createError(
-              "path_template_mismatch",
-              "Path does not match the template",
-              { template, data, position: dataIndex },
-            ),
+          return fail(
+            "path_template_mismatch",
+            "Path does not match the template",
+            { template, data, position: dataIndex },
           );
         }
         value = data.slice(dataIndex, literalIndex);
@@ -198,12 +227,14 @@ export const extractFieldValues = (
     }
 
     if (data[dataIndex] !== char) {
-      return err(
-        createError(
-          "path_template_mismatch",
-          "Path does not match the template",
-          { template, data, position: dataIndex },
-        ),
+      return fail(
+        "path_template_mismatch",
+        "Path does not match the template",
+        {
+          template,
+          data,
+          position: dataIndex,
+        },
       );
     }
 
@@ -212,13 +243,11 @@ export const extractFieldValues = (
   }
 
   if (dataIndex !== data.length) {
-    return err(
-      createError(
-        "path_template_mismatch",
-        "Path does not match the template",
-        { template, data, extraData: data.slice(dataIndex) },
-      ),
-    );
+    return fail("path_template_mismatch", "Path does not match the template", {
+      template,
+      data,
+      extraData: data.slice(dataIndex),
+    });
   }
 
   return ok(fieldset);

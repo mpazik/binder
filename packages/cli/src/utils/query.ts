@@ -4,10 +4,15 @@ import {
   type Filter,
   type Filters,
   isComplexFilter,
+  type AncestralFieldsetChain,
   type QueryParams,
 } from "@binder/db";
-import { createError, err, isErr, ok, type Result } from "@binder/utils";
-import { extractFieldNames, interpolateFields } from "./interpolate-fields.ts";
+import { fail, isErr, ok, type Result } from "@binder/utils";
+import {
+  extractFieldNames,
+  interpolateAncestralFields,
+  parseAncestralPlaceholder,
+} from "./interpolate-fields.ts";
 
 export const formatWhenCondition = (filters: Filters): string =>
   Object.entries(filters)
@@ -23,55 +28,19 @@ export const formatWhenCondition = (filters: Filters): string =>
     })
     .join(", ");
 
-export type NavigationContext = Fieldset[];
-
 const interpolateFilterValue = (
   filter: Filter,
-  context: NavigationContext,
+  context: AncestralFieldsetChain,
 ): Result<Filter> => {
   if (typeof filter === "string") {
-    const fieldNames = extractFieldNames(filter);
-    if (fieldNames.length === 0) return ok(filter);
-
-    const fieldset: Fieldset = {};
-    for (const fieldName of fieldNames) {
-      const value = context[0]?.[fieldName];
-      if (value === undefined || value === null)
-        return err(
-          createError(
-            "field-not-found",
-            `Field '${fieldName}' not found in context`,
-            { fieldName },
-          ),
-        );
-      fieldset[fieldName] = value;
-    }
-
-    const result = interpolateFields(filter, fieldset);
+    const result = interpolateAncestralFields(filter, context);
     if (isErr(result)) return result;
     return ok(result.data);
   }
 
   if (typeof filter === "object" && !Array.isArray(filter) && "op" in filter) {
     if (typeof filter.value === "string") {
-      const fieldNames = extractFieldNames(filter.value);
-      if (fieldNames.length === 0) return ok(filter);
-
-      const fieldset: Fieldset = {};
-      for (const fieldName of fieldNames) {
-        const value = context[0]?.[fieldName];
-        if (value === undefined || value === null)
-          return err(
-            createError(
-              "field-not-found",
-              `Field '${fieldName}' not found in context`,
-              { fieldName },
-            ),
-          );
-        fieldset[fieldName] = value;
-      }
-
-      const result = interpolateFields(filter.value, fieldset);
+      const result = interpolateAncestralFields(filter.value, context);
       if (isErr(result)) return result;
       return ok({ ...filter, value: result.data });
     }
@@ -82,7 +51,7 @@ const interpolateFilterValue = (
 
 export const interpolateQueryParams = (
   queryParams: QueryParams,
-  context: NavigationContext,
+  context: AncestralFieldsetChain,
 ): Result<QueryParams> => {
   if (!queryParams.filters) return ok(queryParams);
 
@@ -96,88 +65,43 @@ export const interpolateQueryParams = (
   return ok({ ...queryParams, filters: interpolatedFilters });
 };
 
-const resolvePlaceholders = (
-  query: string,
-  parents: NavigationContext = [],
-): Result<string> => {
-  const fieldNames = extractFieldNames(query);
-
-  if (fieldNames.length === 0) return ok(query);
-
-  const fieldset: Fieldset = {};
-
-  for (const fieldName of fieldNames) {
-    const parentMatch = fieldName.match(/^parent(\d*)\.(.+)$/);
-
-    if (!parentMatch) {
-      return err(
-        createError(
-          "invalid-placeholder",
-          `Invalid placeholder format: {${fieldName}}`,
-          { fieldName },
-        ),
-      );
-    }
-
-    const [, indexStr, actualFieldName] = parentMatch;
-    const parentIndex = indexStr === "" ? 0 : parseInt(indexStr, 10) - 1;
-
-    if (parentIndex >= parents.length) {
-      return err(
-        createError(
-          "context-not-found",
-          `Parent context at index ${parentIndex + 1} not found`,
-          { parentIndex: parentIndex + 1, stackSize: parents.length },
-        ),
-      );
-    }
-
-    const parentEntity = parents[parentIndex];
-    if (!parentEntity) {
-      return err(
-        createError(
-          "context-not-found",
-          `Parent entity at index ${parentIndex + 1} is undefined`,
-          { parentIndex: parentIndex + 1 },
-        ),
-      );
-    }
-
-    const fieldValue = parentEntity[actualFieldName!];
-
-    if (fieldValue === null || fieldValue === undefined) {
-      return err(
-        createError(
-          "field-not-found",
-          `Field '${actualFieldName}' not found in parent${indexStr || ""}`,
-          {
-            fieldName: actualFieldName,
-            parentIndex: parentIndex + 1,
-            entity: parentEntity,
-          },
-        ),
-      );
-    }
-
-    fieldset[fieldName] = fieldValue;
-  }
-
-  return interpolateFields(query, fieldset);
-};
-
 export const parseStringQuery = (
   query: string,
-  parents?: NavigationContext,
+  parents: AncestralFieldsetChain = [],
 ): Result<QueryParams> => {
-  const resolveResult = resolvePlaceholders(query, parents);
-  if (isErr(resolveResult)) return resolveResult;
+  const fieldNames = extractFieldNames(query);
+  for (const fieldName of fieldNames) {
+    const { depth } = parseAncestralPlaceholder(fieldName);
+    if (depth === 0) {
+      return fail(
+        "invalid-placeholder",
+        `Invalid placeholder format: {${fieldName}}`,
+        { fieldName },
+      );
+    }
+    if (depth > parents.length) {
+      return fail(
+        "context-not-found",
+        `Parent context at index ${depth} not found`,
+        {
+          parentIndex: depth,
+          stackSize: parents.length,
+        },
+      );
+    }
+  }
 
-  const resolvedQuery = resolveResult.data;
+  const result = interpolateAncestralFields(
+    query,
+    (fieldName, depth) => parents[depth - 1]?.[fieldName],
+  );
+  if (isErr(result)) return result;
+
   const filters: Record<string, string> = {};
-  const pairs = resolvedQuery.split(/\s+AND\s+|,/).map((p) => p.trim());
+  const pairs = result.data.split(/\s+AND\s+|,/).map((p: string) => p.trim());
 
   for (const pair of pairs) {
-    const [field, value] = pair.split("=").map((s) => s.trim());
+    const [field, value] = pair.split("=").map((s: string) => s.trim());
     if (field && value) {
       filters[field] = value;
     }

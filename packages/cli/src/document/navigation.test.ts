@@ -360,6 +360,29 @@ describe("navigation", () => {
       );
     });
 
+    it("renders nested item", async () => {
+      await check(
+        [
+          {
+            path: "projects/{title}/",
+            where: { type: "Project" },
+            children: [
+              {
+                path: "{parent.uid}",
+                view: DEFAULT_DYNAMIC_VIEW,
+              },
+            ],
+          },
+        ],
+        [
+          {
+            path: `projects/${mockProjectNode.title}/${mockProjectNode.uid}.md`,
+            data: mockProjectNode,
+          },
+        ],
+      );
+    });
+
     it("renders yaml with includes option", async () => {
       const tasksWithProject = throwIfError(
         await kg.search({
