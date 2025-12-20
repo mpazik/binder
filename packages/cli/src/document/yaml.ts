@@ -1,12 +1,129 @@
+import {
+  Document,
+  isMap,
+  isScalar,
+  isSeq,
+  type YAMLMap,
+  type YAMLSeq,
+} from "yaml";
 import * as YAML from "yaml";
 import { isErr, ok, tryCatch, type Result } from "@binder/utils";
 import type { FieldsetNested } from "@binder/db";
 
-export const renderYamlEntity = (data: FieldsetNested): string =>
-  YAML.stringify(data, { indent: 2, lineWidth: 0 });
+const MAX_INLINE_ITEMS = 5;
+const MAX_INLINE_LENGTH = 80;
 
-export const renderYamlList = (data: FieldsetNested[]): string =>
-  YAML.stringify({ items: data }, { indent: 2, lineWidth: 0 });
+const estimateInlineLength = (node: YAMLMap | YAMLSeq): number => {
+  if (isSeq(node)) {
+    const itemLengths = node.items.map((item) =>
+      isScalar(item) ? String(item.value).length : 0,
+    );
+    return (
+      2 +
+      itemLengths.reduce((sum, len) => sum + len, 0) +
+      (node.items.length - 1) * 2
+    );
+  }
+
+  const pairLengths = node.items.map((pair) => {
+    const keyLen = isScalar(pair.key) ? String(pair.key.value).length : 0;
+    const valLen = isScalar(pair.value)
+      ? String(pair.value.value).length
+      : isSeq(pair.value)
+        ? estimateInlineLength(pair.value)
+        : 0;
+    return keyLen + 2 + valLen;
+  });
+  return (
+    4 +
+    pairLengths.reduce((sum, len) => sum + len, 0) +
+    (node.items.length - 1) * 2
+  );
+};
+
+const isShallow = (node: YAMLMap | YAMLSeq): boolean => {
+  if (isSeq(node)) {
+    return node.items.every((item) => isScalar(item));
+  }
+  return node.items.every(
+    (pair) =>
+      isScalar(pair.value) ||
+      (isSeq(pair.value) && pair.value.items.every((item) => isScalar(item))),
+  );
+};
+
+const shouldRenderInline = (node: YAMLMap | YAMLSeq): boolean => {
+  if (node.items.length > MAX_INLINE_ITEMS) return false;
+  if (!isShallow(node)) return false;
+  if (estimateInlineLength(node) > MAX_INLINE_LENGTH) return false;
+  return true;
+};
+
+const applyInlineFormatting = (node: YAMLMap | YAMLSeq): void => {
+  if (isSeq(node)) {
+    for (const item of node.items) {
+      if (isMap(item)) {
+        applyInlineFormatting(item);
+      } else if (isSeq(item) && shouldRenderInline(item)) {
+        item.flow = true;
+      }
+    }
+    if (shouldRenderInline(node)) {
+      node.flow = true;
+    }
+  } else {
+    for (const pair of node.items) {
+      const value = pair.value;
+      if (isMap(value)) {
+        if (shouldRenderInline(value)) {
+          value.flow = true;
+        } else {
+          applyInlineFormatting(value);
+        }
+      } else if (isSeq(value)) {
+        applyInlineFormatting(value);
+      }
+    }
+  }
+};
+
+const applyEntityFormatting = (entity: YAMLMap): void => {
+  for (const pair of entity.items) {
+    const value = pair.value;
+    if (isMap(value)) {
+      applyInlineFormatting(value);
+    } else if (isSeq(value)) {
+      applyInlineFormatting(value);
+    }
+  }
+};
+
+export const renderYamlEntity = (data: FieldsetNested): string => {
+  const doc = new Document(data);
+  const root = doc.contents;
+  if (isMap(root)) {
+    applyEntityFormatting(root);
+  }
+  return doc.toString({ indent: 2, lineWidth: 0 });
+};
+
+export const renderYamlList = (data: FieldsetNested[]): string => {
+  const doc = new Document({ items: data });
+
+  const itemsSeq = doc.getIn(["items"], true) as YAMLSeq | undefined;
+  if (itemsSeq && isSeq(itemsSeq)) {
+    itemsSeq.items.forEach((item, index) => {
+      if (isMap(item)) {
+        applyEntityFormatting(item);
+        if (index > 0) {
+          item.spaceBefore = true;
+        }
+      }
+    });
+  }
+
+  return doc.toString({ indent: 2, lineWidth: 0 });
+};
 
 export const parseYamlEntity = (content: string): Result<FieldsetNested> => {
   const parseResult = tryCatch(() => YAML.parse(content) as FieldsetNested);
