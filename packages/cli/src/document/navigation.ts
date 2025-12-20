@@ -1,15 +1,16 @@
 import { extname, join } from "path";
 import {
+  type AncestralFieldsetChain,
   emptyFieldset,
   type Fieldset,
   type FieldsetNested,
+  type Filter,
   type Filters,
   formatFieldValue,
   type GraphVersion,
   type Includes,
   type KnowledgeGraph,
   type NamespaceEditable,
-  type AncestralFieldsetChain,
   type NodeSchema,
   type QueryParams,
 } from "@binder/db";
@@ -18,6 +19,7 @@ import {
   isErr,
   ok,
   okVoid,
+  omit,
   type Result,
   type ResultAsync,
 } from "@binder/utils";
@@ -66,45 +68,18 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     path: `${BINDER_DIR}/fields`,
     query: {
       filters: { type: "Field" },
-      includes: {
-        key: true,
-        name: true,
-        description: true,
-        dataType: true,
-        when: true,
-        allowMultiple: true,
-        default: true,
-        unique: true,
-        range: true,
-        inverseOf: true,
-        options: true,
-      },
     },
   },
   {
     path: `${BINDER_DIR}/types`,
     query: {
       filters: { type: "Type" },
-      includes: {
-        key: true,
-        name: true,
-        description: true,
-        fields: true,
-      },
     },
   },
   {
     path: `${BINDER_DIR}/navigation`,
     query: {
       filters: { type: "Navigation" },
-      includes: {
-        key: true,
-        path: true,
-        where: true,
-        query: true,
-        parent: true,
-        children: true,
-      },
     },
   },
 ];
@@ -222,6 +197,21 @@ const getParentDir = (filePath: string, fileType: FileType): string => {
   return withoutExt + "/";
 };
 
+const isSingleValueFilter = (filter: Filter): boolean =>
+  typeof filter !== "object" || filter === null;
+
+const getExcludedFields = (
+  namespace: NamespaceEditable,
+  filters: Filters | undefined,
+): readonly string[] => {
+  const excluded: string[] = ["id"];
+  if (namespace === "config") excluded.push("uid");
+
+  // hide type, if only single type is being displayed
+  if (filters?.type && isSingleValueFilter(filters.type)) excluded.push("type");
+  return excluded;
+};
+
 const renderContent = async (
   kg: KnowledgeGraph,
   schema: NodeSchema,
@@ -255,12 +245,20 @@ const renderContent = async (
       );
       if (isErr(formattedItems)) return formattedItems;
 
-      return ok(renderYamlList(formattedItems.data));
+      if (item.query.includes) return ok(renderYamlList(formattedItems.data));
+
+      const excludedFields = getExcludedFields(namespace, item.query.filters);
+      const filteredItems = formattedItems.data.map((e) =>
+        omit(e, excludedFields),
+      );
+      return ok(renderYamlList(filteredItems));
     } else {
       const formattedEntity = await formatReferences(entity, schema, kg);
       if (isErr(formattedEntity)) return formattedEntity;
 
-      return ok(renderYamlEntity(formattedEntity.data));
+      const excludedFields = getExcludedFields(namespace, item.where);
+      const filteredEntity = omit(formattedEntity.data, excludedFields);
+      return ok(renderYamlEntity(filteredEntity));
     }
   }
 };

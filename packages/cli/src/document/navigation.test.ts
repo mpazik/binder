@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
-import { throwIfError } from "@binder/utils";
+import { omit, throwIfError } from "@binder/utils";
 import {
   type Fieldset,
   type FieldsetNested,
@@ -23,10 +23,10 @@ import {
 } from "../lib/filesystem.mock.ts";
 import { createMockRuntimeContextWithDb, mockConfig } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
+import { BINDER_DIR } from "../config.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
-import { BINDER_DIR } from "../config.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
   DEFAULT_DYNAMIC_VIEW,
@@ -279,7 +279,7 @@ describe("navigation", () => {
         [
           {
             path: `projects/${mockProjectNode.title}.yaml`,
-            yaml: mockProjectNode,
+            yaml: omit(mockProjectNode, ["id", "type"]),
           },
         ],
       );
@@ -297,8 +297,11 @@ describe("navigation", () => {
           {
             path: "all-tasks.yaml",
             yamlList: [
-              mockTask1Node,
-              { ...mockTask2Node, project: mockProjectKey },
+              omit(mockTask1Node, ["id", "type"]),
+              omit({ ...mockTask2Node, project: mockProjectKey }, [
+                "id",
+                "type",
+              ]),
             ],
           },
         ],
@@ -322,7 +325,12 @@ describe("navigation", () => {
         [
           {
             path: `projects/${mockProjectNode.title}/tasks.yaml`,
-            yamlList: [{ ...mockTask2Node, project: mockProjectKey }],
+            yamlList: [
+              omit({ ...mockTask2Node, project: mockProjectKey }, [
+                "id",
+                "type",
+              ]),
+            ],
           },
         ],
       );
