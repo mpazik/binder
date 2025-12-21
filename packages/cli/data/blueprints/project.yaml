@@ -77,35 +77,52 @@
 # Navigation Structure
 - author: system
   configurations:
-    - key: nav-tasks
+    # Milestones (one file per milestone with its tasks)
+    - key: nav-milestone
       type: Navigation
-      path: tasks
-      query:
-        filters: { type: Task, status: [pending, active] }
+      path: milestones/{key}
+      where: { type: Milestone, status: [pending, active] }
+      includes:
+        key: true
+        title: true
+        description: true
+        status: true
+        dueDate: true
+        linkedFrom:
+          title: true
+          status: true
+          priority: true
+          dueDate: true
 
-    - key: nav-milestones
+    # Backlog (tasks without milestones)
+    - key: nav-backlog
       type: Navigation
-      path: milestones
+      path: backlog
       query:
-        filters: { type: Milestone, status: [pending, active] }
+        filters: { type: Task, linksTo: null, status: [pending, active] }
 
-    - key: nav-archive-dir
+    # Archive
+    - key: nav-archive-milestone
       type: Navigation
-      path: archive/
+      path: archive/milestones/{key}
+      where: { type: Milestone, status: complete }
+      includes:
+        key: true
+        title: true
+        description: true
+        status: true
+        dueDate: true
+        linkedFrom:
+          title: true
+          status: true
+          priority: true
+          dueDate: true
 
-    - key: nav-archive-tasks
+    - key: nav-archive-backlog
       type: Navigation
-      path: tasks
-      parent: nav-archive-dir
+      path: archive/tasks
       query:
-        filters: { type: Task, status: complete }
-
-    - key: nav-archive-milestones
-      type: Navigation
-      path: milestones
-      parent: nav-archive-dir
-      query:
-        filters: { type: Milestone, status: complete }
+        filters: { type: Task, linksTo: null, status: complete }
 
 # Sample data
 - author: system

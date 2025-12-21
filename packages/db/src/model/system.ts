@@ -86,6 +86,7 @@ export const configSchemaIds = {
   children: newMetaSystemId(25),
   parent: newMetaSystemId(26),
   where: newMetaSystemId(27),
+  includes: newMetaSystemId(28),
 } as const;
 export const fieldTypes = [fieldSystemType] as const;
 export type ConfigFieldDef = FieldDef<ConfigDataType>;
@@ -253,6 +254,13 @@ export const configFieldsDefs = {
     name: "Where",
     dataType: "object",
     description: "Filter conditions for entity selection",
+  },
+  includes: {
+    id: configSchemaIds.includes,
+    key: "includes" as SystemKey,
+    name: "Includes",
+    dataType: "object",
+    description: "Fields to include in entity output",
   },
 } as const satisfies Record<FieldKey, ConfigFieldDef>;
 export type ConfigFieldDefinitions = typeof configFieldsDefs;

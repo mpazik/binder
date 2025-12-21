@@ -40,6 +40,7 @@ const typeNavigation: TypeDef = {
     [fieldPathKey, { required: true }],
     "query",
     "where",
+    "includes",
     "children",
     "parent",
   ],
