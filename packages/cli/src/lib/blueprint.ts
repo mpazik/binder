@@ -1,14 +1,13 @@
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import * as YAML from "yaml";
-import { fail, isErr, ok, tryCatch, type ResultAsync } from "@binder/utils";
+import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import {
-  TransactionInput,
-  type TransactionInput as TransactionInputType,
   typeSystemType,
   type EntityKey,
+  type TransactionInput,
 } from "@binder/db";
 import { isBundled } from "../build-time.ts";
+import { parseTransactionInputContent } from "../utils/transaction-input.ts";
 import type { FileSystem } from "./filesystem.ts";
 
 export type BlueprintInfo = {
@@ -31,7 +30,7 @@ const capitalize = (str: string): string =>
   str.charAt(0).toUpperCase() + str.slice(1);
 
 const extractTypesFromTransactions = (
-  transactions: TransactionInputType[],
+  transactions: TransactionInput[],
 ): EntityKey[] => {
   const types: EntityKey[] = [];
 
@@ -86,7 +85,7 @@ export const loadBlueprint = async (
   fs: FileSystem,
   blueprintPath: string,
   defaultAuthor: string,
-): ResultAsync<TransactionInputType[]> => {
+): ResultAsync<TransactionInput[]> => {
   const contentResult = await fs.readFile(blueprintPath);
   if (isErr(contentResult))
     return fail("blueprint-read-error", "Failed to read blueprint file", {
@@ -94,36 +93,16 @@ export const loadBlueprint = async (
       error: contentResult.error,
     });
 
-  const parseResult = tryCatch(() => YAML.parse(contentResult.data));
+  const parseResult = parseTransactionInputContent(
+    contentResult.data,
+    "yaml",
+    defaultAuthor,
+  );
   if (isErr(parseResult))
-    return fail("blueprint-parse-error", "Failed to parse blueprint YAML", {
+    return fail("blueprint-validation-error", parseResult.error.message, {
       path: blueprintPath,
-      error: parseResult.error,
+      ...parseResult.error.data,
     });
 
-  const rawTransactions = parseResult.data as Record<string, unknown>[];
-  const transactions: TransactionInputType[] = [];
-
-  for (const raw of rawTransactions) {
-    const txResult = tryCatch(() =>
-      TransactionInput.parse({
-        ...raw,
-        author: raw.author ?? defaultAuthor,
-      }),
-    );
-
-    if (isErr(txResult))
-      return fail(
-        "blueprint-validation-error",
-        "Invalid transaction in blueprint",
-        {
-          path: blueprintPath,
-          error: txResult.error,
-        },
-      );
-
-    transactions.push(txResult.data);
-  }
-
-  return ok(transactions);
+  return ok(parseResult.data);
 };

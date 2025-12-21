@@ -67,7 +67,7 @@ cli = cli
   })
   .strict();
 
-const result = tryCatch(() => cli.parse());
+const result = await tryCatch(async () => cli.parse());
 if (isErr(result)) {
   console.error("fatal", result.error);
   process.exitCode = 1;

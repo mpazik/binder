@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isErr, ok } from "@binder/utils";
-import { TransactionInput } from "@binder/db";
+import { TransactionInputSchema } from "@binder/db";
 import { defineTool } from "./types.ts";
 
 export const transactToolName = "transact";
@@ -90,7 +90,7 @@ Call the 'schema' tool first to understand available types, fields, and data typ
     idempotent: false,
   },
   async execute(args, { kg, config }) {
-    const input = TransactionInput.parse({
+    const input = TransactionInputSchema.parse({
       author: config.author,
       nodes: args.nodes,
       configurations: args.configurations,

@@ -1,21 +1,12 @@
 import { join } from "path";
 import type { Argv } from "yargs";
-import {
-  createError,
-  err,
-  isErr,
-  ok,
-  type ResultAsync,
-  tryCatch,
-} from "@binder/utils";
+import { createError, err, fail, isErr, ok } from "@binder/utils";
 import {
   normalizeEntityRef,
-  TransactionInput,
+  type TransactionInput,
   type Transaction,
-  type TransactionInput as TransactionInputType,
   type TransactionRef,
 } from "@binder/db";
-import * as YAML from "yaml";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import {
   verifySync,
@@ -24,78 +15,83 @@ import {
 } from "../lib/orchestrator.ts";
 import {
   readLastTransactions,
+  readTransactionRange,
   readTransactions,
   rehashLog,
   verifyLog,
 } from "../lib/journal.ts";
 import { TRANSACTION_LOG_FILE } from "../config.ts";
+import {
+  detectFileFormat,
+  parseTransactionInputFile,
+  serializeTransactionInputs,
+  transactionToInput,
+} from "../utils/transaction-input.ts";
 import { types } from "./types.ts";
 
-export const loadTransactionFromFile = async (
-  path: string,
-  defaultAuthor: string,
-): ResultAsync<TransactionInputType> => {
-  const fileResult = await tryCatch(async () => {
-    const bunFile = Bun.file(path);
-    const text = await bunFile.text();
-    return YAML.parse(text);
-  });
+export const transactionImportHandler: CommandHandlerWithDb<{
+  files: string[];
+  dryRun?: boolean;
+  yes?: boolean;
+}> = async ({ kg, config, ui, log, fs, args }) => {
+  if (args.files.length === 0)
+    return fail("no-files", "At least one file path is required");
 
-  if (isErr(fileResult))
-    return err(
-      createError("file-read-error", "Failed to read transaction file", {
-        path,
-        error: fileResult.error,
-      }),
-    );
-
-  const raw = fileResult.data as Record<string, unknown>;
-  const parseResult = tryCatch(() =>
-    TransactionInput.parse({
-      ...raw,
-      author: raw.author ?? defaultAuthor,
-    }),
-  );
-
-  if (isErr(parseResult))
-    return err(
-      createError("validation-error", "Invalid transaction format", {
-        path,
-        error: parseResult.error,
-      }),
-    );
-
-  return ok(parseResult.data);
-};
-
-export const transactionCreateHandler: CommandHandlerWithDb<{
-  path: string;
-}> = async ({ kg, config, ui, log, args }) => {
-  const path = args.path;
-
-  if (!path) {
-    log.error("Path to transaction file is required");
-    process.exit(1);
-  }
-
-  const transactionResult = await loadTransactionFromFile(path, config.author);
-
-  if (isErr(transactionResult)) {
-    log.error("Failed to load transaction", {
+  const allInputs: TransactionInput[] = [];
+  for (const path of args.files) {
+    const parseResult = await parseTransactionInputFile(
+      fs,
       path,
-      error: transactionResult.error,
-    });
-    process.exit(1);
+      config.author,
+    );
+    if (isErr(parseResult)) return parseResult;
+    allInputs.push(...parseResult.data);
   }
 
-  const result = await kg.update(transactionResult.data);
-  if (isErr(result)) return result;
+  if (allInputs.length === 0)
+    return fail(
+      "no-transactions",
+      "No transactions found in the provided files",
+    );
 
-  log.info("Transaction created successfully", { path });
+  ui.heading(`Importing ${allInputs.length} transaction(s)`);
+  for (const input of allInputs) {
+    const nodeCount = input.nodes?.length ?? 0;
+    const configCount = input.configurations?.length ?? 0;
+    ui.info(
+      `  ${input.author}: ${nodeCount} node(s), ${configCount} config(s)`,
+    );
+  }
+
+  if (args.dryRun) {
+    ui.block(() => {
+      ui.info("Dry run complete - no changes made");
+    });
+    return ok(undefined);
+  }
+
+  if (!args.yes) {
+    ui.println("");
+    if (!(await ui.confirm("Do you want to proceed with import? (yes/no): "))) {
+      ui.info("Import cancelled");
+      return ok(undefined);
+    }
+  }
+
+  const results: Transaction[] = [];
+  for (const input of allInputs) {
+    const result = await kg.update(input);
+    if (isErr(result)) return result;
+    results.push(result.data);
+  }
+
+  log.info("Import completed successfully", { count: results.length });
   ui.block(() => {
-    ui.printTransaction(result.data);
+    ui.success(`Imported ${results.length} transaction(s) successfully`);
+    for (const tx of results) {
+      ui.printTransaction(tx, "oneline");
+    }
   });
-  ui.success("Transaction created successfully");
   return ok(undefined);
 };
 
@@ -506,6 +502,36 @@ export const transactionLogHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
+export const transactionExportHandler: CommandHandlerWithDb<{
+  output?: string;
+  last: number;
+  from?: number;
+  to?: number;
+}> = async ({ config, ui, fs, args }) => {
+  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
+
+  const transactionsResult =
+    args.from !== undefined || args.to !== undefined
+      ? await readTransactionRange(fs, transactionLogPath, args.from, args.to)
+      : await readLastTransactions(fs, transactionLogPath, args.last);
+
+  if (isErr(transactionsResult)) return transactionsResult;
+
+  const inputs = transactionsResult.data.map(transactionToInput);
+  const format = args.output ? detectFileFormat(args.output) : "jsonl";
+  const serialized = serializeTransactionInputs(inputs, format);
+
+  if (args.output) {
+    const writeResult = await fs.writeFile(args.output, serialized);
+    if (isErr(writeResult)) return writeResult;
+    ui.success(`Exported ${inputs.length} transaction(s) to ${args.output}`);
+  } else {
+    ui.println(serialized);
+  }
+
+  return ok(undefined);
+};
+
 const TransactionCommand = types({
   command: "transaction <command>",
   aliases: ["tx"],
@@ -514,17 +540,61 @@ const TransactionCommand = types({
     return yargs
       .command(
         types({
-          command: "create [path]",
-          aliases: ["add"],
-          describe: "create a transaction from a YAML file",
+          command: "import <files...>",
+          aliases: ["create", "add"],
+          describe: "import transactions from file(s)",
           builder: (yargs: Argv) => {
-            return yargs.positional("path", {
-              describe: "path to transaction YAML file",
-              type: "string",
-              demandOption: true,
-            });
+            return yargs
+              .positional("files", {
+                describe: "path(s) to transaction file(s)",
+                type: "string",
+                array: true,
+                demandOption: true,
+              })
+              .option("dry-run", {
+                alias: "d",
+                describe: "preview transactions without applying",
+                type: "boolean",
+                default: false,
+              })
+              .option("yes", {
+                alias: "y",
+                describe: "skip confirmation prompt",
+                type: "boolean",
+                default: false,
+              });
           },
-          handler: runtimeWithDb(transactionCreateHandler),
+          handler: runtimeWithDb(transactionImportHandler),
+        }),
+      )
+      .command(
+        types({
+          command: "export",
+          describe: "export transactions as TransactionInput format",
+          builder: (yargs: Argv) => {
+            return yargs
+              .option("output", {
+                alias: "o",
+                describe:
+                  "output file (format from extension: .yaml, .json, .jsonl)",
+                type: "string",
+              })
+              .option("last", {
+                alias: "n",
+                describe: "export last N transactions",
+                type: "number",
+                default: 1,
+              })
+              .option("from", {
+                describe: "export starting from transaction ID",
+                type: "number",
+              })
+              .option("to", {
+                describe: "export up to transaction ID",
+                type: "number",
+              });
+          },
+          handler: runtimeWithDb(transactionExportHandler),
         }),
       )
       .command(
@@ -656,7 +726,7 @@ const TransactionCommand = types({
       )
       .demandCommand(
         1,
-        "You need to specify a subcommand: create, read, rollback, squash, verify, repair, log",
+        "You need to specify a subcommand: import, export, read, rollback, squash, verify, repair, log",
       );
   },
   handler: async () => {},

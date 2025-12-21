@@ -233,6 +233,27 @@ export const readTransactions = async (
   return ok(transactions);
 };
 
+export const readTransactionRange = async (
+  fs: FileSystem,
+  path: string,
+  from?: number,
+  to?: number,
+): ResultAsync<Transaction[]> => {
+  const transactions: Transaction[] = [];
+
+  for await (const result of readTransactionsFromBeginning(fs, path)) {
+    if (isErr(result)) return result;
+
+    const tx = result.data;
+    if (from !== undefined && tx.id < from) continue;
+    if (to !== undefined && tx.id > to) break;
+
+    transactions.push(tx);
+  }
+
+  return ok(transactions);
+};
+
 export const removeLastFromLog = async (
   fs: FileSystem,
   path: string,
