@@ -7,6 +7,7 @@ import {
   type CompletionParams,
   type Connection,
   createConnection,
+  type DefinitionParams,
   type Diagnostic,
   DiagnosticSeverity,
   type DocumentDiagnosticReport,
@@ -14,6 +15,7 @@ import {
   type Hover,
   type HoverParams,
   type InitializeParams,
+  type Location,
   ProposedFeatures,
   ResponseError,
   TextDocuments,
@@ -49,6 +51,7 @@ import { handleHover } from "./hover.ts";
 import { handleCompletion } from "./completion.ts";
 import { handleCodeAction } from "./code-actions.ts";
 import { handleInlayHints } from "./inlay-hints.ts";
+import { handleDefinition } from "./definition.ts";
 
 const throwLspError = (
   error: ErrorObject,
@@ -176,6 +179,7 @@ export const createLspServer = (
           triggerCharacters: [":", " "],
         },
         hoverProvider: true,
+        definitionProvider: true,
         codeActionProvider: {
           codeActionKinds: [CodeActionKind.QuickFix],
         },
@@ -338,6 +342,22 @@ export const createLspServer = (
     if (!runtime) return null;
     return handleHover(params, lspDocuments, documentCache, runtime, log);
   });
+
+  connection.onDefinition(
+    async (params: DefinitionParams): Promise<Location | null> => {
+      log.debug("Definition request received", {
+        uri: params.textDocument.uri,
+      });
+      if (!runtime) return null;
+      return handleDefinition(
+        params,
+        lspDocuments,
+        documentCache,
+        runtime,
+        log,
+      );
+    },
+  );
 
   connection.onCodeAction(
     async (params: CodeActionParams): Promise<CodeAction[]> => {

@@ -10,6 +10,7 @@ import {
   type GraphVersion,
   type Includes,
   type KnowledgeGraph,
+  matchesFilters,
   type NamespaceEditable,
   type NodeSchema,
   type QueryParams,
@@ -35,7 +36,11 @@ import type { FileSystem } from "../lib/filesystem.ts";
 import { BINDER_DIR, type ConfigPaths } from "../config.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
-import { renderYamlEntity, renderYamlList } from "./yaml.ts";
+import {
+  findEntityInYamlList,
+  renderYamlEntity,
+  renderYamlList,
+} from "./yaml.ts";
 import { formatReferences, formatReferencesList } from "./reference.ts";
 import type { FileType } from "./document.ts";
 
@@ -388,4 +393,78 @@ export const renderNavigation = async (
     if (isErr(result)) return result;
   }
   return okVoid;
+};
+
+export type DefinitionLocation = {
+  filePath: string;
+  line: number;
+};
+
+const isListNavItem = (item: NavigationItem): boolean =>
+  item.query !== undefined;
+
+const flattenNavigationItems = (items: NavigationItem[]): NavigationItem[] => {
+  const result: NavigationItem[] = [];
+  for (const item of items) {
+    result.push(item);
+    if (item.children) result.push(...flattenNavigationItems(item.children));
+  }
+  return result;
+};
+
+const findMatchingNavItem = (
+  items: NavigationItem[],
+  entity: Fieldset,
+): NavigationItem | undefined => {
+  const flattened = flattenNavigationItems(items);
+
+  const individualMatches: NavigationItem[] = [];
+  const listMatches: NavigationItem[] = [];
+
+  for (const item of flattened) {
+    const filters = item.where ?? item.query?.filters;
+    if (!filters) continue;
+
+    if (!matchesFilters(filters, entity)) continue;
+
+    if (isListNavItem(item)) {
+      listMatches.push(item);
+    } else {
+      individualMatches.push(item);
+    }
+  }
+
+  if (individualMatches.length > 0) return individualMatches[0];
+  if (listMatches.length > 0) return listMatches[0];
+};
+
+export const findEntityLocation = async (
+  fs: FileSystem,
+  paths: ConfigPaths,
+  entity: Fieldset,
+  navigation: NavigationItem[],
+): ResultAsync<DefinitionLocation | undefined> => {
+  const navItem = findMatchingNavItem(navigation, entity);
+  if (!navItem) return ok(undefined);
+
+  const resolvedPathResult = resolvePath(navItem, entity, []);
+  if (isErr(resolvedPathResult)) return resolvedPathResult;
+
+  const relativePath = resolvedPathResult.data;
+  const filePath = join(paths.docs, relativePath);
+
+  if (!isListNavItem(navItem)) {
+    return ok({ filePath, line: 0 });
+  }
+
+  const contentResult = await fs.readFile(filePath);
+  if (isErr(contentResult)) return ok({ filePath, line: 0 });
+
+  const entityKey = entity.key as string | undefined;
+  const entityUid = entity.uid as string | undefined;
+
+  if (!entityKey && !entityUid) return ok({ filePath, line: 0 });
+
+  const line = findEntityInYamlList(contentResult.data, entityKey, entityUid);
+  return ok({ filePath, line });
 };

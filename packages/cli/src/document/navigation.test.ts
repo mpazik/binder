@@ -30,6 +30,7 @@ import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
   DEFAULT_DYNAMIC_VIEW,
+  findEntityLocation,
   findNavigationItemByPath,
   loadNavigation,
   type NavigationItem,
@@ -459,6 +460,101 @@ describe("navigation", () => {
           query: { filters: { type: "Task" } },
         },
       ]);
+    });
+  });
+
+  describe("findEntityLocation", () => {
+    let fs: MockFileSystem;
+    const paths = mockConfig.paths;
+
+    beforeEach(async () => {
+      fs = createInMemoryFileSystem();
+      await fs.mkdir(paths.root);
+      await fs.mkdir(paths.binder);
+      await fs.mkdir(paths.docs);
+    });
+
+    it("returns undefined when no matching nav item found", async () => {
+      const result = throwIfError(
+        await findEntityLocation(fs, paths, mockTask1Node, []),
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("finds individual file for entity with matching where filter", async () => {
+      const navigation: NavigationItem[] = [
+        {
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          view: DEFAULT_DYNAMIC_VIEW,
+        },
+      ];
+
+      const result = throwIfError(
+        await findEntityLocation(fs, paths, mockTask1Node, navigation),
+      );
+      expect(result).toEqual({
+        filePath: `${paths.docs}/tasks/${mockTask1Node.title}.md`,
+        line: 0,
+      });
+    });
+
+    it("finds entity in list file", async () => {
+      const navigation: NavigationItem[] = [
+        {
+          path: "all-tasks",
+          query: { filters: { type: "Task" } },
+        },
+      ];
+
+      const listContent = [
+        "- key: first-key",
+        "  title: First Task",
+        "- key: second-key",
+        "  title: Second Task",
+      ].join("\n");
+      await fs.writeFile(`${paths.docs}/all-tasks.yaml`, listContent);
+
+      const firstEntity: Fieldset = { type: "Task", key: "first-key" };
+      const secondEntity: Fieldset = { type: "Task", key: "second-key" };
+
+      const result = throwIfError(
+        await findEntityLocation(fs, paths, firstEntity, navigation),
+      );
+      expect(result).toEqual({
+        filePath: `${paths.docs}/all-tasks.yaml`,
+        line: 0,
+      });
+
+      const result2 = throwIfError(
+        await findEntityLocation(fs, paths, secondEntity, navigation),
+      );
+      expect(result2).toEqual({
+        filePath: `${paths.docs}/all-tasks.yaml`,
+        line: 2,
+      });
+    });
+
+    it("prefers individual file over list file", async () => {
+      const navigation: NavigationItem[] = [
+        {
+          path: "all-tasks",
+          query: { filters: { type: "Task" } },
+        },
+        {
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          view: DEFAULT_DYNAMIC_VIEW,
+        },
+      ];
+
+      const result = throwIfError(
+        await findEntityLocation(fs, paths, mockTask1Node, navigation),
+      );
+      expect(result).toEqual({
+        filePath: `${paths.docs}/tasks/${mockTask1Node.title}.md`,
+        line: 0,
+      });
     });
   });
 });

@@ -1,14 +1,16 @@
+import * as YAML from "yaml";
 import {
   Document,
   isMap,
+  isPair,
   isScalar,
   isSeq,
   type YAMLMap,
   type YAMLSeq,
 } from "yaml";
-import * as YAML from "yaml";
-import { isErr, ok, tryCatch, type Result } from "@binder/utils";
+import { isErr, ok, type Result, tryCatch } from "@binder/utils";
 import type { FieldsetNested } from "@binder/db";
+import { parseYamlDocument } from "./yaml-cst.ts";
 
 const MAX_INLINE_ITEMS = 5;
 const MAX_INLINE_LENGTH = 80;
@@ -137,4 +139,38 @@ export const parseYamlList = (content: string): Result<FieldsetNested[]> => {
   );
   if (isErr(parseResult)) return parseResult;
   return ok(parseResult.data.items);
+};
+
+export const findEntityInYamlList = (
+  content: string,
+  key: string | undefined,
+  uid: string | undefined,
+): number => {
+  const { doc, lineCounter } = parseYamlDocument(content);
+  if (!doc.contents || !isSeq(doc.contents)) return 0;
+
+  for (const item of doc.contents.items) {
+    if (!isMap(item)) continue;
+
+    for (const pair of item.items) {
+      if (!isPair(pair) || !isScalar(pair.key)) continue;
+      if (!isScalar(pair.value)) continue;
+
+      const fieldName = String(pair.key.value);
+      const fieldValue = String(pair.value.value);
+
+      const matchesKey = fieldName === "key" && key && fieldValue === key;
+      const matchesUid = fieldName === "uid" && uid && fieldValue === uid;
+
+      if (!matchesKey && !matchesUid) continue;
+
+      const range = item.range;
+      if (!range) return 0;
+
+      const pos = lineCounter.linePos(range[0]);
+      return pos.line - 1;
+    }
+  }
+
+  return 0;
 };
