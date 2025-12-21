@@ -9,11 +9,13 @@
       name: Status
       dataType: option
       options: [pending, active, complete, cancelled, archived]
+      default: pending
 
     - key: priority
       type: Field
       dataType: option
       options: [low, medium, high]
+      default: medium
 
     - key: dueDate
       type: Field
@@ -122,7 +124,7 @@
         - description
         - resourceType: { required: true }
         - url
-        - status: { default: pending, exclude: [active] }
+        - status: { exclude: [active] }
         - tags
         - linksTo
         - linkedFrom
@@ -329,7 +331,6 @@
 
     - type: Task
       title: Buy running shoes
-      status: pending
       parent: run-5km
 
     - type: Task
@@ -340,24 +341,20 @@
 
     - type: Task
       title: Schedule rest days
-      status: pending
       priority: low
       parent: run-5km
 
     - type: Task
       title: Read TypeScript handbook
-      status: pending
       parent: learn-typescript
 
     - type: Task
       title: Set up TypeScript project
-      status: pending
       priority: high
       parent: learn-typescript
 
     - type: Task
       title: Practice generics exercises
-      status: pending
       parent: learn-typescript
 
     # Notes
@@ -390,7 +387,6 @@
       title: TypeScript Handbook
       resourceType: article
       url: https://www.typescriptlang.org/docs/handbook/
-      status: pending
       linksTo: [career]
 
     - type: Resource
@@ -412,14 +408,12 @@
       title: The Pragmatic Programmer
       description: Classic book on software craftsmanship
       resourceType: book
-      status: pending
       linksTo: [career]
 
     - type: Resource
       title: Why We Sleep
       description: Book by Matthew Walker on sleep science
       resourceType: book
-      status: pending
       linksTo: [health]
 
     - type: Resource
@@ -434,7 +428,6 @@
       description: Podcast episode on optimizing sleep
       resourceType: podcast
       url: https://www.hubermanlab.com/episode/toolkit-for-sleep
-      status: pending
       linksTo: [health]
 
     # Archived

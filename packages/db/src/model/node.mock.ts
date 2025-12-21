@@ -1,6 +1,7 @@
 import type { NodeId, NodeKey, NodeUid } from "./node.ts";
 import {
   mockFieldKeyEmail,
+  mockPriorityFieldKey,
   mockProjectTypeKey,
   mockTaskTypeKey,
   mockUserTypeKey,
@@ -23,7 +24,8 @@ export const mockTask1Node = {
   type: mockTaskTypeKey,
   title: "Implement user authentication",
   description: "Add login and registration functionality with JWT tokens",
-  status: "todo",
+  status: "pending",
+  priority: "medium",
   tags: ["urgent", "important"],
 } as const satisfies Fieldset;
 
@@ -53,7 +55,7 @@ export const mockProjectNode = {
   type: mockProjectTypeKey,
   title: "Binder System",
   description: "Build a robust entity management system with REST API",
-  status: "in_progress",
+  status: "active",
 } as const satisfies Fieldset;
 
 export const mockTask2Node = {
@@ -63,7 +65,8 @@ export const mockTask2Node = {
   type: mockTaskTypeKey,
   title: "Implement schema generator",
   description: "Create a dynamic schema generator",
-  status: "todo",
+  status: "pending",
+  priority: "medium",
   project: mockProjectUid,
 } as const satisfies Fieldset;
 
@@ -74,7 +77,8 @@ export const mockTask3Node = {
   type: mockTaskTypeKey,
   title: "Add relationship fields",
   description: "Enable querying related entities through API",
-  status: "in_progress",
+  status: "active",
+  priority: "medium",
   project: mockProjectUid,
 } as const satisfies Fieldset;
 

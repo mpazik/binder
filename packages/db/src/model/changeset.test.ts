@@ -322,6 +322,7 @@ describe("applyChangeset", () => {
       title: null,
       description: null,
       status: null,
+      priority: null,
       tags: null,
     }));
 

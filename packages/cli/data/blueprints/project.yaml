@@ -8,12 +8,14 @@
       type: Field
       name: Status
       dataType: option
-      options: [todo, in-progress, done]
+      options: [pending, active, complete, cancelled, archived]
+      default: pending
 
     - key: priority
       type: Field
       dataType: option
       options: [low, medium, high]
+      default: medium
 
     - key: dueDate
       type: Field
@@ -79,13 +81,13 @@
       type: Navigation
       path: tasks
       query:
-        filters: { type: Task, status: [todo, in-progress] }
+        filters: { type: Task, status: [pending, active] }
 
     - key: nav-milestones
       type: Navigation
       path: milestones
       query:
-        filters: { type: Milestone, status: [todo, in-progress] }
+        filters: { type: Milestone, status: [pending, active] }
 
     - key: nav-archive-dir
       type: Navigation
@@ -96,14 +98,14 @@
       path: tasks
       parent: nav-archive-dir
       query:
-        filters: { type: Task, status: done }
+        filters: { type: Task, status: complete }
 
     - key: nav-archive-milestones
       type: Navigation
       path: milestones
       parent: nav-archive-dir
       query:
-        filters: { type: Milestone, status: done }
+        filters: { type: Milestone, status: complete }
 
 # Sample data
 - author: system
@@ -113,51 +115,47 @@
       key: design-phase
       title: Design Phase
       description: Complete all design mockups and prototypes
-      status: done
+      status: complete
       dueDate: 2025-01-15
 
     - type: Milestone
       key: development-phase
       title: Development Phase
       description: Implement approved designs
-      status: in-progress
+      status: active
       dueDate: 2025-02-28
 
     - type: Milestone
       key: launch
       title: Launch
       description: Go live with new website
-      status: todo
       dueDate: 2025-03-31
 
     # Tasks
     - type: Task
       title: Create wireframes
       description: Low-fidelity wireframes for all pages
-      status: done
+      status: complete
       priority: high
       linksTo: [design-phase]
 
     - type: Task
       title: Design homepage mockup
-      status: done
+      status: complete
       priority: high
       linksTo: [design-phase]
 
     - type: Task
       title: Build component library
-      status: in-progress
+      status: active
       priority: high
       linksTo: [development-phase]
 
     - type: Task
       title: Implement responsive navigation
-      status: todo
-      priority: medium
       linksTo: [development-phase]
 
     - type: Task
       title: Set up CI/CD pipeline
-      status: todo
       priority: low
       linksTo: [launch]

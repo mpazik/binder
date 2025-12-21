@@ -40,6 +40,7 @@ import {
   type FieldChangeset,
   type FieldDef,
   type FieldKey,
+  fieldSystemType,
   fieldTypes,
   type Fieldset,
   type FieldValue,
@@ -62,9 +63,11 @@ import {
   normalizeListMutationInput,
   normalizeOptionSet,
   normalizeValueChange,
+  type OptionDef,
   type OptionDefInput,
   resolveEntityRefType,
   type TypeDef,
+  type TypeFieldRef,
   typeSystemType,
   type DataTypeNs,
   USER_CONFIG_ID_OFFSET,
@@ -205,6 +208,80 @@ const validatePatchAttrs = <N extends NamespaceEditable>(
       errors.push({
         fieldKey: `${fieldKey}.${attrKey}`,
         message: validationResult.error.message ?? "validation failed",
+      });
+    }
+  }
+
+  return errors;
+};
+
+const validateFieldDefaultValue = (
+  input: EntityChangesetInput<"config">,
+  existingEntity: Fieldset | undefined,
+): ChangesetValidationError[] => {
+  const errors: ChangesetValidationError[] = [];
+
+  const defaultValue = input["default"] as FieldValue | undefined;
+  if (defaultValue === undefined) return errors;
+
+  const dataType =
+    (input["dataType"] as string) ?? existingEntity?.["dataType"];
+  if (!dataType) return errors;
+
+  const inputOptions = input["options"] as OptionDefInput[] | undefined;
+  const options = inputOptions
+    ? normalizeOptionSet(inputOptions)
+    : (existingEntity?.["options"] as OptionDef[] | undefined);
+
+  const tempFieldDef = {
+    dataType,
+    allowMultiple: false,
+    options,
+  } as NodeFieldDef;
+  const validationResult = validateDataType("node", tempFieldDef, defaultValue);
+
+  if (isErr(validationResult)) {
+    errors.push({
+      fieldKey: "default",
+      message: `default value does not match dataType '${dataType}': ${validationResult.error.message}`,
+    });
+  }
+
+  return errors;
+};
+
+const validateTypeFieldDefaults = (
+  input: EntityChangesetInput<"config">,
+  schema: EntitySchema,
+): ChangesetValidationError[] => {
+  const errors: ChangesetValidationError[] = [];
+
+  const fields = input["fields"] as TypeFieldRef[] | undefined;
+  if (!fields || !Array.isArray(fields)) return errors;
+
+  for (const fieldRef of fields) {
+    const attrs = getTypeFieldAttrs(fieldRef);
+    if (!attrs?.default) continue;
+
+    const fieldKey = getTypeFieldKey(fieldRef);
+    const fieldDef = getFieldDef(schema, fieldKey);
+    if (!fieldDef) continue;
+
+    const tempFieldDef = {
+      dataType: fieldDef.dataType,
+      allowMultiple: false,
+      options: fieldDef.options,
+    } as NodeFieldDef;
+    const validationResult = validateDataType(
+      "node",
+      tempFieldDef,
+      attrs.default,
+    );
+
+    if (isErr(validationResult)) {
+      errors.push({
+        fieldKey: `fields.${fieldKey}.default`,
+        message: `default value does not match dataType '${fieldDef.dataType}': ${validationResult.error.message}`,
       });
     }
   }
@@ -387,8 +464,12 @@ const validateChangesetInput = <N extends NamespaceEditable>(
   for (const fieldKey of mandatoryFields) {
     const attrs = fieldAttrs.get(fieldKey);
     const hasValueConstraint = attrs?.value !== undefined;
+    const hasDefault =
+      attrs?.default !== undefined ||
+      getFieldDef(schema, fieldKey)?.default !== undefined;
     if (
       !hasValueConstraint &&
+      !hasDefault &&
       (!(fieldKey in input) || input[fieldKey] == null)
     ) {
       errors.push({
@@ -616,6 +697,25 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
       );
       if (mandatoryErrors.length > 0)
         return validationError(index, namespace, mandatoryErrors);
+
+      if (namespace === "config" && typeKey === fieldSystemType) {
+        const defaultErrors = validateFieldDefaultValue(
+          input as EntityChangesetInput<"config">,
+          currentValues,
+        );
+        if (defaultErrors.length > 0)
+          return validationError(index, namespace, defaultErrors);
+      }
+
+      if (namespace === "config" && typeKey === typeSystemType) {
+        const defaultErrors = validateTypeFieldDefaults(
+          input as EntityChangesetInput<"config">,
+          schema,
+        );
+        if (defaultErrors.length > 0)
+          return validationError(index, namespace, defaultErrors);
+      }
+
       for (const key of keys) {
         const currentValue = currentValues[key];
         const inputValue = input[key];
@@ -657,18 +757,53 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
       }
 
       const typeKey = input.type as EntityType;
+
+      if (namespace === "config" && typeKey === fieldSystemType) {
+        const defaultErrors = validateFieldDefaultValue(
+          input as EntityChangesetInput<"config">,
+          undefined,
+        );
+        if (defaultErrors.length > 0)
+          return validationError(index, namespace, defaultErrors);
+      }
+
+      if (namespace === "config" && typeKey === typeSystemType) {
+        const defaultErrors = validateTypeFieldDefaults(
+          input as EntityChangesetInput<"config">,
+          schema,
+        );
+        if (defaultErrors.length > 0)
+          return validationError(index, namespace, defaultErrors);
+      }
+
+      const typeDef = schema.types[typeKey];
+      const typeFieldKeys = typeDef?.fields.map(getTypeFieldKey) ?? [];
       const fieldAttrs = getFieldAttrs(schema, typeKey);
-      const fieldsWithValues: Record<string, any> = {};
-      for (const [fieldKey, attrs] of fieldAttrs.entries()) {
-        if (attrs.value !== undefined && !(fieldKey in input)) {
-          fieldsWithValues[fieldKey] = attrs.value;
+
+      const fieldsWithDefaults: Record<string, FieldValue> = {};
+      for (const fieldKey of typeFieldKeys) {
+        if (fieldKey in input) continue;
+
+        const attrs = fieldAttrs.get(fieldKey);
+        if (attrs?.value !== undefined) {
+          fieldsWithDefaults[fieldKey] = attrs.value;
+          continue;
+        }
+        if (attrs?.default !== undefined) {
+          fieldsWithDefaults[fieldKey] = attrs.default;
+          continue;
+        }
+
+        const fieldDef = getFieldDef(schema, fieldKey);
+        if (fieldDef?.default !== undefined) {
+          fieldsWithDefaults[fieldKey] = fieldDef.default as FieldValue;
         }
       }
 
       const entityData = {
         id: newEntityId,
         ...input,
-        ...fieldsWithValues,
+        ...fieldsWithDefaults,
         uid: (input["uid"] ?? createUid()) as EntityUid,
       };
       const keys = Object.keys(entityData) as FieldKey[];

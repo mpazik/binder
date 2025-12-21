@@ -29,7 +29,7 @@ describe("renderSchemaPreview", () => {
 
   it("should render option field with available options", () => {
     expect(result).toContain(
-      "• status: todo|in_progress|done|cancelled|archived - Current state",
+      "• status: pending|active|complete|cancelled|archived - Current state",
     );
   });
 
@@ -67,7 +67,7 @@ describe("renderSchemaPreview", () => {
 
   it("should render types with field constraints", () => {
     expect(result).toContain("title{required}");
-    expect(result).toContain("status{default: todo, exclude: archived}");
+    expect(result).toContain("status{exclude: archived}");
   });
 
   it("should render multi-line format for complex types", () => {
@@ -88,7 +88,7 @@ describe("renderSchemaPreview", () => {
     const result = renderSchemaPreview(mockNodeSchema);
 
     expect(result).toContain("title{required}");
-    expect(result).toContain("status{default: todo, exclude: archived}");
+    expect(result).toContain("status{exclude: archived}");
     expect(result).toContain("members{min: 1}");
     expect(result).toContain('name{required, description: "Full name"}');
   });
@@ -97,13 +97,13 @@ describe("renderSchemaPreview", () => {
     const result = renderSchemaPreview(mockNodeSchema);
 
     expect(result).toContain("assignedTo{only: User}");
-    expect(result).toContain("status{default: todo, exclude: archived}");
+    expect(result).toContain("status{exclude: archived}");
   });
 
   it("should render when constraint", () => {
     const result = renderSchemaPreview(mockNodeSchema);
 
-    expect(result).toContain("completedAt: datetime {when: status=done}");
+    expect(result).toContain("completedAt: datetime {when: status=complete}");
   });
 
   it("should handle empty schema", () => {

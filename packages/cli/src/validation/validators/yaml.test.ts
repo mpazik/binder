@@ -55,7 +55,7 @@ key: [unclosed
     await check(
       `
 title: My Task
-status: todo
+status: pending
 unknownField: value
 `,
       [{ code: "invalid-field", severity: "error" }],
@@ -67,7 +67,7 @@ unknownField: value
       `
 type: Task
 title: My Task
-status: todo
+status: pending
 name: Should be warning
 `,
       [{ code: "extra-field", severity: "warning" }],
@@ -79,7 +79,7 @@ name: Should be warning
       `
 items:
   - title: Valid Task
-    status: todo
+    status: pending
   - title: Invalid Task
     unknownField: should error
 `,
@@ -94,7 +94,7 @@ items:
 items:
   - type: Task
     title: Valid Task
-    status: todo
+    status: pending
   - type: Task
     title: Another Task
     name: Should be warning
@@ -109,7 +109,7 @@ items:
       `
 type: Task
 title: My Task
-status: todo
+status: pending
 `,
       [],
     );
@@ -131,7 +131,7 @@ status: invalid_status
       `
 type: Task
 title: My Task
-status: todo
+status: pending
 dueDate: not-a-date
 `,
       [{ code: "invalid-value", severity: "error" }],
@@ -143,7 +143,7 @@ dueDate: not-a-date
       `
 type: Task
 title: My Task
-status: todo
+status: pending
 dueDate: 2024-01-15
 `,
       [],
@@ -155,7 +155,7 @@ dueDate: 2024-01-15
       `
 type: Task
 title: My Task
-status: in_progress
+status: active
 `,
       [],
     );

@@ -164,7 +164,6 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     db.transaction(async (tx) => {
       const entityResult = await fetchEntity(tx, namespace, ref as any);
       if (isErr(entityResult)) return entityResult;
-      if (!includes) return entityResult;
 
       const schemaResult = await getSchema(namespace);
       if (isErr(schemaResult)) return schemaResult;
@@ -282,22 +281,20 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
 
         const orderedResults = before ? results.data.reverse() : results.data;
         const hasMore = orderedResults.length > limit;
-        let items = orderedResults
+        const dbItems = orderedResults
           .slice(0, limit)
           .map((row) => dbModelToEntity(row));
 
-        if (includes) {
-          const resolvedResult = await resolveIncludes(
-            tx,
-            items,
-            includes,
-            namespace,
-            schema,
-            internalSearch,
-          );
-          if (isErr(resolvedResult)) return resolvedResult;
-          items = resolvedResult.data;
-        }
+        const resolvedResult = await resolveIncludes(
+          tx,
+          dbItems,
+          includes,
+          namespace,
+          schema,
+          internalSearch,
+        );
+        if (isErr(resolvedResult)) return resolvedResult;
+        const items = resolvedResult.data;
 
         const firstItem = items[0];
         const lastItem = items[items.length - 1];

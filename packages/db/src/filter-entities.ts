@@ -1,5 +1,5 @@
 import { includes } from "@binder/utils";
-import { and, inArray, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, sql, type SQL } from "drizzle-orm";
 import { tableStoredFields, type nodeTable, type configTable } from "./schema";
 import type {
   ComplexFilter,
@@ -20,23 +20,26 @@ export const isComplexFilter = (filter: Filter): filter is ComplexFilter => {
   );
 };
 
-/**
- * Normalizes a filter to a complex filter format.
- * Arrays are converted to { op: "in", value: array } for consistent handling.
- */
-export const normalizeFilter = (filter: Filter): Filter => {
+type NormalizedFilter = ComplexFilter | string | number | boolean;
+
+export const normalizeFilter = (filter: Filter): NormalizedFilter => {
   if (Array.isArray(filter)) return { op: "in", value: filter };
-  return filter;
+  return filter as NormalizedFilter;
 };
 
-export const matchesFilter = (filter: Filter, value: FieldValue): boolean => {
-  const normalized = normalizeFilter(filter);
-  if (!isComplexFilter(normalized)) {
-    if (normalized === null || normalized === undefined) return value == null;
-    return value === normalized;
+const isComplexNormalized = (
+  filter: NormalizedFilter,
+): filter is ComplexFilter => typeof filter === "object" && filter !== null;
+
+const matchesNormalizedFilter = (
+  filter: NormalizedFilter,
+  value: FieldValue,
+): boolean => {
+  if (!isComplexNormalized(filter)) {
+    return value === filter;
   }
 
-  const { op, value: filterValue } = normalized;
+  const { op, value: filterValue } = filter;
 
   switch (op) {
     case "eq":
@@ -102,6 +105,9 @@ export const matchesFilter = (filter: Filter, value: FieldValue): boolean => {
   }
 };
 
+export const matchesFilter = (filter: Filter, value: FieldValue): boolean =>
+  matchesNormalizedFilter(normalizeFilter(filter), value);
+
 export const matchesFilters = (filters: Filters, entity: Fieldset): boolean => {
   for (const [fieldKey, filter] of Object.entries(filters)) {
     if (!matchesFilter(filter, entity[fieldKey])) return false;
@@ -125,10 +131,7 @@ const buildFilterCondition = (
   const fieldSql = getFieldSql(table, fieldKey);
   const normalized = normalizeFilter(filter);
 
-  if (!isComplexFilter(normalized)) {
-    if (normalized === null || normalized === undefined) {
-      return sql`${fieldSql} IS NULL`;
-    }
+  if (!isComplexNormalized(normalized)) {
     return sql`${fieldSql} = ${normalized}`;
   }
 

@@ -1,4 +1,4 @@
-import { assertCheck, groupByToObject } from "@binder/utils";
+import { assertCheck, groupByToObject, type JsonValue } from "@binder/utils";
 import type { EntityId, EntityKey, EntityType, EntityUid } from "./entity.ts";
 import {
   type CoreDataType,
@@ -39,6 +39,7 @@ export type FieldDef<D extends string = string> = {
   immutable?: boolean;
   attributes?: FieldKey[];
   when?: Filters;
+  default?: JsonValue;
 };
 
 export const newId = <T extends EntityId>(seq: number, offset: number) =>

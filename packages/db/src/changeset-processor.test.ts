@@ -235,6 +235,45 @@ describe("processChangesetInput", () => {
     });
   });
 
+  it("includes field default values in changeset for new entity", async () => {
+    const result = throwIfError(
+      await process([
+        { type: mockTaskTypeKey, title: "Task without priority" },
+      ]),
+    );
+
+    const changeset = Object.values(result)[0];
+    expect(changeset).toMatchObject({
+      priority: "medium",
+      status: "pending",
+    });
+  });
+
+  it("includes type-level default over field-level default", async () => {
+    const { mockProjectTypeKey } = await import("./model/config.mock.ts");
+    const result = throwIfError(
+      await process([{ type: mockProjectTypeKey, title: "Project" }]),
+    );
+
+    const changeset = Object.values(result)[0];
+    expect(changeset).toMatchObject({
+      status: "active",
+    });
+  });
+
+  it("does not override user-provided value with default", async () => {
+    const result = throwIfError(
+      await process([
+        { type: mockTaskTypeKey, title: "Task", priority: "high" },
+      ]),
+    );
+
+    const changeset = Object.values(result)[0];
+    expect(changeset).toMatchObject({
+      priority: "high",
+    });
+  });
+
   describe("validation", () => {
     const checkProcessingSucceeds = async (
       inputs: EntityChangesetInput<any>[],
@@ -306,7 +345,7 @@ describe("processChangesetInput", () => {
 
     it("accepts create without conditional required field when condition not met", () =>
       checkProcessingSucceeds([
-        { type: mockTaskTypeKey, title: "Task", status: "todo" },
+        { type: mockTaskTypeKey, title: "Task", status: "pending" },
       ]));
 
     it("rejects create missing conditional required field when condition is met", async () => {
@@ -739,6 +778,134 @@ describe("processChangesetInput", () => {
               message: "Expected string, got: boolean",
             },
           ],
+        );
+      });
+    });
+
+    describe("default value validation", () => {
+      it("accepts Field with valid default matching dataType", () =>
+        checkProcessingSucceeds(
+          [
+            {
+              type: fieldSystemType,
+              key: "testDefaultField" as ConfigKey,
+              dataType: "string",
+              default: "hello",
+            },
+          ],
+          "config",
+        ));
+
+      it("accepts Field with integer default", () =>
+        checkProcessingSucceeds(
+          [
+            {
+              type: fieldSystemType,
+              key: "testIntField" as ConfigKey,
+              dataType: "integer",
+              default: 42,
+            },
+          ],
+          "config",
+        ));
+
+      it("accepts Field with boolean default", () =>
+        checkProcessingSucceeds(
+          [
+            {
+              type: fieldSystemType,
+              key: "testBoolField" as ConfigKey,
+              dataType: "boolean",
+              default: true,
+            },
+          ],
+          "config",
+        ));
+
+      it("rejects Field with default not matching dataType", async () => {
+        await checkHasValidationErrors(
+          [
+            {
+              type: fieldSystemType,
+              key: "testBadDefault" as ConfigKey,
+              dataType: "integer",
+              default: "not a number",
+            },
+          ],
+          [
+            {
+              changesetIndex: 0,
+              namespace: "config",
+              fieldKey: "default",
+              message: expect.stringContaining(
+                "default value does not match dataType 'integer'",
+              ),
+            },
+          ],
+          "config",
+        );
+      });
+
+      it("rejects Type with field attr default not matching field dataType", async () => {
+        await checkHasValidationErrors(
+          [
+            {
+              type: typeSystemType,
+              key: "TestTypeBadDefault" as ConfigKey,
+              name: "Test Type",
+              fields: [["title", { default: 123 }]] as any,
+            },
+          ],
+          [
+            {
+              changesetIndex: 0,
+              namespace: "config",
+              fieldKey: "fields.title.default",
+              message: expect.stringContaining(
+                "default value does not match dataType 'string'",
+              ),
+            },
+          ],
+          "config",
+        );
+      });
+
+      it("accepts Field with option default matching valid option", () =>
+        checkProcessingSucceeds(
+          [
+            {
+              type: fieldSystemType,
+              key: "testOptionField" as ConfigKey,
+              dataType: "option",
+              options: [{ key: "a" }, { key: "b" }],
+              default: "a",
+            },
+          ],
+          "config",
+        ));
+
+      it("rejects Field with option default not in options list", async () => {
+        await checkHasValidationErrors(
+          [
+            {
+              type: fieldSystemType,
+              key: "testBadOptionField" as ConfigKey,
+              dataType: "option",
+              options: [{ key: "a" }, { key: "b" }],
+              default: "invalid",
+            },
+          ],
+          [
+            {
+              changesetIndex: 0,
+              namespace: "config",
+              fieldKey: "default",
+              message: expect.stringContaining(
+                "Invalid option value: invalid. Expected one of: a, b",
+              ),
+            },
+          ],
+          "config",
         );
       });
     });

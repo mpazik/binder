@@ -1,12 +1,12 @@
 import { isErr, ok, type ResultAsync } from "@binder/utils";
-import type {
-  EntitySchema,
-  FieldKey,
-  Fieldset,
-  FieldValue,
-  Filters,
-  Includes,
-  NamespaceEditable,
+import {
+  type EntitySchema,
+  type FieldKey,
+  type Fieldset,
+  type FieldValue,
+  type Filters,
+  type Includes,
+  type NamespaceEditable,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 
@@ -203,19 +203,13 @@ export const resolveIncludes = async (
   ) => ResultAsync<Fieldset[]>,
 ): ResultAsync<Fieldset[]> => {
   if (entities.length === 0) return ok(entities);
-  if (!includes || Object.keys(includes).length === 0) return ok(entities);
-
-  const resolvedEntities = entities.map((entity) => ({ ...entity }));
+  if (!includes) return ok(entities);
 
   for (const [fieldKey, includeValue] of Object.entries(includes)) {
-    // Only expand relations when there are nested includes (e.g., { project: { title: true } })
-    // Simple includes (e.g., { project: true }) just return the uid/key as-is
     if (!isNestedInclude(includeValue)) continue;
 
     const field = schema.fields[fieldKey];
     if (!field || field.dataType !== "relation") continue;
-    // Skip relation fields without range - these are schema references (like TypeFieldRef)
-    // that store field keys, not entity UIDs
     if (!field.range && !field.inverseOf) continue;
 
     const nestedFilters = (includeValue as NestedIncludes).filters;
@@ -224,16 +218,12 @@ export const resolveIncludes = async (
     let relatedFilters: Filters = {};
 
     if (field.inverseOf) {
-      const entityUids = resolvedEntities
-        .map((e) => e.uid as string)
-        .filter(Boolean);
+      const entityUids = entities.map((e) => e.uid as string).filter(Boolean);
       if (entityUids.length === 0) continue;
 
       relatedFilters[field.inverseOf] = { op: "in", value: entityUids };
     } else {
-      const relatedIds = Array.from(
-        collectRelationshipIds(resolvedEntities, fieldKey),
-      );
+      const relatedIds = Array.from(collectRelationshipIds(entities, fieldKey));
       if (relatedIds.length === 0) continue;
 
       relatedFilters = {
@@ -247,7 +237,6 @@ export const resolveIncludes = async (
     });
     if (isErr(relatedEntitiesResult)) return relatedEntitiesResult;
 
-    // If no results found by uid, try searching by key (for field references)
     if (
       relatedEntitiesResult.data.length === 0 &&
       !field.inverseOf &&
@@ -279,14 +268,14 @@ export const resolveIncludes = async (
       return resolvedRelatedEntitiesResult;
 
     mergeRelationshipData(
-      resolvedEntities,
+      entities,
       fieldKey,
       resolvedRelatedEntitiesResult.data,
       field.inverseOf,
     );
   }
 
-  const selectedEntities = applyFieldSelection(resolvedEntities, includes);
+  const selectedEntities = applyFieldSelection(entities, includes);
 
   cleanRelatedEntities(selectedEntities, includes);
 

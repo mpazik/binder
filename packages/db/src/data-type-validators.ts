@@ -202,6 +202,7 @@ export const configDataTypeValidators: {
       undefined,
     );
   },
+  json: () => okVoid,
   option: optionValidator,
   optionSet: (value) => {
     if (!Array.isArray(value))

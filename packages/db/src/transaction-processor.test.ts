@@ -278,7 +278,7 @@ describe("transaction processor", () => {
       });
       await applyTransactionInput({
         author: "test",
-        nodes: [{ $ref: mockTask1Uid, status: "done" }],
+        nodes: [{ $ref: mockTask1Uid, status: "complete" }],
       });
 
       await db.transaction(async (tx) => {

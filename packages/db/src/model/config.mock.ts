@@ -24,10 +24,11 @@ export const mockStatusField = {
   name: "Status",
   description: "Current state",
   dataType: "option",
+  default: "pending",
   options: [
-    { key: "todo", name: "To Do" },
-    { key: "in_progress", name: "In Progress" },
-    { key: "done", name: "Done" },
+    { key: "pending", name: "Pending" },
+    { key: "active", name: "Active" },
+    { key: "complete", name: "Complete" },
     { key: "cancelled", name: "Cancelled" },
     { key: "archived", name: "Archived" },
   ],
@@ -171,7 +172,7 @@ export const mockCompletedAtField = {
   name: "Completed At",
   description: "When task was completed",
   dataType: "datetime",
-  when: { status: "done" },
+  when: { status: "complete" },
 } as const satisfies NodeFieldDef;
 
 export const mockCancelReasonFieldKey = "cancelReason" as ConfigKey;
@@ -195,7 +196,7 @@ export const mockPriorityField = {
   name: "Priority",
   description: "Priority level",
   dataType: "option",
-  immutable: true,
+  default: "medium",
   options: [
     { key: "low", name: "Low" },
     { key: "medium", name: "Medium" },
@@ -212,7 +213,8 @@ export const mockTaskType = {
   description: "Individual unit of work",
   fields: [
     [titleFieldKey, { required: true }],
-    [mockStatusFieldKey, { default: "todo", exclude: ["archived"] }],
+    [mockStatusFieldKey, { exclude: ["archived"] }],
+    [mockPriorityFieldKey, {}],
     [mockAssignedToFieldKey, { only: ["User"] }],
     mockTagsFieldKey,
     mockDueDateFieldKey,
@@ -230,7 +232,7 @@ export const mockProjectType = {
   description: "Container for related tasks",
   fields: [
     [titleFieldKey, { required: true }],
-    [mockStatusFieldKey, { default: "todo", required: true }],
+    [mockStatusFieldKey, { default: "active", required: true }],
     mockAssignedToFieldKey,
     mockTagsFieldKey,
     mockTasksFieldKey,

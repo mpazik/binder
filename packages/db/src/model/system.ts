@@ -53,6 +53,7 @@ export const newAppSystemId = (seq: number): SystemId =>
 export const configDataTypes = {
   ...coreDataTypes,
   object: { name: "Object" },
+  json: { name: "JSON", description: "Any JSON value" },
   option: { name: "Option", description: "Option value" },
   optionSet: {
     name: "Option Set",
@@ -190,7 +191,7 @@ export const configFieldsDefs = {
     id: configSchemaIds.default,
     key: "default" as SystemKey,
     name: "Default",
-    dataType: "string",
+    dataType: "json",
     description: "Default value for the field",
   },
   value: {
@@ -287,6 +288,7 @@ export const configTypeDefs: ConfigTypeDefinitions = {
       "unique",
       "options",
       "when",
+      "default",
     ],
   },
   [typeSystemType]: {

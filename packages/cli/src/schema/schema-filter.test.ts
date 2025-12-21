@@ -7,6 +7,7 @@ import {
   mockEmailField,
   mockNodeSchema,
   mockNotExistingNodeTypeKey,
+  mockPriorityField,
   mockProjectType,
   mockProjectTypeKey,
   mockStatusField,
@@ -55,6 +56,7 @@ describe("filterSchemaByTypes", () => {
       types: [mockTaskType],
       fields: [
         mockStatusField,
+        mockPriorityField,
         mockAssignedToField,
         mockTagsField,
         mockDueDateField,
@@ -69,6 +71,7 @@ describe("filterSchemaByTypes", () => {
       types: [mockTaskType, mockProjectType],
       fields: [
         mockStatusField,
+        mockPriorityField,
         mockAssignedToField,
         mockTagsField,
         mockTasksField,

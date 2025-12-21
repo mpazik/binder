@@ -14,7 +14,7 @@ import { mockNodeSchema } from "./schema.mock.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
-  "YcYjovWUA_SoxAy5GHk61ovaRbef60v55jgjHj5bH5g" as TransactionHash;
+  "rSLu1kJ8Ex8Iws1rb2hM06wsfQx4AbdXCpbTK5hw7rg" as TransactionHash;
 
 export const mockAuthor = "test-user";
 export const mockAuthor2 = "test-user2";
@@ -43,7 +43,7 @@ export const mockTransactionInit: Transaction = {
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "6Sawqxk7S0Sp6grRVZfjc2paR8iyAWFOjeI3SYekZvw" as TransactionHash;
+  "yuAnrO7_aS7IAzYRgs9Z8ppptZ36wTC6mFeLqNViRSU" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
   hash: mockTransactionUpdateHash,
@@ -68,7 +68,7 @@ export const mockTransaction3: Transaction = {
   author: mockAuthor2,
   nodes: {
     [mockTask2Node.uid]: {
-      status: ["set", "in_progress", "todo"],
+      status: ["set", "active", "pending"],
     },
   },
   configurations: {},
@@ -85,7 +85,7 @@ export const mockTransaction4: Transaction = {
   author: mockAuthor2,
   nodes: {
     [mockProjectNode.uid]: {
-      status: ["set", "completed", "in_progress"],
+      status: ["set", "complete", "active"],
     },
   },
   configurations: {},
