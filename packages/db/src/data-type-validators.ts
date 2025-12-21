@@ -239,6 +239,7 @@ export const configDataTypeValidators: {
 
     return okVoid;
   },
+  query: queryValidator,
 };
 
 const createValidateDataType =

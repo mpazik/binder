@@ -1,0 +1,13 @@
+key: 2-pre-launch
+title: Pre Launch Activities
+status: pending
+milestoneTasks:
+  - title: Write README
+    status: pending
+    priority: medium
+  - title: Make feature screenshots
+    status: pending
+    priority: medium
+  - title: add examples for scripts and agents
+    status: pending
+    priority: medium

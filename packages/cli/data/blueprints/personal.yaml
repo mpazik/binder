@@ -56,6 +56,7 @@
       type: Field
       name: Links To
       dataType: relation
+      range: [Area, Task, Project, Note, Resource]
       allowMultiple: true
       inverseOf: linkedFrom
 
@@ -63,6 +64,7 @@
       type: Field
       name: Linked From
       dataType: relation
+      range: [Area, Task, Project, Note, Resource]
       allowMultiple: true
       inverseOf: linksTo
 

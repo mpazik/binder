@@ -35,19 +35,20 @@
       allowMultiple: true
       inverseOf: parent
 
-    - key: linksTo
+    - key: milestone
       type: Field
-      name: Links To
+      name: Milestone
       dataType: relation
-      allowMultiple: true
-      inverseOf: linkedFrom
+      range: [Milestone]
+      inverseOf: milestoneTasks
 
-    - key: linkedFrom
+    - key: milestoneTasks
       type: Field
-      name: Linked From
+      name: Milestone Tasks
       dataType: relation
+      range: [Task]
       allowMultiple: true
-      inverseOf: linksTo
+      inverseOf: milestone
 
     # Types
     - key: Task
@@ -61,8 +62,7 @@
         - dueDate
         - parent: { only: [Task] }
         - children: { only: [Task] }
-        - linksTo: { only: [Milestone, Task] }
-        - linkedFrom
+        - milestone
 
     - key: Milestone
       type: Type
@@ -72,7 +72,7 @@
         - description
         - status
         - dueDate
-        - linkedFrom: { only: [Task] }
+        - milestoneTasks
 
 # Navigation Structure
 - author: system
@@ -88,7 +88,7 @@
         description: true
         status: true
         dueDate: true
-        linkedFrom:
+        milestoneTasks:
           title: true
           status: true
           priority: true
@@ -99,7 +99,10 @@
       type: Navigation
       path: backlog
       query:
-        filters: { type: Task, linksTo: null, status: [pending, active] }
+        filters:
+          type: Task
+          milestone: { op: empty, value: true }
+          status: [pending, active]
 
     # Archive
     - key: nav-archive-milestone
@@ -112,7 +115,7 @@
         description: true
         status: true
         dueDate: true
-        linkedFrom:
+        milestoneTasks:
           title: true
           status: true
           priority: true
@@ -122,57 +125,80 @@
       type: Navigation
       path: archive/tasks
       query:
-        filters: { type: Task, linksTo: null, status: complete }
+        filters:
+          {
+            type: Task,
+            milestone: { op: empty, value: true },
+            status: complete,
+          }
 
 # Sample data
 - author: system
   nodes:
-    # Milestones
+    # Milestones (concurrent goals, not sequential phases)
     - type: Milestone
-      key: design-phase
-      title: Design Phase
-      description: Complete all design mockups and prototypes
-      status: complete
-      dueDate: 2025-01-15
+      key: mvp-release
+      title: MVP Release
+      description: Ship core functionality to beta testers
+      status: active
+      dueDate: 2025-02-15
 
     - type: Milestone
-      key: development-phase
-      title: Development Phase
-      description: Implement approved designs
+      key: user-feedback
+      title: User Testing Round
+      description: Gather feedback from 20 beta users
       status: active
       dueDate: 2025-02-28
 
     - type: Milestone
-      key: launch
-      title: Launch
-      description: Go live with new website
-      dueDate: 2025-03-31
+      key: v1-launch
+      title: V1 Public Launch
+      description: App store release
+      dueDate: 2025-04-01
 
-    # Tasks
+    # Tasks - mixed work streams
     - type: Task
-      title: Create wireframes
-      description: Low-fidelity wireframes for all pages
+      title: Build authentication flow
+      description: Login, signup, password reset
       status: complete
       priority: high
-      linksTo: [design-phase]
+      milestone: mvp-release
 
     - type: Task
-      title: Design homepage mockup
-      status: complete
-      priority: high
-      linksTo: [design-phase]
+      title: Design onboarding screens
+      status: active
+      priority: medium
+      milestone: mvp-release
 
     - type: Task
-      title: Build component library
+      title: Set up crash reporting
       status: active
       priority: high
-      linksTo: [development-phase]
+      milestone: mvp-release
 
     - type: Task
-      title: Implement responsive navigation
-      linksTo: [development-phase]
+      title: Write user interview script
+      status: complete
+      priority: medium
+      milestone: user-feedback
 
     - type: Task
-      title: Set up CI/CD pipeline
+      title: Recruit beta testers
+      status: active
+      priority: high
+      milestone: user-feedback
+
+    - type: Task
+      title: App store listing copy
       priority: low
-      linksTo: [launch]
+      milestone: v1-launch
+
+    - type: Task
+      title: Investigate push notifications
+      description: Research options for cross-platform push
+      priority: low
+
+    - type: Task
+      title: Fix landscape orientation bug
+      status: active
+      priority: medium

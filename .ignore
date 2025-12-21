@@ -1,3 +1,4 @@
-!specs
-!.binder-dev
-!.docs-dev
+!specs/
+!.binder-dev/
+!.binder/
+!.docs-dev/

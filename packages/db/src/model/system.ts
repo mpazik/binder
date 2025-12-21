@@ -59,6 +59,7 @@ export const configDataTypes = {
     name: "Option Set",
     description: "Set of options to choose from",
   },
+  query: { name: "Query", description: "Query parameters" },
 } as const satisfies DataTypeDefs;
 export type ConfigDataType = keyof typeof configDataTypes;
 
@@ -229,7 +230,7 @@ export const configFieldsDefs = {
     id: configSchemaIds.query,
     key: "query" as SystemKey,
     name: "Query",
-    dataType: "object",
+    dataType: "query",
     description: "Query parameters for data retrieval",
   },
   children: {

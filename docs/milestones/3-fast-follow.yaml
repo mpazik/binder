@@ -1,0 +1,14 @@
+key: 3-fast-follow
+title: Fast Follow
+description: Quick improvements and iterations after initial launch
+status: pending
+milestoneTasks:
+  - title: Use hash to check if file was modified before accessing fs
+    status: pending
+    priority: medium
+  - title: File watcher
+    status: pending
+    priority: medium
+  - title: Cache navigation items
+    status: pending
+    priority: medium

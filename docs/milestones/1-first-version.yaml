@@ -1,0 +1,31 @@
+key: 1-first-version
+title: First Version
+status: active
+milestoneTasks:
+  - title: Put views to directory
+    status: pending
+    priority: medium
+  - title: Add alphabet
+    status: pending
+    priority: medium
+  - title: Wrap in fences when needed, depending on the alphabet
+    status: pending
+    priority: medium
+  - title: Fix yaml synchronisation
+    status: pending
+    priority: medium
+  - title: rename node to record
+    status: pending
+    priority: medium
+  - title: fix synch of config items
+    status: pending
+    priority: medium
+  - title: fix suggestions
+    status: pending
+    priority: medium
+  - title: move .binder to the docs directory
+    status: pending
+    priority: medium
+  - title: Support multiple workspaces
+    status: pending
+    priority: medium
