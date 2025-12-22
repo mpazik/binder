@@ -86,7 +86,7 @@ export const processTransactionInput = async (
         nodes: nodesResult.data,
         configurations,
       },
-      incrementEntityId(versionResult.data.id) as TransactionId,
+      incrementEntityId(versionResult.data.id),
     ),
   );
 };

@@ -21,8 +21,8 @@ export const emptyFieldset: Fieldset = {};
 
 export const GENESIS_ENTITY_ID = 0 as EntityId;
 
-export const incrementEntityId = (id: EntityId): EntityId => {
-  return (id + 1) as EntityId;
+export const incrementEntityId = <ID extends EntityId>(id: ID): ID => {
+  return (id + 1) as ID;
 };
 
 export const entityRefType = ["id", "key", "uid"] as const;

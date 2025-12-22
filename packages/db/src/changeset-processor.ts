@@ -4,11 +4,12 @@ import {
   assertDefinedPass,
   assertFailed,
   assertNotEmpty,
-  createError,
   err,
+  type ErrorObject,
   fail,
   includes,
   isErr,
+  isTuple,
   objEntries,
   objKeys,
   ok,
@@ -24,36 +25,41 @@ import {
   type ChangesetsInput,
   type ConfigKey,
   coreIdentityFieldKeys,
+  type DataTypeNs,
   emptyFieldset,
   type EntitiesChangeset,
   type EntityChangesetInput,
   type EntityChangesetRef,
   type EntityId,
   type EntityNsRef,
-  type EntityUid,
   type EntityNsUid,
+  type EntityRef,
   type EntitySchema,
   type EntityType,
+  type EntityUid,
   type FieldAttrDef,
-  getTypeFieldAttrs,
-  getTypeFieldKey,
   type FieldChangeset,
   type FieldDef,
   type FieldKey,
+  type Fieldset,
   fieldSystemType,
   fieldTypes,
-  type Fieldset,
   type FieldValue,
   getFieldDef,
-  getMutationInputRef,
+  getTypeFieldAttrs,
+  getTypeFieldKey,
   incrementEntityId,
   isClearChange,
   isEntityUpdate,
+  isListMutation,
+  isListMutationArray,
   isListMutationInput,
   isListMutationInputArray,
-  type ListMutationInputPatch,
+  isPatchMutation,
   isReservedEntityKey,
   isSetChange,
+  type ListMutation,
+  type ListMutationInput,
   type NamespaceEditable,
   type NamespaceSchema,
   type NodeFieldDef,
@@ -69,7 +75,6 @@ import {
   type TypeDef,
   type TypeFieldRef,
   typeSystemType,
-  type DataTypeNs,
   USER_CONFIG_ID_OFFSET,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
@@ -77,6 +82,7 @@ import {
   createEntity,
   deleteEntity,
   fetchEntityFieldset,
+  resolveEntityRefs,
   updateEntity,
 } from "./entity-store.ts";
 import { validateDataType } from "./data-type-validators.ts";
@@ -91,24 +97,14 @@ const fieldsToExcludeFromValidation = [
   "$ref",
 ] as const;
 
-const normalizeValueForField = (
-  schema: EntitySchema,
-  fieldKey: FieldKey,
-  value: FieldValue,
-): FieldValue => {
-  const fieldDef = getFieldDef(schema, fieldKey);
-  if (fieldDef?.dataType === "relation") {
-    return normalizeInputValue(value);
-  }
-  if (fieldDef?.dataType === "optionSet" && Array.isArray(value)) {
-    return normalizeOptionSet(value as OptionDefInput[]);
-  }
-  return value;
+type ValidationError = {
+  field?: string;
+  message: string;
 };
 
-export type ChangesetValidationError = {
-  fieldKey: string;
-  message: string;
+export type ChangesetValidationError = ValidationError & {
+  namespace: NamespaceEditable;
+  index: number;
 };
 
 const getMandatoryFields = (
@@ -153,8 +149,8 @@ const validateConditionalMandatoryFields = (
   typeKey: EntityType,
   mergedValues: Fieldset,
   inputKeys: FieldKey[],
-): ChangesetValidationError[] => {
-  const errors: ChangesetValidationError[] = [];
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
   const typeDef = schema.types[typeKey];
   if (!typeDef) return errors;
 
@@ -172,7 +168,7 @@ const validateConditionalMandatoryFields = (
     if (inputKeys.includes(fieldKey)) continue;
 
     errors.push({
-      fieldKey,
+      field: fieldKey,
       message: "mandatory property is missing or null",
     });
   }
@@ -185,8 +181,8 @@ const validatePatchAttrs = <N extends NamespaceEditable>(
   fieldDef: FieldDef,
   attrs: Fieldset,
   schema: EntitySchema,
-): ChangesetValidationError[] => {
-  const errors: ChangesetValidationError[] = [];
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
   const allowedAttrs = fieldDef.attributes;
 
   if (!allowedAttrs || allowedAttrs.length === 0) return errors;
@@ -206,7 +202,7 @@ const validatePatchAttrs = <N extends NamespaceEditable>(
     );
     if (isErr(validationResult)) {
       errors.push({
-        fieldKey: `${fieldKey}.${attrKey}`,
+        field: `${fieldKey}.${attrKey}`,
         message: validationResult.error.message ?? "validation failed",
       });
     }
@@ -218,8 +214,8 @@ const validatePatchAttrs = <N extends NamespaceEditable>(
 const validateFieldDefaultValue = (
   input: EntityChangesetInput<"config">,
   existingEntity: Fieldset | undefined,
-): ChangesetValidationError[] => {
-  const errors: ChangesetValidationError[] = [];
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
 
   const defaultValue = input["default"] as FieldValue | undefined;
   if (defaultValue === undefined) return errors;
@@ -242,7 +238,7 @@ const validateFieldDefaultValue = (
 
   if (isErr(validationResult)) {
     errors.push({
-      fieldKey: "default",
+      field: "default",
       message: `default value does not match dataType '${dataType}': ${validationResult.error.message}`,
     });
   }
@@ -253,8 +249,8 @@ const validateFieldDefaultValue = (
 const validateTypeFieldDefaults = (
   input: EntityChangesetInput<"config">,
   schema: EntitySchema,
-): ChangesetValidationError[] => {
-  const errors: ChangesetValidationError[] = [];
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
 
   const fields = input["fields"] as TypeFieldRef[] | undefined;
   if (!fields || !Array.isArray(fields)) return errors;
@@ -280,7 +276,7 @@ const validateTypeFieldDefaults = (
 
     if (isErr(validationResult)) {
       errors.push({
-        fieldKey: `fields.${fieldKey}.default`,
+        field: `fields.${fieldKey}.default`,
         message: `default value does not match dataType '${fieldDef.dataType}': ${validationResult.error.message}`,
       });
     }
@@ -289,22 +285,17 @@ const validateTypeFieldDefaults = (
   return errors;
 };
 
-const isPatchMutationInput = (
-  mutation: unknown,
-): mutation is ListMutationInputPatch =>
-  Array.isArray(mutation) && mutation[0] === "patch";
-
 const validateChangesetInput = <N extends NamespaceEditable>(
   namespace: N,
   input: EntityChangesetInput<N>,
   schema: EntitySchema,
-): ChangesetValidationError[] => {
-  const errors: ChangesetValidationError[] = [];
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
 
   const keyValue = input["key"] as string;
   if (keyValue !== undefined && isReservedEntityKey(keyValue)) {
     errors.push({
-      fieldKey: "key",
+      field: "key",
       message: `key "${keyValue}" is reserved and cannot be used`,
     });
   }
@@ -318,7 +309,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       | undefined;
     if (!fieldDef) {
       errors.push({
-        fieldKey,
+        field: fieldKey,
         message: `field "${fieldKey}" is not defined in schema`,
       });
       continue;
@@ -330,7 +321,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
     if (isEntityUpdate(input)) {
       if (fieldDef.immutable) {
         errors.push({
-          fieldKey,
+          field: fieldKey,
           message: "field is immutable and cannot be updated",
         });
         continue;
@@ -342,7 +333,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
         const attrs = fieldAttrs.get(fieldKey);
         if (attrs?.value !== undefined && value !== attrs.value) {
           errors.push({
-            fieldKey,
+            field: fieldKey,
             message: `field must have value "${attrs.value}", got: ${value}`,
           });
           continue;
@@ -350,29 +341,29 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       }
     }
 
-    if (isListMutationInputArray(value)) {
+    if (isListMutationArray(value)) {
       for (const mutation of value) {
-        if (isPatchMutationInput(mutation)) {
-          const patchErrors = validatePatchAttrs(
-            namespace,
-            fieldKey,
-            fieldDef,
-            mutation[2],
-            schema,
+        if (isPatchMutation(mutation)) {
+          errors.push(
+            ...validatePatchAttrs(
+              namespace,
+              fieldKey,
+              fieldDef,
+              mutation[2],
+              schema,
+            ),
           );
-          errors.push(...patchErrors);
           continue;
         }
         const [kind, mutationValue] = mutation;
-        const singleValueFieldDef = { ...fieldDef, allowMultiple: false };
         const validationResult = validateDataType(
           namespace,
-          singleValueFieldDef,
-          getMutationInputRef(mutationValue),
+          { ...fieldDef, allowMultiple: false },
+          mutationValue as FieldValue,
         );
         if (isErr(validationResult)) {
           errors.push({
-            fieldKey,
+            field: fieldKey,
             message: `Invalid ${kind} value: ${validationResult.error.message}`,
           });
         }
@@ -380,28 +371,28 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       continue;
     }
 
-    if (isListMutationInput(value)) {
-      if (isPatchMutationInput(value)) {
-        const patchErrors = validatePatchAttrs(
-          namespace,
-          fieldKey,
-          fieldDef,
-          value[2],
-          schema,
+    if (isListMutation(value)) {
+      if (isPatchMutation(value)) {
+        errors.push(
+          ...validatePatchAttrs(
+            namespace,
+            fieldKey,
+            fieldDef,
+            value[2],
+            schema,
+          ),
         );
-        errors.push(...patchErrors);
         continue;
       }
       const [kind, mutationValue] = value;
-      const singleValueFieldDef = { ...fieldDef, allowMultiple: false };
       const validationResult = validateDataType(
         namespace,
-        singleValueFieldDef,
-        getMutationInputRef(mutationValue),
+        { ...fieldDef, allowMultiple: false },
+        mutationValue as FieldValue,
       );
       if (isErr(validationResult)) {
         errors.push({
-          fieldKey,
+          field: fieldKey,
           message: `Invalid ${kind} value: ${validationResult.error.message}`,
         });
       }
@@ -410,22 +401,17 @@ const validateChangesetInput = <N extends NamespaceEditable>(
 
     if (fieldDef.unique && fieldDef.allowMultiple) {
       errors.push({
-        fieldKey,
+        field: fieldKey,
         message: "unique constraint cannot be used with allowMultiple",
       });
       continue;
     }
 
-    const normalizedValue = normalizeValueForField(schema, fieldKey, value);
-    const validationResult = validateDataType(
-      namespace,
-      fieldDef,
-      normalizedValue,
-    );
+    const validationResult = validateDataType(namespace, fieldDef, value);
 
     if (isErr(validationResult)) {
       errors.push({
-        fieldKey,
+        field: fieldKey,
         message: validationResult.error.message ?? "validation failed",
       });
     }
@@ -435,7 +421,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
 
   if (!input.type) {
     errors.push({
-      fieldKey: "type",
+      field: "type",
       message: "type is required for create entity changeset",
     });
     return errors;
@@ -446,14 +432,14 @@ const validateChangesetInput = <N extends NamespaceEditable>(
 
   if (!typeDef) {
     errors.push({
-      fieldKey: "type",
+      field: "type",
       message: `invalid type: ${typeKey}`,
     });
     return errors;
   }
 
   const fieldAttrs = getFieldAttrs(schema, typeKey);
-  // For creates, input contains all entity values needed to evaluate `when` conditions.
+  // For creations, input contains all entity values needed to evaluate `when` conditions.
   // Updates are partial and skip mandatory validation, so this cast is safe.
   const mandatoryFields = getMandatoryFields(
     schema,
@@ -473,7 +459,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       (!(fieldKey in input) || input[fieldKey] == null)
     ) {
       errors.push({
-        fieldKey,
+        field: fieldKey,
         message: "mandatory property is missing or null",
       });
     }
@@ -488,8 +474,8 @@ const validateUniquenessConstraints = async <N extends NamespaceEditable>(
   input: EntityChangesetInput<N>,
   schema: EntitySchema,
   currentEntityUid?: EntityNsUid[N],
-): ResultAsync<ChangesetValidationError[]> => {
-  const errors: ChangesetValidationError[] = [];
+): ResultAsync<ValidationError[]> => {
+  const errors: ValidationError[] = [];
   const table = editableEntityTables[namespace];
 
   for (const [fieldKey, value] of Object.entries(input)) {
@@ -498,7 +484,7 @@ const validateUniquenessConstraints = async <N extends NamespaceEditable>(
     if (!fieldDef || !fieldDef.unique) continue;
     if (fieldDef.allowMultiple) {
       errors.push({
-        fieldKey,
+        field: fieldKey,
         message: "unique constraint cannot be used with allowMultiple",
       });
       continue;
@@ -525,7 +511,7 @@ const validateUniquenessConstraints = async <N extends NamespaceEditable>(
     if (existingResult.data.length > 0) {
       const conflictingUid = existingResult.data[0].uid;
       errors.push({
-        fieldKey,
+        field: fieldKey,
         message: `value must be unique, already exists in entity ${conflictingUid}`,
       });
     }
@@ -577,18 +563,10 @@ export const applyChangeset = async <N extends NamespaceEditable>(
   }
 };
 
-const validationError = <N, E, R>(
-  index: number,
-  namespace: N,
-  errors: E,
-): Result<R> =>
-  err(
-    createError("changeset-validation-failed", "changeset validation failed", {
-      index,
-      namespace,
-      errors,
-    }),
-  );
+const validationError = <R>(
+  message: string,
+  field?: string,
+): Result<R, ValidationError[]> => err([{ field, message }]);
 
 export const applyConfigChangesetToSchema = (
   baseSchema: NodeSchema,
@@ -632,240 +610,431 @@ export const applyConfigChangesetToSchema = (
   };
 };
 
+type RefToUidMap = Map<string, EntityUid>;
+
+const collectRelationKeys = <N extends NamespaceEditable>(
+  normalizedInputs: EntityChangesetInput<N>[],
+  schema: NamespaceSchema<N>,
+): EntityRef[] => {
+  const refs: EntityRef[] = [];
+
+  const addIfKey = (ref: string): void => {
+    if (!isValidUid(ref)) refs.push(ref as EntityRef);
+  };
+
+  const collectFromValue = (value: FieldValue): void => {
+    if (typeof value === "string") {
+      addIfKey(value);
+    } else if (isTuple(value)) {
+      addIfKey(value[0]);
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string") {
+          addIfKey(item);
+        } else if (isTuple(item)) {
+          addIfKey(item[0]);
+        }
+      }
+    }
+  };
+
+  for (const input of normalizedInputs) {
+    for (const [fieldKey, value] of objEntries(input)) {
+      if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
+        continue;
+      const fieldDef = getFieldDef(schema, fieldKey);
+      if (fieldDef?.dataType !== "relation") continue;
+
+      const fieldValue = value as FieldValue;
+      if (isListMutationArray(fieldValue)) {
+        for (const mutation of fieldValue as ListMutation[]) {
+          if (mutation[0] !== "patch") collectFromValue(mutation[1]);
+        }
+      } else if (isListMutation(fieldValue)) {
+        if (fieldValue[0] !== "patch") collectFromValue(fieldValue[1]);
+      } else {
+        collectFromValue(fieldValue);
+      }
+    }
+  }
+
+  return refs;
+};
+
+const collectIntraBatchKeyToUid = <N extends NamespaceEditable>(
+  normalizedInputs: EntityChangesetInput<N>[],
+): RefToUidMap => {
+  const keyToUid: RefToUidMap = new Map();
+
+  for (const input of normalizedInputs) {
+    if (isEntityUpdate(input)) continue;
+
+    const key = input["key"] as string | undefined;
+    if (!key) continue;
+
+    const uid = (input["uid"] as EntityUid) ?? createUid();
+    keyToUid.set(key, uid);
+    (input as Record<string, unknown>)["uid"] = uid;
+  }
+
+  return keyToUid;
+};
+
+const buildRefToUidMap = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  normalizedInputs: EntityChangesetInput<N>[],
+  schema: NamespaceSchema<N>,
+): ResultAsync<RefToUidMap> => {
+  const intraBatchMap = collectIntraBatchKeyToUid(normalizedInputs);
+
+  const allRefs = collectRelationKeys(normalizedInputs, schema);
+  const refsToResolve = allRefs.filter(
+    (ref) => !intraBatchMap.has(String(ref)),
+  );
+
+  if (refsToResolve.length === 0) return ok(intraBatchMap);
+
+  const resolvedResult = await resolveEntityRefs(tx, "node", refsToResolve);
+  if (isErr(resolvedResult)) return resolvedResult;
+
+  const refToUid: RefToUidMap = new Map(intraBatchMap);
+  for (let i = 0; i < refsToResolve.length; i++) {
+    const originalRef = String(refsToResolve[i]);
+    const resolvedUid = resolvedResult.data[i];
+    if (resolvedUid && originalRef !== resolvedUid) {
+      refToUid.set(originalRef, resolvedUid);
+    }
+  }
+
+  return ok(refToUid);
+};
+
+const normalizeFieldValue = (
+  fieldDef: FieldDef | undefined,
+  value: FieldValue,
+): FieldValue | ListMutation | ListMutation[] => {
+  if (isListMutationInputArray(value)) {
+    return (value as ListMutationInput[]).map(normalizeListMutationInput);
+  }
+  if (isListMutationInput(value)) {
+    return normalizeListMutationInput(value as ListMutationInput);
+  }
+  if (fieldDef?.dataType === "optionSet" && Array.isArray(value)) {
+    return normalizeOptionSet(value as OptionDefInput[]);
+  }
+  if (fieldDef?.dataType === "relation") {
+    return normalizeInputValue(value);
+  }
+  return value;
+};
+
+const normalizeInput = <N extends NamespaceEditable>(
+  input: EntityChangesetInput<N>,
+  schema: NamespaceSchema<N>,
+): EntityChangesetInput<N> => {
+  const normalized: EntityChangesetInput<N> = { ...input };
+
+  for (const [fieldKey, value] of objEntries(input)) {
+    if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
+      continue;
+
+    const fieldDef = getFieldDef(schema, fieldKey);
+    normalized[fieldKey] = normalizeFieldValue(
+      fieldDef,
+      value as FieldValue,
+    ) as typeof value;
+  }
+
+  return normalized;
+};
+
+const resolveRelationRef = (
+  value: FieldValue,
+  refToUid: RefToUidMap,
+): FieldValue => {
+  if (typeof value === "string") {
+    return refToUid.get(value) ?? value;
+  }
+  if (isTuple(value)) {
+    const resolvedRef = refToUid.get(value[0]) ?? value[0];
+    return [resolvedRef, value[1] as Fieldset];
+  }
+  return value;
+};
+
+const resolveRelationFieldValue = (
+  fieldDef: FieldDef | undefined,
+  value: FieldValue,
+  refToUid: RefToUidMap,
+): FieldValue => {
+  if (fieldDef?.dataType !== "relation") return value;
+
+  if (Array.isArray(value)) {
+    return value.map((item) => resolveRelationRef(item, refToUid));
+  }
+  return resolveRelationRef(value, refToUid);
+};
+
+const resolveRelationMutation = (
+  fieldDef: FieldDef | undefined,
+  mutation: ListMutation,
+  refToUid: RefToUidMap,
+): ListMutation => {
+  if (mutation[0] === "patch") return mutation;
+  const resolvedValue = resolveRelationFieldValue(
+    fieldDef,
+    mutation[1],
+    refToUid,
+  );
+  return [mutation[0], resolvedValue, mutation[2]] as ListMutation;
+};
+
+const resolveRelations = <N extends NamespaceEditable>(
+  input: EntityChangesetInput<N>,
+  schema: NamespaceSchema<N>,
+  refToUid: RefToUidMap,
+): EntityChangesetInput<N> => {
+  const resolved: EntityChangesetInput<N> = { ...input };
+
+  for (const [fieldKey, value] of objEntries(input)) {
+    if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
+      continue;
+
+    const fieldDef = getFieldDef(schema, fieldKey);
+    if (fieldDef?.dataType !== "relation") continue;
+
+    const fieldValue = value as FieldValue;
+
+    if (isListMutationArray(fieldValue)) {
+      resolved[fieldKey] = (fieldValue as ListMutation[]).map((m) =>
+        resolveRelationMutation(fieldDef, m, refToUid),
+      ) as typeof value;
+    } else if (isListMutation(fieldValue)) {
+      resolved[fieldKey] = resolveRelationMutation(
+        fieldDef,
+        fieldValue as ListMutation,
+        refToUid,
+      ) as typeof value;
+    } else {
+      resolved[fieldKey] = resolveRelationFieldValue(
+        fieldDef,
+        fieldValue,
+        refToUid,
+      ) as typeof value;
+    }
+  }
+
+  return resolved;
+};
+
+const buildChangeset = async <N extends NamespaceEditable>(
+  namespace: N,
+  schema: NamespaceSchema<N>,
+  input: EntityChangesetInput<N>,
+  tx: DbTransaction,
+  generateEntityId: () => EntityId,
+): ResultAsync<[EntityChangesetRef<N>, FieldChangeset], ValidationError[]> => {
+  const updatedSystemField = systemGeneratedFields.find(
+    (field) => field in input,
+  );
+  if (updatedSystemField)
+    return validationError(
+      `system field ${updatedSystemField} not allowed in update`,
+    );
+
+  const validationErrors = validateChangesetInput(namespace, input, schema);
+  if (validationErrors.length > 0) return err(validationErrors);
+
+  const changeset: FieldChangeset = {};
+  let changesetRef: EntityChangesetRef<N>;
+  let typeKey: EntityType;
+
+  if (isEntityUpdate(input)) {
+    const ref = input.$ref as EntityNsRef[N];
+    const keys = Object.keys(input).filter((k) => k !== "$ref") as FieldKey[];
+    assertNotEmpty(keys);
+    const selectResult = await fetchEntityFieldset(tx, namespace, ref, [
+      ...keys,
+      "key",
+      "uid",
+      "type",
+    ]);
+    if (isErr(selectResult))
+      return validationError(
+        selectResult.error.message ?? selectResult.error.key,
+      );
+    const currentValues = selectResult.data;
+
+    typeKey = currentValues.type as EntityType;
+    const mergedValues = { ...currentValues, ...input } as Fieldset;
+    const mandatoryErrors = validateConditionalMandatoryFields(
+      schema,
+      typeKey,
+      mergedValues,
+      keys,
+    );
+    if (mandatoryErrors.length > 0) return err(mandatoryErrors);
+
+    for (const key of keys) {
+      const currentValue = currentValues[key];
+      const inputValue = input[key];
+      if (isListMutationArray(inputValue)) {
+        changeset[key] = ["seq", inputValue];
+      } else if (isListMutation(inputValue)) {
+        changeset[key] = ["seq", [inputValue]];
+      } else {
+        changeset[key] =
+          currentValue == null
+            ? ["set", inputValue]
+            : ["set", inputValue, currentValue];
+      }
+    }
+    changesetRef = (
+      namespace === "node"
+        ? currentValues.uid
+        : assertDefinedPass(currentValues.key)
+    ) as EntityChangesetRef<N>;
+  } else {
+    const newEntityId = generateEntityId();
+
+    if (input["uid"] && !isValidUid(input["uid"])) {
+      return validationError("invalid uid format", "uid");
+    }
+    if (namespace === "config" && !input["key"]) {
+      return validationError("key is required for config entities", "key");
+    }
+
+    typeKey = input.type as EntityType;
+
+    const typeDef = schema.types[typeKey];
+    const typeFieldKeys = typeDef?.fields.map(getTypeFieldKey) ?? [];
+    const fieldAttrs = getFieldAttrs(schema, typeKey);
+
+    const fieldsWithDefaults: Record<string, FieldValue> = {};
+    for (const fieldKey of typeFieldKeys) {
+      if (fieldKey in input) continue;
+
+      const attrs = fieldAttrs.get(fieldKey);
+      if (attrs?.value !== undefined) {
+        fieldsWithDefaults[fieldKey] = attrs.value;
+        continue;
+      }
+      if (attrs?.default !== undefined) {
+        fieldsWithDefaults[fieldKey] = attrs.default;
+        continue;
+      }
+
+      const fieldDef = getFieldDef(schema, fieldKey);
+      if (fieldDef?.default !== undefined) {
+        fieldsWithDefaults[fieldKey] = fieldDef.default as FieldValue;
+      }
+    }
+
+    const entityData = {
+      id: newEntityId,
+      ...input,
+      ...fieldsWithDefaults,
+      uid: (input["uid"] ?? createUid()) as EntityUid,
+    };
+    for (const key of Object.keys(entityData) as FieldKey[]) {
+      changeset[key] = (entityData as Fieldset)[key];
+    }
+    changesetRef = (
+      namespace === "node"
+        ? entityData.uid
+        : assertDefinedPass(entityData.key as ConfigKey)
+    ) as EntityChangesetRef<N>;
+  }
+
+  if (namespace === "config") {
+    if (typeKey === fieldSystemType) {
+      const defaultErrors = validateFieldDefaultValue(
+        input as EntityChangesetInput<"config">,
+        undefined,
+      );
+      if (defaultErrors.length > 0) return err(defaultErrors);
+    }
+
+    if (typeKey === typeSystemType) {
+      const defaultErrors = validateTypeFieldDefaults(
+        input as EntityChangesetInput<"config">,
+        schema,
+      );
+      if (defaultErrors.length > 0) return err(defaultErrors);
+    }
+  }
+
+  const uniquenessResult = await validateUniquenessConstraints(
+    tx,
+    namespace,
+    input,
+    schema,
+    undefined,
+  );
+  if (isErr(uniquenessResult))
+    return validationError(
+      uniquenessResult.error.message ?? uniquenessResult.error.key,
+    );
+  if (uniquenessResult.data.length > 0) return err(uniquenessResult.data);
+
+  return ok([changesetRef, changeset]);
+};
+
 export const processChangesetInput = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
-  input: ChangesetsInput<N>,
+  inputs: ChangesetsInput<N>,
   schema: NamespaceSchema<N>,
   lastEntityId: EntityId,
-): ResultAsync<EntitiesChangeset<N>> => {
+): ResultAsync<
+  EntitiesChangeset<N>,
+  ErrorObject<{ errors?: ChangesetValidationError[] }>
+> => {
+  const normalizedInputs = inputs.map((raw) => normalizeInput(raw, schema));
+
+  const refToUidResult =
+    namespace === "node"
+      ? await buildRefToUidMap(tx, normalizedInputs, schema)
+      : ok(new Map<string, EntityUid>());
+  if (isErr(refToUidResult)) return refToUidResult;
+  const refToUid = refToUidResult.data;
+
   let lastId =
     namespace === "config"
       ? (Math.max(lastEntityId, USER_CONFIG_ID_OFFSET - 1) as EntityId)
       : lastEntityId;
-  const buildChangeset = async (
-    input: EntityChangesetInput<N>,
-    index: number,
-  ): ResultAsync<[EntityChangesetRef<N>, FieldChangeset]> => {
-    const updatedSystemField = systemGeneratedFields.find(
-      (field) => field in input,
-    );
-    if (updatedSystemField)
-      return err(
-        createError(
-          "invalid-input",
-          `system field ${updatedSystemField} not allowed in update`,
-        ),
-      );
-
-    const validationErrors = validateChangesetInput(namespace, input, schema);
-    if (validationErrors.length > 0)
-      return validationError(index, namespace, validationErrors);
-
-    const changeset: FieldChangeset = {};
-    let changesetRef: EntityChangesetRef<N>;
-    if (isEntityUpdate(input)) {
-      const ref = input.$ref as EntityNsRef[N];
-      const keys = Object.keys(input).filter((k) => k !== "$ref") as FieldKey[];
-      assertNotEmpty(keys);
-      const selectResult = await fetchEntityFieldset(tx, namespace, ref, [
-        ...keys,
-        "key",
-        "uid",
-        "type",
-      ]);
-      if (isErr(selectResult)) return selectResult;
-      const currentValues = selectResult.data;
-      const uniquenessResult = await validateUniquenessConstraints(
-        tx,
-        namespace,
-        input,
-        schema,
-        currentValues["uid"] as EntityNsUid[N],
-      );
-      if (isErr(uniquenessResult)) return uniquenessResult;
-      if (uniquenessResult.data.length > 0)
-        return validationError(index, namespace, uniquenessResult.data);
-
-      const typeKey = currentValues.type as EntityType;
-      const mergedValues = { ...currentValues, ...input } as Fieldset;
-      const mandatoryErrors = validateConditionalMandatoryFields(
-        schema,
-        typeKey,
-        mergedValues,
-        keys,
-      );
-      if (mandatoryErrors.length > 0)
-        return validationError(index, namespace, mandatoryErrors);
-
-      if (namespace === "config" && typeKey === fieldSystemType) {
-        const defaultErrors = validateFieldDefaultValue(
-          input as EntityChangesetInput<"config">,
-          currentValues,
-        );
-        if (defaultErrors.length > 0)
-          return validationError(index, namespace, defaultErrors);
-      }
-
-      if (namespace === "config" && typeKey === typeSystemType) {
-        const defaultErrors = validateTypeFieldDefaults(
-          input as EntityChangesetInput<"config">,
-          schema,
-        );
-        if (defaultErrors.length > 0)
-          return validationError(index, namespace, defaultErrors);
-      }
-
-      for (const key of keys) {
-        const currentValue = currentValues[key];
-        const inputValue = input[key];
-        if (isListMutationInputArray(inputValue)) {
-          changeset[key] = ["seq", inputValue.map(normalizeListMutationInput)];
-        } else if (isListMutationInput(inputValue)) {
-          changeset[key] = ["seq", [normalizeListMutationInput(inputValue)]];
-        } else {
-          const normalizedValue = normalizeValueForField(
-            schema,
-            key,
-            inputValue as FieldValue,
-          );
-          if (currentValue === undefined || currentValue === null) {
-            changeset[key] = ["set", normalizedValue];
-          } else {
-            changeset[key] = ["set", normalizedValue, currentValue];
-          }
-        }
-      }
-      changesetRef = (
-        namespace === "node"
-          ? currentValues.uid
-          : assertDefinedPass(currentValues.key)
-      ) as EntityChangesetRef<N>;
-    } else {
-      const newEntityId = incrementEntityId(lastId);
-      lastId = newEntityId;
-
-      if (input["uid"] && !isValidUid(input["uid"])) {
-        return validationError(index, namespace, [
-          { fieldKey: "uid", message: "invalid uid format" },
-        ]);
-      }
-      if (namespace === "config" && !input["key"]) {
-        return validationError(index, namespace, [
-          { fieldKey: "key", message: "key is required for config entities" },
-        ]);
-      }
-
-      const typeKey = input.type as EntityType;
-
-      if (namespace === "config" && typeKey === fieldSystemType) {
-        const defaultErrors = validateFieldDefaultValue(
-          input as EntityChangesetInput<"config">,
-          undefined,
-        );
-        if (defaultErrors.length > 0)
-          return validationError(index, namespace, defaultErrors);
-      }
-
-      if (namespace === "config" && typeKey === typeSystemType) {
-        const defaultErrors = validateTypeFieldDefaults(
-          input as EntityChangesetInput<"config">,
-          schema,
-        );
-        if (defaultErrors.length > 0)
-          return validationError(index, namespace, defaultErrors);
-      }
-
-      const typeDef = schema.types[typeKey];
-      const typeFieldKeys = typeDef?.fields.map(getTypeFieldKey) ?? [];
-      const fieldAttrs = getFieldAttrs(schema, typeKey);
-
-      const fieldsWithDefaults: Record<string, FieldValue> = {};
-      for (const fieldKey of typeFieldKeys) {
-        if (fieldKey in input) continue;
-
-        const attrs = fieldAttrs.get(fieldKey);
-        if (attrs?.value !== undefined) {
-          fieldsWithDefaults[fieldKey] = attrs.value;
-          continue;
-        }
-        if (attrs?.default !== undefined) {
-          fieldsWithDefaults[fieldKey] = attrs.default;
-          continue;
-        }
-
-        const fieldDef = getFieldDef(schema, fieldKey);
-        if (fieldDef?.default !== undefined) {
-          fieldsWithDefaults[fieldKey] = fieldDef.default as FieldValue;
-        }
-      }
-
-      const entityData = {
-        id: newEntityId,
-        ...input,
-        ...fieldsWithDefaults,
-        uid: (input["uid"] ?? createUid()) as EntityUid,
-      };
-      const keys = Object.keys(entityData) as FieldKey[];
-      for (const key of keys) {
-        changeset[key] = normalizeValueForField(
-          schema,
-          key,
-          (entityData as any)[key],
-        );
-      }
-      changesetRef = (
-        namespace === "node"
-          ? entityData.uid
-          : assertDefinedPass(entityData.key as ConfigKey)
-      ) as EntityChangesetRef<N>;
-    }
-
-    const uniquenessResult = await validateUniquenessConstraints(
-      tx,
-      namespace,
-      input,
-      schema,
-      undefined,
-    );
-    if (isErr(uniquenessResult)) return uniquenessResult;
-    if (uniquenessResult.data.length > 0)
-      return validationError(index, namespace, uniquenessResult.data);
-
-    return ok([changesetRef, changeset]);
+  const generateEntityId = () => {
+    const newEntityId = incrementEntityId(lastId);
+    lastId = newEntityId;
+    return newEntityId;
   };
 
   const changesetResults = await Promise.all(
-    input.map((item, index) => buildChangeset(item, index)),
+    normalizedInputs.map(async (input, index) => {
+      const resolvedInput = resolveRelations(input, schema, refToUid);
+      const result = await buildChangeset(
+        namespace,
+        schema,
+        resolvedInput,
+        tx,
+        generateEntityId,
+      );
+      if (isErr(result))
+        return err(result.error.map((it) => ({ ...it, index, namespace })));
+      return result;
+    }),
   );
-  const errorResults = changesetResults.filter((it) => isErr(it));
+
+  const errorResults = changesetResults.filter(isErr);
   if (errorResults.length > 0) {
-    const flattenedErrors = [];
-    for (const errorResult of errorResults) {
-      const error = errorResult.error;
-      if (error.key === "changeset-validation-failed") {
-        const validationData = error.data as any;
-        const fieldErrors = validationData.errors || [];
-        for (const fieldError of fieldErrors) {
-          flattenedErrors.push({
-            changesetIndex: validationData.index,
-            namespace: validationData.namespace,
-            fieldKey: fieldError.fieldKey,
-            message: fieldError.message,
-          });
-        }
-      } else {
-        flattenedErrors.push(error);
-      }
-    }
     return fail("changeset-input-process-failed", "failed creating changeset", {
-      errors: flattenedErrors,
+      errors: errorResults.flatMap((it) => it.error),
     });
   }
 
   return ok(
     Object.fromEntries(
-      changesetResults.map((it) => throwIfError(it)),
+      changesetResults.map(throwIfError),
     ) as EntitiesChangeset<N>,
   );
 };

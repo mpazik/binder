@@ -573,6 +573,15 @@ export const squashChangesets = (
   });
 };
 
+export const isListMutation = (value: unknown): value is ListMutation =>
+  Array.isArray(value) &&
+  value.length >= 2 &&
+  value.length <= 3 &&
+  (value[0] === "insert" || value[0] === "remove" || value[0] === "patch");
+
+export const isListMutationArray = (value: unknown): value is ListMutation[] =>
+  Array.isArray(value) && value.length > 0 && value.every(isListMutation);
+
 export const isInsertMutation = (
   mutation: ListMutation,
 ): mutation is ListMutationInsert => mutation[0] === "insert";

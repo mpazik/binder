@@ -7,10 +7,14 @@ import {
 } from "@binder/utils";
 import "@binder/utils/tests";
 import {
+  mockProjectKey,
+  mockProjectNode,
   mockTask1Node,
   mockTaskNode1Updated,
   mockTaskWithOwnersNode,
+  mockTaskWithOwnersUid,
   mockUserNode,
+  mockUserUid,
 } from "./model/node.mock.ts";
 import {
   mockChangesetCreateTask1,
@@ -30,23 +34,34 @@ import {
   emptySchema,
   type EntitiesChangeset,
   type EntityChangesetInput,
+  type EntityId,
   type FieldKey,
   fieldSystemType,
   GENESIS_ENTITY_ID,
   inverseChangeset,
   type NamespaceEditable,
+  type NodeKey,
   type NodeType,
+  type NodeUid,
   typeSystemType,
 } from "./model";
-import { entityExists, fetchEntityFieldset } from "./entity-store.ts";
+import {
+  createEntity,
+  entityExists,
+  fetchEntityFieldset,
+} from "./entity-store.ts";
+import { saveTransaction } from "./transaction-store.ts";
+import { mockTransactionInit } from "./model/transaction.mock.ts";
 import { mockNodeSchema } from "./model/schema.mock.ts";
 import {
   mockFieldKeyEmail,
   mockNotExistingNodeTypeKey,
   mockPriorityField,
   mockPriorityFieldKey,
+  mockProjectTypeKey,
   mockTaskType,
   mockTaskTypeKey,
+  mockTeamTypeKey,
   mockUserTypeKey,
 } from "./model/config.mock.ts";
 import { mockChangesetInputUpdateTask1 } from "./model/changeset-input.mock.ts";
@@ -250,7 +265,6 @@ describe("processChangesetInput", () => {
   });
 
   it("includes type-level default over field-level default", async () => {
-    const { mockProjectTypeKey } = await import("./model/config.mock.ts");
     const result = throwIfError(
       await process([{ type: mockProjectTypeKey, title: "Project" }]),
     );
@@ -299,9 +313,9 @@ describe("processChangesetInput", () => {
         data: {
           errors: [
             {
-              changesetIndex: 0,
+              index: 0,
               namespace: "node",
-              fieldKey: "type",
+              field: "type",
               message: "invalid type: NotExistingNodeType",
             },
           ],
@@ -317,9 +331,9 @@ describe("processChangesetInput", () => {
           data: {
             errors: [
               {
-                changesetIndex: 0,
+                index: 0,
                 namespace: "config",
-                fieldKey: "type",
+                field: "type",
                 message: "invalid type: InvalidConfigType",
               },
             ],
@@ -334,9 +348,9 @@ describe("processChangesetInput", () => {
         [{ type: mockTaskTypeKey }],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "title",
+            field: "title",
             message: "mandatory property is missing or null",
           },
         ],
@@ -359,9 +373,9 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "cancelReason",
+            field: "cancelReason",
             message: "mandatory property is missing or null",
           },
         ],
@@ -390,9 +404,9 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "cancelReason",
+            field: "cancelReason",
             message: "mandatory property is missing or null",
           },
         ],
@@ -416,15 +430,15 @@ describe("processChangesetInput", () => {
         [{ type: fieldSystemType }],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "config",
-            fieldKey: "key",
+            field: "key",
             message: "mandatory property is missing or null",
           },
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "config",
-            fieldKey: "dataType",
+            field: "dataType",
             message: "mandatory property is missing or null",
           },
         ],
@@ -437,15 +451,15 @@ describe("processChangesetInput", () => {
         [{ type: mockTaskTypeKey }, { title: "Updated Task" } as any],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "title",
+            field: "title",
             message: "mandatory property is missing or null",
           },
           {
-            changesetIndex: 1,
+            index: 1,
             namespace: "node",
-            fieldKey: "type",
+            field: "type",
             message: "type is required for create entity changeset",
           },
         ],
@@ -464,15 +478,15 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "invalidField",
+            field: "invalidField",
             message: 'field "invalidField" is not defined in schema',
           },
           {
-            changesetIndex: 1,
+            index: 1,
             namespace: "node",
-            fieldKey: "anotherInvalidField",
+            field: "anotherInvalidField",
             message: 'field "anotherInvalidField" is not defined in schema',
           },
         ],
@@ -493,15 +507,15 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "config",
-            fieldKey: "key",
+            field: "key",
             message: 'key "first" is reserved and cannot be used',
           },
           {
-            changesetIndex: 1,
+            index: 1,
             namespace: "config",
-            fieldKey: "key",
+            field: "key",
             message: 'key "last" is reserved and cannot be used',
           },
         ],
@@ -514,9 +528,9 @@ describe("processChangesetInput", () => {
         [{ type: fieldSystemType, key: testFieldKey, dataType: 123 as any }],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "config",
-            fieldKey: "dataType",
+            field: "dataType",
             message: "Expected non-empty string for option",
           },
         ],
@@ -535,9 +549,9 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "tags",
+            field: "tags",
             message: "Expected array when allowMultiple is true, got: string",
           },
         ],
@@ -555,9 +569,9 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "config",
-            fieldKey: "dataType",
+            field: "dataType",
             message: expect.stringContaining(
               "Invalid option value: invalidDataType",
             ),
@@ -582,15 +596,15 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "tags",
+            field: "tags",
             message: expect.stringContaining("Invalid insert value"),
           },
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: "tags",
+            field: "tags",
             message: expect.stringContaining("Invalid remove value"),
           },
         ],
@@ -624,9 +638,9 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "node",
-            fieldKey: mockFieldKeyEmail,
+            field: mockFieldKeyEmail,
             message: expect.stringContaining(
               "value must be unique, already exists",
             ),
@@ -655,21 +669,21 @@ describe("processChangesetInput", () => {
         ],
         [
           {
-            changesetIndex: 0,
+            index: 0,
             namespace: "config",
-            fieldKey: "dataType",
+            field: "dataType",
             message: "field is immutable and cannot be updated",
           },
           {
-            changesetIndex: 1,
+            index: 1,
             namespace: "config",
-            fieldKey: "allowMultiple",
+            field: "allowMultiple",
             message: "field is immutable and cannot be updated",
           },
           {
-            changesetIndex: 2,
+            index: 2,
             namespace: "config",
-            fieldKey: "unique",
+            field: "unique",
             message: "field is immutable and cannot be updated",
           },
         ],
@@ -702,14 +716,13 @@ describe("processChangesetInput", () => {
         "config",
       ));
 
-    it("creates Type with fields using ObjTuple format (YAML ergonomic input)", () =>
+    it("creates Type with fields using ObjTuple format", () =>
       checkProcessingSucceeds(
         [
           {
             type: typeSystemType,
             key: "TestType" as ConfigKey,
             name: "Test Type",
-            // ObjTuple format: { fieldKey: { attrs } } instead of [fieldKey, { attrs }]
             fields: [{ title: { required: true } }, "description"] as any,
           },
         ],
@@ -729,9 +742,9 @@ describe("processChangesetInput", () => {
           ],
           [
             {
-              changesetIndex: 0,
+              index: 0,
               namespace: "node",
-              fieldKey: "owners.role",
+              field: "owners.role",
               message: "Expected string, got: number",
             },
           ],
@@ -772,9 +785,9 @@ describe("processChangesetInput", () => {
           ],
           [
             {
-              changesetIndex: 0,
+              index: 0,
               namespace: "node",
-              fieldKey: "owners.role",
+              field: "owners.role",
               message: "Expected string, got: boolean",
             },
           ],
@@ -834,9 +847,9 @@ describe("processChangesetInput", () => {
           ],
           [
             {
-              changesetIndex: 0,
+              index: 0,
               namespace: "config",
-              fieldKey: "default",
+              field: "default",
               message: expect.stringContaining(
                 "default value does not match dataType 'integer'",
               ),
@@ -858,9 +871,9 @@ describe("processChangesetInput", () => {
           ],
           [
             {
-              changesetIndex: 0,
+              index: 0,
               namespace: "config",
-              fieldKey: "fields.title.default",
+              field: "fields.title.default",
               message: expect.stringContaining(
                 "default value does not match dataType 'string'",
               ),
@@ -897,9 +910,9 @@ describe("processChangesetInput", () => {
           ],
           [
             {
-              changesetIndex: 0,
+              index: 0,
               namespace: "config",
-              fieldKey: "default",
+              field: "default",
               message: expect.stringContaining(
                 "Invalid option value: invalid. Expected one of: a, b",
               ),
@@ -908,6 +921,130 @@ describe("processChangesetInput", () => {
           "config",
         );
       });
+    });
+  });
+
+  describe("relation key resolution", () => {
+    const mockUserKey = "user-rick" as NodeKey;
+    const mockTeamNode = {
+      id: 100 as EntityId,
+      uid: mockTaskWithOwnersUid,
+      type: mockTeamTypeKey,
+      members: [],
+    };
+
+    const check = async (
+      inputs: EntityChangesetInput<any>[],
+      expectedField: string,
+      expectedValue: NodeUid | NodeUid[],
+    ) => {
+      const result = throwIfError(await process(inputs));
+      const nodeUids = Object.keys(result) as NodeUid[];
+      const nodeChangeset = result[nodeUids[0]!];
+      expect(nodeChangeset[expectedField]).toEqual(expectedValue);
+    };
+
+    it("resolves relation keys to UIDs in node changesets", async () => {
+      await db.transaction(async (tx) => {
+        await createEntity(tx, "node", mockProjectNode);
+        await saveTransaction(tx, mockTransactionInit);
+      });
+
+      await check(
+        [{ type: mockTaskTypeKey, title: "Task", project: mockProjectKey }],
+        "project",
+        mockProjectNode.uid,
+      );
+    });
+
+    it("resolves relation keys to UIDs in array relation fields", async () => {
+      await db.transaction(async (tx) => {
+        await createEntity(tx, "node", { ...mockUserNode, key: mockUserKey });
+        await saveTransaction(tx, mockTransactionInit);
+      });
+
+      await check(
+        [{ type: mockTeamTypeKey, members: [mockUserKey] }],
+        "members",
+        [mockUserUid],
+      );
+    });
+
+    it("resolves relation keys in list mutation insert", async () => {
+      await db.transaction(async (tx) => {
+        await createEntity(tx, "node", { ...mockUserNode, key: mockUserKey });
+        await createEntity(tx, "node", mockTeamNode);
+        await saveTransaction(tx, mockTransactionInit);
+      });
+
+      const result = throwIfError(
+        await process([
+          { $ref: mockTaskWithOwnersUid, members: [["insert", mockUserKey]] },
+        ]),
+      );
+
+      expect(result[mockTaskWithOwnersUid].members).toEqual([
+        "seq",
+        [["insert", mockUserUid]],
+      ]);
+    });
+
+    it("resolves relation keys in tuple format with attributes", async () => {
+      await db.transaction(async (tx) => {
+        await createEntity(tx, "node", { ...mockUserNode, key: mockUserKey });
+        await createEntity(tx, "node", mockTeamNode);
+        await saveTransaction(tx, mockTransactionInit);
+      });
+
+      const result = throwIfError(
+        await process([
+          {
+            $ref: mockTaskWithOwnersUid,
+            members: [["insert", [mockUserKey, { role: "admin" }]]],
+          },
+        ]),
+      );
+
+      expect(result[mockTaskWithOwnersUid].members).toEqual([
+        "seq",
+        [["insert", [mockUserUid, { role: "admin" }]]],
+      ]);
+    });
+
+    it("resolves intra-batch keys in single relation field", async () => {
+      const result = throwIfError(
+        await process([
+          { type: mockProjectTypeKey, key: mockProjectKey, title: "Project" },
+          { type: mockTaskTypeKey, title: "Task", project: mockProjectKey },
+        ]),
+      );
+
+      const projectChangeset = Object.values(result).find(
+        (cs) => cs.key === mockProjectKey,
+      );
+      const taskChangeset = Object.values(result).find(
+        (cs) => cs.title === "Task",
+      );
+
+      expect(taskChangeset!.project).toBe(projectChangeset!.uid);
+    });
+
+    it("resolves intra-batch keys in array relation field", async () => {
+      const result = throwIfError(
+        await process([
+          { type: mockUserTypeKey, key: mockUserKey, name: "Alice" },
+          { type: mockTeamTypeKey, members: [mockUserKey] },
+        ]),
+      );
+
+      const userChangeset = Object.values(result).find(
+        (cs) => cs.key === mockUserKey,
+      );
+      const teamChangeset = Object.values(result).find(
+        (cs) => cs.type === mockTeamTypeKey,
+      );
+
+      expect(teamChangeset!.members).toEqual([userChangeset!.uid as NodeUid]);
     });
   });
 });
