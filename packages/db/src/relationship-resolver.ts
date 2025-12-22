@@ -200,6 +200,7 @@ export const resolveIncludes = async (
     tx: DbTransaction,
     namespace: NamespaceEditable,
     filters: Filters,
+    schema: EntitySchema,
   ) => ResultAsync<Fieldset[]>,
 ): ResultAsync<Fieldset[]> => {
   if (entities.length === 0) return ok(entities);
@@ -231,10 +232,15 @@ export const resolveIncludes = async (
       };
     }
 
-    let relatedEntitiesResult = await searchFn(tx, namespace, {
-      ...nestedFilters,
-      ...relatedFilters,
-    });
+    let relatedEntitiesResult = await searchFn(
+      tx,
+      namespace,
+      {
+        ...nestedFilters,
+        ...relatedFilters,
+      },
+      schema,
+    );
     if (isErr(relatedEntitiesResult)) return relatedEntitiesResult;
 
     if (
@@ -246,7 +252,7 @@ export const resolveIncludes = async (
         ...nestedFilters,
         key: relatedFilters.uid,
       };
-      relatedEntitiesResult = await searchFn(tx, namespace, keyFilters);
+      relatedEntitiesResult = await searchFn(tx, namespace, keyFilters, schema);
       if (isErr(relatedEntitiesResult)) return relatedEntitiesResult;
     }
 

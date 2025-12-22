@@ -3,11 +3,13 @@ import { and, sql, type SQL } from "drizzle-orm";
 import { tableStoredFields, type nodeTable, type configTable } from "./schema";
 import type {
   ComplexFilter,
+  EntitySchema,
   Fieldset,
   FieldValue,
   Filter,
   Filters,
 } from "./model";
+import { getFieldDef } from "./model";
 
 type EntityTable = typeof nodeTable | typeof configTable;
 
@@ -127,11 +129,17 @@ const buildFilterCondition = (
   table: EntityTable,
   fieldKey: string,
   filter: Filter,
+  schema?: EntitySchema,
 ): SQL | undefined => {
   const fieldSql = getFieldSql(table, fieldKey);
   const normalized = normalizeFilter(filter);
+  const fieldDef = schema ? getFieldDef(schema, fieldKey) : undefined;
+  const isMultiValue = fieldDef?.allowMultiple === true;
 
   if (!isComplexNormalized(normalized)) {
+    if (isMultiValue) {
+      return sql`EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE value = ${normalized})`;
+    }
     return sql`${fieldSql} = ${normalized}`;
   }
 
@@ -139,13 +147,25 @@ const buildFilterCondition = (
 
   switch (op) {
     case "eq":
+      if (isMultiValue) {
+        return sql`EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE value = ${value})`;
+      }
       return sql`${fieldSql} = ${value}`;
 
     case "not":
+      if (isMultiValue) {
+        return sql`NOT EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE value = ${value})`;
+      }
       return sql`${fieldSql} != ${value}`;
 
     case "in":
       if (!Array.isArray(value) || value.length === 0) return undefined;
+      if (isMultiValue) {
+        return sql`EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE value IN (${sql.join(
+          value.map((v) => sql`${v}`),
+          sql`, `,
+        )}))`;
+      }
       return sql`${fieldSql} IN (${sql.join(
         value.map((v) => sql`${v}`),
         sql`, `,
@@ -153,6 +173,12 @@ const buildFilterCondition = (
 
     case "notIn":
       if (!Array.isArray(value) || value.length === 0) return undefined;
+      if (isMultiValue) {
+        return sql`NOT EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE value IN (${sql.join(
+          value.map((v) => sql`${v}`),
+          sql`, `,
+        )}))`;
+      }
       return sql`${fieldSql} NOT IN (${sql.join(
         value.map((v) => sql`${v}`),
         sql`, `,
@@ -197,11 +223,12 @@ const buildFilterCondition = (
 export const buildWhereClause = (
   table: EntityTable,
   filters: Filters,
+  schema?: EntitySchema,
 ): SQL | undefined => {
   const conditions: SQL[] = [];
 
   for (const [fieldKey, filter] of Object.entries(filters)) {
-    const condition = buildFilterCondition(table, fieldKey, filter);
+    const condition = buildFilterCondition(table, fieldKey, filter, schema);
     if (condition) conditions.push(condition);
   }
 

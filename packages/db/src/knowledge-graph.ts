@@ -87,13 +87,14 @@ const internalSearch = async (
   tx: DbTransaction,
   namespace: NamespaceEditable,
   filters: Filters,
+  schema: EntitySchema,
 ): ResultAsync<Fieldset[]> => {
   const table = namespace === "config" ? configTable : nodeTable;
   return tryCatch(
     tx
       .select()
       .from(table)
-      .where(buildWhereClause(table, filters))
+      .where(buildWhereClause(table, filters, schema))
       .orderBy(asc(table.id))
       .then((rows) => rows.map((row) => dbModelToEntity(row))),
   );
@@ -258,7 +259,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         }
 
         const table = namespace === "config" ? configTable : nodeTable;
-        const filterClause = buildWhereClause(table, filters);
+        const filterClause = buildWhereClause(table, filters, schema);
 
         const orderClause = before ? desc(table.id) : asc(table.id);
         const paginationClause = after
