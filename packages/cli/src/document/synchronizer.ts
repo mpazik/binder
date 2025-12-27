@@ -336,7 +336,7 @@ export const synchronizeModifiedFiles = async (
 
   const [configResult, nodeResult] = await Promise.all([
     scanNamespace("config", { include: configIncludePatterns }),
-    scanNamespace("node"),
+    scanNamespace("node", { include: config.include, exclude: config.exclude }),
   ]);
 
   if (isErr(configResult)) return configResult;

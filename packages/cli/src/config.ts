@@ -32,6 +32,8 @@ export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 
 export const UserConfigSchema = GlobalConfigSchema.extend({
   docsPath: z.string().default(DEFAULT_DOCS_PATH),
+  include: z.array(z.string()).optional(),
+  exclude: z.array(z.string()).optional(),
   validation: z
     .object({
       rules: z
@@ -104,6 +106,8 @@ export type AppConfig = {
   author: string;
   logLevel?: LogLevel;
   paths: ConfigPaths;
+  include?: string[];
+  exclude?: string[];
   validation?: {
     rules?: Record<string, "error" | "warning" | "info" | "hint" | "off">;
   };
@@ -136,7 +140,8 @@ export const loadWorkspaceConfig = async (
 
   if (isErr(loadedConfig)) return loadedConfig;
 
-  const { docsPath, author, logLevel, validation } = loadedConfig.data;
+  const { docsPath, author, logLevel, include, exclude, validation } =
+    loadedConfig.data;
 
   return ok({
     author: author || globalConfig.author || DEFAULT_AUTHOR,
@@ -146,6 +151,8 @@ export const loadWorkspaceConfig = async (
       binder: join(root, BINDER_DIR),
       docs: join(root, docsPath),
     },
+    include,
+    exclude,
     validation,
   });
 };

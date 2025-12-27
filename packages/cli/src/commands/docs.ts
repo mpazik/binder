@@ -14,7 +14,6 @@ import {
 } from "../document/navigation.ts";
 import {
   getRelativeSnapshotPath,
-  modifiedSnapshots,
   namespaceFromSnapshotPath,
   resolveSnapshotPath,
   snapshotRootForNamespace,
@@ -22,6 +21,7 @@ import {
 import type { ValidationError } from "../validation";
 import { validateDocument } from "../validation";
 import { getDocumentFileType, parseDocument } from "../document/document.ts";
+import { createPathMatcher } from "../utils/file.ts";
 import { types } from "./types.ts";
 
 export const docsRenderHandler: CommandHandlerWithDb = async (context) => {
@@ -89,6 +89,11 @@ const lintNamespace = async <N extends NamespaceEditable>(
   const navigationResult = await loadNavigation(kg, namespace);
   if (isErr(navigationResult)) return navigationResult;
 
+  const shouldInclude =
+    namespace === "node"
+      ? createPathMatcher({ include: config.include, exclude: config.exclude })
+      : () => true;
+
   let errors = 0;
   let warnings = 0;
 
@@ -97,6 +102,8 @@ const lintNamespace = async <N extends NamespaceEditable>(
     if (fileType === undefined) continue;
 
     const relativePath = getRelativeSnapshotPath(filePath, config.paths);
+
+    if (!shouldInclude(relativePath)) continue;
     const navigationItem = findNavigationItemByPath(
       navigationResult.data,
       relativePath,
