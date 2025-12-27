@@ -4,6 +4,7 @@ import {
   coreIdentityFieldKeys,
   type EntityChangesetInput,
   type FieldsetNested,
+  type NamespaceEditable,
   type QueryParams,
 } from "@binder/db";
 import { extractFieldsetFromQuery } from "./query.ts";
@@ -132,11 +133,11 @@ const isFieldsetNested = (value: unknown): value is FieldsetNested =>
 const isQueryParams = (value: unknown): value is QueryParams =>
   typeof value === "object" && value !== null && "filters" in value;
 
-const generateNodeChangeset = (
+const generateChangeset = <N extends NamespaceEditable>(
   newNode: FieldsetNested,
   oldNode?: FieldsetNested,
   parentNode?: FieldsetNested,
-): EntityChangesetInput<"node"> | null => {
+): EntityChangesetInput<N> | null => {
   if (!oldNode) {
     let nodeType = newNode.type;
 
@@ -158,7 +159,7 @@ const generateNodeChangeset = (
       }
     }
 
-    return { type: nodeType, ...fields } as EntityChangesetInput<"node">;
+    return { type: nodeType, ...fields } as EntityChangesetInput<N>;
   }
 
   const changes: Record<string, unknown> = {};
@@ -180,7 +181,7 @@ const generateNodeChangeset = (
   const uid = oldNode.uid;
   if (typeof uid !== "string") return null;
 
-  return { $ref: uid, ...changes } as EntityChangesetInput<"node">;
+  return { $ref: uid, ...changes } as EntityChangesetInput<N>;
 };
 
 type NodeMatchWithParent = NodeMatch & { parentNode?: FieldsetNested };
@@ -188,8 +189,8 @@ type NodeMatchWithParent = NodeMatch & { parentNode?: FieldsetNested };
 export const diffNodeTrees = (
   newTree: FieldsetNested,
   oldTree: FieldsetNested,
-): Result<ChangesetsInput<"node">> => {
-  const changesets: EntityChangesetInput<"node">[] = [];
+): Result<ChangesetsInput> => {
+  const changesets: ChangesetsInput = [];
   const queue: NodeMatchWithParent[] = [
     { newNode: newTree, oldNode: oldTree, similarity: 1 },
   ];
@@ -198,7 +199,7 @@ export const diffNodeTrees = (
     const match = queue.shift()!;
     const { newNode, oldNode, parentNode } = match;
 
-    const changeset = generateNodeChangeset(newNode, oldNode, parentNode);
+    const changeset = generateChangeset(newNode, oldNode, parentNode);
     if (changeset) {
       changesets.push(changeset);
     }
@@ -253,12 +254,12 @@ export const diffNodeTrees = (
 export const diffNodeLists = (
   newNodes: FieldsetNested[],
   oldNodes: FieldsetNested[],
-): Result<ChangesetsInput<"node">> => {
-  const changesets: EntityChangesetInput<"node">[] = [];
+): Result<ChangesetsInput> => {
+  const changesets: ChangesetsInput = [];
   const matches = matchNodes(newNodes, oldNodes);
 
   for (const match of matches) {
-    const changeset = generateNodeChangeset(match.newNode, match.oldNode);
+    const changeset = generateChangeset(match.newNode, match.oldNode);
     if (changeset) {
       changesets.push(changeset);
     }

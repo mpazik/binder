@@ -1,27 +1,42 @@
 import type {
+  ChangesetsInput,
   EntitySchema,
   Fieldset,
   FieldsetNested,
   KnowledgeGraph,
   NamespaceEditable,
-  NodeSchema,
   TransactionId,
   TransactionInput,
 } from "@binder/db";
-import { createError, err, isErr, ok, type ResultAsync } from "@binder/utils";
+import {
+  createError,
+  err,
+  fail,
+  isErr,
+  ok,
+  type ResultAsync,
+} from "@binder/utils";
 import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { diffNodeLists, diffNodeTrees } from "../utils/node-diff.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import {
+  modifiedSnapshots,
+  namespaceFromSnapshotPath,
   resolveSnapshotPath,
+  snapshotRootForNamespace,
   type SnapshotChangeMetadata,
 } from "../lib/snapshot.ts";
+import type { DatabaseCli } from "../db";
 import { type AppConfig } from "../config.ts";
+import type { MatchOptions } from "../utils/file.ts";
 import {
+  CONFIG_NAVIGATION_ITEMS,
   DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
+  getNavigationFilePatterns,
   getPathTemplate,
+  loadNavigation,
   type NavigationItem,
 } from "./navigation.ts";
 import { parseMarkdown, parseView } from "./markdown.ts";
@@ -219,24 +234,22 @@ const extractFromFile = async (
   return ok({ ...extracted.data, file: normalizedFile.data });
 };
 
-export const synchronizeFile = async (
+export const synchronizeFile = async <N extends NamespaceEditable>(
   fs: FileSystem,
   kg: KnowledgeGraph,
   config: AppConfig,
   navigationItems: NavigationItem[],
   schema: EntitySchema,
   relativePath: string,
-  namespace: NamespaceEditable = "node",
+  namespace: N,
   _txVersion?: TransactionId, // we should later use it to fetch data for a given version for fair comparison
-): ResultAsync<TransactionInput | null> => {
+): ResultAsync<ChangesetsInput<N>> => {
   const navItem = findNavigationItemByPath(navigationItems, relativePath);
   if (!navItem) {
-    return err(
-      createError(
-        "yaml_file_not_found",
-        "YAML file not found in navigation config",
-        { path: relativePath },
-      ),
+    return fail(
+      "navigation_item_not_found",
+      "Not found item in navigation config for the path",
+      { path: relativePath },
     );
   }
 
@@ -263,30 +276,21 @@ export const synchronizeFile = async (
   if (isErr(extractResult)) return extractResult;
 
   const data = extractResult.data;
-  const diffResult =
-    data.kind === "single"
-      ? diffNodeTrees(data.file, data.kg)
-      : diffNodeLists(data.file, data.kg);
-  if (isErr(diffResult)) return diffResult;
-
-  if (diffResult.data.length === 0) return ok(null);
-
-  return ok({
-    author: config.author,
-    nodes: diffResult.data,
-  });
+  return data.kind === "single"
+    ? diffNodeTrees(data.file, data.kg)
+    : diffNodeLists(data.file, data.kg);
 };
 
-export const synchronizeModifiedFiles = async (
+const synchronizeNamespaceFiles = async <N extends NamespaceEditable>(
   fs: FileSystem,
   kg: KnowledgeGraph,
   config: AppConfig,
   navigationItems: NavigationItem[],
-  schema: NodeSchema,
+  schema: EntitySchema,
   modifiedFiles: SnapshotChangeMetadata[],
-  namespace: NamespaceEditable = "node",
-): ResultAsync<TransactionInput | null> => {
-  const allNodes: TransactionInput["nodes"] = [];
+  namespace: N,
+): ResultAsync<ChangesetsInput<N>> => {
+  const changesets: ChangesetsInput<N> = [];
 
   for (const file of modifiedFiles) {
     const syncResult = await synchronizeFile(
@@ -300,17 +304,90 @@ export const synchronizeModifiedFiles = async (
     );
     if (isErr(syncResult)) return syncResult;
 
-    if (syncResult.data?.nodes) {
-      allNodes.push(...syncResult.data.nodes);
-    }
+    changesets.push(...syncResult.data);
   }
 
-  if (allNodes.length === 0) {
-    return ok(null);
-  }
+  return ok(changesets);
+};
+
+export const synchronizeModifiedFiles = async (
+  db: DatabaseCli,
+  fs: FileSystem,
+  kg: KnowledgeGraph,
+  config: AppConfig,
+  scopePath?: string,
+): ResultAsync<TransactionInput | null> => {
+  const scopeAbsolute = scopePath
+    ? resolveSnapshotPath(scopePath, config.paths)
+    : null;
+  const scopeNamespace = scopeAbsolute
+    ? namespaceFromSnapshotPath(scopeAbsolute, config.paths)
+    : null;
+
+  const scanNamespace = (ns: NamespaceEditable, options?: MatchOptions) => {
+    if (scopeNamespace && scopeNamespace !== ns) return ok([]);
+    const path = scopeAbsolute ?? snapshotRootForNamespace(ns, config.paths);
+    return modifiedSnapshots(db, fs, config.paths, path, options);
+  };
+
+  const configIncludePatterns = getNavigationFilePatterns(
+    CONFIG_NAVIGATION_ITEMS,
+  );
+
+  const [configResult, nodeResult] = await Promise.all([
+    scanNamespace("config", { include: configIncludePatterns }),
+    scanNamespace("node"),
+  ]);
+
+  if (isErr(configResult)) return configResult;
+  if (isErr(nodeResult)) return nodeResult;
+  const configFiles = configResult.data;
+  const nodeFiles = nodeResult.data;
+
+  if (configFiles.length === 0 && nodeFiles.length === 0) return ok(null);
+
+  const configSchema = kg.getConfigSchema();
+  const nodeSchemaResult = await kg.getNodeSchema();
+  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+
+  const configNavigationResult = await loadNavigation(kg, "config");
+  if (isErr(configNavigationResult)) return configNavigationResult;
+
+  const nodeNavigationResult = await loadNavigation(kg, "node");
+  if (isErr(nodeNavigationResult)) return nodeNavigationResult;
+
+  const [configsResult, nodesResult] = await Promise.all([
+    synchronizeNamespaceFiles(
+      fs,
+      kg,
+      config,
+      configNavigationResult.data,
+      configSchema,
+      configFiles,
+      "config",
+    ),
+    synchronizeNamespaceFiles(
+      fs,
+      kg,
+      config,
+      nodeNavigationResult.data,
+      nodeSchemaResult.data,
+      nodeFiles,
+      "node",
+    ),
+  ]);
+
+  if (isErr(configsResult)) return configsResult;
+  if (isErr(nodesResult)) return nodesResult;
+
+  const configs = configsResult.data;
+  const nodes = nodesResult.data;
+
+  if (configs.length === 0 && nodes.length === 0) return ok(null);
 
   return ok({
     author: config.author,
-    nodes: allNodes,
+    nodes,
+    configurations: configs,
   });
 };

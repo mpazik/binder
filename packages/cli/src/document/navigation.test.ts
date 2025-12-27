@@ -32,6 +32,7 @@ import {
   DEFAULT_DYNAMIC_VIEW,
   findEntityLocation,
   findNavigationItemByPath,
+  getNavigationFilePatterns,
   loadNavigation,
   type NavigationItem,
   renderNavigation,
@@ -555,6 +556,24 @@ describe("navigation", () => {
         filePath: `${paths.docs}/tasks/${mockTask1Node.title}.md`,
         line: 0,
       });
+    });
+  });
+
+  describe("getNavigationFilePatterns", () => {
+    it("converts path templates to glob patterns", () => {
+      const items: NavigationItem[] = [
+        { path: "tasks/{title}", view: DEFAULT_DYNAMIC_VIEW },
+        { path: "projects/{parent.title}/{uid}", view: DEFAULT_DYNAMIC_VIEW },
+        { path: "static/file", view: DEFAULT_DYNAMIC_VIEW },
+        { path: "dirs/{name}/" },
+      ];
+      const patterns = getNavigationFilePatterns(items);
+      expect(patterns).toEqual([
+        "tasks/*.md",
+        "projects/*/*.md",
+        "static/file.md",
+        "dirs/*/",
+      ]);
     });
   });
 });

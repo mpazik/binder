@@ -36,34 +36,12 @@ export const docsRenderHandler: CommandHandlerWithDb = async (context) => {
 export const docsSyncHandler: CommandHandlerWithDb<{
   path?: string;
 }> = async ({ kg, fs, ui, config, args, db }) => {
-  const navigationResult = await loadNavigation(kg);
-  if (isErr(navigationResult)) return navigationResult;
-
-  const scopePath = resolveSnapshotPath(args.path, config.paths);
-  const modifiedFilesResult = await modifiedSnapshots(
-    db,
-    fs,
-    config.paths,
-    scopePath,
-  );
-  if (isErr(modifiedFilesResult)) return modifiedFilesResult;
-
-  const actionableFiles = modifiedFilesResult.data.filter(
-    (file) => file.type === "untracked" || file.type === "updated",
-  );
-
-  if (actionableFiles.length === 0) {
-    ui.println("No changes detected");
-    return ok(undefined);
-  }
-
   const syncResult = await synchronizeModifiedFiles(
+    db,
     fs,
     kg,
     config,
-    navigationResult.data,
-    { fields: {}, types: {} },
-    actionableFiles,
+    args.path,
   );
   if (isErr(syncResult)) return syncResult;
 
@@ -75,11 +53,15 @@ export const docsSyncHandler: CommandHandlerWithDb<{
   const updateResult = await kg.update(syncResult.data);
   if (isErr(updateResult)) return updateResult;
 
+  const changeCount =
+    (syncResult.data.nodes?.length ?? 0) +
+    (syncResult.data.configurations?.length ?? 0);
+
   ui.block(() => {
     ui.printTransaction(updateResult.data);
   });
   ui.success(
-    `Synchronized ${actionableFiles.length} file${actionableFiles.length === 1 ? "" : "s"}`,
+    `Synchronized ${changeCount} change${changeCount === 1 ? "" : "s"}`,
   );
   return ok(undefined);
 };

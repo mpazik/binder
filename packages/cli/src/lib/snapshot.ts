@@ -15,6 +15,7 @@ import {
 import type { DatabaseCli } from "../db";
 import { cliSnapshotMetadataTable } from "../db/schema.ts";
 import { BINDER_DIR, type ConfigPaths } from "../config.ts";
+import { createPathMatcher, type MatchOptions } from "../utils/file.ts";
 import type { FileSystem } from "./filesystem.ts";
 
 export type SnapshotMetadata = {
@@ -125,6 +126,7 @@ export const modifiedSnapshots = async (
   fs: FileSystem,
   paths: ConfigPaths,
   scopePath: string = paths.docs,
+  options: MatchOptions = {},
 ): ResultAsync<SnapshotChangeMetadata[]> => {
   const snapshotMetadataResult = getSnapshotMetadata(db, undefined);
   if (isErr(snapshotMetadataResult)) return snapshotMetadataResult;
@@ -132,11 +134,15 @@ export const modifiedSnapshots = async (
 
   const metadataByPath = new Map(snapshotMetadata.map((m) => [m.path, m]));
   const seenPaths = new Set<string>();
+  const shouldInclude = createPathMatcher(options);
 
   const checkFile = async (
     absolutePath: string,
   ): ResultAsync<SnapshotChangeMetadata | null> => {
     const snapshotPath = getRelativeSnapshotPath(absolutePath, paths);
+
+    if (!shouldInclude(snapshotPath)) return ok(null);
+
     seenPaths.add(snapshotPath);
     const metadata = metadataByPath.get(snapshotPath);
 
@@ -183,8 +189,15 @@ export const modifiedSnapshots = async (
   const removedFiles: SnapshotChangeMetadata[] = [];
   for (const metadata of snapshotMetadata) {
     if (seenPaths.has(metadata.path)) continue;
+    if (!shouldInclude(metadata.path)) continue;
 
-    if (metadata.path.startsWith(scopePrefix)) {
+    // When scopePrefix is empty (docs root), exclude config files
+    const isInScope =
+      scopePrefix === ""
+        ? !metadata.path.startsWith(BINDER_DIR)
+        : metadata.path.startsWith(scopePrefix);
+
+    if (isInScope) {
       removedFiles.push({
         type: "removed",
         path: metadata.path,

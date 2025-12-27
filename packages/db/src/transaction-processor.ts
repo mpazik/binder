@@ -53,7 +53,7 @@ export const processTransactionInput = async (
   const configurationsResult = await processChangesetInput(
     tx,
     "config",
-    (input.configurations ?? []) as ChangesetsInput<"config">,
+    (input.configurations ?? []) as ChangesetsInput,
     configSchema,
     lastConfigIdResult.data,
   );
@@ -64,7 +64,7 @@ export const processTransactionInput = async (
   const nodesResult = await processChangesetInput(
     tx,
     "node",
-    (input.nodes ?? []) as ChangesetsInput<"node">,
+    (input.nodes ?? []) as ChangesetsInput,
     applyConfigChangesetToSchema(nodeSchema, configurationsResult.data),
     lastNodeIdResult.data,
   );

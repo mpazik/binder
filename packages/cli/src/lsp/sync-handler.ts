@@ -44,17 +44,22 @@ export const handleDocumentSave = async (
   );
   if (isErr(syncResult)) return syncResult;
 
-  if (syncResult.data === null) {
+  if (syncResult.data.length === 0) {
     log.debug("No changes to sync", { relativePath });
     return ok(undefined);
   }
 
-  const applyResult = await kg.update(syncResult.data);
+  const transactionInput =
+    namespace === "config"
+      ? { author: config.author, configs: syncResult.data }
+      : { author: config.author, nodes: syncResult.data };
+
+  const applyResult = await kg.update(transactionInput);
   if (isErr(applyResult)) return applyResult;
 
   log.info("File synced successfully", {
     relativePath,
-    nodeCount: syncResult.data.nodes?.length ?? 0,
+    changeCount: syncResult.data.length,
   });
 
   return ok(undefined);

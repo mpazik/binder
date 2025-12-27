@@ -89,6 +89,13 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
   },
 ];
 
+export const getNavigationFilePatterns = (items: NavigationItem[]): string[] =>
+  items.map((item) => {
+    const template = getPathTemplate(item);
+    const result = interpolateAncestralFields(template, () => "*");
+    return isErr(result) ? template : result.data;
+  });
+
 export const loadNavigation = async (
   kg: KnowledgeGraph,
   namespace: NamespaceEditable = "node",

@@ -3,6 +3,7 @@ import * as ui from "./ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 import { getTestDatabaseCli } from "./db/db.mock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
+import { BINDER_DIR } from "./config.ts";
 import type { AppConfig } from "./config.ts";
 import type { RuntimeContextWithDb, RuntimeContext } from "./runtime.ts";
 
@@ -10,7 +11,7 @@ export const mockConfig: AppConfig = {
   author: "test-user",
   paths: {
     root: "/test",
-    binder: "/test/.binder",
+    binder: `/test/${BINDER_DIR}`,
     docs: "/test/docs",
   },
 };

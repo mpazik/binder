@@ -82,7 +82,7 @@ export type EntityChangesetInput<N extends NamespaceEditable> =
   | EntityUpdate<N>
   | EntityCreate<N>;
 
-export type ChangesetsInput<N extends NamespaceEditable> =
+export type ChangesetsInput<N extends NamespaceEditable = NamespaceEditable> =
   EntityChangesetInput<N>[];
 
 export const changesetInputForNewEntity = <N extends NamespaceEditable>(
