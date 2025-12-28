@@ -35,8 +35,9 @@ export const createDocumentCache = (log: Logger): DocumentCache => {
     const cached = cache.get(key);
     if (cached) {
       hits++;
-      log.debug("Document cache hit", { uri, version, hits, misses });
       return cached.parsed;
+    } else {
+      log.debug("Document cache miss", { uri, version, hits, misses });
     }
 
     const filePath = fileURLToPath(uri);

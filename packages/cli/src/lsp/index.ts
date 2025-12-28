@@ -1,21 +1,10 @@
 import { fileURLToPath } from "node:url";
 import {
-  type CodeAction,
   CodeActionKind,
-  type CodeActionParams,
-  type CompletionItem,
-  type CompletionParams,
   type Connection,
   createConnection,
-  type DefinitionParams,
-  type Diagnostic,
-  DiagnosticSeverity,
-  type DocumentDiagnosticReport,
   ErrorCodes,
-  type Hover,
-  type HoverParams,
   type InitializeParams,
-  type Location,
   ProposedFeatures,
   ResponseError,
   TextDocuments,
@@ -31,20 +20,7 @@ import {
 } from "../runtime.ts";
 import { setupCleanupHandlers } from "../lib/lock.ts";
 import type { Logger } from "../log.ts";
-import {
-  validateDocument,
-  type ValidationError,
-  type ValidationSeverity,
-} from "../validation";
-import {
-  findNavigationItemByPath,
-  loadNavigation,
-} from "../document/navigation.ts";
 import { BINDER_VERSION } from "../build-time.ts";
-import {
-  getRelativeSnapshotPath,
-  namespaceFromSnapshotPath,
-} from "../lib/snapshot.ts";
 import { handleDocumentSave } from "./sync-handler.ts";
 import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
 import { handleHover } from "./hover.ts";
@@ -52,6 +28,8 @@ import { handleCompletion } from "./completion.ts";
 import { handleCodeAction } from "./code-actions.ts";
 import { handleInlayHints } from "./inlay-hints.ts";
 import { handleDefinition } from "./definition.ts";
+import { handleDiagnostics } from "./diagnostics.ts";
+import { withDocumentContext } from "./lsp-utils.ts";
 
 const throwLspError = (
   error: ErrorObject,
@@ -66,30 +44,6 @@ const throwLspError = (
     error,
   );
 };
-
-const severityToDiagnosticSeverity: Record<
-  ValidationSeverity,
-  DiagnosticSeverity
-> = {
-  error: DiagnosticSeverity.Error,
-  warning: DiagnosticSeverity.Warning,
-  info: DiagnosticSeverity.Information,
-  hint: DiagnosticSeverity.Hint,
-};
-
-const EMPTY_DIAGNOSTICS: DocumentDiagnosticReport = {
-  kind: "full",
-  items: [],
-} as const;
-
-const validationErrorToDiagnostic = (error: ValidationError): Diagnostic => ({
-  range: error.range,
-  severity: severityToDiagnosticSeverity[error.severity],
-  message: error.message,
-  source: "binder",
-  code: error.code,
-  data: error.data,
-});
 
 export const createLspServer = (
   minimalContext: RuntimeContextInit,
@@ -196,8 +150,7 @@ export const createLspServer = (
 
   connection.onShutdown(() => {
     log.info("LSP server shutdown requested");
-    const stats = documentCache.getStats();
-    log.info("Document cache stats", stats);
+    log.info("Document cache stats", documentCache.getStats());
     shutdownReceived = true;
     return undefined;
   });
@@ -238,147 +191,38 @@ export const createLspServer = (
     }
   });
 
-  connection.languages.diagnostics.on(async (params) => {
-    log.info("Diagnostic request received", { uri: params.textDocument.uri });
-
-    if (!runtime) {
-      log.warn("Runtime not initialized, returning empty diagnostics");
-      return EMPTY_DIAGNOSTICS;
-    }
-    const { kg, config, fs } = runtime;
-
-    const uri = params.textDocument.uri;
-    const document = lspDocuments.get(uri);
-
-    if (!document) {
-      log.warn("Document not found", { uri });
-      return EMPTY_DIAGNOSTICS;
-    }
-
-    const content = documentCache.getParsed(document);
-    if (!content) {
-      log.debug("Document type not supported", { uri });
-      return EMPTY_DIAGNOSTICS;
-    }
-
-    const filePath = fileURLToPath(uri);
-    log.debug("validateDocument called", { filePath });
-    const ruleConfig = config.validation?.rules ?? {};
-
-    const namespace = namespaceFromSnapshotPath(filePath, config.paths);
-    if (namespace === undefined) {
-      log.debug("Document from outside binder directories", { filePath });
-      return EMPTY_DIAGNOSTICS;
-    }
-    const schemaResult = await runtime.kg.getSchema(namespace);
-    if (isErr(schemaResult)) {
-      log.error("Failed to load schema", schemaResult.error);
-      return EMPTY_DIAGNOSTICS;
-    }
-
-    const navigationResult = await loadNavigation(kg, namespace);
-    if (isErr(navigationResult)) {
-      log.error("Failed to load navigation", navigationResult.error);
-      return EMPTY_DIAGNOSTICS;
-    }
-
-    const relativePath = getRelativeSnapshotPath(filePath, config.paths);
-    log.debug("Resolved relative path", { filePath, relativePath });
-
-    const navigationItem = findNavigationItemByPath(
-      navigationResult.data,
-      relativePath,
-    );
-
-    if (!navigationItem) {
-      log.debug("No navigation item found", { filePath, relativePath });
-      return EMPTY_DIAGNOSTICS;
-    }
-
-    const validationResult = await validateDocument(content, {
-      filePath,
-      navigationItem,
-      namespace,
-      schema: schemaResult.data,
-      ruleConfig,
-      kg,
-    });
-
-    const diagnostics = [
-      ...validationResult.errors,
-      ...validationResult.warnings,
-    ].map(validationErrorToDiagnostic);
-
-    log.info("Returning diagnostics", {
-      filePath,
-      errorCount: validationResult.errors.length,
-      warningCount: validationResult.warnings.length,
-    });
-
-    return {
-      kind: "full",
-      items: diagnostics,
-    };
-  });
+  const deps = {
+    lspDocuments,
+    documentCache,
+    runtime,
+    log,
+  };
 
   connection.onCompletion(
-    async (params: CompletionParams): Promise<CompletionItem[]> => {
-      log.debug("Completion request received", {
-        uri: params.textDocument.uri,
-      });
-      if (!runtime) return [];
-      return handleCompletion(
-        params,
-        lspDocuments,
-        documentCache,
-        runtime,
-        log,
-      );
-    },
+    withDocumentContext("Completion", deps, handleCompletion),
   );
 
-  connection.onHover(async (params: HoverParams): Promise<Hover | null> => {
-    log.debug("Hover request received", { uri: params.textDocument.uri });
-    if (!runtime) return null;
-    return handleHover(params, lspDocuments, documentCache, runtime, log);
-  });
+  connection.onHover(withDocumentContext("Hover", deps, handleHover));
 
   connection.onDefinition(
-    async (params: DefinitionParams): Promise<Location | null> => {
-      log.debug("Definition request received", {
-        uri: params.textDocument.uri,
-      });
-      if (!runtime) return null;
-      return handleDefinition(
-        params,
-        lspDocuments,
-        documentCache,
-        runtime,
-        log,
-      );
-    },
+    withDocumentContext("Definition", deps, handleDefinition),
   );
 
   connection.onCodeAction(
-    async (params: CodeActionParams): Promise<CodeAction[]> => {
-      log.debug("Code action request received", {
-        uri: params.textDocument.uri,
-      });
-      if (!runtime) return [];
-      return handleCodeAction(
-        params,
-        lspDocuments,
-        documentCache,
-        runtime,
-        log,
-      );
-    },
+    withDocumentContext("Code action", deps, handleCodeAction),
   );
 
-  connection.languages.inlayHint.on(async (params) => {
-    log.debug("Inlay hints request received", { uri: params.textDocument.uri });
-    if (!runtime) return [];
-    return handleInlayHints(params, lspDocuments, documentCache, runtime, log);
+  connection.languages.inlayHint.on(
+    withDocumentContext("Inlay hints", deps, handleInlayHints),
+  );
+
+  connection.languages.diagnostics.on(async (params) => {
+    const result = await withDocumentContext(
+      "Diagnostics",
+      deps,
+      handleDiagnostics,
+    )(params);
+    return result ?? { kind: "full", items: [] };
   });
 
   lspDocuments.listen(connection);

@@ -1,5 +1,4 @@
 import type { DefinitionParams, Location } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
 import { isScalar } from "yaml";
 import { isErr } from "@binder/utils";
 import type { Fieldset } from "@binder/db";
@@ -8,14 +7,16 @@ import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedYaml } from "../document/yaml-cst.ts";
 import { getPositionContext } from "../document/yaml-cst.ts";
 import { findEntityLocation, loadNavigation } from "../document/navigation.ts";
-import type { DocumentCache } from "./document-cache.ts";
-import { getDocumentContext, lspPositionToYamlPosition } from "./lsp-utils.ts";
+import {
+  type DocumentContext,
+  lspPositionToYamlPosition,
+  type LspHandler,
+} from "./lsp-utils.ts";
 
 const isRelationField = (
   fieldKey: string,
-  context: Awaited<ReturnType<typeof getDocumentContext>>,
+  context: DocumentContext,
 ): boolean => {
-  if (!context) return false;
   const fieldDef = context.schema.fields[fieldKey];
   return fieldDef?.dataType === "relation";
 };
@@ -36,31 +37,10 @@ const extractReferenceValue = (
   return undefined;
 };
 
-type LspDocuments = {
-  get: (uri: string) => TextDocument | undefined;
-};
-
-export const handleDefinition = async (
-  params: DefinitionParams,
-  lspDocuments: LspDocuments,
-  documentCache: DocumentCache,
-  runtime: RuntimeContextWithDb,
-  log: Logger,
-): Promise<Location | null> => {
-  const document = lspDocuments.get(params.textDocument.uri);
-  if (!document) {
-    log.debug("Document not found for definition", {
-      uri: params.textDocument.uri,
-    });
-    return null;
-  }
-
-  const context = await getDocumentContext(document, documentCache, runtime);
-  if (!context) {
-    log.debug("No document context for definition");
-    return null;
-  }
-
+export const handleDefinition: LspHandler<
+  DefinitionParams,
+  Location | null
+> = async (params, { document, context, runtime, log }) => {
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
     log.debug("Not a YAML document");

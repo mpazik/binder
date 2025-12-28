@@ -1,10 +1,8 @@
 import type {
   CompletionItem,
   CompletionParams,
-  TextDocuments,
 } from "vscode-languageserver/node";
 import { CompletionItemKind } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
 import { isMap } from "yaml";
 import type {
   EntitySchema,
@@ -22,11 +20,10 @@ import {
   getParentMap,
   getPositionContext,
 } from "../document/yaml-cst.ts";
-import type { DocumentCache } from "./document-cache.ts";
 import {
   getAllowedFields,
-  getDocumentContext,
   lspPositionToYamlPosition,
+  type LspHandler,
 } from "./lsp-utils.ts";
 
 const createFieldNameCompletions = (
@@ -136,27 +133,10 @@ const createValueCompletions = async (
   return [];
 };
 
-export const handleCompletion = async (
-  params: CompletionParams,
-  lspDocuments: TextDocuments<TextDocument>,
-  documentCache: DocumentCache,
-  runtime: RuntimeContextWithDb,
-  log: Logger,
-): Promise<CompletionItem[]> => {
-  const document = lspDocuments.get(params.textDocument.uri);
-  if (!document) {
-    log.debug("Document not found for completion", {
-      uri: params.textDocument.uri,
-    });
-    return [];
-  }
-
-  const context = await getDocumentContext(document, documentCache, runtime);
-  if (!context) {
-    log.debug("No document context for completion");
-    return [];
-  }
-
+export const handleCompletion: LspHandler<
+  CompletionParams,
+  CompletionItem[]
+> = async (params, { document, context, runtime, log }) => {
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
     log.debug("Not a YAML document");

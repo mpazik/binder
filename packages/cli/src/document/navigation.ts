@@ -475,3 +475,35 @@ export const findEntityLocation = async (
   const line = findEntityInYamlList(contentResult.data, entityKey, entityUid);
   return ok({ filePath, line });
 };
+
+export type NavigationLoader = (
+  namespace?: NamespaceEditable,
+) => ResultAsync<NavigationItem[]>;
+export type NavigationCache = {
+  load: NavigationLoader;
+  invalidate: () => void;
+};
+
+export const createNavigationCache = (kg: KnowledgeGraph): NavigationCache => {
+  const cache: Record<NamespaceEditable, NavigationItem[] | null> = {
+    node: null,
+    config: null,
+  };
+
+  return {
+    load: async (namespace = "node") => {
+      const cached = cache[namespace];
+      if (cached) return ok(cached);
+
+      const result = await loadNavigation(kg, namespace);
+      if (isErr(result)) return result;
+
+      cache[namespace] = result.data;
+      return result;
+    },
+    invalidate: () => {
+      // config navigation items are hardcoded
+      cache.node = null;
+    },
+  };
+};

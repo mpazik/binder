@@ -4,19 +4,16 @@ import type {
   Diagnostic,
   Position,
   Range,
-  TextDocuments,
 } from "vscode-languageserver/node";
 import { CodeActionKind, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { FieldAttrDef, FieldDef } from "@binder/db";
 import { findSimilar } from "@binder/utils";
-import type { Logger } from "../log.ts";
-import type { RuntimeContextWithDb } from "../runtime.ts";
-import type { DocumentCache } from "./document-cache.ts";
 import {
+  type DocumentContext,
   getAllowedFields,
-  getDocumentContext,
   getFieldDefForType,
+  type LspHandler,
 } from "./lsp-utils.ts";
 
 const getDefaultValue = (fieldDef: FieldDef, attrs?: FieldAttrDef): string => {
@@ -131,10 +128,8 @@ const createRemoveFieldAction = (
 const createAddFieldAction = (
   diagnostic: Diagnostic,
   document: TextDocument,
-  context: Awaited<ReturnType<typeof getDocumentContext>>,
+  context: DocumentContext,
 ): CodeAction | undefined => {
-  if (!context) return undefined;
-
   const data = diagnostic.data as { fieldKey?: string } | undefined;
   if (!data?.fieldKey) return undefined;
 
@@ -163,27 +158,10 @@ const createAddFieldAction = (
   };
 };
 
-export const handleCodeAction = async (
-  params: CodeActionParams,
-  lspDocuments: TextDocuments<TextDocument>,
-  documentCache: DocumentCache,
-  runtime: RuntimeContextWithDb,
-  log: Logger,
-): Promise<CodeAction[]> => {
-  const document = lspDocuments.get(params.textDocument.uri);
-  if (!document) {
-    log.debug("Document not found for code action", {
-      uri: params.textDocument.uri,
-    });
-    return [];
-  }
-
-  const context = await getDocumentContext(document, documentCache, runtime);
-  if (!context) {
-    log.debug("No document context for code action");
-    return [];
-  }
-
+export const handleCodeAction: LspHandler<CodeActionParams, CodeAction[]> = (
+  params,
+  { document, context, log },
+) => {
   const actions: CodeAction[] = [];
   const diagnostics = params.context.diagnostics;
 

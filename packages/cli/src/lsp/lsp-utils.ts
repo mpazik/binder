@@ -1,9 +1,11 @@
 import type {
   Position as LspPosition,
   Range as LspRange,
+  TextDocumentIdentifier,
+  TextDocuments,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import { isMap, isPair, isScalar, type LineCounter } from "yaml";
+import { type LineCounter } from "yaml";
 import type {
   EntitySchema,
   FieldAttrDef,
@@ -20,15 +22,71 @@ import {
   isFieldInSchema,
 } from "@binder/db";
 import { isErr } from "@binder/utils";
+import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedDocument } from "../document/document.ts";
-import type { NavigationItem } from "../document/navigation.ts";
-import { namespaceFromSnapshotPath } from "../lib/snapshot.ts";
 import {
-  type ParsedYaml,
-  type Position as YamlPosition,
-} from "../document/yaml-cst.ts";
+  type NavigationItem,
+  findNavigationItemByPath,
+} from "../document/navigation.ts";
+import {
+  getRelativeSnapshotPath,
+  namespaceFromSnapshotPath,
+} from "../lib/snapshot.ts";
+import { getTypeFromFilters } from "../utils/query.ts";
+import { type Position as YamlPosition } from "../document/yaml-cst.ts";
 import type { DocumentCache } from "./document-cache.ts";
+
+type LspParams = { textDocument: TextDocumentIdentifier };
+
+type LspHandlerDeps = {
+  document: TextDocument;
+  context: DocumentContext;
+  runtime: RuntimeContextWithDb;
+  log: Logger;
+};
+
+export type LspHandler<TParams extends LspParams, TResult> = (
+  params: TParams,
+  deps: LspHandlerDeps,
+) => TResult | Promise<TResult>;
+
+type WithDocumentContextDeps = {
+  lspDocuments: TextDocuments<TextDocument>;
+  documentCache: DocumentCache;
+  runtime: RuntimeContextWithDb | null;
+  log: Logger;
+};
+
+export const withDocumentContext =
+  <TParams extends LspParams, TResult>(
+    requestName: string,
+    deps: WithDocumentContextDeps,
+    handler: LspHandler<TParams, TResult>,
+  ) =>
+  async (params: TParams): Promise<TResult | null> => {
+    const { lspDocuments, documentCache, runtime, log } = deps;
+
+    log.debug(`${requestName} request received`, {
+      uri: params.textDocument.uri,
+    });
+
+    if (!runtime) return null;
+
+    const document = lspDocuments.get(params.textDocument.uri);
+    if (!document) {
+      log.warn("Document not found", { uri: params.textDocument.uri });
+      return null;
+    }
+
+    const context = await getDocumentContext(document, documentCache, runtime);
+    if (!context) {
+      log.warn("No document context", { uri: params.textDocument.uri });
+      return null;
+    }
+
+    return handler(params, { document, context, runtime, log });
+  };
 
 export type DocumentContext = {
   document: TextDocument;
@@ -98,24 +156,17 @@ export const lspPositionToYamlPosition = (
   };
 };
 
-const extractTypeFromYaml = (
-  parsed: ParsedYaml,
+const extractTypeFromNavigation = (
+  navigationItem: NavigationItem,
   schema: EntitySchema,
 ): TypeDef | undefined => {
-  const { doc } = parsed;
-  if (!doc.contents || !isMap(doc.contents)) return undefined;
+  const filters = navigationItem.query?.filters ?? navigationItem.where;
+  if (!filters) return undefined;
 
-  for (const item of doc.contents.items) {
-    if (isPair(item) && isScalar(item.key)) {
-      const key = String(item.key.value);
-      if (key === "type" && isScalar(item.value)) {
-        const typeName = String(item.value.value);
-        return schema.types[typeName as never];
-      }
-    }
-  }
+  const entityType = getTypeFromFilters(filters);
+  if (!entityType) return undefined;
 
-  return undefined;
+  return schema.types[entityType as never];
 };
 
 export const getDocumentContext = async (
@@ -135,8 +186,17 @@ export const getDocumentContext = async (
 
   const schema = schemaResult.data;
 
-  const typeDef =
-    "doc" in parsed ? extractTypeFromYaml(parsed, schema) : undefined;
+  const navigationResult = await runtime.nav(namespace);
+  if (isErr(navigationResult)) return undefined;
+
+  const relativePath = getRelativeSnapshotPath(filePath, runtime.config.paths);
+  const navigationItem = findNavigationItemByPath(
+    navigationResult.data,
+    relativePath,
+  );
+  if (navigationItem === undefined) return undefined;
+
+  const typeDef = extractTypeFromNavigation(navigationItem, schema);
 
   return {
     document,
@@ -144,7 +204,7 @@ export const getDocumentContext = async (
     uri: document.uri,
     namespace,
     schema,
-    navigationItem: { path: filePath },
+    navigationItem,
     typeDef,
   };
 };

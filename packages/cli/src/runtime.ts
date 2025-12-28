@@ -5,6 +5,7 @@ import {
   type Err,
   err,
   type ErrorObject,
+  isEmptyObject,
   isErr,
   normalizeError,
   ok,
@@ -29,6 +30,10 @@ import { setupCleanupHandlers } from "./lib/lock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { createLogger, type Logger, type LogLevel } from "./log.ts";
 import { isDevMode } from "./build-time.ts";
+import {
+  createNavigationCache,
+  type NavigationLoader,
+} from "./document/navigation.ts";
 
 type RuntimeOptions = {
   logLevel?: LogLevel;
@@ -57,6 +62,7 @@ export type RuntimeContext = {
 export type RuntimeContextWithDb = RuntimeContext & {
   db: DatabaseCli;
   kg: KnowledgeGraph;
+  nav: NavigationLoader;
 };
 
 export type CommandHandlerMinimal<TArgs = object> = (
@@ -177,9 +183,19 @@ export const initializeDbRuntime = async (
   }
 
   const db = dbResult.data;
-  const kg = setupKnowledgeGraph({ fs, log, config, db });
 
-  return ok({ ...context, kg, db });
+  const kg = setupKnowledgeGraph(
+    { fs, log, config, db },
+    {
+      afterCommit: async (transaction) => {
+        if (isEmptyObject(transaction.configurations)) return;
+        navigationCache.invalidate();
+      },
+    },
+  );
+  const navigationCache = createNavigationCache(kg);
+
+  return ok({ ...context, kg, db, nav: navigationCache.load });
 };
 
 type CommandOptions = {

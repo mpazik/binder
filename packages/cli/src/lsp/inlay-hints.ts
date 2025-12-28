@@ -1,18 +1,11 @@
-import type {
-  InlayHint,
-  InlayHintParams,
-  TextDocuments,
-} from "vscode-languageserver/node";
+import type { InlayHint, InlayHintParams } from "vscode-languageserver/node";
 import { InlayHintKind } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
 import { isMap, isPair, isScalar, isSeq, type YAMLMap } from "yaml";
 import type { EntitySchema, NodeRef } from "@binder/db";
 import { isErr } from "@binder/utils";
-import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedYaml } from "../document/yaml-cst.ts";
-import type { DocumentCache } from "./document-cache.ts";
-import { getDocumentContext, offsetToPosition } from "./lsp-utils.ts";
+import { type LspHandler, offsetToPosition } from "./lsp-utils.ts";
 
 type RelationValue = {
   value: string;
@@ -99,27 +92,10 @@ const resolveEntityTitle = async (
   return (entity.title || entity.name) as string | undefined;
 };
 
-export const handleInlayHints = async (
-  params: InlayHintParams,
-  lspDocuments: TextDocuments<TextDocument>,
-  documentCache: DocumentCache,
-  runtime: RuntimeContextWithDb,
-  log: Logger,
-): Promise<InlayHint[]> => {
-  const document = lspDocuments.get(params.textDocument.uri);
-  if (!document) {
-    log.debug("Document not found for inlay hints", {
-      uri: params.textDocument.uri,
-    });
-    return [];
-  }
-
-  const context = await getDocumentContext(document, documentCache, runtime);
-  if (!context) {
-    log.debug("No document context for inlay hints");
-    return [];
-  }
-
+export const handleInlayHints: LspHandler<
+  InlayHintParams,
+  InlayHint[]
+> = async (_params, { context, runtime, log }) => {
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
     log.debug("Not a YAML document");

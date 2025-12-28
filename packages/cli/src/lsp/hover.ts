@@ -1,25 +1,17 @@
-import type {
-  Hover,
-  HoverParams,
-  TextDocuments,
-} from "vscode-languageserver/node";
+import type { Hover, HoverParams } from "vscode-languageserver/node";
 import { MarkupKind } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { LineCounter } from "yaml";
 import type { FieldAttrDef, FieldDef } from "@binder/db";
-import type { Logger } from "../log.ts";
-import type { RuntimeContextWithDb } from "../runtime.ts";
 import {
   getPositionContext,
   type ParsedYaml,
   type YamlContext,
 } from "../document/yaml-cst.ts";
 import { formatWhenCondition } from "../utils/query.ts";
-import type { DocumentCache } from "./document-cache.ts";
 import {
-  getDocumentContext,
   getFieldDefForType,
   lspPositionToYamlPosition,
+  type LspHandler,
   yamlRangeToLspRange,
 } from "./lsp-utils.ts";
 
@@ -91,25 +83,10 @@ const buildFieldHover = (
   };
 };
 
-export const handleHover = async (
-  params: HoverParams,
-  lspDocuments: TextDocuments<TextDocument>,
-  documentCache: DocumentCache,
-  runtime: RuntimeContextWithDb,
-  log: Logger,
-): Promise<Hover | null> => {
-  const document = lspDocuments.get(params.textDocument.uri);
-  if (!document) {
-    log.debug("Document not found for hover", { uri: params.textDocument.uri });
-    return null;
-  }
-
-  const context = await getDocumentContext(document, documentCache, runtime);
-  if (!context) {
-    log.debug("No document context for hover");
-    return null;
-  }
-
+export const handleHover: LspHandler<HoverParams, Hover | null> = (
+  params,
+  { document, context, log },
+) => {
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
     log.debug("Not a YAML document");

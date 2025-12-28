@@ -2,68 +2,78 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
-import { changesetInputForNewEntity } from "@binder/db";
-import {
-  mockProjectNode,
-  mockTransactionInit,
-  mockTransactionInitInput,
-} from "@binder/db/mocks";
+import { mockProjectNode, mockTransactionInit } from "@binder/db/mocks";
+import type { EntitySchema, NodeDataType } from "@binder/db";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { createMockRuntimeContextWithDb, mockLog } from "../runtime.mock.ts";
 import { mockNavigationConfigInput } from "../document/navigation.mock.ts";
-import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
+import { parseYamlDocument } from "../document/yaml-cst.ts";
 import { handleDefinition } from "./definition.ts";
-
-type LspDocuments = {
-  get: (uri: string) => TextDocument | undefined;
-};
+import type { DocumentContext } from "./lsp-utils.ts";
 
 describe("definition", () => {
   let runtime: RuntimeContextWithDb;
-  let documentCache: DocumentCache;
+  let schema: EntitySchema<NodeDataType>;
 
-  const createDocument = (uri: string, content: string): TextDocument =>
-    TextDocument.create(uri, "yaml", 1, content);
+  const createDocumentContext = (
+    uri: string,
+    content: string,
+  ): { document: TextDocument; context: DocumentContext } => {
+    const document = TextDocument.create(uri, "yaml", 1, content);
+    const parsed = parseYamlDocument(content);
 
-  const createLspDocuments = (docs: TextDocument[]): LspDocuments => ({
-    get: (uri: string) => docs.find((d) => d.uri === uri),
-  });
+    return {
+      document,
+      context: {
+        document,
+        parsed,
+        uri,
+        namespace: "node",
+        schema,
+        navigationItem: {
+          path: "tasks/",
+          query: { filters: { type: "Task" } },
+        },
+        typeDef: schema.types.Task,
+      },
+    };
+  };
 
   beforeEach(async () => {
     runtime = await createMockRuntimeContextWithDb();
-    documentCache = createDocumentCache(mockLog);
     throwIfError(await runtime.kg.apply(mockTransactionInit));
+    schema = throwIfError(await runtime.kg.getSchema("node"));
   });
 
   it("returns null when cursor is not on a relation field value", async () => {
-    const doc = createDocument(
+    const { document, context } = createDocumentContext(
       `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
       "type: Task\ntitle: My Task",
     );
 
     const result = await handleDefinition(
-      { textDocument: { uri: doc.uri }, position: { line: 1, character: 3 } },
-      createLspDocuments([doc]),
-      documentCache,
-      runtime,
-      mockLog,
+      {
+        textDocument: { uri: document.uri },
+        position: { line: 1, character: 3 },
+      },
+      { document, context, runtime, log: mockLog },
     );
 
     expect(result).toBeNull();
   });
 
   it("returns null when field is not a relation type", async () => {
-    const doc = createDocument(
+    const { document, context } = createDocumentContext(
       `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
       "type: Task\ntitle: My Task\ndescription: Some description",
     );
 
     const result = await handleDefinition(
-      { textDocument: { uri: doc.uri }, position: { line: 2, character: 15 } },
-      createLspDocuments([doc]),
-      documentCache,
-      runtime,
-      mockLog,
+      {
+        textDocument: { uri: document.uri },
+        position: { line: 2, character: 15 },
+      },
+      { document, context, runtime, log: mockLog },
     );
 
     expect(result).toBeNull();
@@ -77,17 +87,17 @@ describe("definition", () => {
       }),
     );
 
-    const doc = createDocument(
+    const { document, context } = createDocumentContext(
       `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
       `type: Task\ntitle: My Task\nproject: ${mockProjectNode.key}`,
     );
 
     const result = await handleDefinition(
-      { textDocument: { uri: doc.uri }, position: { line: 2, character: 12 } },
-      createLspDocuments([doc]),
-      documentCache,
-      runtime,
-      mockLog,
+      {
+        textDocument: { uri: document.uri },
+        position: { line: 2, character: 12 },
+      },
+      { document, context, runtime, log: mockLog },
     );
 
     expect(result).toEqual({
@@ -100,17 +110,17 @@ describe("definition", () => {
   });
 
   it("returns null when referenced entity does not exist", async () => {
-    const doc = createDocument(
+    const { document, context } = createDocumentContext(
       `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
       "type: Task\ntitle: My Task\nproject: non-existent-project",
     );
 
     const result = await handleDefinition(
-      { textDocument: { uri: doc.uri }, position: { line: 2, character: 12 } },
-      createLspDocuments([doc]),
-      documentCache,
-      runtime,
-      mockLog,
+      {
+        textDocument: { uri: document.uri },
+        position: { line: 2, character: 12 },
+      },
+      { document, context, runtime, log: mockLog },
     );
 
     expect(result).toBeNull();

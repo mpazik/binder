@@ -5,6 +5,7 @@
 import { join } from "path";
 import {
   type KnowledgeGraph,
+  type KnowledgeGraphCallbacks,
   openKnowledgeGraph,
   squashTransactions as mergeTransactions,
   type Transaction,
@@ -329,7 +330,10 @@ const withLockedKg = async <T>(
   return result;
 };
 
-export const setupKnowledgeGraph = (services: Services): KnowledgeGraph => {
+export const setupKnowledgeGraph = (
+  services: Services,
+  callbacks: KnowledgeGraphCallbacks,
+): KnowledgeGraph => {
   const {
     db,
     fs,
