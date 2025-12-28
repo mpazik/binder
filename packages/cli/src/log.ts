@@ -76,7 +76,10 @@ export const createLogger = async (
     printLogs?: boolean;
     logFile?: string;
   },
-): ResultAsync<Logger> => {
+): ResultAsync<{
+  log: Logger;
+  close: () => void;
+}> => {
   const dir = `${options.binderDir}/logs`;
   const logFilePath = `${dir}/${options.logFile ?? "cli.log"}`;
   const dirResult = await fs.mkdir(dir, { recursive: true });
@@ -150,7 +153,7 @@ export const createLogger = async (
     }
   };
 
-  return ok({
+  const log: Logger = {
     logPath: logFilePath,
     debug(message?: any, extra?: Record<string, any>) {
       if (shouldLog("debug")) {
@@ -185,5 +188,7 @@ export const createLogger = async (
         },
       };
     },
-  });
+  };
+
+  return ok({ log, close: () => writer.end() });
 };

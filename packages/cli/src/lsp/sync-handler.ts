@@ -22,7 +22,10 @@ export const handleDocumentSave = async (
 
   const namespace = namespaceFromSnapshotPath(absolutePath, config.paths);
   if (namespace === undefined) {
-    log.debug("File outside workspace, skipping sync", { path: absolutePath });
+    log.debug("File outside workspace, skipping sync", {
+      path: absolutePath,
+      config: config.paths,
+    });
     return ok(undefined);
   }
   const relativePath = getRelativeSnapshotPath(absolutePath, config.paths);

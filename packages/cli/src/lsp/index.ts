@@ -1,28 +1,17 @@
-import { fileURLToPath } from "node:url";
 import {
   CodeActionKind,
   type Connection,
   createConnection,
-  ErrorCodes,
   type InitializeParams,
   ProposedFeatures,
-  ResponseError,
   TextDocuments,
   TextDocumentSyncKind,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { type ErrorObject, isErr } from "@binder/utils";
-import {
-  initializeDbRuntime,
-  initializeRuntime,
-  type RuntimeContextInit,
-  type RuntimeContextWithDb,
-} from "../runtime.ts";
-import { setupCleanupHandlers } from "../lib/lock.ts";
-import type { Logger } from "../log.ts";
+import { isErr } from "@binder/utils";
+import { type RuntimeContextInit } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
 import { handleDocumentSave } from "./sync-handler.ts";
-import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
 import { handleHover } from "./hover.ts";
 import { handleCompletion } from "./completion.ts";
 import { handleCodeAction } from "./code-actions.ts";
@@ -30,20 +19,7 @@ import { handleInlayHints } from "./inlay-hints.ts";
 import { handleDefinition } from "./definition.ts";
 import { handleDiagnostics } from "./diagnostics.ts";
 import { withDocumentContext } from "./lsp-utils.ts";
-
-const throwLspError = (
-  error: ErrorObject,
-  log: Logger,
-  message: string,
-): never => {
-  log.error(message, error);
-  // eslint-disable-next-line no-restricted-syntax
-  throw new ResponseError(
-    ErrorCodes.InternalError,
-    `${message}: ${error.message}`,
-    error,
-  );
-};
+import { createWorkspaceManager } from "./workspace-manager.ts";
 
 export const createLspServer = (
   minimalContext: RuntimeContextInit,
@@ -54,10 +30,15 @@ export const createLspServer = (
     process.stdout,
   );
   const lspDocuments = new TextDocuments(TextDocument);
-  let log = minimalContext.log;
+  const log = minimalContext.log;
+  const workspaceManager = createWorkspaceManager(minimalContext, log);
+  const deps = {
+    lspDocuments,
+    workspaceManager,
+    log,
+  };
 
-  let runtime: RuntimeContextWithDb | null = null;
-  let documentCache: DocumentCache = createDocumentCache(log);
+  let hasWorkspaceFolderCapability = false;
 
   connection.onInitialize(async (params: InitializeParams) => {
     log.info("LSP client initialized", {
@@ -65,55 +46,25 @@ export const createLspServer = (
       clientVersion: params.clientInfo?.version,
     });
 
-    const rootUri =
-      params.workspaceFolders && params.workspaceFolders.length > 0
-        ? params.workspaceFolders[0].uri
-        : params.rootUri;
+    log.info("Workspace folders received", {
+      workspaces: params.workspaceFolders,
+    });
 
-    if (!rootUri) {
-      log.error("No workspace root provided by LSP client");
-      // We can't initialize without a root. Return empty capabilities to disable server effectively.
-      return { capabilities: {} };
+    hasWorkspaceFolderCapability =
+      params.capabilities.workspace?.workspaceFolders === true;
+
+    // Initialize all Binder workspaces from the provided workspace folders
+    const workspaceFolders = params.workspaceFolders ?? [];
+    for (const folder of workspaceFolders) {
+      const isBinder = await workspaceManager.isBinderWorkspace(folder.uri);
+      if (isBinder) {
+        await workspaceManager.initializeWorkspace(folder.uri);
+      }
     }
 
-    const rootPath = fileURLToPath(rootUri);
-    log.info("Initializing workspace", { rootPath });
-
-    const runtimeResult = await initializeRuntime(
-      {
-        ...minimalContext,
-        silent: true,
-        logFile: "lsp.log",
-      },
-      rootPath,
-    );
-    if (isErr(runtimeResult))
-      throwLspError(
-        runtimeResult.error,
-        log,
-        "Failed to initialize Binder workspace",
-      );
-
-    const runtimeContext = runtimeResult.data!;
-    log = runtimeContext.log; // promote to local logger
-
-    const runtimeWithDbResult = await initializeDbRuntime(runtimeContext);
-    if (isErr(runtimeWithDbResult))
-      throwLspError(
-        runtimeWithDbResult.error,
-        log,
-        "Failed to initialize Binder database",
-      );
-
-    setupCleanupHandlers(runtimeContext.fs, runtimeContext.config.paths.binder);
-
-    runtime = { ...runtimeContext, ...runtimeWithDbResult.data! };
-    documentCache = createDocumentCache(log);
-
-    log.info("Workspace loaded", {
+    log.info("Workspaces loaded", {
       version: BINDER_VERSION,
-      cwd: runtimeContext.config.paths.root,
-      logLevel: minimalContext.logLevel,
+      stats: workspaceManager.getStats(),
     });
 
     return {
@@ -138,19 +89,45 @@ export const createLspServer = (
           codeActionKinds: [CodeActionKind.QuickFix],
         },
         inlayHintProvider: true,
+        workspace: {
+          workspaceFolders: {
+            supported: true,
+            changeNotifications: true,
+          },
+        },
       },
     };
   });
 
   connection.onInitialized(() => {
     log.info("LSP server initialized");
+
+    if (hasWorkspaceFolderCapability) {
+      connection.workspace.onDidChangeWorkspaceFolders(async (event) => {
+        log.info("Workspace folders changed", {
+          added: event.added,
+          removed: event.removed,
+        });
+
+        for (const removed of event.removed) {
+          await workspaceManager.disposeWorkspace(removed.uri);
+        }
+
+        for (const added of event.added) {
+          const isBinder = await workspaceManager.isBinderWorkspace(added.uri);
+          if (isBinder) {
+            await workspaceManager.initializeWorkspace(added.uri);
+          }
+        }
+      });
+    }
   });
 
   let shutdownReceived = false;
 
-  connection.onShutdown(() => {
-    log.info("LSP server shutdown requested");
-    log.info("Document cache stats", documentCache.getStats());
+  connection.onShutdown(async () => {
+    log.info("LSP server shutdown requested", workspaceManager.getStats());
+    await workspaceManager.disposeAll();
     shutdownReceived = true;
     return undefined;
   });
@@ -162,41 +139,39 @@ export const createLspServer = (
   });
 
   lspDocuments.onDidOpen(async (event) => {
-    log.info("Document opened", { uri: event.document.uri });
+    log.debug("Document opened", { uri: event.document.uri });
   });
 
   lspDocuments.onDidChangeContent(async (change) => {
     log.debug("Document changed", { uri: change.document.uri });
   });
 
-  lspDocuments.onDidClose((event) => {
+  lspDocuments.onDidClose(async (event) => {
     const uri = event.document.uri;
     log.info("Document closed", { uri });
-    documentCache.invalidate(uri);
+
+    const workspace = await workspaceManager.findWorkspaceForDocument(uri);
+    if (workspace) {
+      workspace.documentCache.invalidate(uri);
+    }
   });
 
   lspDocuments.onDidSave(async (change) => {
     const uri = change.document.uri;
     log.info("Document saved", { uri });
 
-    if (!runtime) {
-      log.error("Workspace not initialized, cannot sync file", { uri });
+    const workspace = await workspaceManager.findWorkspaceForDocument(uri);
+    if (!workspace) {
+      log.debug("Document not in any Binder workspace, skipping sync", { uri });
       return;
     }
 
-    const result = await handleDocumentSave(runtime, uri);
+    const result = await handleDocumentSave(workspace.runtime, uri);
 
     if (isErr(result)) {
       log.error("Sync failed", { error: result.error, uri });
     }
   });
-
-  const deps = {
-    lspDocuments,
-    documentCache,
-    runtime,
-    log,
-  };
 
   connection.onCompletion(
     withDocumentContext("Completion", deps, handleCompletion),

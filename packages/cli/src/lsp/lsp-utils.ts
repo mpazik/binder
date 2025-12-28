@@ -36,6 +36,7 @@ import {
 import { getTypeFromFilters } from "../utils/query.ts";
 import { type Position as YamlPosition } from "../document/yaml-cst.ts";
 import type { DocumentCache } from "./document-cache.ts";
+import type { WorkspaceManager } from "./workspace-manager.ts";
 
 type LspParams = { textDocument: TextDocumentIdentifier };
 
@@ -51,10 +52,9 @@ export type LspHandler<TParams extends LspParams, TResult> = (
   deps: LspHandlerDeps,
 ) => TResult | Promise<TResult>;
 
-type WithDocumentContextDeps = {
+export type WithDocumentContextDeps = {
   lspDocuments: TextDocuments<TextDocument>;
-  documentCache: DocumentCache;
-  runtime: RuntimeContextWithDb | null;
+  workspaceManager: WorkspaceManager;
   log: Logger;
 };
 
@@ -65,23 +65,30 @@ export const withDocumentContext =
     handler: LspHandler<TParams, TResult>,
   ) =>
   async (params: TParams): Promise<TResult | null> => {
-    const { lspDocuments, documentCache, runtime, log } = deps;
+    const { lspDocuments, workspaceManager, log } = deps;
+    const uri = params.textDocument.uri;
 
-    log.debug(`${requestName} request received`, {
-      uri: params.textDocument.uri,
-    });
+    const workspace = workspaceManager.findWorkspaceForDocument(uri);
+    if (workspace) {
+      log.debug(`${requestName} request received`, { uri });
+    } else {
+      log.debug(`${requestName}: document not in any Binder workspace`, {
+        uri,
+      });
+      return null;
+    }
 
-    if (!runtime) return null;
+    const { runtime, documentCache } = workspace;
 
-    const document = lspDocuments.get(params.textDocument.uri);
+    const document = lspDocuments.get(uri);
     if (!document) {
-      log.warn("Document not found", { uri: params.textDocument.uri });
+      log.warn("Document not found", { uri });
       return null;
     }
 
     const context = await getDocumentContext(document, documentCache, runtime);
     if (!context) {
-      log.warn("No document context", { uri: params.textDocument.uri });
+      log.debug("No document context", { uri });
       return null;
     }
 

@@ -6,6 +6,7 @@ import { CompletionItemKind } from "vscode-languageserver/node";
 import { isMap } from "yaml";
 import type {
   EntitySchema,
+  FieldAttrDef,
   FieldDef,
   NodeFieldDef,
   NodeType,
@@ -22,8 +23,9 @@ import {
 } from "../document/yaml-cst.ts";
 import {
   getAllowedFields,
-  lspPositionToYamlPosition,
+  getFieldDefForType,
   type LspHandler,
+  lspPositionToYamlPosition,
 } from "./lsp-utils.ts";
 
 const createFieldNameCompletions = (
@@ -70,15 +72,30 @@ const createBooleanCompletions = (): CompletionItem[] => {
 };
 
 const createRelationCompletions = async (
-  fieldDef: FieldDef,
   runtime: RuntimeContextWithDb,
   log: Logger,
+  fieldDef: FieldDef,
+  attrs: FieldAttrDef | undefined,
 ): Promise<CompletionItem[]> => {
-  if (fieldDef.dataType !== "relation" || !fieldDef.range) return [];
+  if (fieldDef.dataType !== "relation") return [];
+
+  const range = fieldDef.range ?? attrs?.only;
+  if (!range || range.length === 0) {
+    return [
+      {
+        label: "(no range defined)",
+        kind: CompletionItemKind.Text,
+        detail: "Relation missing 'range' or 'only'",
+        documentation:
+          "This relation field does not have any target types defined. Add a 'range' property to the schema or an 'only' constraint to the type definition.",
+        insertText: "# Fix schema: missing relation range",
+      },
+    ];
+  }
 
   const completions: CompletionItem[] = [];
 
-  for (const targetType of fieldDef.range) {
+  for (const targetType of range) {
     const searchResult = await runtime.kg.search({
       filters: { type: targetType as NodeType },
       pagination: { limit: 50 },
@@ -112,11 +129,14 @@ const createRelationCompletions = async (
 const createValueCompletions = async (
   fieldKey: string,
   schema: EntitySchema,
+  typeDef: TypeDef | undefined,
   runtime: RuntimeContextWithDb,
   log: Logger,
 ): Promise<CompletionItem[]> => {
-  const fieldDef = schema.fields[fieldKey];
-  if (!fieldDef) return [];
+  const fieldInfo = getFieldDefForType(fieldKey, typeDef, schema);
+  if (!fieldInfo) return [];
+
+  const { def: fieldDef, attrs } = fieldInfo;
 
   if (fieldDef.dataType === "option") {
     return createOptionCompletions(fieldDef as FieldDef<"option">);
@@ -127,7 +147,7 @@ const createValueCompletions = async (
   }
 
   if (fieldDef.dataType === "relation") {
-    return createRelationCompletions(fieldDef, runtime, log);
+    return createRelationCompletions(runtime, log, fieldDef, attrs);
   }
 
   return [];
@@ -137,6 +157,7 @@ export const handleCompletion: LspHandler<
   CompletionParams,
   CompletionItem[]
 > = async (params, { document, context, runtime, log }) => {
+  log.debug("COMPLETION");
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
     log.debug("Not a YAML document");
@@ -173,6 +194,7 @@ export const handleCompletion: LspHandler<
     return createValueCompletions(
       yamlContext.fieldKey,
       context.schema,
+      context.typeDef,
       runtime,
       log,
     );

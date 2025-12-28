@@ -95,7 +95,7 @@ const fatalError = (
 
 export const initializeMinimalRuntime = async (
   options?: RuntimeOptions,
-): ResultAsync<RuntimeContextInit> => {
+): ResultAsync<{ runtime: RuntimeContextInit; close: () => void }> => {
   const fs = createRealFileSystem();
   const logLevel = options?.logLevel || (isDevMode() ? "debug" : "info");
 
@@ -107,7 +107,7 @@ export const initializeMinimalRuntime = async (
   });
   if (isErr(logResult)) return logResult;
 
-  const log = logResult.data;
+  const { log, close: closeLogger } = logResult.data;
 
   process.on("uncaughtException", (err) => {
     log.error("Uncaught exception", { error: err });
@@ -129,19 +129,25 @@ export const initializeMinimalRuntime = async (
   }
 
   return ok({
-    logLevel,
-    printLogs: options?.printLogs || false,
-    silent: options?.silent || false,
-    globalConfig: globalConfigResult.data,
-    log,
-    fs,
+    runtime: {
+      logLevel,
+      printLogs: options?.printLogs || false,
+      silent: options?.silent || false,
+      globalConfig: globalConfigResult.data,
+      log,
+      fs,
+    },
+    close: closeLogger,
   });
 };
 
 export const initializeRuntime = async (
   runtime: RuntimeContextInit,
   root: string,
-): ResultAsync<RuntimeContext> => {
+): ResultAsync<{
+  runtime: RuntimeContext;
+  close: () => void;
+}> => {
   const { globalConfig, fs } = runtime;
 
   const configResult = await loadWorkspaceConfig(root, globalConfig);
@@ -163,17 +169,20 @@ export const initializeRuntime = async (
   });
   if (isErr(logResult)) return logResult;
 
+  const { log, close } = logResult.data;
+
   return ok({
-    config,
-    log: logResult.data,
-    ui,
-    fs,
+    runtime: { config, log, ui, fs },
+    close,
   });
 };
 
 export const initializeDbRuntime = async (
   context: RuntimeContext,
-): ResultAsync<RuntimeContextWithDb> => {
+): ResultAsync<{
+  runtime: RuntimeContextWithDb;
+  close: () => void;
+}> => {
   const { config, log, fs } = context;
   const dbPath = join(config.paths.binder, DB_FILE);
   const dbResult = openCliDb({ path: dbPath, migrate: true });
@@ -182,7 +191,7 @@ export const initializeDbRuntime = async (
     return dbResult;
   }
 
-  const db = dbResult.data;
+  const { db, close: closeDb } = dbResult.data;
 
   const kg = setupKnowledgeGraph(
     { fs, log, config, db },
@@ -195,7 +204,36 @@ export const initializeDbRuntime = async (
   );
   const navigationCache = createNavigationCache(kg);
 
-  return ok({ ...context, kg, db, nav: navigationCache.load });
+  return ok({
+    runtime: { ...context, kg, db, nav: navigationCache.load },
+    close: closeDb,
+  });
+};
+
+export const initializeFullRuntime = async (
+  minimalContext: RuntimeContextInit,
+  root: string,
+): ResultAsync<{
+  runtime: RuntimeContextWithDb;
+  close: () => void;
+}> => {
+  const runtimeResult = await initializeRuntime(minimalContext, root);
+  if (isErr(runtimeResult)) return runtimeResult;
+
+  const { runtime: context, close: closeLog } = runtimeResult.data;
+
+  const dbResult = await initializeDbRuntime(context);
+  if (isErr(dbResult)) return dbResult;
+
+  const { runtime, close: closeDb } = dbResult.data;
+
+  return ok({
+    runtime,
+    close: () => {
+      closeDb();
+      closeLog();
+    },
+  });
 };
 
 type CommandOptions = {
@@ -232,7 +270,7 @@ export const bootstrapMinimal = <TArgs extends object = object>(
       );
     }
 
-    const runtime = runtimeResult.data;
+    const { runtime, close } = runtimeResult.data;
 
     const result = await tryCatch(() =>
       handler({
@@ -250,6 +288,7 @@ export const bootstrapMinimal = <TArgs extends object = object>(
     if (data && !opts.silent) {
       ui.println(ui.Style.TEXT_SUCCESS + data + ui.Style.TEXT_NORMAL);
     }
+    close();
   };
 };
 
@@ -286,7 +325,7 @@ export const runtime = <TArgs extends object = object>(
       );
       if (isErr(contextResult)) return contextResult;
 
-      const context = contextResult.data;
+      const { runtime: context, close } = contextResult.data;
       const result = await tryCatch(() =>
         handler({
           ...context,
@@ -299,6 +338,7 @@ export const runtime = <TArgs extends object = object>(
         // we want to use local logger
         return fatalError(error, context.log, options?.silent);
       }
+      close();
 
       return result.data;
     },
@@ -324,10 +364,15 @@ export const runtimeWithDb = <TArgs extends object = object>(
 
     const dbResult = await initializeDbRuntime(context);
     if (isErr(dbResult)) return dbResult;
+    const { runtime, close } = dbResult.data;
 
-    return handler({
+    const result = await handler({
       args,
-      ...dbResult.data,
+      ...runtime,
     });
+
+    close();
+
+    return result;
   }, options);
 };

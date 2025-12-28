@@ -5,16 +5,18 @@ import { Database as BunDatabase } from "bun:sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import {
   createError,
-  type Result,
-  ok,
   isErr,
-  tryCatch,
+  ok,
+  type Result,
   serializeErrorData,
+  tryCatch,
 } from "@binder/utils";
 import { isBundled } from "../build-time.ts";
 import { schema } from "./schema.ts";
 
-export type DatabaseCli = ReturnType<typeof drizzle<typeof schema>>;
+type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+
+export type DatabaseCli = DrizzleDb;
 
 type FileDbOptions = {
   path: string;
@@ -27,7 +29,12 @@ type MemoryDbOptions = {
 
 export type OpenCliDbOptions = FileDbOptions | MemoryDbOptions;
 
-export const openCliDb = (options: OpenCliDbOptions): Result<DatabaseCli> => {
+export const openCliDb = (
+  options: OpenCliDbOptions,
+): Result<{
+  db: DatabaseCli;
+  close: () => void;
+}> => {
   const isMemory = "memory" in options && options.memory;
   const dbPath = isMemory ? ":memory:" : (options as FileDbOptions).path;
   const shouldMigrate = isMemory ? true : (options as FileDbOptions).migrate;
@@ -42,7 +49,8 @@ export const openCliDb = (options: OpenCliDbOptions): Result<DatabaseCli> => {
 
   if (isErr(sqliteResult)) return sqliteResult;
 
-  const db = drizzle(sqliteResult.data, { schema });
+  const sqlite = sqliteResult.data;
+  const db = drizzle(sqlite, { schema });
 
   if (shouldMigrate) {
     const __filename = fileURLToPath(import.meta.url);
@@ -77,5 +85,5 @@ export const openCliDb = (options: OpenCliDbOptions): Result<DatabaseCli> => {
     if (isErr(cliMigrationResult)) return cliMigrationResult;
   }
 
-  return ok(db);
+  return ok({ db, close: () => sqlite.close() });
 };
