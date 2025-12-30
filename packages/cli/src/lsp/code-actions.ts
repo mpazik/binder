@@ -28,7 +28,7 @@ const getDefaultValue = (fieldDef: FieldDef, attrs?: FieldAttrDef): string => {
   if (fieldDef.dataType === "boolean") return "false";
   if (fieldDef.dataType === "integer" || fieldDef.dataType === "decimal")
     return "0";
-  if (fieldDef.dataType === "string" || fieldDef.dataType === "text")
+  if (fieldDef.dataType === "plaintext" || fieldDef.dataType === "richtext")
     return '""';
 
   return "";

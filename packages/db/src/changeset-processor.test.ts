@@ -234,7 +234,7 @@ describe("processChangesetInput", () => {
         await processChangesetInput(
           tx,
           "config",
-          [{ type: fieldSystemType, key: testFieldKey, dataType: "string" }],
+          [{ type: fieldSystemType, key: testFieldKey, dataType: "plaintext" }],
           coreConfigSchema,
           GENESIS_ENTITY_ID,
         ),
@@ -246,7 +246,7 @@ describe("processChangesetInput", () => {
       uid: expect.any(String),
       key: testFieldKey,
       type: fieldSystemType,
-      dataType: "string",
+      dataType: "plaintext",
     });
   });
 
@@ -326,7 +326,7 @@ describe("processChangesetInput", () => {
 
     it("validates successful create changeset for config", () =>
       checkProcessingSucceeds(
-        [{ type: fieldSystemType, key: testFieldKey, dataType: "string" }],
+        [{ type: fieldSystemType, key: testFieldKey, dataType: "plaintext" }],
         "config",
       ));
 
@@ -525,7 +525,7 @@ describe("processChangesetInput", () => {
           {
             type: fieldSystemType,
             key: "first" as ConfigKey,
-            dataType: "string",
+            dataType: "plaintext",
           },
           { $ref: mockPriorityFieldKey, key: "last" as ConfigKey },
         ],
@@ -715,25 +715,25 @@ describe("processChangesetInput", () => {
       );
     });
 
-    it("creates Field with dataType='string'", () =>
+    it("creates Field with dataType='plaintext'", () =>
       checkProcessingSucceeds(
         [
           {
             type: fieldSystemType,
             key: "testStringField" as ConfigKey,
-            dataType: "string",
+            dataType: "plaintext",
           },
         ],
         "config",
       ));
 
-    it("creates Field with dataType='string' and unique constraint", () =>
+    it("creates Field with dataType='plaintext' and unique constraint", () =>
       checkProcessingSucceeds(
         [
           {
             type: fieldSystemType,
             key: "testStringField2" as ConfigKey,
-            dataType: "string",
+            dataType: "plaintext",
             unique: true,
           },
         ],
@@ -769,7 +769,7 @@ describe("processChangesetInput", () => {
               index: 0,
               namespace: "node",
               field: "owners.role",
-              message: "Expected string, got: number",
+              message: "Expected string for plaintext, got: number",
             },
           ],
         );
@@ -812,7 +812,7 @@ describe("processChangesetInput", () => {
               index: 0,
               namespace: "node",
               field: "owners.role",
-              message: "Expected string, got: boolean",
+              message: "Expected string for plaintext, got: boolean",
             },
           ],
         );
@@ -826,7 +826,7 @@ describe("processChangesetInput", () => {
             {
               type: fieldSystemType,
               key: "testDefaultField" as ConfigKey,
-              dataType: "string",
+              dataType: "plaintext",
               default: "hello",
             },
           ],
@@ -899,7 +899,7 @@ describe("processChangesetInput", () => {
               namespace: "config",
               field: "fields.title.default",
               message: expect.stringContaining(
-                "default value does not match dataType 'string'",
+                "default value does not match dataType 'plaintext'",
               ),
             },
           ],
@@ -1084,7 +1084,7 @@ describe("applyConfigChangesetToSchema", () => {
         uid: "fldPriori01",
         key: newFieldKey,
         type: fieldSystemType,
-        dataType: "string",
+        dataType: "plaintext",
       },
     };
 
@@ -1092,7 +1092,7 @@ describe("applyConfigChangesetToSchema", () => {
 
     expect(result.fields[newFieldKey]).toMatchObject({
       key: newFieldKey,
-      dataType: "string",
+      dataType: "plaintext",
     });
   });
 

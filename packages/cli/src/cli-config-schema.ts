@@ -26,7 +26,7 @@ const fieldPath: CliConfigFieldDef = {
   type: fieldSystemType,
   name: "File Path",
   description: "Virtual path pattern in the navigation tree",
-  dataType: "string",
+  dataType: "plaintext",
 };
 
 const typeNavigation: TypeDef = {

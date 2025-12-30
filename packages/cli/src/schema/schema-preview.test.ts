@@ -18,9 +18,9 @@ describe("renderSchemaPreview", () => {
     expect(result).toContain("TYPES:");
   });
 
-  it("should render field with basic string type", () => {
-    expect(result).toContain("• email: string");
-    expect(result).toContain("• role: string");
+  it("should render field with basic plaintext type", () => {
+    expect(result).toContain("• email: plaintext");
+    expect(result).toContain("• role: plaintext");
   });
 
   it("should render field with description", () => {
@@ -53,7 +53,7 @@ describe("renderSchemaPreview", () => {
   });
 
   it("should render array of primitives", () => {
-    expect(result).toContain("• tags: string[] - Category labels");
+    expect(result).toContain("• tags: plaintext[] - Category labels");
   });
 
   it("should render boolean field", () => {

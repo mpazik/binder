@@ -21,17 +21,17 @@ describe("field-value", () => {
     };
 
     it("parses string values", () => {
-      check("hello", { dataType: "string" }, "hello");
-      check("  hello  ", { dataType: "string" }, "hello");
+      check("hello", { dataType: "plaintext" }, "hello");
+      check("  hello  ", { dataType: "plaintext" }, "hello");
     });
 
     it("parses text values", () => {
-      check("some text", { dataType: "text" }, "some text");
+      check("some text", { dataType: "richtext" }, "some text");
     });
 
     it("parses empty string as null", () => {
-      check("", { dataType: "string" }, null);
-      check("   ", { dataType: "string" }, null);
+      check("", { dataType: "plaintext" }, null);
+      check("   ", { dataType: "plaintext" }, null);
     });
 
     it("parses integer values", () => {
@@ -105,7 +105,7 @@ describe("field-value", () => {
 
     describe("allowMultiple", () => {
       it("parses comma-separated values into array", () => {
-        check("a, b, c", { dataType: "string", allowMultiple: true }, [
+        check("a, b, c", { dataType: "plaintext", allowMultiple: true }, [
           "a",
           "b",
           "c",
@@ -113,19 +113,20 @@ describe("field-value", () => {
       });
 
       it("trims whitespace from each item", () => {
-        check("  foo  ,  bar  ", { dataType: "string", allowMultiple: true }, [
-          "foo",
-          "bar",
-        ]);
+        check(
+          "  foo  ,  bar  ",
+          { dataType: "plaintext", allowMultiple: true },
+          ["foo", "bar"],
+        );
       });
 
       it("returns empty array for empty string", () => {
-        check("", { dataType: "string", allowMultiple: true }, []);
-        check("   ", { dataType: "string", allowMultiple: true }, []);
+        check("", { dataType: "plaintext", allowMultiple: true }, []);
+        check("   ", { dataType: "plaintext", allowMultiple: true }, []);
       });
 
       it("handles single value", () => {
-        check("single", { dataType: "string", allowMultiple: true }, [
+        check("single", { dataType: "plaintext", allowMultiple: true }, [
           "single",
         ]);
       });

@@ -38,7 +38,7 @@ const fieldTextContent = {
   type: fieldSystemType,
   name: "Text Content",
   description: "Text content.",
-  dataType: "text",
+  dataType: "richtext",
 } as const satisfies NodeFieldDef;
 
 export const fieldHeadingLevelUid = "d2Oq5pStUxY" as ConfigUid;
@@ -62,7 +62,7 @@ const fieldCitationSource = {
   type: fieldSystemType,
   name: "Citation Source",
   description: "Citation or source reference.",
-  dataType: "string",
+  dataType: "plaintext",
 } as const satisfies NodeFieldDef;
 
 export const fieldCodeLanguageUid = "f4Qs7rVwWzA" as ConfigUid;
@@ -74,7 +74,7 @@ const fieldCodeLanguage = {
   type: fieldSystemType,
   name: "Code Language",
   description: "Programming language identifier.",
-  dataType: "string",
+  dataType: "plaintext",
 } as const satisfies NodeFieldDef;
 
 export const fieldQueryUid = "g5Rt8sWxXaB" as ConfigUid;
@@ -98,7 +98,7 @@ const fieldTemplate = {
   type: fieldSystemType,
   name: "Template",
   description: "Template string.",
-  dataType: "string",
+  dataType: "plaintext",
 } as const satisfies NodeFieldDef;
 
 export const fieldPathUid = "r6Cd9eIjIlM" as ConfigUid;
@@ -110,7 +110,7 @@ const fieldPath = {
   type: fieldSystemType,
   name: "Path",
   description: "File system path.",
-  dataType: "string",
+  dataType: "plaintext",
 } as const satisfies NodeFieldDef;
 
 export const typeDocumentUid = "i7Tv0uZaZcD" as ConfigUid;

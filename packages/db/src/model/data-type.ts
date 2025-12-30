@@ -14,11 +14,10 @@ export const coreDataTypes = {
   boolean: { name: "Boolean" },
   integer: { name: "Integer" },
   decimal: { name: "Decimal" },
-  string: { name: "Short text" },
-  text: {
-    name: "Text",
-    description:
-      "Single-line text with optional line breaks and inline formatting",
+  plaintext: { name: "Plaintext" },
+  richtext: {
+    name: "Richtext",
+    description: "Text with structure and styling",
   },
   date: { name: "Date" },
   datetime: { name: "Date Time" },
@@ -51,8 +50,8 @@ export type DataTypeValueMap = {
   boolean: boolean;
   integer: number;
   decimal: number;
-  string: string;
-  text: string;
+  plaintext: string;
+  richtext: string;
   date: IsoDate;
   datetime: IsoTimestamp;
   interval: string;

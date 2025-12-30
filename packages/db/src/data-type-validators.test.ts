@@ -167,29 +167,29 @@ describe("data-type-validators", () => {
     });
   });
 
-  describe("string", () => {
+  describe("plaintext", () => {
     it("accepts strings", () => {
-      checkOk("string", "");
-      checkOk("string", "hello");
-      checkOk("string", "123");
+      checkOk("plaintext", "");
+      checkOk("plaintext", "hello");
+      checkOk("plaintext", "123");
     });
 
     it("rejects non-strings", () => {
-      checkErr("string", 123);
-      checkErr("string", null);
-      checkErr("string", true);
+      checkErr("plaintext", 123);
+      checkErr("plaintext", null);
+      checkErr("plaintext", true);
     });
   });
 
-  describe("text", () => {
+  describe("richtext", () => {
     it("accepts strings", () => {
-      checkOk("text", "");
-      checkOk("text", "long text content");
+      checkOk("richtext", "");
+      checkOk("richtext", "long text content");
     });
 
     it("rejects non-strings", () => {
-      checkErr("text", 123);
-      checkErr("text", null);
+      checkErr("richtext", 123);
+      checkErr("richtext", null);
     });
   });
 
@@ -375,17 +375,17 @@ describe("data-type-validators", () => {
     };
 
     it("validates single values", () => {
-      checkOk("string", "test");
+      checkOk("plaintext", "test");
     });
 
     it("validates multiple values when allowMultiple is true", () => {
-      checkOk("string", ["test1", "test2"], {
+      checkOk("plaintext", ["test1", "test2"], {
         fieldDef: { allowMultiple: true },
       });
     });
 
     it("rejects non-array when allowMultiple is true", () => {
-      checkErr("string", "test", {
+      checkErr("plaintext", "test", {
         fieldDef: { allowMultiple: true },
         message: "Expected array when allowMultiple is true",
       });

@@ -107,7 +107,7 @@ describe("transaction processor", () => {
         processTransactionInput(
           tx,
           {
-            configurations: [{ type: fieldSystemType, dataType: "string" }],
+            configurations: [{ type: fieldSystemType, dataType: "plaintext" }],
             author: "test",
           },
           mockNodeSchema,
@@ -148,7 +148,7 @@ describe("transaction processor", () => {
               {
                 type: fieldSystemType,
                 key: newFieldKey,
-                dataType: "string",
+                dataType: "plaintext",
               },
               {
                 type: typeSystemType,
@@ -180,7 +180,7 @@ describe("transaction processor", () => {
               {
                 type: fieldSystemType,
                 key: newFieldKey,
-                dataType: "string",
+                dataType: "plaintext",
               },
               {
                 $ref: mockTaskTypeKey,
@@ -210,7 +210,7 @@ describe("transaction processor", () => {
               {
                 type: fieldSystemType,
                 key: newFieldKey,
-                dataType: "string",
+                dataType: "plaintext",
               },
               {
                 type: typeSystemType,

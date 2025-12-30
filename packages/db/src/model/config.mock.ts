@@ -59,7 +59,7 @@ export const mockRoleField = {
   type: fieldSystemType,
   name: "Role",
   description: "Role in relation",
-  dataType: "string",
+  dataType: "plaintext",
 } as const satisfies NodeFieldDef;
 
 export const mockOwnersFieldKey = "owners" as ConfigKey;
@@ -113,7 +113,7 @@ export const mockTagsField = {
   type: fieldSystemType,
   name: "Tags",
   description: "Category labels",
-  dataType: "string",
+  dataType: "plaintext",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -136,7 +136,7 @@ export const mockEmailField = {
   type: fieldSystemType,
   name: "Email",
   description: "Email address",
-  dataType: "string",
+  dataType: "plaintext",
   unique: true,
 } as const satisfies NodeFieldDef;
 
@@ -184,7 +184,7 @@ export const mockCancelReasonField = {
   type: fieldSystemType,
   name: "Cancel Reason",
   description: "Reason for cancellation",
-  dataType: "string",
+  dataType: "plaintext",
   when: { status: "cancelled" },
 } as const satisfies NodeFieldDef;
 

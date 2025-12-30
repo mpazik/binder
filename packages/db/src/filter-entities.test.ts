@@ -15,7 +15,7 @@ describe("filter-entities", () => {
       it("matches equal string", () => check("relation", "relation", true));
 
       it("does not match different string", () =>
-        check("relation", "string", false));
+        check("relation", "plaintext", false));
 
       it("matches equal number", () => check(42, 42, true));
 
@@ -30,12 +30,12 @@ describe("filter-entities", () => {
         check({ op: "eq", value: "relation" }, "relation", true));
 
       it("does not match different value", () =>
-        check({ op: "eq", value: "relation" }, "string", false));
+        check({ op: "eq", value: "relation" }, "plaintext", false));
     });
 
     describe("not operator", () => {
       it("matches different value", () =>
-        check({ op: "not", value: "relation" }, "string", true));
+        check({ op: "not", value: "relation" }, "plaintext", true));
 
       it("does not match equal value", () =>
         check({ op: "not", value: "relation" }, "relation", false));
@@ -144,14 +144,14 @@ describe("filter-entities", () => {
 
     it("works with complex filters", () =>
       check(
-        { dataType: { op: "in", value: ["relation", "string"] } },
+        { dataType: { op: "in", value: ["relation", "plaintext"] } },
         { dataType: "relation" },
         true,
       ));
 
     it("works with array shorthand filters", () =>
       check(
-        { dataType: ["relation", "string"] },
+        { dataType: ["relation", "plaintext"] },
         { dataType: "relation" },
         true,
       ));

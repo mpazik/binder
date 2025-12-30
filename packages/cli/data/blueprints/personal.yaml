@@ -37,7 +37,7 @@
     - key: url
       type: Field
       name: URL
-      dataType: string
+      dataType: plaintext
 
     - key: parent
       type: Field

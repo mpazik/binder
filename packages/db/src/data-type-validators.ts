@@ -86,20 +86,20 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
     );
   },
 
-  string: (value) => {
+  plaintext: (value) => {
     if (typeof value === "string") return okVoid;
     return fail(
       "validation-error",
-      `Expected string, got: ${typeof value}`,
+      `Expected string for plaintext, got: ${typeof value}`,
       undefined,
     );
   },
 
-  text: (value) => {
+  richtext: (value) => {
     if (typeof value === "string") return okVoid;
     return fail(
       "validation-error",
-      `Expected string for text, got: ${typeof value}`,
+      `Expected string for richtext, got: ${typeof value}`,
       undefined,
     );
   },

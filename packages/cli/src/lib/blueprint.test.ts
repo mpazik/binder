@@ -20,7 +20,7 @@ describe("blueprint", () => {
   configurations:
     - key: email
       type: Field
-      dataType: string
+      dataType: plaintext
 - author: system
   configurations:
     - key: Person
@@ -43,7 +43,7 @@ describe("blueprint", () => {
       author: "system",
     });
     expect(transactions[0].configurations).toMatchObject([
-      { key: "email", type: "Field", dataType: "string" },
+      { key: "email", type: "Field", dataType: "plaintext" },
     ]);
     expect(transactions[1]).toMatchObject({
       author: "system",
@@ -58,7 +58,7 @@ describe("blueprint", () => {
 - configurations:
     - key: name
       type: Field
-      dataType: string
+      dataType: plaintext
 `;
     await fs.mkdir("/blueprints", { recursive: true });
     await fs.writeFile("/blueprints/test.yaml", blueprintContent);
