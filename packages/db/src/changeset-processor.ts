@@ -926,6 +926,9 @@ const buildChangeset = async <N extends NamespaceEditable>(
 
       const fieldDef = getFieldDef(schema, fieldKey);
       if (fieldDef?.default !== undefined) {
+        // TODO: later this should be a function
+        if (fieldDef.when && !matchesFilters(fieldDef.when, input as Fieldset))
+          continue;
         fieldsWithDefaults[fieldKey] = fieldDef.default as FieldValue;
       }
     }

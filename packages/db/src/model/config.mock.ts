@@ -173,6 +173,7 @@ export const mockCompletedAtField = {
   description: "When task was completed",
   dataType: "datetime",
   when: { status: "complete" },
+  default: "2024-01-01T00:00:00.000Z",
 } as const satisfies NodeFieldDef;
 
 export const mockCancelReasonFieldKey = "cancelReason" as ConfigKey;

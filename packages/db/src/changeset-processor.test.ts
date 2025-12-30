@@ -288,6 +288,30 @@ describe("processChangesetInput", () => {
     });
   });
 
+  it("skips default when 'when' condition is not met", async () => {
+    const result = throwIfError(
+      await process([
+        { type: mockTaskTypeKey, title: "Pending Task", status: "pending" },
+      ]),
+    );
+
+    const changeset = Object.values(result)[0];
+    expect(changeset).not.toHaveProperty("completedAt");
+  });
+
+  it("applies default when 'when' condition is met", async () => {
+    const result = throwIfError(
+      await process([
+        { type: mockTaskTypeKey, title: "Complete Task", status: "complete" },
+      ]),
+    );
+
+    const changeset = Object.values(result)[0];
+    expect(changeset).toMatchObject({
+      completedAt: "2024-01-01T00:00:00.000Z",
+    });
+  });
+
   describe("validation", () => {
     const checkProcessingSucceeds = async (
       inputs: EntityChangesetInput<any>[],
