@@ -16,6 +16,8 @@ import {
   coreDataTypes,
   type DataTypeDefs,
   dataTypeDefsToOptions,
+  plaintextAlphabetOptions,
+  richtextAlphabetOptions,
 } from "./data-type.ts";
 import type { FieldKey } from "./field.ts";
 import {
@@ -88,6 +90,8 @@ export const configSchemaIds = {
   parent: newMetaSystemId(26),
   where: newMetaSystemId(27),
   includes: newMetaSystemId(28),
+  plaintextAlphabet: newMetaSystemId(29),
+  richtextAlphabet: newMetaSystemId(30),
 } as const;
 export const fieldTypes = [fieldSystemType] as const;
 export type ConfigFieldDef = FieldDef<ConfigDataType>;
@@ -201,6 +205,7 @@ export const configFieldsDefs = {
     key: "value" as SystemKey,
     name: "Value",
     dataType: "plaintext",
+    plaintextAlphabet: "line",
     description: "Fixed value constraint for the field",
   },
   exclude: {
@@ -208,6 +213,7 @@ export const configFieldsDefs = {
     key: "exclude" as SystemKey,
     name: "Exclude",
     dataType: "plaintext",
+    plaintextAlphabet: "code",
     description: "Excluded option values",
     allowMultiple: true,
   },
@@ -216,6 +222,7 @@ export const configFieldsDefs = {
     key: "only" as SystemKey,
     name: "Only",
     dataType: "plaintext",
+    plaintextAlphabet: "code",
     description: "Allowed option values",
     allowMultiple: true,
   },
@@ -263,6 +270,26 @@ export const configFieldsDefs = {
     dataType: "object",
     description: "Fields to include in entity output",
   },
+  plaintextAlphabet: {
+    id: configSchemaIds.plaintextAlphabet,
+    key: "plaintextAlphabet" as SystemKey,
+    name: "Plaintext Alphabet",
+    dataType: "option",
+    description: "Character constraints for plaintext fields",
+    options: plaintextAlphabetOptions,
+    when: { dataType: "plaintext" },
+    default: "line",
+  },
+  richtextAlphabet: {
+    id: configSchemaIds.richtextAlphabet,
+    key: "richtextAlphabet" as SystemKey,
+    name: "Richtext Alphabet",
+    dataType: "option",
+    description: "Formatting constraints for richtext fields",
+    options: richtextAlphabetOptions,
+    when: { dataType: "richtext" },
+    default: "block",
+  },
 } as const satisfies Record<FieldKey, ConfigFieldDef>;
 export type ConfigFieldDefinitions = typeof configFieldsDefs;
 export type ConfigFieldKey = keyof ConfigFieldDefinitions;
@@ -298,6 +325,8 @@ export const configTypeDefs: ConfigTypeDefinitions = {
       "options",
       "when",
       "default",
+      "plaintextAlphabet",
+      "richtextAlphabet",
     ],
   },
   [typeSystemType]: {

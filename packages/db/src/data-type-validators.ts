@@ -8,15 +8,20 @@ import {
   type Result,
 } from "@binder/utils";
 import { isValidUid } from "./utils/uid.ts";
-import type {
-  ConfigDataType,
-  CoreDataType,
-  DataTypeNs,
-  FieldDef,
-  Namespace,
-  NodeDataType,
+import {
+  type ConfigDataType,
+  configFieldsDefs,
+  type CoreDataType,
+  type DataTypeNs,
+  type FieldDef,
+  type Namespace,
+  type NodeDataType,
 } from "./model";
-import { QueryParamsSchema } from "./model";
+import {
+  plaintextAlphabets,
+  QueryParamsSchema,
+  richtextAlphabets,
+} from "./model";
 
 export type DataTypeValidator<D extends string> = (
   value: JsonValue,
@@ -86,22 +91,36 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
     );
   },
 
-  plaintext: (value) => {
-    if (typeof value === "string") return okVoid;
-    return fail(
-      "validation-error",
-      `Expected string for plaintext, got: ${typeof value}`,
-      undefined,
-    );
+  plaintext: (value, fieldDef) => {
+    if (typeof value !== "string")
+      return fail(
+        "validation-error",
+        `Expected string for plaintext, got: ${typeof value}`,
+        undefined,
+      );
+    if (value === "") return okVoid;
+    const alphabet: keyof typeof plaintextAlphabets =
+      fieldDef.plaintextAlphabet ?? configFieldsDefs.plaintextAlphabet.default;
+    const alphabetDef = plaintextAlphabets[alphabet];
+    if (!alphabetDef.pattern.test(value))
+      return fail("validation-error", alphabetDef.errorMessage);
+    return okVoid;
   },
 
-  richtext: (value) => {
-    if (typeof value === "string") return okVoid;
-    return fail(
-      "validation-error",
-      `Expected string for richtext, got: ${typeof value}`,
-      undefined,
-    );
+  richtext: (value, fieldDef) => {
+    if (typeof value !== "string")
+      return fail(
+        "validation-error",
+        `Expected string for richtext, got: ${typeof value}`,
+        undefined,
+      );
+    if (value === "") return okVoid;
+    const alphabet: keyof typeof richtextAlphabets =
+      fieldDef.richtextAlphabet ?? configFieldsDefs.richtextAlphabet.default;
+    const alphabetDef = richtextAlphabets[alphabet];
+    if (!alphabetDef.pattern.test(value))
+      return fail("validation-error", alphabetDef.errorMessage);
+    return okVoid;
   },
 
   date: (value) => {

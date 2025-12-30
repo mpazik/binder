@@ -179,6 +179,96 @@ describe("data-type-validators", () => {
       checkErr("plaintext", null);
       checkErr("plaintext", true);
     });
+
+    it("uses line alphabet by default - rejects line breaks", () => {
+      checkErr("plaintext", "hello\nworld", {
+        message: "single line without line breaks",
+      });
+    });
+
+    it("accepts single line with default alphabet", () => {
+      checkOk("plaintext", "hello world with spaces");
+    });
+
+    describe("alphabet: token", () => {
+      const fieldDef = { plaintextAlphabet: "token" as const };
+
+      it("accepts letters and digits", () => {
+        checkOk("plaintext", "abc123", { fieldDef });
+        checkOk("plaintext", "", { fieldDef });
+      });
+
+      it("rejects spaces", () => {
+        checkErr("plaintext", "abc 123", {
+          fieldDef,
+          message: "only letters and digits",
+        });
+      });
+
+      it("rejects special characters", () => {
+        checkErr("plaintext", "abc-123", { fieldDef });
+        checkErr("plaintext", "abc_123", { fieldDef });
+      });
+    });
+
+    describe("alphabet: code", () => {
+      const fieldDef = { plaintextAlphabet: "code" as const };
+
+      it("accepts valid code identifiers", () => {
+        checkOk("plaintext", "myItem", { fieldDef });
+        checkOk("plaintext", "my-item_v2", { fieldDef });
+        checkOk("plaintext", "", { fieldDef });
+      });
+
+      it("rejects codes starting with digit", () => {
+        checkErr("plaintext", "123abc", {
+          fieldDef,
+          message: "start with a letter",
+        });
+      });
+
+      it("rejects codes starting with special char", () => {
+        checkErr("plaintext", "-item", { fieldDef });
+        checkErr("plaintext", "_item", { fieldDef });
+      });
+    });
+
+    describe("alphabet: word", () => {
+      const fieldDef = { plaintextAlphabet: "word" as const };
+
+      it("accepts words without whitespace", () => {
+        checkOk("plaintext", "hello", { fieldDef });
+        checkOk("plaintext", "hello-world", { fieldDef });
+        checkOk("plaintext", "", { fieldDef });
+      });
+
+      it("rejects words with spaces", () => {
+        checkErr("plaintext", "hello world", {
+          fieldDef,
+          message: "single word without whitespace",
+        });
+      });
+
+      it("rejects words with tabs", () => {
+        checkErr("plaintext", "hello\tworld", { fieldDef });
+      });
+    });
+
+    describe("alphabet: paragraph", () => {
+      const fieldDef = { plaintextAlphabet: "paragraph" as const };
+
+      it("accepts multiple lines without blank lines", () => {
+        checkOk("plaintext", "line1\nline2\nline3", { fieldDef });
+        checkOk("plaintext", "", { fieldDef });
+      });
+
+      it("rejects blank lines", () => {
+        checkErr("plaintext", "para1\n\npara2", {
+          fieldDef,
+          message: "must not contain blank lines",
+        });
+      });
+    });
   });
 
   describe("richtext", () => {
@@ -190,6 +280,64 @@ describe("data-type-validators", () => {
     it("rejects non-strings", () => {
       checkErr("richtext", 123);
       checkErr("richtext", null);
+    });
+
+    it("uses block alphabet by default - rejects blank lines", () => {
+      checkErr("richtext", "para1\n\npara2", {
+        message: "must not contain blank lines",
+      });
+    });
+
+    describe("alphabet: word", () => {
+      const fieldDef = { richtextAlphabet: "word" as const };
+
+      it("accepts single words", () => {
+        checkOk("richtext", "hello", { fieldDef });
+        checkOk("richtext", "", { fieldDef });
+      });
+
+      it("rejects spaces", () => {
+        checkErr("richtext", "hello world", {
+          fieldDef,
+          message: "single word without whitespace",
+        });
+      });
+    });
+
+    describe("alphabet: line", () => {
+      const fieldDef = { richtextAlphabet: "line" as const };
+
+      it("accepts single lines with formatting", () => {
+        checkOk("richtext", "hello **world**", { fieldDef });
+        checkOk("richtext", "", { fieldDef });
+      });
+
+      it("rejects line breaks", () => {
+        checkErr("richtext", "line1\nline2", {
+          fieldDef,
+          message: "single line without line breaks",
+        });
+      });
+    });
+
+    describe("alphabet: section", () => {
+      const fieldDef = { richtextAlphabet: "section" as const };
+
+      it("accepts content with blank lines", () => {
+        checkOk("richtext", "heading\n\nparagraph", { fieldDef });
+        checkOk("richtext", "", { fieldDef });
+      });
+
+      it("rejects horizontal rules", () => {
+        checkErr("richtext", "section1\n---\nsection2", {
+          fieldDef,
+          message: "must not contain horizontal rules",
+        });
+      });
+
+      it("rejects longer horizontal rules", () => {
+        checkErr("richtext", "section1\n-----\nsection2", { fieldDef });
+      });
     });
   });
 

@@ -4,6 +4,8 @@ import {
   type CoreDataType,
   type GetValueType,
   type OptionDef,
+  type PlaintextAlphabet,
+  type RichtextAlphabet,
 } from "./data-type.ts";
 import type { FieldKey, FieldPath } from "./field.ts";
 import type { Filters } from "./query.ts";
@@ -40,6 +42,8 @@ export type FieldDef<D extends string = string> = {
   attributes?: FieldKey[];
   when?: Filters;
   default?: JsonValue;
+  plaintextAlphabet?: PlaintextAlphabet;
+  richtextAlphabet?: RichtextAlphabet;
 };
 
 export const newId = <T extends EntityId>(seq: number, offset: number) =>
@@ -91,6 +95,7 @@ export const coreFields = {
     key: "key" as EntityKey,
     name: "Key",
     dataType: "plaintext",
+    plaintextAlphabet: "code",
     description: "Unique key to identify the configuration record",
     unique: true,
   },
@@ -99,6 +104,7 @@ export const coreFields = {
     key: "type" as EntityKey,
     name: "type",
     dataType: "plaintext",
+    plaintextAlphabet: "code",
     immutable: true,
   },
   name: {
@@ -106,18 +112,21 @@ export const coreFields = {
     key: nameFieldKey,
     name: "name",
     dataType: "plaintext",
+    plaintextAlphabet: "line",
   },
   title: {
     id: coreIds.title,
     key: titleFieldKey,
     name: "title",
     dataType: "plaintext",
+    plaintextAlphabet: "line",
   },
   description: {
     id: coreIds.description,
     key: descriptionFieldKey,
     name: "description",
     dataType: "richtext",
+    richtextAlphabet: "section",
   },
 } as const satisfies Record<string, FieldDef>;
 
