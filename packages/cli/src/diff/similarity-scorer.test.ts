@@ -32,13 +32,16 @@ describe("computeMatchScore", () => {
   const score = (
     target: FieldsetNested & { position?: number },
     candidate: FieldsetNested & { position?: number },
-    listLength = defaultListLength,
+    config: Pick<ScorerConfig, "listLength" | "excludeFields">,
   ): number => {
-    const scorerConfig: ScorerConfig = { schema, classifications, listLength };
     const { position: targetPos, ...targetFieldset } = target;
     const { position: candidatePos, ...candidateFieldset } = candidate;
     return computeMatchScore(
-      scorerConfig,
+      {
+        schema,
+        classifications,
+        ...config,
+      },
       targetFieldset,
       candidateFieldset,
       targetPos ?? 0,
@@ -50,17 +53,22 @@ describe("computeMatchScore", () => {
     target: FieldsetNested & { position?: number },
     betterMatch: FieldsetNested & { position?: number },
     worseMatch: FieldsetNested & { position?: number },
-    options: { listLength?: number; match?: "greater" | "equal" } = {},
+    options: {
+      listLength?: number;
+      match?: "greater" | "equal";
+      excludeFields?: Set<string>;
+    } = {},
   ) => {
-    const { listLength = defaultListLength, match = "greater" } = options;
-    if (match === "equal") {
-      expect(score(target, betterMatch, listLength)).toBeCloseTo(
-        score(target, worseMatch, listLength),
+    const { listLength = defaultListLength, excludeFields } = options;
+    const config = { listLength, excludeFields };
+    if (options.match === "equal") {
+      expect(score(target, betterMatch, config)).toBeCloseTo(
+        score(target, worseMatch, config),
         5,
       );
     } else {
-      expect(score(target, betterMatch, listLength)).toBeGreaterThan(
-        score(target, worseMatch, listLength),
+      expect(score(target, betterMatch, config)).toBeGreaterThan(
+        score(target, worseMatch, config),
       );
     }
   };
@@ -71,7 +79,7 @@ describe("computeMatchScore", () => {
     sign: "positive" | "negative",
     listLength = defaultListLength,
   ) => {
-    const s = score(target, candidate, listLength);
+    const s = score(target, candidate, { listLength });
     if (sign === "positive") {
       expect(s).toBeGreaterThan(0);
     } else {
@@ -85,7 +93,9 @@ describe("computeMatchScore", () => {
     expected: number,
     precision = 0,
   ) => {
-    expect(score(target, candidate)).toBeCloseTo(expected, precision);
+    expect(
+      score(target, candidate, { listLength: defaultListLength }),
+    ).toBeCloseTo(expected, precision);
   };
 
   describe("field strength", () => {
@@ -151,7 +161,9 @@ describe("computeMatchScore", () => {
 
     it("position penalty scales with list length", () => {
       const moved = { ...task, position: 1 };
-      expect(score(task, moved, 5)).toBeLessThan(score(task, moved, 100));
+      expect(score(task, moved, { listLength: 5 })).toBeLessThan(
+        score(task, moved, { listLength: 100 }),
+      );
     });
   });
 
@@ -257,7 +269,7 @@ describe("computeMatchScore", () => {
         35.3,
       );
     });
-    // Type match alone is not enough - need partial content similarity to reach threshold
+    // Type match alone is not enough - need partial content similarity to reach the threshold
     it("near threshold - type match with weak title similarity", () => {
       checkScore(
         task,
@@ -562,6 +574,17 @@ describe("computeMatchScore", () => {
         tasks: ["task-3", "task-4"],
       };
       check(projectWithNested, projectWithStrings, projectDifferentStrings);
+    });
+  });
+
+  describe("excluded fields", () => {
+    it("differing excluded field scores same as matching field", () => {
+      const sameStatus = { ...task, status: "pending" };
+      const differentStatus = { ...task, status: "active" };
+      check(task, sameStatus, differentStatus, {
+        excludeFields: new Set(["status"]),
+        match: "equal",
+      });
     });
   });
 });

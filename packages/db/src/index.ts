@@ -10,8 +10,10 @@ export type * from "./model";
 export { entityTables } from "./schema";
 export { validateDataType } from "./data-type-validators";
 export {
+  extractUid,
   formatFieldValue,
   getNestedValue,
+  isFieldsetNested,
   parseFieldValue,
   setNestedValue,
 } from "./model/field.ts";
@@ -20,3 +22,4 @@ export {
   matchesFilter,
   matchesFilters,
 } from "./filter-entities.ts";
+export { createUid } from "./utils/uid.ts";

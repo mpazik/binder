@@ -5,7 +5,6 @@ import "@binder/utils/tests";
 import { type EntityChangesetInput, type KnowledgeGraph } from "@binder/db";
 import {
   mockNodeSchema,
-  mockProjectNode,
   mockTask1Node,
   mockTask1Uid,
   mockTask2Node,

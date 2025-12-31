@@ -5,233 +5,204 @@ import type {
   FieldsetNested,
   KnowledgeGraph,
   NamespaceEditable,
+  QueryParams,
   TransactionId,
   TransactionInput,
 } from "@binder/db";
-import {
-  createError,
-  err,
-  fail,
-  isErr,
-  ok,
-  type ResultAsync,
-} from "@binder/utils";
+import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import { extractFieldValues } from "../utils/interpolate-fields.ts";
-import { diffNodeLists, diffNodeTrees } from "../utils/node-diff.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
+import { diffEntities, diffQueryResults } from "../diff";
 import type { FileSystem } from "../lib/filesystem.ts";
 import {
   modifiedSnapshots,
   namespaceFromSnapshotPath,
   resolveSnapshotPath,
-  snapshotRootForNamespace,
   type SnapshotChangeMetadata,
+  snapshotRootForNamespace,
 } from "../lib/snapshot.ts";
 import type { DatabaseCli } from "../db";
 import { type AppConfig } from "../config.ts";
 import type { MatchOptions } from "../utils/file.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
-  DEFAULT_DYNAMIC_VIEW,
   findNavigationItemByPath,
   getNavigationFilePatterns,
   getPathTemplate,
   loadNavigation,
   type NavigationItem,
 } from "./navigation.ts";
-import { parseMarkdown, parseView } from "./markdown.ts";
-import { extractFields } from "./view.ts";
-import { parseYamlEntity, parseYamlList } from "./yaml.ts";
-import { getDocumentFileType } from "./document.ts";
+import {
+  extract,
+  type ExtractedFileData,
+  type ExtractedProjection,
+} from "./extraction.ts";
 import { normalizeReferences, normalizeReferencesList } from "./reference.ts";
 
-export { diffNodeTrees } from "../utils/node-diff.ts";
-
-type ParsedFileResult =
-  | { kind: "single"; file: FieldsetNested; kg: FieldsetNested }
-  | { kind: "list"; file: FieldsetNested[]; kg: FieldsetNested[] };
-
-const extractFromYamlSingle = async (
+const synchronizeSingle = async (
   kg: KnowledgeGraph,
-  _navItem: NavigationItem,
-  content: string,
-  pathFields: Fieldset,
+  schema: EntitySchema,
   namespace: NamespaceEditable,
-): ResultAsync<ParsedFileResult> => {
-  const parseResult = parseYamlEntity(content);
-  if (isErr(parseResult)) return parseResult;
-
-  const kgSearchResult = await kg.search(
-    {
-      filters: pathFields as Record<string, string>,
-    },
+  entity: FieldsetNested,
+  pathFields: Fieldset,
+): ResultAsync<ChangesetsInput> => {
+  const kgResult = await kg.search(
+    { filters: pathFields as Record<string, string> },
     namespace,
   );
-  if (isErr(kgSearchResult)) return kgSearchResult;
+  if (isErr(kgResult)) return kgResult;
 
-  if (kgSearchResult.data.items.length !== 1) {
-    return err(
-      createError(
-        "invalid_node_count",
-        "Path fields must resolve to exactly one node",
-        {
-          pathFields,
-          nodeCount: kgSearchResult.data.items.length,
-        },
-      ),
+  if (kgResult.data.items.length !== 1) {
+    return fail(
+      "invalid_node_count",
+      "Path fields must resolve to exactly one node",
+      { pathFields, nodeCount: kgResult.data.items.length },
     );
   }
 
-  return ok({
-    kind: "single",
-    file: parseResult.data,
-    kg: kgSearchResult.data.items[0]!,
-  });
+  const normalizedResult = await normalizeReferences(entity, schema, kg);
+  if (isErr(normalizedResult)) return normalizedResult;
+
+  return ok(
+    diffEntities(schema, normalizedResult.data, kgResult.data.items[0]!),
+  );
 };
 
-const extractFromYamlList = async (
+const synchronizeList = async (
   kg: KnowledgeGraph,
-  navItem: NavigationItem,
-  content: string,
-  pathFields: Fieldset,
+  schema: EntitySchema,
   namespace: NamespaceEditable,
-): ResultAsync<ParsedFileResult> => {
-  const parseResult = parseYamlList(content);
-  if (isErr(parseResult)) return parseResult;
-
-  if (!navItem.query) {
-    return err(
-      createError(
-        "missing_query",
-        "Navigation item with YAML list must have query",
-      ),
-    );
-  }
-
-  const interpolatedQuery = interpolateQueryParams(navItem.query, [pathFields]);
+  entities: FieldsetNested[],
+  query: QueryParams,
+  pathFields: Fieldset,
+): ResultAsync<ChangesetsInput> => {
+  const interpolatedQuery = interpolateQueryParams(query, [pathFields]);
   if (isErr(interpolatedQuery)) return interpolatedQuery;
 
-  const kgSearchResult = await kg.search(interpolatedQuery.data, namespace);
-  if (isErr(kgSearchResult)) return kgSearchResult;
+  const kgResult = await kg.search(interpolatedQuery.data, namespace);
+  if (isErr(kgResult)) return kgResult;
 
-  return ok({
-    kind: "list",
-    file: parseResult.data,
-    kg: kgSearchResult.data.items,
-  });
-};
+  const normalizedResult = await normalizeReferencesList(entities, schema, kg);
+  if (isErr(normalizedResult)) return normalizedResult;
 
-const extractFromMarkdown = async (
-  kg: KnowledgeGraph,
-  schema: EntitySchema,
-  navItem: NavigationItem,
-  markdown: string,
-  pathFields: Fieldset,
-  namespace: NamespaceEditable,
-): ResultAsync<ParsedFileResult> => {
-  const templateString = navItem.view ?? DEFAULT_DYNAMIC_VIEW;
-  const viewAst = parseView(templateString);
-  const markdownAst = parseMarkdown(markdown);
-  const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
-  if (isErr(fileFieldsResult)) return fileFieldsResult;
-
-  const kgSearchResult = await kg.search(
-    {
-      filters: pathFields as Record<string, string>,
-    },
-    namespace,
+  const diffResult = diffQueryResults(
+    schema,
+    normalizedResult.data,
+    kgResult.data.items,
+    interpolatedQuery.data,
   );
-  if (isErr(kgSearchResult)) return kgSearchResult;
 
-  if (kgSearchResult.data.items.length !== 1) {
-    return err(
-      createError(
-        "invalid_node_count",
-        "Path fields must resolve to exactly one node",
-        {
-          pathFields,
-          nodeCount: kgSearchResult.data.items.length,
-        },
-      ),
-    );
-  }
-
-  return ok({
-    kind: "single",
-    file: fileFieldsResult.data,
-    kg: kgSearchResult.data.items[0]!,
-  });
+  return ok([...diffResult.toCreate, ...diffResult.toUpdate]);
 };
 
-const extractFromFile = async (
+const synchronizeProjection = async (
   kg: KnowledgeGraph,
   schema: EntitySchema,
-  navItem: NavigationItem,
-  content: string,
-  pathFields: Fieldset,
-  filePath: string,
   namespace: NamespaceEditable,
-): ResultAsync<ParsedFileResult> => {
-  const fileType = getDocumentFileType(filePath);
+  projection: ExtractedProjection,
+  pathFields: Fieldset,
+): ResultAsync<ChangesetsInput> => {
+  const interpolatedQuery = interpolateQueryParams(projection.query, [
+    pathFields,
+  ]);
+  if (isErr(interpolatedQuery)) return interpolatedQuery;
 
-  let result: ResultAsync<ParsedFileResult>;
+  const kgResult = await kg.search(interpolatedQuery.data, namespace);
+  if (isErr(kgResult)) return kgResult;
 
-  if (fileType === "yaml") {
-    if (navItem.includes) {
-      result = extractFromYamlSingle(
-        kg,
-        navItem,
-        content,
-        pathFields,
-        namespace,
-      );
-    } else if (navItem.query) {
-      result = extractFromYamlList(kg, navItem, content, pathFields, namespace);
-    } else {
-      return err(
-        createError(
-          "invalid_yaml_config",
-          "YAML navigation item must have includes or query",
-        ),
-      );
-    }
-  } else if (fileType === "markdown") {
-    result = extractFromMarkdown(
-      kg,
-      schema,
-      navItem,
-      content,
-      pathFields,
-      namespace,
-    );
-  } else {
-    return err(
-      createError("unsupported_file_type", "Unsupported file type", {
-        path: filePath,
-      }),
-    );
-  }
-
-  const extracted = await result;
-  if (isErr(extracted)) return extracted;
-
-  if (extracted.data.kind === "single") {
-    const normalizedFile = await normalizeReferences(
-      extracted.data.file,
-      schema,
-      kg,
-    );
-    if (isErr(normalizedFile)) return normalizedFile;
-    return ok({ ...extracted.data, file: normalizedFile.data });
-  }
-
-  const normalizedFile = await normalizeReferencesList(
-    extracted.data.file,
+  const normalizedResult = await normalizeReferencesList(
+    projection.items,
     schema,
     kg,
   );
-  if (isErr(normalizedFile)) return normalizedFile;
-  return ok({ ...extracted.data, file: normalizedFile.data });
+  if (isErr(normalizedResult)) return normalizedResult;
+
+  const diffResult = diffQueryResults(
+    schema,
+    normalizedResult.data,
+    kgResult.data.items,
+    interpolatedQuery.data,
+  );
+
+  return ok([...diffResult.toCreate, ...diffResult.toUpdate]);
+};
+
+const synchronizeDocument = async (
+  kg: KnowledgeGraph,
+  schema: EntitySchema,
+  namespace: NamespaceEditable,
+  entity: FieldsetNested,
+  projections: ExtractedProjection[],
+  pathFields: Fieldset,
+): ResultAsync<ChangesetsInput> => {
+  const kgResult = await kg.search(
+    { filters: pathFields as Record<string, string> },
+    namespace,
+  );
+  if (isErr(kgResult)) return kgResult;
+
+  if (kgResult.data.items.length !== 1) {
+    return fail(
+      "invalid_node_count",
+      "Path fields must resolve to exactly one node",
+      { pathFields, nodeCount: kgResult.data.items.length },
+    );
+  }
+
+  const normalizedResult = await normalizeReferences(entity, schema, kg);
+  if (isErr(normalizedResult)) return normalizedResult;
+
+  const changesets: ChangesetsInput = diffEntities(
+    schema,
+    normalizedResult.data,
+    kgResult.data.items[0]!,
+  );
+
+  for (const projection of projections) {
+    const projectionResult = await synchronizeProjection(
+      kg,
+      schema,
+      namespace,
+      projection,
+      pathFields,
+    );
+    if (isErr(projectionResult)) return projectionResult;
+    changesets.push(...projectionResult.data);
+  }
+
+  return ok(changesets);
+};
+
+const synchronizeExtracted = (
+  kg: KnowledgeGraph,
+  schema: EntitySchema,
+  namespace: NamespaceEditable,
+  data: ExtractedFileData,
+  pathFields: Fieldset,
+): ResultAsync<ChangesetsInput> => {
+  if (data.kind === "single") {
+    return synchronizeSingle(kg, schema, namespace, data.entity, pathFields);
+  }
+
+  if (data.kind === "list") {
+    return synchronizeList(
+      kg,
+      schema,
+      namespace,
+      data.entities,
+      data.query,
+      pathFields,
+    );
+  }
+
+  return synchronizeDocument(
+    kg,
+    schema,
+    namespace,
+    data.entity,
+    data.projections,
+    pathFields,
+  );
 };
 
 export const synchronizeFile = async <N extends NamespaceEditable>(
@@ -242,7 +213,7 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
   schema: EntitySchema,
   relativePath: string,
   namespace: N,
-  _txVersion?: TransactionId, // we should later use it to fetch data for a given version for fair comparison
+  _txVersion?: TransactionId,
 ): ResultAsync<ChangesetsInput<N>> => {
   const navItem = findNavigationItemByPath(navigationItems, relativePath);
   if (!navItem) {
@@ -264,21 +235,21 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
   const contentResult = await fs.readFile(absolutePath);
   if (isErr(contentResult)) return contentResult;
 
-  const extractResult = await extractFromFile(
-    kg,
+  const extractResult = extract(
     schema,
     navItem,
     contentResult.data,
-    pathFields,
     absolutePath,
-    namespace,
   );
   if (isErr(extractResult)) return extractResult;
 
-  const data = extractResult.data;
-  return data.kind === "single"
-    ? diffNodeTrees(data.file, data.kg)
-    : diffNodeLists(data.file, data.kg);
+  return synchronizeExtracted(
+    kg,
+    schema,
+    namespace,
+    extractResult.data,
+    pathFields,
+  );
 };
 
 const synchronizeNamespaceFiles = async <N extends NamespaceEditable>(

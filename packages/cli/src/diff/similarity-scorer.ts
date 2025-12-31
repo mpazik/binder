@@ -34,6 +34,7 @@ export type ScorerConfig = {
   schema: EntitySchema;
   classifications: FieldClassifications;
   listLength: number;
+  excludeFields?: Set<FieldKey>;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -259,6 +260,8 @@ export const computeMatchScore = (
     if (oldValue === undefined) continue;
 
     const fieldKey = key as FieldKey;
+    if (config.excludeFields?.has(fieldKey)) continue;
+
     const classification = config.classifications.get(fieldKey);
     if (!classification) continue;
 

@@ -24,3 +24,9 @@ items:
     description: See config.mock.ts
     status: pending
     priority: medium
+
+  - uid: MmQ1CesjrIs
+    key: null
+    title: Merge changes from across different projection views and files
+    status: pending
+    priority: medium

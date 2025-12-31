@@ -1,4 +1,4 @@
-import type { EntitySchema, FieldsetNested } from "@binder/db";
+import type { EntitySchema, FieldKey, FieldsetNested } from "@binder/db";
 import { auctionMatch } from "./auction-match.ts";
 import { computeMatchScore, type ScorerConfig } from "./similarity-scorer.ts";
 import { type FieldClassifications } from "./field-classifier.ts";
@@ -6,6 +6,7 @@ import { type FieldClassifications } from "./field-classifier.ts";
 export type MatcherConfig = {
   schema: EntitySchema;
   classifications: FieldClassifications;
+  excludeFields?: Set<FieldKey>;
 };
 
 export type MatchResult = {
@@ -70,6 +71,7 @@ export const matchEntities = (
     schema: config.schema,
     classifications: config.classifications,
     listLength,
+    excludeFields: config.excludeFields,
   };
 
   const scores: number[][] = [];
