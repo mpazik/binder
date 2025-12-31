@@ -30,3 +30,15 @@ export const includes = <T extends readonly unknown[]>(
   arr: T,
   value: unknown,
 ): value is T[number] => arr.includes(value as T[number]);
+
+export const jaccardSimilarity = <T>(a: T[], b: T[]): number => {
+  if (a.length === 0 && b.length === 0) return 1;
+  if (a.length === 0 || b.length === 0) return 0;
+
+  const setA = new Set(a);
+  const setB = new Set(b);
+  const intersection = [...setA].filter((x) => setB.has(x)).length;
+  const union = new Set([...setA, ...setB]).size;
+
+  return intersection / union;
+};

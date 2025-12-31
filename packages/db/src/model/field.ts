@@ -1,4 +1,5 @@
 import { fail, type JsonValue, ok, type Result } from "@binder/utils";
+import type { EntityUid } from "./entity.ts";
 import type { FieldDef } from "./schema.ts";
 
 export type FieldKey = string;
@@ -6,8 +7,21 @@ export type FieldPath = readonly FieldKey[];
 export type FieldValue = JsonValue;
 export type Fieldset = Record<FieldKey, FieldValue>;
 export type FieldValueProvider = (key: FieldKey) => FieldValue;
+export type FieldNestedValue = FieldValue | FieldsetNested;
 export type FieldsetNested = {
-  [key: FieldKey]: FieldValue | FieldsetNested;
+  [key: FieldKey]: FieldNestedValue;
+};
+
+export const isFieldsetNested = (
+  value: FieldNestedValue,
+): value is FieldsetNested =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+export const extractUid = (value: FieldNestedValue): EntityUid | undefined => {
+  if (typeof value === "string") return value as EntityUid;
+  if (isFieldsetNested(value) && typeof value.uid === "string")
+    return value.uid as EntityUid;
+  return undefined;
 };
 
 // 0 is the current entity, 1 its parent, and so on

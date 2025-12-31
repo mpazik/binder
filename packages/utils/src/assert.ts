@@ -54,6 +54,20 @@ export function assertDefinedPass<T>(
   return value;
 }
 
+export function assertString(value: unknown, name?: string): string {
+  if (typeof value === "string") return value;
+  assertFailed(
+    `${name ?? "value"} is ${typeof value} but expected to be a string`,
+  );
+}
+
+export function assertNumber(value: unknown, name?: string): number {
+  if (typeof value === "number") return value;
+  assertFailed(
+    `${name ?? "value"} is ${typeof value} but expected to be a number`,
+  );
+}
+
 export function assertType<S, T extends S>(
   value: S,
   check: (it: S) => it is T,

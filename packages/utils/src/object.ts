@@ -54,7 +54,7 @@ export const objectFromKeys = <T>(keys: string[], fn: (key: string) => T) => {
 
 export const pick = <T extends Record<string, any>, K extends keyof T>(
   obj: T,
-  keys: K[],
+  keys: readonly K[],
 ): Pick<T, K> => {
   const result = {} as Pick<T, K>;
   for (const key of keys) {
