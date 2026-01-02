@@ -320,23 +320,77 @@ describe("data-type-validators", () => {
       });
     });
 
+    describe("alphabet: block", () => {
+      const fieldDef = { richtextAlphabet: "block" as const };
+
+      it("accepts paragraphs and lists", () => {
+        checkOk("richtext", "paragraph content", { fieldDef });
+        checkOk("richtext", "- item 1\n- item 2", { fieldDef });
+        checkOk("richtext", "", { fieldDef });
+      });
+
+      it("rejects blank lines", () => {
+        checkErr("richtext", "para1\n\npara2", {
+          fieldDef,
+          message: "must not contain blank lines",
+        });
+      });
+
+      it("rejects headers", () => {
+        checkErr("richtext", "# Heading", {
+          fieldDef,
+          message: "cannot contain headers",
+        });
+        checkErr("richtext", "## Heading", { fieldDef });
+        checkErr("richtext", "### Heading", { fieldDef });
+      });
+
+      it("rejects headers in multiline content", () => {
+        checkErr("richtext", "content\n## Heading\nmore content", { fieldDef });
+      });
+
+      it("allows hash without space (not a header)", () => {
+        checkOk("richtext", "#hashtag", { fieldDef });
+        checkOk("richtext", "##not-a-header", { fieldDef });
+      });
+    });
+
     describe("alphabet: section", () => {
       const fieldDef = { richtextAlphabet: "section" as const };
 
       it("accepts content with blank lines", () => {
-        checkOk("richtext", "heading\n\nparagraph", { fieldDef });
+        checkOk("richtext", "paragraph\n\nanother paragraph", { fieldDef });
         checkOk("richtext", "", { fieldDef });
+      });
+
+      it("rejects headers", () => {
+        checkErr("richtext", "# Heading\n\nContent", {
+          fieldDef,
+          message: "cannot contain headers",
+        });
+        checkErr("richtext", "## Sub heading", { fieldDef });
+      });
+    });
+
+    describe("alphabet: document", () => {
+      const fieldDef = { richtextAlphabet: "document" as const };
+
+      it("accepts content with headers", () => {
+        checkOk("richtext", "# Heading\n\nContent", { fieldDef });
+        checkOk("richtext", "## Sub heading\n\nMore content", { fieldDef });
+        checkOk("richtext", "# Title\nContent\n## Another", { fieldDef });
+      });
+
+      it("accepts content with blank lines", () => {
+        checkOk("richtext", "paragraph\n\nanother paragraph", { fieldDef });
       });
 
       it("rejects horizontal rules", () => {
         checkErr("richtext", "section1\n---\nsection2", {
           fieldDef,
-          message: "must not contain horizontal rules",
+          message: "cannot contain horizontal rules",
         });
-      });
-
-      it("rejects longer horizontal rules", () => {
-        checkErr("richtext", "section1\n-----\nsection2", { fieldDef });
+        checkErr("richtext", "# Title\n---\ncontent", { fieldDef });
       });
     });
   });

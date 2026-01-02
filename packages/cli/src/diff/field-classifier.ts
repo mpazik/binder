@@ -42,6 +42,7 @@ const RICHTEXT_U_VALUES: Record<RichtextAlphabet, number> = {
   line: 0.0001,
   block: 0.00001,
   section: 0.000001,
+  document: 0.0000001,
 };
 
 const BASE_U_VALUES: Record<CoreDataType, number> = {

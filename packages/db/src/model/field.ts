@@ -71,15 +71,88 @@ export const setNestedValue = (
   current[path[path.length - 1]!] = value;
 };
 
+type MultiValueDelimiter =
+  | "comma"
+  | "newline"
+  | "blankline"
+  | "header"
+  | "hrule";
+
+const getMultiValueDelimiter = (fieldDef: FieldDef): MultiValueDelimiter => {
+  if (fieldDef.dataType === "plaintext") {
+    const alphabet = fieldDef.plaintextAlphabet;
+    if (alphabet === "line") return "newline";
+    if (alphabet === "paragraph") return "blankline";
+    return "comma";
+  }
+  if (fieldDef.dataType === "richtext") {
+    const alphabet = fieldDef.richtextAlphabet;
+    if (alphabet === "line") return "newline";
+    if (alphabet === "block") return "blankline";
+    if (alphabet === "section") return "header";
+    if (alphabet === "document") return "hrule";
+    return "comma";
+  }
+  return "comma";
+};
+
+const splitByHeader = (value: string): string[] => {
+  const headerPattern = /^#{1,6}\s/;
+  const lines = value.split("\n");
+  const sections: string[] = [];
+  let currentSection: string[] = [];
+
+  for (const line of lines) {
+    if (headerPattern.test(line) && currentSection.length > 0) {
+      sections.push(currentSection.join("\n").trim());
+      currentSection = [line];
+    } else {
+      currentSection.push(line);
+    }
+  }
+
+  if (currentSection.length > 0) {
+    const trimmed = currentSection.join("\n").trim();
+    if (trimmed) sections.push(trimmed);
+  }
+
+  return sections;
+};
+
+const splitByHorizontalRule = (value: string): string[] =>
+  value.split(/^-{3,}\s*$/m).map((item) => item.trim());
+
+const splitByDelimiter = (
+  value: string,
+  delimiter: MultiValueDelimiter,
+): string[] => {
+  if (delimiter === "comma") return value.split(",").map((item) => item.trim());
+
+  if (delimiter === "newline")
+    return value.split("\n").map((item) => item.trim());
+
+  if (delimiter === "blankline")
+    return value.split(/\n\n+/).map((item) => item.trim());
+
+  if (delimiter === "header") return splitByHeader(value);
+
+  if (delimiter === "hrule") return splitByHorizontalRule(value);
+
+  return [value];
+};
+
 export const parseFieldValue = (
   raw: string,
-  fieldDef: Pick<FieldDef, "dataType" | "allowMultiple">,
+  fieldDef: FieldDef,
 ): Result<FieldValue> => {
   const trimmed = raw.trim();
 
   if (fieldDef.allowMultiple) {
     if (trimmed === "") return ok([]);
-    const items = trimmed.split(",").map((item) => item.trim());
+    const delimiter = getMultiValueDelimiter(fieldDef);
+    const items = splitByDelimiter(trimmed, delimiter).filter(
+      (item) => item.length > 0,
+    );
     return ok(items);
   }
 

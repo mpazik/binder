@@ -1,8 +1,11 @@
-import type {
-  FieldChangeInput,
-  FieldChangesetInput,
-  FieldKey,
-  Fieldset,
+import {
+  type EntitySchema,
+  type FieldChangeInput,
+  type FieldChangesetInput,
+  type FieldDef,
+  type FieldKey,
+  type Fieldset,
+  parseFieldValue,
 } from "@binder/db";
 import {
   createError,
@@ -49,7 +52,7 @@ const parsePatchOperation = (patch: string): PatchOperation | null => {
     (patch.startsWith("'") && patch.endsWith("'")) ||
     (patch.startsWith('"') && patch.endsWith('"'));
   const trimmedPatch = patchHasOuterQuotes ? patch.slice(1, -1) : patch;
-  const match = trimmedPatch.match(/^([\w]+)(?::([^=+-]+))?([-+]*=|--)(.*)$/);
+  const match = trimmedPatch.match(/^([\w]+)(?::([^=+-]+))?([-+]*=|--)(.*)$/s);
   if (!match) return null;
 
   const [, field, accessor, operator, value] = match;
@@ -140,6 +143,7 @@ const parseYamlValue = (
 
 export const parseFieldChange = (
   fieldChange: string,
+  fieldDef: FieldDef,
 ): Result<FieldChangeInput> => {
   const patchOp = parsePatchOperation(fieldChange);
   if (!patchOp) return err(createPatchFormatError(fieldChange));
@@ -167,27 +171,7 @@ export const parseFieldChange = (
 
   if (operator === "=") {
     if (value === "[]") return ok([]);
-
-    const quotedValue = parseQuotedValue(value);
-    if (quotedValue !== value) {
-      if (quotedValue === "") return ok("");
-      if (quotedValue === "true") return ok(true);
-      if (quotedValue === "false") return ok(false);
-      if (/^-?\d+$/.test(quotedValue)) return ok(parseInt(quotedValue, 10));
-      if (/^-?\d+\.\d+$/.test(quotedValue)) return ok(parseFloat(quotedValue));
-      return ok(quotedValue);
-    }
-
-    if (value === "") return ok("");
-    if (value.includes(",")) {
-      return ok(splitCommaSeparated(value));
-    }
-
-    if (value === "true") return ok(true);
-    if (value === "false") return ok(false);
-    if (/^-?\d+$/.test(value)) return ok(parseInt(value, 10));
-    if (/^-?\d+\.\d+$/.test(value)) return ok(parseFloat(value));
-    return ok(value);
+    return parseFieldValue(parseQuotedValue(value), fieldDef);
   }
 
   if (operator === "+=") {
@@ -270,6 +254,7 @@ export const parseFieldChange = (
 
 export const parsePatches = (
   patches: string[],
+  schema: EntitySchema,
 ): Result<FieldChangesetInput> => {
   const result: Record<string, FieldChangeInput> = {};
   for (const patch of patches) {
@@ -277,7 +262,13 @@ export const parsePatches = (
     if (!patchOp) return err(createPatchFormatError(patch));
 
     const fieldKey = patchOp.field as FieldKey;
-    const fieldChangeResult = parseFieldChange(patch);
+    const fieldDef = schema.fields[fieldKey];
+    if (!fieldDef)
+      return fail("field-not-found", `Unknown field: ${fieldKey}`, {
+        field: fieldKey,
+      });
+
+    const fieldChangeResult = parseFieldChange(patch, fieldDef);
     if (isErr(fieldChangeResult)) return fieldChangeResult;
     result[fieldKey] = fieldChangeResult.data;
   }

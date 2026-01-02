@@ -102,8 +102,8 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
     const alphabet: keyof typeof plaintextAlphabets =
       fieldDef.plaintextAlphabet ?? configFieldsDefs.plaintextAlphabet.default;
     const alphabetDef = plaintextAlphabets[alphabet];
-    if (!alphabetDef.pattern.test(value))
-      return fail("validation-error", alphabetDef.errorMessage);
+    const error = alphabetDef.validate(value, {});
+    if (error) return fail("validation-error", error);
     return okVoid;
   },
 
@@ -118,8 +118,10 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
     const alphabet: keyof typeof richtextAlphabets =
       fieldDef.richtextAlphabet ?? configFieldsDefs.richtextAlphabet.default;
     const alphabetDef = richtextAlphabets[alphabet];
-    if (!alphabetDef.pattern.test(value))
-      return fail("validation-error", alphabetDef.errorMessage);
+    const error = alphabetDef.validate(value, {
+      allowMultiple: fieldDef.allowMultiple,
+    });
+    if (error) return fail("validation-error", error);
     return okVoid;
   },
 

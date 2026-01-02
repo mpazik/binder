@@ -22,7 +22,10 @@ export const configCreateHandler: CommandHandlerWithDb<{
   type: ConfigType;
   patches: string[];
 }> = async ({ kg, config, args }) => {
-  const fieldsResult = parsePatches(args.patches);
+  const schemaResult = await kg.getSchema("config");
+  if (isErr(schemaResult)) return schemaResult;
+
+  const fieldsResult = parsePatches(args.patches, schemaResult.data);
   if (isErr(fieldsResult)) return fieldsResult;
 
   const result = await kg.update({
@@ -55,7 +58,10 @@ export const configUpdateHandler: CommandHandlerWithDb<{
   ref: ConfigRef;
   patches: string[];
 }> = async ({ kg, config, args }) => {
-  const fieldsResult = parsePatches(args.patches);
+  const schemaResult = await kg.getSchema("config");
+  if (isErr(schemaResult)) return schemaResult;
+
+  const fieldsResult = parsePatches(args.patches, schemaResult.data);
   if (isErr(fieldsResult)) return fieldsResult;
 
   const result = await kg.update({

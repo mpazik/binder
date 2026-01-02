@@ -13,7 +13,10 @@ export const nodeCreateHandler: CommandHandlerWithDb<{
   type: NodeType;
   patches: string[];
 }> = async ({ kg, config, ui, args }) => {
-  const fieldsResult = parsePatches(args.patches);
+  const schemaResult = await kg.getSchema("node");
+  if (isErr(schemaResult)) return schemaResult;
+
+  const fieldsResult = parsePatches(args.patches, schemaResult.data);
   if (isErr(fieldsResult)) return fieldsResult;
 
   const result = await kg.update({
@@ -46,7 +49,10 @@ export const nodeUpdateHandler: CommandHandlerWithDb<{
   ref: NodeRef;
   patches: string[];
 }> = async ({ kg, config, ui, args }) => {
-  const fieldsResult = parsePatches(args.patches);
+  const schemaResult = await kg.getSchema("node");
+  if (isErr(schemaResult)) return schemaResult;
+
+  const fieldsResult = parsePatches(args.patches, schemaResult.data);
   if (isErr(fieldsResult)) return fieldsResult;
 
   const result = await kg.update({

@@ -115,7 +115,7 @@ export const mockTagsField = {
   name: "Tags",
   description: "Category labels",
   dataType: "plaintext",
-  plaintextAlphabet: "line",
+  plaintextAlphabet: "code",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -210,7 +210,7 @@ export const mockPriorityField = {
 } as const satisfies NodeFieldDef;
 
 export const mockTaskType = {
-  id: newUserConfigId(14),
+  id: newUserConfigId(20),
   uid: "typTask0012" as ConfigUid,
   key: mockTaskTypeKey,
   type: typeSystemType,
@@ -229,7 +229,7 @@ export const mockTaskType = {
 } as const satisfies TypeDef;
 
 export const mockProjectType = {
-  id: newUserConfigId(15),
+  id: newUserConfigId(21),
   uid: "typProjct13" as ConfigUid,
   key: mockProjectTypeKey,
   type: typeSystemType,
@@ -245,7 +245,7 @@ export const mockProjectType = {
 } as const satisfies TypeDef;
 
 export const mockUserType = {
-  id: newUserConfigId(16),
+  id: newUserConfigId(22),
   uid: "typUser0014" as ConfigUid,
   key: mockUserTypeKey,
   type: typeSystemType,
@@ -258,7 +258,7 @@ export const mockUserType = {
 } as const satisfies TypeDef;
 
 export const mockTeamType = {
-  id: newUserConfigId(17),
+  id: newUserConfigId(23),
   uid: "typTeam0015" as ConfigUid,
   key: mockTeamTypeKey,
   type: typeSystemType,
@@ -266,3 +266,79 @@ export const mockTeamType = {
   description: "Collaborative group",
   fields: [[mockMembersFieldKey, { min: 1 }]],
 } as const satisfies TypeDef;
+
+export const mockAliasesFieldKey = "aliases" as ConfigKey;
+export const mockAliasesField = {
+  id: newUserConfigId(14),
+  uid: "fldAlias022" as ConfigUid,
+  key: mockAliasesFieldKey,
+  type: fieldSystemType,
+  name: "Aliases",
+  description: "Alternative names",
+  dataType: "plaintext",
+  plaintextAlphabet: "line",
+  allowMultiple: true,
+} as const satisfies NodeFieldDef;
+
+export const mockNotesFieldKey = "notes" as ConfigKey;
+export const mockNotesField = {
+  id: newUserConfigId(15),
+  uid: "fldNotes023" as ConfigUid,
+  key: mockNotesFieldKey,
+  type: fieldSystemType,
+  name: "Notes",
+  description: "Multiple note paragraphs",
+  dataType: "plaintext",
+  plaintextAlphabet: "paragraph",
+  allowMultiple: true,
+} as const satisfies NodeFieldDef;
+
+export const mockStepsFieldKey = "steps" as ConfigKey;
+export const mockStepsField = {
+  id: newUserConfigId(16),
+  uid: "fldSteps024" as ConfigUid,
+  key: mockStepsFieldKey,
+  type: fieldSystemType,
+  name: "Steps",
+  description: "Instruction steps",
+  dataType: "richtext",
+  richtextAlphabet: "block",
+  allowMultiple: true,
+} as const satisfies NodeFieldDef;
+
+export const mockChaptersFieldKey = "chapters" as ConfigKey;
+export const mockChaptersField = {
+  id: newUserConfigId(17),
+  uid: "fldChpts025" as ConfigUid,
+  key: mockChaptersFieldKey,
+  type: fieldSystemType,
+  name: "Chapters",
+  description: "Document chapters",
+  dataType: "richtext",
+  richtextAlphabet: "section",
+  allowMultiple: true,
+} as const satisfies NodeFieldDef;
+
+export const mockTemplatesFieldKey = "templates" as ConfigKey;
+export const mockTemplatesField = {
+  id: newUserConfigId(18),
+  uid: "fldTmpls026" as ConfigUid,
+  key: mockTemplatesFieldKey,
+  type: fieldSystemType,
+  name: "Templates",
+  description: "Document templates",
+  dataType: "richtext",
+  richtextAlphabet: "document",
+  allowMultiple: true,
+} as const satisfies NodeFieldDef;
+
+export const mockPriceFieldKey = "price" as ConfigKey;
+export const mockPriceField = {
+  id: newUserConfigId(19),
+  uid: "fldPrice027" as ConfigUid,
+  key: mockPriceFieldKey,
+  type: fieldSystemType,
+  name: "Price",
+  description: "Item price",
+  dataType: "decimal",
+} as const satisfies NodeFieldDef;
