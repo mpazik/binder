@@ -19,19 +19,25 @@ import { mockDocumentTransactionInput } from "./document.mock.ts";
 import { mockNavigationConfigInput } from "./navigation.mock.ts";
 import { synchronizeFile, synchronizeModifiedFiles } from "./synchronizer.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
-import { type NavigationItem } from "./navigation.ts";
+import { type NavigationItem, type Templates } from "./navigation.ts";
 
-const navigationItems: NavigationItem[] = [
-  {
-    path: "tasks/{key}",
-    view: `# {title}
+const taskView = `# {title}
 
 **Status:** {status}
 
 ## Description
 
 {description}
-`,
+`;
+
+const templates: Templates = [
+  { key: "task-template", templateContent: taskView },
+];
+
+const navigationItems: NavigationItem[] = [
+  {
+    path: "tasks/{key}",
+    template: "task-template",
   },
   {
     path: "tasks/{key}",
@@ -84,6 +90,7 @@ describe("synchronizeFile", () => {
         mockNodeSchema,
         filePath,
         "node",
+        templates,
       ),
     );
     expect(result).toEqual(expectedNodes);

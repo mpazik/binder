@@ -46,7 +46,7 @@ import type { FileType } from "./document.ts";
 
 const inferFileType = (item: NavigationItem): FileType => {
   if (item.path.endsWith("/")) return "directory";
-  if (item.view !== undefined) return "markdown";
+  if (item.template !== undefined) return "markdown";
   return "yaml";
 };
 
@@ -62,11 +62,14 @@ export const getPathTemplate = (item: NavigationItem): string =>
 export type NavigationItem = {
   path: string;
   where?: Filters;
-  view?: string;
+  template?: string;
   includes?: Includes;
   query?: QueryParams;
   children?: NavigationItem[];
 };
+
+export const SYSTEM_TEMPLATE_KEY = "__system__";
+export const DEFAULT_TEMPLATE_KEY = "__default__";
 
 export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
   {
@@ -86,6 +89,11 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
     query: {
       filters: { type: "Navigation" },
     },
+  },
+  {
+    path: `${BINDER_DIR}/templates/{key}`,
+    where: { type: "Template" },
+    template: SYSTEM_TEMPLATE_KEY,
   },
 ];
 
@@ -130,7 +138,7 @@ export const loadNavigation = async (
     return {
       path: item.path as string,
       where: item.where as Filters | undefined,
-      view: item.view as string | undefined,
+      template: item.template as string | undefined,
       includes: item.includes as Includes | undefined,
       query: item.query as QueryParams | undefined,
       ...(children && children.length > 0 ? { children } : {}),
@@ -193,14 +201,20 @@ export const resolvePath = (
   );
 };
 
-export const DEFAULT_DYNAMIC_VIEW = `# {title}
+const BUILTIN_TEMPLATES: Templates = [
+  { key: SYSTEM_TEMPLATE_KEY, templateContent: `{templateContent}` },
+  {
+    key: DEFAULT_TEMPLATE_KEY,
+    templateContent: `# {title}
 
 **Type:** {type}
 **Key:** {key}
 
 ## Description
 
-{description}`;
+{description}`,
+  },
+];
 
 const getParentDir = (filePath: string, fileType: FileType): string => {
   if (fileType === "directory") return filePath;
@@ -224,6 +238,23 @@ const getExcludedFields = (
   return excluded;
 };
 
+export const findTemplate = (
+  templates: Templates,
+  key: string | undefined,
+): TemplateEntity => {
+  const found = templates.find((t) => t.key === key);
+  if (found) return found;
+  return templates.find((t) => t.key === DEFAULT_TEMPLATE_KEY)!;
+};
+
+const resolveTemplateContent = (
+  item: NavigationItem,
+  templates: Templates,
+): string | undefined => {
+  if (!item.template) return undefined;
+  return findTemplate(templates, item.template).templateContent;
+};
+
 const renderContent = async (
   kg: KnowledgeGraph,
   schema: NodeSchema,
@@ -232,10 +263,12 @@ const renderContent = async (
   parentEntities: Fieldset[],
   fileType: FileType,
   namespace: NamespaceEditable,
+  templates: Templates,
 ): Promise<Result<string> | undefined> => {
   if (fileType === "markdown") {
-    assertDefined(item.view);
-    const viewAst = parseView(item.view);
+    const templateContent = resolveTemplateContent(item, templates);
+    assertDefined(templateContent, "templateContent");
+    const viewAst = parseView(templateContent);
     const viewResult = renderView(schema, viewAst, entity as Fieldset);
     if (isErr(viewResult)) return viewResult;
     return ok(viewResult.data);
@@ -286,6 +319,7 @@ const renderNavigationItem = async (
   parentPath: string,
   parentEntities: Fieldset[],
   namespace: NamespaceEditable,
+  templates: Templates,
 ): ResultAsync<void> => {
   const fileType = inferFileType(item);
 
@@ -329,6 +363,7 @@ const renderNavigationItem = async (
       parentEntities,
       fileType,
       namespace,
+      templates,
     );
 
     if (renderResult) {
@@ -362,6 +397,7 @@ const renderNavigationItem = async (
           itemDir,
           childParentEntities,
           namespace,
+          templates,
         );
         if (isErr(result)) return result;
       }
@@ -383,6 +419,8 @@ export const renderNavigation = async (
   if (isErr(schemaResult)) return schemaResult;
   const versionResult = await kg.version();
   if (isErr(versionResult)) return versionResult;
+  const templatesResult = await loadTemplates(kg);
+  if (isErr(templatesResult)) return templatesResult;
 
   for (const item of navigationItems) {
     const result = await renderNavigationItem(
@@ -396,6 +434,7 @@ export const renderNavigation = async (
       "",
       [],
       namespace,
+      templatesResult.data,
     );
     if (isErr(result)) return result;
   }
@@ -504,6 +543,61 @@ export const createNavigationCache = (kg: KnowledgeGraph): NavigationCache => {
     invalidate: () => {
       // config navigation items are hardcoded
       cache.node = null;
+    },
+  };
+};
+
+export type TemplateEntity = {
+  key: string;
+  name?: string;
+  description?: string;
+  preamble?: string[];
+  templateContent: string;
+};
+
+export type Templates = TemplateEntity[];
+
+export const loadTemplates = async (
+  kg: KnowledgeGraph,
+): ResultAsync<Templates> => {
+  const searchResult = await kg.search(
+    { filters: { type: "Template" } },
+    "config",
+  );
+  if (isErr(searchResult)) return searchResult;
+
+  const templates: Templates = searchResult.data.items.map((item) => ({
+    key: item.key as string,
+    name: item.name as string | undefined,
+    description: item.description as string | undefined,
+    preamble: item.preamble as string[] | undefined,
+    templateContent: item.templateContent as string,
+  }));
+
+  return ok([...BUILTIN_TEMPLATES, ...templates]);
+};
+
+export type TemplateLoader = () => ResultAsync<Templates>;
+export type TemplateCache = {
+  load: TemplateLoader;
+  invalidate: () => void;
+};
+
+export const createTemplateCache = (kg: KnowledgeGraph): TemplateCache => {
+  let cache: Templates | null = null;
+
+  return {
+    load: async () => {
+      if (cache) return ok(cache);
+
+      const result = await loadTemplates(kg);
+      if (isErr(result)) return result;
+
+      cache = result.data;
+      return result;
+    },
+    invalidate: () => {
+      cache = null;
     },
   };
 };

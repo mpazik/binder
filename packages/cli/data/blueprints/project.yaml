@@ -132,6 +132,29 @@
             status: complete,
           }
 
+    # Milestone markdown documents
+    - key: nav-milestone-doc
+      type: Navigation
+      path: docs/milestones/{key}
+      where: { type: Milestone }
+      template: milestone-template
+
+    # Templates
+    - key: milestone-template
+      type: Template
+      name: Milestone Template
+      templateContent: |
+        # {title}
+
+        **Status:** {status}
+        **Due Date:** {dueDate}
+
+        ## Description
+
+        {description}
+
+        ## Tasks
+
 # Sample data
 - author: system
   nodes:

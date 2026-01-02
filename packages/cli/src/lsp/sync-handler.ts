@@ -1,6 +1,6 @@
 import { isErr, ok, type ResultAsync } from "@binder/utils";
 import { synchronizeFile } from "../document/synchronizer.ts";
-import { loadNavigation } from "../document/navigation.ts";
+import { loadNavigation, loadTemplates } from "../document/navigation.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import {
   getRelativeSnapshotPath,
@@ -36,6 +36,9 @@ export const handleDocumentSave = async (
   const schemaResult = await kg.getSchema(namespace);
   if (isErr(schemaResult)) return schemaResult;
 
+  const templatesResult = await loadTemplates(kg);
+  if (isErr(templatesResult)) return templatesResult;
+
   const syncResult = await synchronizeFile(
     fs,
     kg,
@@ -44,6 +47,7 @@ export const handleDocumentSave = async (
     schemaResult.data,
     relativePath,
     namespace,
+    templatesResult.data,
   );
   if (isErr(syncResult)) return syncResult;
 

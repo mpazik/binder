@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { omit, throwIfError } from "@binder/utils";
 import {
+  openKnowledgeGraph,
+  type ConfigKey,
   type Fieldset,
   type FieldsetNested,
   type KnowledgeGraph,
-  openKnowledgeGraph,
 } from "@binder/db";
 import {
   mockNodeSchema,
@@ -24,16 +25,19 @@ import {
 import { createMockRuntimeContextWithDb, mockConfig } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { BINDER_DIR } from "../config.ts";
+import { cliConfigSchema, typeTemplateKey } from "../cli-config-schema.ts";
 import { parseView } from "./markdown.ts";
 import { renderView } from "./view.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
-  DEFAULT_DYNAMIC_VIEW,
+  DEFAULT_TEMPLATE_KEY,
   findEntityLocation,
   findNavigationItemByPath,
+  findTemplate,
   getNavigationFilePatterns,
   loadNavigation,
+  loadTemplates,
   type NavigationItem,
   renderNavigation,
 } from "./navigation.ts";
@@ -53,7 +57,7 @@ describe("navigation", () => {
     it("matches markdown file by path template", () => {
       const item: NavigationItem = {
         path: "tasks/{title}",
-        view: DEFAULT_DYNAMIC_VIEW,
+        template: DEFAULT_TEMPLATE_KEY,
       };
       check([item], "tasks/my-task.md", item);
     });
@@ -69,7 +73,7 @@ describe("navigation", () => {
     it("returns undefined when no match found", () => {
       const item: NavigationItem = {
         path: "tasks/{title}",
-        view: DEFAULT_DYNAMIC_VIEW,
+        template: DEFAULT_TEMPLATE_KEY,
       };
       check([item], "projects/my-project.md", undefined);
     });
@@ -77,10 +81,10 @@ describe("navigation", () => {
     it("returns first matching item", () => {
       const first: NavigationItem = {
         path: "tasks/{title}",
-        view: DEFAULT_DYNAMIC_VIEW,
+        template: DEFAULT_TEMPLATE_KEY,
       };
       check(
-        [first, { path: "tasks/{key}", view: DEFAULT_DYNAMIC_VIEW }],
+        [first, { path: "tasks/{key}", template: DEFAULT_TEMPLATE_KEY }],
         "tasks/my-task.md",
         first,
       );
@@ -89,7 +93,7 @@ describe("navigation", () => {
     it("matches nested child item", () => {
       const childItem: NavigationItem = {
         path: "info",
-        view: DEFAULT_DYNAMIC_VIEW,
+        template: DEFAULT_TEMPLATE_KEY,
       };
       check(
         [{ path: "tasks/{title}/", children: [childItem] }],
@@ -128,15 +132,42 @@ describe("navigation", () => {
     let db: DatabaseCli;
     let kg: KnowledgeGraph;
     let fs: MockFileSystem;
+    let defaultTemplateContent: string;
     const paths = mockConfig.paths;
     const docsPath = mockConfig.paths.docs;
-    const defaultViewAst = parseView(DEFAULT_DYNAMIC_VIEW);
+
+    const staticViewContent = "# Welcome\n\nStatic content\n";
+    const infoViewContent = "# Info\n\n{description}";
 
     beforeEach(async () => {
       db = getTestDatabaseCli();
-      kg = openKnowledgeGraph(db);
+      kg = openKnowledgeGraph(db, { configSchema: cliConfigSchema });
       fs = createInMemoryFileSystem();
       throwIfError(await kg.apply(mockTransactionInit));
+
+      const templates = throwIfError(await loadTemplates(kg));
+      defaultTemplateContent = findTemplate(
+        templates,
+        DEFAULT_TEMPLATE_KEY,
+      ).templateContent;
+
+      throwIfError(
+        await kg.update({
+          author: "test",
+          configurations: [
+            {
+              type: typeTemplateKey,
+              key: "static-template" as ConfigKey,
+              templateContent: staticViewContent,
+            },
+            {
+              type: typeTemplateKey,
+              key: "info-template" as ConfigKey,
+              templateContent: infoViewContent,
+            },
+          ],
+        }),
+      );
     });
 
     type FileSpec =
@@ -163,7 +194,7 @@ describe("navigation", () => {
         } else if ("content" in file) {
           expect(fileContent).toEqual(file.content);
         } else {
-          const viewAst = file.view ? parseView(file.view) : defaultViewAst;
+          const viewAst = parseView(file.view ?? defaultTemplateContent);
           const snapshot = throwIfError(
             renderView(mockNodeSchema, viewAst, file.data),
           );
@@ -178,10 +209,9 @@ describe("navigation", () => {
     };
 
     it("renders simple markdown without iteration", async () => {
-      const staticView = "# Welcome\n\nStatic content\n";
       await check(
-        [{ path: "README", view: staticView }],
-        [{ path: "README.md", content: staticView }],
+        [{ path: "README", template: "static-template" }],
+        [{ path: "README.md", content: staticViewContent }],
       );
     });
 
@@ -191,7 +221,7 @@ describe("navigation", () => {
           {
             path: "tasks/{title}",
             where: { type: "Task" },
-            view: DEFAULT_DYNAMIC_VIEW,
+            template: DEFAULT_TEMPLATE_KEY,
           },
         ],
         [
@@ -208,7 +238,6 @@ describe("navigation", () => {
     });
 
     it("renders nested item for directory", async () => {
-      const infoView = "# Info\n\n{description}";
       await check(
         [
           {
@@ -217,7 +246,7 @@ describe("navigation", () => {
             children: [
               {
                 path: "info",
-                view: infoView,
+                template: "info-template",
               },
             ],
           },
@@ -225,12 +254,12 @@ describe("navigation", () => {
         [
           {
             path: `tasks/${mockTask1Node.title}/info.md`,
-            view: infoView,
+            view: infoViewContent,
             data: mockTask1Node,
           },
           {
             path: `tasks/${mockTask2Node.title}/info.md`,
-            view: infoView,
+            view: infoViewContent,
             data: mockTask2Node,
           },
         ],
@@ -243,12 +272,12 @@ describe("navigation", () => {
           {
             path: "projects/{title}",
             where: { type: "Project" },
-            view: DEFAULT_DYNAMIC_VIEW,
+            template: DEFAULT_TEMPLATE_KEY,
             children: [
               {
                 path: "tasks/{title}",
                 where: { type: "Task" },
-                view: DEFAULT_DYNAMIC_VIEW,
+                template: DEFAULT_TEMPLATE_KEY,
               },
             ],
           },
@@ -380,7 +409,7 @@ describe("navigation", () => {
             children: [
               {
                 path: "{parent.uid}",
-                view: DEFAULT_DYNAMIC_VIEW,
+                template: DEFAULT_TEMPLATE_KEY,
               },
             ],
           },
@@ -487,7 +516,7 @@ describe("navigation", () => {
         {
           path: "tasks/{title}",
           where: { type: "Task" },
-          view: DEFAULT_DYNAMIC_VIEW,
+          template: DEFAULT_TEMPLATE_KEY,
         },
       ];
 
@@ -545,7 +574,7 @@ describe("navigation", () => {
         {
           path: "tasks/{title}",
           where: { type: "Task" },
-          view: DEFAULT_DYNAMIC_VIEW,
+          template: DEFAULT_TEMPLATE_KEY,
         },
       ];
 
@@ -562,9 +591,12 @@ describe("navigation", () => {
   describe("getNavigationFilePatterns", () => {
     it("converts path templates to glob patterns", () => {
       const items: NavigationItem[] = [
-        { path: "tasks/{title}", view: DEFAULT_DYNAMIC_VIEW },
-        { path: "projects/{parent.title}/{uid}", view: DEFAULT_DYNAMIC_VIEW },
-        { path: "static/file", view: DEFAULT_DYNAMIC_VIEW },
+        { path: "tasks/{title}", template: DEFAULT_TEMPLATE_KEY },
+        {
+          path: "projects/{parent.title}/{uid}",
+          template: DEFAULT_TEMPLATE_KEY,
+        },
+        { path: "static/file", template: DEFAULT_TEMPLATE_KEY },
         { path: "dirs/{name}/" },
       ];
       const patterns = getNavigationFilePatterns(items);

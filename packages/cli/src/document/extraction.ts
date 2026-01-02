@@ -5,7 +5,11 @@ import {
   type QueryParams,
 } from "@binder/db";
 import { createError, err, isErr, ok, type Result } from "@binder/utils";
-import { DEFAULT_DYNAMIC_VIEW, type NavigationItem } from "./navigation.ts";
+import {
+  findTemplate,
+  type NavigationItem,
+  type Templates,
+} from "./navigation.ts";
 import { parseMarkdown, parseView } from "./markdown.ts";
 import { extractFields } from "./view.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
@@ -98,12 +102,18 @@ const extractFromYamlList = (
   });
 };
 
+const resolveTemplateContent = (
+  navItem: NavigationItem,
+  templates: Templates,
+): string => findTemplate(templates, navItem.template).templateContent;
+
 const extractFromMarkdown = (
   schema: EntitySchema,
   navItem: NavigationItem,
   markdown: string,
+  templates: Templates,
 ): Result<ExtractedFileData> => {
-  const templateString = navItem.view ?? DEFAULT_DYNAMIC_VIEW;
+  const templateString = resolveTemplateContent(navItem, templates);
   const viewAst = parseView(templateString);
   const markdownAst = parseMarkdown(markdown);
   const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
@@ -120,6 +130,7 @@ export const extractRaw = (
   navItem: NavigationItem,
   content: string,
   filePath: string,
+  templates: Templates,
 ): Result<ExtractedFileData> => {
   const fileType = getDocumentFileType(filePath);
 
@@ -139,7 +150,7 @@ export const extractRaw = (
   }
 
   if (fileType === "markdown") {
-    return extractFromMarkdown(schema, navItem, content);
+    return extractFromMarkdown(schema, navItem, content, templates);
   }
 
   return err(
@@ -154,8 +165,9 @@ export const extract = (
   navItem: NavigationItem,
   content: string,
   filePath: string,
+  templates: Templates,
 ): Result<ExtractedFileData> => {
-  const rawResult = extractRaw(schema, navItem, content, filePath);
+  const rawResult = extractRaw(schema, navItem, content, filePath, templates);
   if (isErr(rawResult)) return rawResult;
 
   const data = rawResult.data;

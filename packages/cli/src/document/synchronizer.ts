@@ -3,6 +3,7 @@ import type {
   EntitySchema,
   Fieldset,
   FieldsetNested,
+  Includes,
   KnowledgeGraph,
   NamespaceEditable,
   QueryParams,
@@ -24,13 +25,16 @@ import {
 import type { DatabaseCli } from "../db";
 import { type AppConfig } from "../config.ts";
 import type { MatchOptions } from "../utils/file.ts";
+import type { Logger } from "../log.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
   findNavigationItemByPath,
   getNavigationFilePatterns,
   getPathTemplate,
   loadNavigation,
+  loadTemplates,
   type NavigationItem,
+  type Templates,
 } from "./navigation.ts";
 import {
   extract,
@@ -45,6 +49,7 @@ const synchronizeSingle = async (
   namespace: NamespaceEditable,
   entity: FieldsetNested,
   pathFields: Fieldset,
+  includes?: Includes,
 ): ResultAsync<ChangesetsInput> => {
   const kgResult = await kg.search(
     { filters: pathFields as Record<string, string> },
@@ -75,12 +80,22 @@ const synchronizeList = async (
   entities: FieldsetNested[],
   query: QueryParams,
   pathFields: Fieldset,
+  log?: Logger,
 ): ResultAsync<ChangesetsInput> => {
   const interpolatedQuery = interpolateQueryParams(query, [pathFields]);
   if (isErr(interpolatedQuery)) return interpolatedQuery;
 
   const kgResult = await kg.search(interpolatedQuery.data, namespace);
   if (isErr(kgResult)) return kgResult;
+
+  log?.debug("synchronizeList", {
+    query: interpolatedQuery.data,
+    fileEntities: entities.map((e) => ({ uid: e.uid, milestone: e.milestone })),
+    dbEntities: kgResult.data.items.map((e) => ({
+      uid: e.uid,
+      milestone: e.milestone,
+    })),
+  });
 
   const normalizedResult = await normalizeReferencesList(entities, schema, kg);
   if (isErr(normalizedResult)) return normalizedResult;
@@ -91,6 +106,11 @@ const synchronizeList = async (
     kgResult.data.items,
     interpolatedQuery.data,
   );
+
+  log?.debug("synchronizeList diffResult", {
+    toCreate: diffResult.toCreate.length,
+    toUpdate: diffResult.toUpdate.length,
+  });
 
   return ok([...diffResult.toCreate, ...diffResult.toUpdate]);
 };
@@ -179,9 +199,18 @@ const synchronizeExtracted = (
   namespace: NamespaceEditable,
   data: ExtractedFileData,
   pathFields: Fieldset,
+  includes?: Includes,
+  log?: Logger,
 ): ResultAsync<ChangesetsInput> => {
   if (data.kind === "single") {
-    return synchronizeSingle(kg, schema, namespace, data.entity, pathFields);
+    return synchronizeSingle(
+      kg,
+      schema,
+      namespace,
+      data.entity,
+      pathFields,
+      includes,
+    );
   }
 
   if (data.kind === "list") {
@@ -192,6 +221,7 @@ const synchronizeExtracted = (
       data.entities,
       data.query,
       pathFields,
+      log,
     );
   }
 
@@ -213,6 +243,7 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
   schema: EntitySchema,
   relativePath: string,
   namespace: N,
+  templates: Templates,
   _txVersion?: TransactionId,
 ): ResultAsync<ChangesetsInput<N>> => {
   const navItem = findNavigationItemByPath(navigationItems, relativePath);
@@ -240,6 +271,7 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
     navItem,
     contentResult.data,
     absolutePath,
+    templates,
   );
   if (isErr(extractResult)) return extractResult;
 
@@ -249,6 +281,7 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
     namespace,
     extractResult.data,
     pathFields,
+    navItem.includes,
   );
 };
 
@@ -260,6 +293,7 @@ const synchronizeNamespaceFiles = async <N extends NamespaceEditable>(
   schema: EntitySchema,
   modifiedFiles: SnapshotChangeMetadata[],
   namespace: N,
+  templates: Templates,
 ): ResultAsync<ChangesetsInput<N>> => {
   const changesets: ChangesetsInput<N> = [];
 
@@ -272,6 +306,8 @@ const synchronizeNamespaceFiles = async <N extends NamespaceEditable>(
       schema,
       file.path,
       namespace,
+      templates,
+      undefined,
     );
     if (isErr(syncResult)) return syncResult;
 
@@ -287,6 +323,7 @@ export const synchronizeModifiedFiles = async (
   kg: KnowledgeGraph,
   config: AppConfig,
   scopePath?: string,
+  log?: Logger,
 ): ResultAsync<TransactionInput | null> => {
   const scopeAbsolute = scopePath
     ? resolveSnapshotPath(scopePath, config.paths)
@@ -315,6 +352,11 @@ export const synchronizeModifiedFiles = async (
   const configFiles = configResult.data;
   const nodeFiles = nodeResult.data;
 
+  log?.debug("Modified files detected", {
+    configFiles: configFiles.map((f) => ({ path: f.path, type: f.type })),
+    nodeFiles: nodeFiles.map((f) => ({ path: f.path, type: f.type })),
+  });
+
   if (configFiles.length === 0 && nodeFiles.length === 0) return ok(null);
 
   const configSchema = kg.getConfigSchema();
@@ -327,6 +369,10 @@ export const synchronizeModifiedFiles = async (
   const nodeNavigationResult = await loadNavigation(kg, "node");
   if (isErr(nodeNavigationResult)) return nodeNavigationResult;
 
+  const templatesResult = await loadTemplates(kg);
+  if (isErr(templatesResult)) return templatesResult;
+  const templates = templatesResult.data;
+
   const [configsResult, nodesResult] = await Promise.all([
     synchronizeNamespaceFiles(
       fs,
@@ -336,6 +382,7 @@ export const synchronizeModifiedFiles = async (
       configSchema,
       configFiles,
       "config",
+      templates,
     ),
     synchronizeNamespaceFiles(
       fs,
@@ -345,6 +392,7 @@ export const synchronizeModifiedFiles = async (
       nodeSchemaResult.data,
       nodeFiles,
       "node",
+      templates,
     ),
   ]);
 
@@ -353,6 +401,16 @@ export const synchronizeModifiedFiles = async (
 
   const configs = configsResult.data;
   const nodes = nodesResult.data;
+
+  log?.debug("Changesets after synchronization", {
+    configChangesets: configs.length,
+    nodeChangesets: nodes.length,
+    nodeDetails: nodes.map((n) => ({
+      uid: n.uid,
+      type: n.type,
+      changes: n.changes ? Object.keys(n.changes) : [],
+    })),
+  });
 
   if (configs.length === 0 && nodes.length === 0) return ok(null);
 

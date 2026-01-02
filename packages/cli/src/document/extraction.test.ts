@@ -2,35 +2,42 @@ import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import { mockNodeSchema, mockTask1Node, mockTask2Node } from "@binder/db/mocks";
-import type { NavigationItem } from "./navigation.ts";
+import type { NavigationItem, Templates } from "./navigation.ts";
 import { extract, type ExtractedFileData } from "./extraction.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 
 describe("extract", () => {
-  const check = (
-    navItem: NavigationItem,
-    content: string,
-    path: string,
-    expected: ExtractedFileData,
-  ) => {
-    const result = throwIfError(
-      extract(mockNodeSchema, navItem, content, path),
-    );
-    expect(result).toEqual(expected);
-  };
-
-  const taskView = `# {title}
+  const emptyTemplates: Templates = [];
+  const templates: Templates = [
+    {
+      key: "task-template",
+      templateContent: `# {title}
 
 **Status:** {status}
 
 ## Description
 
 {description}
-`;
+`,
+    },
+  ];
+
+  const check = (
+    navItem: NavigationItem,
+    content: string,
+    path: string,
+    expected: ExtractedFileData,
+    templateList: Templates = emptyTemplates,
+  ) => {
+    const result = throwIfError(
+      extract(mockNodeSchema, navItem, content, path, templateList),
+    );
+    expect(result).toEqual(expected);
+  };
 
   const markdownNavItem: NavigationItem = {
     path: "tasks/{key}",
-    view: taskView,
+    template: "task-template",
   };
 
   const yamlSingleNavItem: NavigationItem = {
@@ -53,15 +60,21 @@ describe("extract", () => {
 
 ${mockTask1Node.description}
 `;
-      check(markdownNavItem, markdown, "task.md", {
-        kind: "document",
-        entity: {
-          title: mockTask1Node.title,
-          status: mockTask1Node.status,
-          description: mockTask1Node.description,
+      check(
+        markdownNavItem,
+        markdown,
+        "task.md",
+        {
+          kind: "document",
+          entity: {
+            title: mockTask1Node.title,
+            status: mockTask1Node.status,
+            description: mockTask1Node.description,
+          },
+          projections: [],
         },
-        projections: [],
-      });
+        templates,
+      );
     });
   });
 
@@ -153,6 +166,7 @@ ${mockTask1Node.description}
         navItemWithoutQuery,
         yaml,
         "all-tasks.yaml",
+        emptyTemplates,
       );
 
       expect(result).toBeErrWithKey("invalid_yaml_config");
@@ -164,6 +178,7 @@ ${mockTask1Node.description}
         markdownNavItem,
         "content",
         "file.txt",
+        templates,
       );
 
       expect(result).toBeErrWithKey("unsupported_file_type");

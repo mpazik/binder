@@ -3,7 +3,7 @@ import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import type { Fieldset, AncestralFieldValueProvider } from "@binder/db";
 import { mockProjectNode, mockUserNode } from "@binder/db/mocks";
-import { resolvePath } from "../document/navigation.ts";
+import { DEFAULT_TEMPLATE_KEY, resolvePath } from "../document/navigation.ts";
 import {
   extractFieldNames,
   extractFieldValues,
@@ -380,7 +380,10 @@ describe("interpolateAncestralFields", () => {
 
 it("round-trips with resolvePath", () => {
   const item: Fieldset = { project: "binder-cli", title: "My Task" };
-  const navItem = { path: "projects/{project}/{title}", view: "# Test" };
+  const navItem = {
+    path: "projects/{project}/{title}",
+    template: DEFAULT_TEMPLATE_KEY,
+  };
   const path = throwIfError(resolvePath(navItem, item));
   expect(path).toBe("projects/binder-cli/My Task.md");
   const result = throwIfError(extractFieldValues(navItem.path + ".md", path));
