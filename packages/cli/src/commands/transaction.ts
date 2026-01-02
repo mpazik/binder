@@ -58,9 +58,10 @@ export const transactionImportHandler: CommandHandlerWithDb<{
   for (const input of allInputs) {
     const nodeCount = input.nodes?.length ?? 0;
     const configCount = input.configurations?.length ?? 0;
-    ui.info(
-      `  ${input.author}: ${nodeCount} node(s), ${configCount} config(s)`,
-    );
+    const parts: string[] = [`author "${input.author}"`];
+    if (nodeCount > 0) parts.push(`${nodeCount} node(s)`);
+    if (configCount > 0) parts.push(`${configCount} config(s)`);
+    ui.info(`  ${parts.join(", ")}`);
   }
 
   if (args.dryRun) {
