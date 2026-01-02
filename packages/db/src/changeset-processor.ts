@@ -51,12 +51,15 @@ import {
   incrementEntityId,
   isClearChange,
   isEntityUpdate,
+  isInsertMutation,
   isListMutation,
   isListMutationArray,
   isListMutationInput,
   isListMutationInputArray,
   isPatchMutation,
+  isRemoveMutation,
   isReservedEntityKey,
+  isSeqChange,
   isSetChange,
   type ListMutation,
   type ListMutationInput,
@@ -76,6 +79,7 @@ import {
   type TypeFieldRef,
   typeSystemType,
   USER_CONFIG_ID_OFFSET,
+  type ValueChangeSet,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 import {
@@ -339,6 +343,37 @@ const validateChangesetInput = <N extends NamespaceEditable>(
           continue;
         }
       }
+    }
+
+    // Handle ["seq", mutations[]] format (ValueChangeSeq)
+    if (Array.isArray(value) && value[0] === "seq" && Array.isArray(value[1])) {
+      for (const mutation of value[1] as ListMutation[]) {
+        if (isPatchMutation(mutation)) {
+          errors.push(
+            ...validatePatchAttrs(
+              namespace,
+              fieldKey,
+              fieldDef,
+              mutation[2] as Fieldset,
+              schema,
+            ),
+          );
+          continue;
+        }
+        const [kind, mutationValue] = mutation;
+        const validationResult = validateDataType(
+          namespace,
+          { ...fieldDef, allowMultiple: false },
+          mutationValue as FieldValue,
+        );
+        if (isErr(validationResult)) {
+          errors.push({
+            field: fieldKey,
+            message: `Invalid ${kind} value: ${validationResult.error.message}`,
+          });
+        }
+      }
+      continue;
     }
 
     if (isListMutationArray(value)) {
@@ -646,7 +681,16 @@ const collectRelationKeys = <N extends NamespaceEditable>(
       if (fieldDef?.dataType !== "relation") continue;
 
       const fieldValue = value as FieldValue;
-      if (isListMutationArray(fieldValue)) {
+      // Handle ["seq", mutations[]] format (ValueChangeSeq)
+      if (
+        Array.isArray(fieldValue) &&
+        fieldValue[0] === "seq" &&
+        Array.isArray(fieldValue[1])
+      ) {
+        for (const mutation of fieldValue[1] as ListMutation[]) {
+          if (mutation[0] !== "patch") collectFromValue(mutation[1]);
+        }
+      } else if (isListMutationArray(fieldValue)) {
         for (const mutation of fieldValue as ListMutation[]) {
           if (mutation[0] !== "patch") collectFromValue(mutation[1]);
         }
@@ -827,6 +871,79 @@ const resolveRelations = <N extends NamespaceEditable>(
   return resolved;
 };
 
+const extractMutations = (
+  change: FieldChangeset[FieldKey],
+): ListMutation[] | null => {
+  if (isListMutationArray(change)) return change;
+  const normalized = normalizeValueChange(change);
+  if (isSeqChange(normalized)) return normalized[1];
+  return null;
+};
+
+const expandInverseRelations = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
+  changesets: EntitiesChangeset<N>,
+  schema: NamespaceSchema<N>,
+): ResultAsync<EntitiesChangeset<N>> => {
+  const result = {} as EntitiesChangeset<N>;
+
+  for (const [parentRef, changeset] of objEntries(changesets)) {
+    const filteredChangeset: FieldChangeset = {};
+
+    for (const [fieldKey, change] of objEntries(changeset)) {
+      const fieldDef = getFieldDef(schema, fieldKey);
+      if (!fieldDef?.inverseOf) {
+        filteredChangeset[fieldKey] = change;
+        continue;
+      }
+
+      const directFieldKey = fieldDef.inverseOf as FieldKey;
+      const mutations = extractMutations(change);
+
+      if (!mutations) {
+        filteredChangeset[fieldKey] = change;
+        continue;
+      }
+
+      for (const mutation of mutations) {
+        if (isInsertMutation(mutation)) {
+          const childRef = mutation[1] as EntityChangesetRef<N>;
+          const existingResult = await fetchEntityFieldset(
+            tx,
+            namespace,
+            childRef,
+            [directFieldKey],
+          );
+          if (isErr(existingResult)) return existingResult;
+
+          const currentValue = existingResult.data[directFieldKey] as
+            | EntityChangesetRef<N>
+            | undefined;
+          const childChange: ValueChangeSet =
+            currentValue != null
+              ? ["set", parentRef, currentValue]
+              : ["set", parentRef];
+
+          const existing = result[childRef] ?? {};
+          result[childRef] = { ...existing, [directFieldKey]: childChange };
+        } else if (isRemoveMutation(mutation)) {
+          const childRef = mutation[1] as EntityChangesetRef<N>;
+          const childChange: ValueChangeSet = ["set", null, parentRef];
+
+          const existing = result[childRef] ?? {};
+          result[childRef] = { ...existing, [directFieldKey]: childChange };
+        }
+      }
+    }
+
+    if (Object.keys(filteredChangeset).length > 0) {
+      result[parentRef] = filteredChangeset;
+    }
+  }
+
+  return ok(result);
+};
 const buildChangeset = async <N extends NamespaceEditable>(
   namespace: N,
   schema: NamespaceSchema<N>,
@@ -1035,9 +1152,9 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
     });
   }
 
-  return ok(
-    Object.fromEntries(
-      changesetResults.map(throwIfError),
-    ) as EntitiesChangeset<N>,
-  );
+  const rawChangesets = Object.fromEntries(
+    changesetResults.map(throwIfError),
+  ) as EntitiesChangeset<N>;
+
+  return expandInverseRelations(tx, namespace, rawChangesets, schema);
 };
