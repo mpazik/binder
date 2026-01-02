@@ -18,6 +18,7 @@ import {
   type NodeDataType,
 } from "./model";
 import {
+  periodFormats,
   plaintextAlphabets,
   QueryParamsSchema,
   richtextAlphabets,
@@ -141,6 +142,21 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
       `Expected ISO timestamp format, got: ${value}`,
       undefined,
     );
+  },
+
+  period: (value, fieldDef) => {
+    if (typeof value !== "string")
+      return fail(
+        "validation-error",
+        `Expected string for period, got: ${typeof value}`,
+        undefined,
+      );
+    if (value === "") return okVoid;
+    const format: keyof typeof periodFormats = fieldDef.periodFormat ?? "day";
+    const formatDef = periodFormats[format];
+    const error = formatDef.validate(value, {});
+    if (error) return fail("validation-error", error);
+    return okVoid;
   },
 };
 

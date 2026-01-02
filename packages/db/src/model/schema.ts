@@ -4,6 +4,7 @@ import {
   type CoreDataType,
   type GetValueType,
   type OptionDef,
+  type PeriodFormat,
   type PlaintextAlphabet,
   type RichtextAlphabet,
 } from "./data-type.ts";
@@ -44,6 +45,7 @@ export type FieldDef<D extends string = string> = {
   default?: JsonValue;
   plaintextAlphabet?: PlaintextAlphabet;
   richtextAlphabet?: RichtextAlphabet;
+  periodFormat?: PeriodFormat;
 };
 
 export const newId = <T extends EntityId>(seq: number, offset: number) =>

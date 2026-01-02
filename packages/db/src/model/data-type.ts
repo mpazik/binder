@@ -36,6 +36,7 @@ export const coreDataTypes = {
   },
   date: { name: "Date" },
   datetime: { name: "Date Time" },
+  period: { name: "Period" },
 } as const satisfies DataTypeDefs;
 
 const createPatternValidator =
@@ -145,8 +146,49 @@ export const richtextAlphabets = {
   },
 } as const satisfies AlphabetDefs;
 
+export const periodFormats = {
+  year: {
+    name: "Year",
+    description: "YYYY (e.g. 2024)",
+    validate: createPatternValidator(/^\d{4}$/, "Invalid year format"),
+  },
+  quarter: {
+    name: "Quarter",
+    description: "YYYY-Q# (e.g. 2024-Q1)",
+    validate: createPatternValidator(
+      /^\d{4}-Q[1-4]$/,
+      "Invalid quarter format",
+    ),
+  },
+  month: {
+    name: "Month",
+    description: "YYYY-MM (e.g. 2024-03)",
+    validate: createPatternValidator(
+      /^\d{4}-(0[1-9]|1[0-2])$/,
+      "Invalid month format",
+    ),
+  },
+  week: {
+    name: "Week",
+    description: "YYYY-W## (e.g. 2024-W12)",
+    validate: createPatternValidator(
+      /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/,
+      "Invalid week format",
+    ),
+  },
+  day: {
+    name: "Day",
+    description: "YYYY-MM-DD (e.g. 2024-03-25)",
+    validate: createPatternValidator(
+      /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
+      "Invalid day format",
+    ),
+  },
+} as const satisfies AlphabetDefs;
+
 export type PlaintextAlphabet = keyof typeof plaintextAlphabets;
 export type RichtextAlphabet = keyof typeof richtextAlphabets;
+export type PeriodFormat = keyof typeof periodFormats;
 
 export const dataTypeDefsToOptions = (
   dataTypeDefs: DataTypeDefs,
@@ -176,6 +218,7 @@ export type DataTypeValueMap = {
   richtext: string;
   date: IsoDate;
   datetime: IsoTimestamp;
+  period: string;
   interval: string;
   duration: string;
   option: string;
@@ -190,6 +233,7 @@ export type DataTypeValueMap = {
 export const plaintextAlphabetOptions =
   dataTypeDefsToOptions(plaintextAlphabets);
 export const richtextAlphabetOptions = dataTypeDefsToOptions(richtextAlphabets);
+export const periodFormatOptions = dataTypeDefsToOptions(periodFormats);
 
 const _validateDataTypeMapCompleteness: {
   [K in CoreDataType]: K extends keyof DataTypeValueMap ? true : false;

@@ -16,6 +16,7 @@ import {
   coreDataTypes,
   type DataTypeDefs,
   dataTypeDefsToOptions,
+  periodFormatOptions,
   plaintextAlphabetOptions,
   richtextAlphabetOptions,
 } from "./data-type.ts";
@@ -92,6 +93,7 @@ export const configSchemaIds = {
   includes: newMetaSystemId(28),
   plaintextAlphabet: newMetaSystemId(29),
   richtextAlphabet: newMetaSystemId(30),
+  periodFormat: newMetaSystemId(31),
 } as const;
 export const fieldTypes = [fieldSystemType] as const;
 export type ConfigFieldDef = FieldDef<ConfigDataType>;
@@ -290,6 +292,16 @@ export const configFieldsDefs = {
     when: { dataType: "richtext" },
     default: "block",
   },
+  periodFormat: {
+    id: configSchemaIds.periodFormat,
+    key: "periodFormat" as SystemKey,
+    name: "Period Format",
+    dataType: "option",
+    description: "Time period granularity for period fields",
+    options: periodFormatOptions,
+    when: { dataType: "period" },
+    default: "day",
+  },
 } as const satisfies Record<FieldKey, ConfigFieldDef>;
 export type ConfigFieldDefinitions = typeof configFieldsDefs;
 export type ConfigFieldKey = keyof ConfigFieldDefinitions;
@@ -327,6 +339,7 @@ export const configTypeDefs: ConfigTypeDefinitions = {
       "default",
       "plaintextAlphabet",
       "richtextAlphabet",
+      "periodFormat",
     ],
   },
   [typeSystemType]: {

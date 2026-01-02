@@ -53,6 +53,7 @@ const BASE_U_VALUES: Record<CoreDataType, number> = {
   decimal: 0.001,
   date: 0.003,
   datetime: 0.0001,
+  period: 0.003,
   relation: 0.05,
   uid: 0.0001,
   seqId: 0.0001,
