@@ -320,11 +320,10 @@ const withLockedKg = async <T>(
   await releaseLock(fs, paths.binder);
 
   if (!isErr(result)) {
-    renderDocs({ ...services, kg }).then((renderResult) => {
-      if (isErr(renderResult)) {
-        log.error("Failed to re-render docs", { error: renderResult.error });
-      }
-    });
+    const renderResult = await renderDocs({ ...services, kg });
+    if (isErr(renderResult)) {
+      log.error("Failed to re-render docs", { error: renderResult.error });
+    }
   }
 
   return result;
@@ -377,22 +376,26 @@ export const setupKnowledgeGraph = (
         await releaseLock(fs, paths.binder);
         log.debug("Lock released after commit");
 
-        renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
-          if (isErr(renderResult)) {
-            log.error("Failed to re-render docs after transaction", {
-              error: renderResult.error,
-            });
-          }
+        const renderResult = await renderDocs({
+          ...services,
+          kg: knowledgeGraph,
         });
+        if (isErr(renderResult)) {
+          log.error("Failed to re-render docs after transaction", {
+            error: renderResult.error,
+          });
+        }
       },
       afterRollback: async () => {
-        renderDocs({ ...services, kg: knowledgeGraph }).then((renderResult) => {
-          if (isErr(renderResult)) {
-            log.error("Failed to re-render docs after transaction", {
-              error: renderResult.error,
-            });
-          }
+        const renderResult = await renderDocs({
+          ...services,
+          kg: knowledgeGraph,
         });
+        if (isErr(renderResult)) {
+          log.error("Failed to re-render docs after transaction", {
+            error: renderResult.error,
+          });
+        }
       },
     },
   });
