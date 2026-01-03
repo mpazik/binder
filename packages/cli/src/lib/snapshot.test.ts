@@ -67,14 +67,37 @@ describe("snapshot", () => {
   });
 
   describe("saveSnapshot", () => {
-    const content = "# Test Document\n\nThis is a test.";
+    const check = async (
+      scenario: { existingContent?: string; newContent: string },
+      expectedWritten: boolean,
+    ) => {
+      if (scenario.existingContent !== undefined) {
+        throwIfError(
+          await saveSnapshot(
+            db,
+            fs,
+            paths,
+            filePath,
+            scenario.existingContent,
+            version,
+          ),
+        );
+      }
 
-    it("saves file to filesystem and creates corresponding metadata record", async () => {
-      throwIfError(
-        await saveSnapshot(db, fs, paths, filePath, content, version),
+      const result = throwIfError(
+        await saveSnapshot(
+          db,
+          fs,
+          paths,
+          filePath,
+          scenario.newContent,
+          version,
+        ),
       );
+      expect(result).toBe(expectedWritten);
 
-      expect((await fs.readFile(filePath)).data).toBe(content);
+      const fileContent = throwIfError(await fs.readFile(filePath));
+      expect(fileContent).toBe(scenario.newContent);
 
       const metadata = throwIfError(getSnapshotMetadata(db));
       expect(metadata).toEqual([
@@ -86,35 +109,18 @@ describe("snapshot", () => {
           hash: await calculateSnapshotHash(fs, filePath),
         },
       ]);
+    };
+
+    it("writes new file", async () => {
+      await check({ newContent: "hello" }, true);
     });
 
-    it("updates same file with new transaction replaces metadata", async () => {
-      const version2: GraphVersion = {
-        id: 2 as TransactionId,
-        hash: "hash2" as any,
-        updatedAt: newIsoTimestamp(),
-      };
+    it("skips write when content unchanged", async () => {
+      await check({ existingContent: "hello", newContent: "hello" }, false);
+    });
 
-      throwIfError(
-        await saveSnapshot(db, fs, paths, filePath, content, version),
-      );
-      throwIfError(
-        await saveSnapshot(db, fs, paths, filePath, "Version 2", version2),
-      );
-
-      const fileResult = await fs.readFile(filePath);
-      expect(fileResult.data).toBe("Version 2");
-
-      const metadata = throwIfError(getSnapshotMetadata(db));
-      expect(metadata).toEqual([
-        {
-          id: 1,
-          path: "test.md",
-          txId: version2.id,
-          ...throwIfError(fs.stat(filePath)),
-          hash: await calculateSnapshotHash(fs, filePath),
-        },
-      ]);
+    it("writes when content changes", async () => {
+      await check({ existingContent: "hello", newContent: "world" }, true);
     });
   });
 

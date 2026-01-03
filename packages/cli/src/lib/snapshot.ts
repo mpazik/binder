@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, relative, resolve } from "path";
-import { like } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import type {
   GraphVersion,
   NamespaceEditable,
@@ -35,6 +35,12 @@ export const calculateSnapshotHash = async (
   for await (const chunk of fs.readFileStream(filePath)) {
     hasher.update(chunk);
   }
+  return hasher.digest("hex");
+};
+
+const calculateContentHash = (content: string): string => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(content);
   return hasher.digest("hex");
 };
 
@@ -216,8 +222,21 @@ export const saveSnapshot = async (
   filePath: string,
   content: string,
   version: GraphVersion,
-): ResultAsync<void> => {
+): ResultAsync<boolean> => {
   const absolutePath = resolveSnapshotPath(filePath, paths);
+  const snapshotPath = getRelativeSnapshotPath(absolutePath, paths);
+  const newHash = calculateContentHash(content);
+
+  const existingMetadata = db
+    .select()
+    .from(cliSnapshotMetadataTable)
+    .where(eq(cliSnapshotMetadataTable.path, snapshotPath))
+    .get();
+
+  if (existingMetadata && existingMetadata.hash === newHash) {
+    return ok(false);
+  }
+
   const mkdirResult = await fs.mkdir(dirname(absolutePath), {
     recursive: true,
   });
@@ -229,19 +248,17 @@ export const saveSnapshot = async (
   const statResult = fs.stat(absolutePath);
   if (isErr(statResult)) return statResult;
 
-  const hash = await calculateSnapshotHash(fs, absolutePath);
   const size = statResult.data.size;
   const mtime = statResult.data.mtime;
-  const snapshotPath = getRelativeSnapshotPath(absolutePath, paths);
 
-  return tryCatch(() => {
+  const insertResult = tryCatch(() => {
     db.insert(cliSnapshotMetadataTable)
       .values({
         path: snapshotPath,
         txId: version.id,
         mtime,
         size,
-        hash,
+        hash: newHash,
       })
       .onConflictDoUpdate({
         target: cliSnapshotMetadataTable.path,
@@ -249,9 +266,49 @@ export const saveSnapshot = async (
           txId: version.id,
           mtime,
           size,
-          hash,
+          hash: newHash,
         },
       })
       .run();
   });
+
+  if (isErr(insertResult)) return insertResult;
+
+  return ok(true);
+};
+
+export const cleanupOrphanSnapshots = async (
+  db: DatabaseCli,
+  fs: FileSystem,
+  paths: ConfigPaths,
+  renderedPaths: string[],
+  namespace: NamespaceEditable,
+): ResultAsync<void> => {
+  const allMetadataResult = getSnapshotMetadata(db);
+  if (isErr(allMetadataResult)) return allMetadataResult;
+
+  const renderedSet = new Set(renderedPaths);
+  const isConfigNamespace = namespace === "config";
+
+  for (const metadata of allMetadataResult.data) {
+    const isConfigPath = metadata.path.startsWith(BINDER_DIR);
+    if (isConfigPath !== isConfigNamespace) continue;
+    if (renderedSet.has(metadata.path)) continue;
+
+    const absolutePath = resolveSnapshotPath(metadata.path, paths);
+    const exists = await fs.exists(absolutePath);
+    if (exists) {
+      const rmResult = await fs.rm(absolutePath);
+      if (isErr(rmResult)) return rmResult;
+    }
+
+    const deleteResult = tryCatch(() => {
+      db.delete(cliSnapshotMetadataTable)
+        .where(eq(cliSnapshotMetadataTable.path, metadata.path))
+        .run();
+    });
+    if (isErr(deleteResult)) return deleteResult;
+  }
+
+  return ok(undefined);
 };

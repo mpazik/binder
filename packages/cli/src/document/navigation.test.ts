@@ -455,6 +455,36 @@ describe("navigation", () => {
         ],
       );
     });
+
+    it("returns rendered and modified paths on first render", async () => {
+      const result = throwIfError(
+        await renderNavigation(db, kg, fs, paths, [
+          { path: "README", template: "static-template" },
+        ]),
+      );
+
+      expect(result).toEqual({
+        renderedPaths: ["README.md"],
+        modifiedPaths: ["README.md"],
+      });
+    });
+
+    it("returns empty modifiedPaths when content unchanged", async () => {
+      const navigationItems: NavigationItem[] = [
+        { path: "README", template: "static-template" },
+      ];
+
+      throwIfError(await renderNavigation(db, kg, fs, paths, navigationItems));
+
+      const result = throwIfError(
+        await renderNavigation(db, kg, fs, paths, navigationItems),
+      );
+
+      expect(result).toEqual({
+        renderedPaths: ["README.md"],
+        modifiedPaths: [],
+      });
+    });
   });
 
   describe("loadNavigation", () => {

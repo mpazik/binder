@@ -17,6 +17,10 @@ import {
 } from "@binder/db";
 import {
   assertDefined,
+  assertDefinedPass,
+  createError,
+  err,
+  fail,
   isErr,
   ok,
   okVoid,
@@ -43,6 +47,21 @@ import {
 } from "./yaml.ts";
 import { formatReferences, formatReferencesList } from "./reference.ts";
 import type { FileType } from "./document.ts";
+
+export type RenderResult = {
+  renderedPaths: string[];
+  modifiedPaths: string[];
+};
+
+const emptyRenderResult = (): RenderResult => ({
+  renderedPaths: [],
+  modifiedPaths: [],
+});
+
+const mergeRenderResults = (results: RenderResult[]): RenderResult => ({
+  renderedPaths: results.flatMap((r) => r.renderedPaths),
+  modifiedPaths: results.flatMap((r) => r.modifiedPaths),
+});
 
 const inferFileType = (item: NavigationItem): FileType => {
   if (item.path.endsWith("/")) return "directory";
@@ -244,7 +263,11 @@ export const findTemplate = (
 ): TemplateEntity => {
   const found = templates.find((t) => t.key === key);
   if (found) return found;
-  return templates.find((t) => t.key === DEFAULT_TEMPLATE_KEY)!;
+  const defaultTemplate = templates.find((t) => t.key === DEFAULT_TEMPLATE_KEY);
+  return assertDefinedPass(
+    defaultTemplate,
+    `DEFAULT_TEMPLATE_KEY "${DEFAULT_TEMPLATE_KEY}" in templates`,
+  );
 };
 
 const resolveTemplateContent = (
@@ -264,7 +287,7 @@ const renderContent = async (
   fileType: FileType,
   namespace: NamespaceEditable,
   templates: Templates,
-): Promise<Result<string> | undefined> => {
+): ResultAsync<string | null> => {
   if (fileType === "markdown") {
     const templateContent = resolveTemplateContent(item, templates);
     assertDefined(templateContent, "templateContent");
@@ -272,7 +295,8 @@ const renderContent = async (
     const viewResult = renderView(schema, viewAst, entity as Fieldset);
     if (isErr(viewResult)) return viewResult;
     return ok(viewResult.data);
-  } else if (fileType === "yaml") {
+  }
+  if (fileType === "yaml") {
     if (item.query) {
       const interpolatedQuery = interpolateQueryParams(item.query, [
         entity as Fieldset,
@@ -297,15 +321,15 @@ const renderContent = async (
         omit(e, excludedFields),
       );
       return ok(renderYamlList(filteredItems));
-    } else {
-      const formattedEntity = await formatReferences(entity, schema, kg);
-      if (isErr(formattedEntity)) return formattedEntity;
-
-      const excludedFields = getExcludedFields(namespace, item.where);
-      const filteredEntity = omit(formattedEntity.data, excludedFields);
-      return ok(renderYamlEntity(filteredEntity));
     }
+    const formattedEntity = await formatReferences(entity, schema, kg);
+    if (isErr(formattedEntity)) return formattedEntity;
+
+    const excludedFields = getExcludedFields(namespace, item.where);
+    const filteredEntity = omit(formattedEntity.data, excludedFields);
+    return ok(renderYamlEntity(filteredEntity));
   }
+  return ok(null);
 };
 
 const renderNavigationItem = async (
@@ -320,8 +344,9 @@ const renderNavigationItem = async (
   parentEntities: Fieldset[],
   namespace: NamespaceEditable,
   templates: Templates,
-): ResultAsync<void> => {
+): ResultAsync<RenderResult> => {
   const fileType = inferFileType(item);
+  const result = emptyRenderResult();
 
   let entities: FieldsetNested[] = [];
   let shouldUpdateParentContext = false;
@@ -355,7 +380,7 @@ const renderNavigationItem = async (
     if (isErr(resolvedPath)) return resolvedPath;
     const filePath = join(parentPath, resolvedPath.data);
 
-    const renderResult = await renderContent(
+    const renderContentResult = await renderContent(
       kg,
       schema,
       item,
@@ -365,18 +390,23 @@ const renderNavigationItem = async (
       namespace,
       templates,
     );
+    if (isErr(renderContentResult)) return renderContentResult;
 
-    if (renderResult) {
-      if (isErr(renderResult)) return renderResult;
+    if (renderContentResult.data !== null) {
       const saveResult = await saveSnapshot(
         db,
         fs,
         paths,
         filePath,
-        renderResult.data,
+        renderContentResult.data,
         version,
       );
       if (isErr(saveResult)) return saveResult;
+
+      result.renderedPaths.push(filePath);
+      if (saveResult.data) {
+        result.modifiedPaths.push(filePath);
+      }
     }
 
     if (item.children) {
@@ -386,7 +416,7 @@ const renderNavigationItem = async (
         : parentEntities;
 
       for (const child of item.children) {
-        const result = await renderNavigationItem(
+        const childResult = await renderNavigationItem(
           db,
           kg,
           fs,
@@ -399,12 +429,15 @@ const renderNavigationItem = async (
           namespace,
           templates,
         );
-        if (isErr(result)) return result;
+        if (isErr(childResult)) return childResult;
+
+        result.renderedPaths.push(...childResult.data.renderedPaths);
+        result.modifiedPaths.push(...childResult.data.modifiedPaths);
       }
     }
   }
 
-  return okVoid;
+  return ok(result);
 };
 
 export const renderNavigation = async (
@@ -414,13 +447,15 @@ export const renderNavigation = async (
   paths: ConfigPaths,
   navigationItems: NavigationItem[],
   namespace: NamespaceEditable = "node",
-): ResultAsync<void> => {
+): ResultAsync<RenderResult> => {
   const schemaResult = await kg.getNodeSchema();
   if (isErr(schemaResult)) return schemaResult;
   const versionResult = await kg.version();
   if (isErr(versionResult)) return versionResult;
   const templatesResult = await loadTemplates(kg);
   if (isErr(templatesResult)) return templatesResult;
+
+  const results: RenderResult[] = [];
 
   for (const item of navigationItems) {
     const result = await renderNavigationItem(
@@ -437,8 +472,10 @@ export const renderNavigation = async (
       templatesResult.data,
     );
     if (isErr(result)) return result;
+    results.push(result.data);
   }
-  return okVoid;
+
+  return ok(mergeRenderResults(results));
 };
 
 export type DefinitionLocation = {
