@@ -13,6 +13,7 @@ import UndoCommand from "./commands/undo.ts";
 import RedoCommand from "./commands/redo.ts";
 import McpCommand from "./commands/mcp.ts";
 import LspCommand from "./commands/lsp.ts";
+import LocateCommand from "./commands/locate.ts";
 import * as UI from "./ui";
 import { BINDER_VERSION, isDevMode } from "./build-time";
 import { LOG_LEVELS } from "./log.ts";
@@ -50,7 +51,8 @@ let cli = yargs(hideBin(process.argv))
   .command(UndoCommand)
   .command(RedoCommand)
   .command(McpCommand)
-  .command(LspCommand);
+  .command(LspCommand)
+  .command(LocateCommand);
 
 if (isDevMode()) {
   cli = cli.command(DevCommand);

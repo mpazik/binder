@@ -495,30 +495,49 @@ const flattenNavigationItems = (items: NavigationItem[]): NavigationItem[] => {
   return result;
 };
 
+const scoreNavItem = (item: NavigationItem): number => {
+  let score = 0;
+
+  // Individual file >> list - user wants the dedicated file, not a line in a list
+  if (!isListNavItem(item)) score += 100;
+
+  // Markdown > YAML - markdown is the richer, primary representation
+  if (inferFileType(item) === "markdown") score += 50;
+
+  // Tiebreaker: simpler paths and filters are preferred.
+  // When scores are equal, we assume the user wants the "default" or "canonical"
+  // location rather than a special-case or highly-specific organizational path.
+  // e.g., "tasks/{key}.md" is preferred over "projects/{project}/tasks/{key}.md"
+  const filters = item.where ?? item.query?.filters;
+  const filterCount = filters ? Object.keys(filters).length : 0;
+  const pathDepth = (item.path.match(/\{/g) || []).length;
+
+  score -= filterCount;
+  score -= pathDepth;
+
+  return score;
+};
+
 const findMatchingNavItem = (
   items: NavigationItem[],
   entity: Fieldset,
 ): NavigationItem | undefined => {
   const flattened = flattenNavigationItems(items);
 
-  const individualMatches: NavigationItem[] = [];
-  const listMatches: NavigationItem[] = [];
+  const matches: { item: NavigationItem; score: number }[] = [];
 
   for (const item of flattened) {
     const filters = item.where ?? item.query?.filters;
     if (!filters) continue;
-
     if (!matchesFilters(filters, entity)) continue;
 
-    if (isListNavItem(item)) {
-      listMatches.push(item);
-    } else {
-      individualMatches.push(item);
-    }
+    matches.push({ item, score: scoreNavItem(item) });
   }
 
-  if (individualMatches.length > 0) return individualMatches[0];
-  if (listMatches.length > 0) return listMatches[0];
+  if (matches.length === 0) return undefined;
+
+  matches.sort((a, b) => b.score - a.score);
+  return matches[0]!.item;
 };
 
 export const findEntityLocation = async (
