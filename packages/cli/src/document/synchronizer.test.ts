@@ -96,8 +96,10 @@ describe("synchronizeFile", () => {
     const result = throwIfError(
       await synchronizeFile(
         ctx.fs,
+        ctx.db,
         kg,
         ctx.config,
+        throwIfError(await kg.version()),
         navigationItems,
         mockNodeSchema,
         filePath,
@@ -238,13 +240,7 @@ describe("synchronizeFile", () => {
     ) => {
       throwIfError(await ctx.fs.writeFile(filePath, content));
       const result = throwIfError(
-        await synchronizeModifiedFiles(
-          ctx.db,
-          ctx.fs,
-          ctx.kg,
-          ctx.config,
-          filePath,
-        ),
+        await synchronizeModifiedFiles(ctx, filePath),
       );
       if (expected === null) {
         expect(result).toEqual(null);
@@ -255,13 +251,7 @@ describe("synchronizeFile", () => {
 
     it("returns null when no modified files in docs folder", async () => {
       const result = throwIfError(
-        await synchronizeModifiedFiles(
-          ctx.db,
-          ctx.fs,
-          ctx.kg,
-          ctx.config,
-          ctx.config.paths.docs,
-        ),
+        await synchronizeModifiedFiles(ctx, ctx.config.paths.docs),
       );
       expect(result).toEqual(null);
     });

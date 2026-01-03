@@ -329,9 +329,13 @@ const withLockedKg = async <T>(
   return result;
 };
 
+export type OrchestratorCallbacks = KnowledgeGraphCallbacks & {
+  onFilesUpdated?: (paths: string[]) => void;
+};
+
 export const setupKnowledgeGraph = (
   services: Services,
-  callbacks: KnowledgeGraphCallbacks,
+  callbacks: OrchestratorCallbacks,
 ): KnowledgeGraph => {
   const {
     db,
@@ -384,6 +388,11 @@ export const setupKnowledgeGraph = (
           log.error("Failed to re-render docs after transaction", {
             error: renderResult.error,
           });
+          return;
+        }
+
+        if (callbacks.onFilesUpdated && renderResult.data.length > 0) {
+          await callbacks.onFilesUpdated(renderResult.data);
         }
       },
       afterRollback: async () => {
@@ -395,6 +404,11 @@ export const setupKnowledgeGraph = (
           log.error("Failed to re-render docs after transaction", {
             error: renderResult.error,
           });
+          return;
+        }
+
+        if (callbacks.onFilesUpdated && renderResult.data.length > 0) {
+          await callbacks.onFilesUpdated(renderResult.data);
         }
       },
     },

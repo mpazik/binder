@@ -1,14 +1,17 @@
+import { pathToFileURL } from "node:url";
 import {
   CodeActionKind,
   type Connection,
   createConnection,
   type InitializeParams,
   ProposedFeatures,
+  Range,
   TextDocuments,
   TextDocumentSyncKind,
+  TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { isErr } from "@binder/utils";
+import { isErr, tryCatch } from "@binder/utils";
 import { type RuntimeContextInit } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
 import { handleDocumentSave } from "./sync-handler.ts";
@@ -31,7 +34,55 @@ export const createLspServer = (
   );
   const lspDocuments = new TextDocuments(TextDocument);
   const log = minimalContext.log;
-  const workspaceManager = createWorkspaceManager(minimalContext, log);
+  const { fs } = minimalContext;
+
+  const workspaceManager = createWorkspaceManager(
+    minimalContext,
+    log,
+    async (absolutePaths: string[]) => {
+      for (const absolutePath of absolutePaths) {
+        const uri = pathToFileURL(absolutePath).href;
+        const openDoc = lspDocuments.get(uri);
+        if (!openDoc) continue;
+
+        const contentResult = await fs.readFile(absolutePath);
+        if (isErr(contentResult)) {
+          log.error("Failed to read file for refresh", {
+            path: absolutePath,
+            error: contentResult.error,
+          });
+          continue;
+        }
+
+        const fullRange = Range.create(0, 0, openDoc.lineCount, 0);
+
+        const editResult = await tryCatch(
+          connection.workspace.applyEdit({
+            documentChanges: [
+              {
+                textDocument: { uri, version: openDoc.version },
+                edits: [TextEdit.replace(fullRange, contentResult.data)],
+              },
+            ],
+          }),
+        );
+
+        if (isErr(editResult)) {
+          log.error("Failed to apply edit for document refresh", {
+            uri,
+            error: editResult.error,
+          });
+        } else if (!editResult.data.applied) {
+          log.error("Edit not applied for document refresh", {
+            uri,
+            editResult: editResult.data,
+          });
+        } else {
+          log.debug("Refreshed open document", { uri });
+        }
+      }
+    },
+  );
   const deps = {
     lspDocuments,
     workspaceManager,

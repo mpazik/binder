@@ -102,6 +102,16 @@ export type ConfigPaths = {
   docs: string;
 };
 
+export const resolveRelativePath = (
+  relativePath: string,
+  paths: ConfigPaths,
+): string => {
+  const isConfigPath = relativePath.startsWith(BINDER_DIR);
+  return isConfigPath
+    ? join(paths.root, relativePath)
+    : join(paths.docs, relativePath);
+};
+
 export type AppConfig = {
   author: string;
   logLevel?: LogLevel;

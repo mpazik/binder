@@ -27,7 +27,10 @@ import {
 import * as ui from "./ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 import { setupCleanupHandlers } from "./lib/lock.ts";
-import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
+import {
+  type OrchestratorCallbacks,
+  setupKnowledgeGraph,
+} from "./lib/orchestrator.ts";
 import { createLogger, type Logger, type LogLevel } from "./log.ts";
 import { isDevMode } from "./build-time.ts";
 import {
@@ -63,6 +66,10 @@ export type RuntimeContextWithDb = RuntimeContext & {
   db: DatabaseCli;
   kg: KnowledgeGraph;
   nav: NavigationLoader;
+};
+
+export type RuntimeDbCallbacks = {
+  onFilesUpdated?: (paths: string[]) => void;
 };
 
 export type CommandHandlerMinimal<TArgs = object> = (
@@ -179,6 +186,7 @@ export const initializeRuntime = async (
 
 export const initializeDbRuntime = async (
   context: RuntimeContext,
+  callbacks?: RuntimeDbCallbacks,
 ): ResultAsync<{
   runtime: RuntimeContextWithDb;
   close: () => void;
@@ -193,14 +201,17 @@ export const initializeDbRuntime = async (
 
   const { db, close: closeDb } = dbResult.data;
 
+  const orchestratorCallbacks: OrchestratorCallbacks = {
+    afterCommit: async (transaction) => {
+      if (isEmptyObject(transaction.configurations)) return;
+      navigationCache.invalidate();
+    },
+    onFilesUpdated: callbacks?.onFilesUpdated,
+  };
+
   const kg = setupKnowledgeGraph(
     { fs, log, config, db },
-    {
-      afterCommit: async (transaction) => {
-        if (isEmptyObject(transaction.configurations)) return;
-        navigationCache.invalidate();
-      },
-    },
+    orchestratorCallbacks,
   );
   const navigationCache = createNavigationCache(kg);
 
@@ -213,6 +224,7 @@ export const initializeDbRuntime = async (
 export const initializeFullRuntime = async (
   minimalContext: RuntimeContextInit,
   root: string,
+  callbacks?: RuntimeDbCallbacks,
 ): ResultAsync<{
   runtime: RuntimeContextWithDb;
   close: () => void;
@@ -222,7 +234,7 @@ export const initializeFullRuntime = async (
 
   const { runtime: context, close: closeLog } = runtimeResult.data;
 
-  const dbResult = await initializeDbRuntime(context);
+  const dbResult = await initializeDbRuntime(context, callbacks);
   if (isErr(dbResult)) return dbResult;
 
   const { runtime, close: closeDb } = dbResult.data;

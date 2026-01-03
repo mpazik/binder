@@ -35,15 +35,9 @@ export const docsRenderHandler: CommandHandlerWithDb = async (context) => {
 
 export const docsSyncHandler: CommandHandlerWithDb<{
   path?: string;
-}> = async ({ kg, fs, ui, config, args, db, log }) => {
-  const syncResult = await synchronizeModifiedFiles(
-    db,
-    fs,
-    kg,
-    config,
-    args.path,
-    log,
-  );
+}> = async (ctx) => {
+  const { kg, ui, args, log } = ctx;
+  const syncResult = await synchronizeModifiedFiles(ctx, args.path, log);
   if (isErr(syncResult)) return syncResult;
 
   if (syncResult.data === null) {

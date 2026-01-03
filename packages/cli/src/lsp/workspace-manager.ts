@@ -6,7 +6,7 @@ import {
   type RuntimeContextInit,
   type RuntimeContextWithDb,
 } from "../runtime.ts";
-import { BINDER_DIR } from "../config.ts";
+import { BINDER_DIR, resolveRelativePath } from "../config.ts";
 import type { Logger } from "../log.ts";
 import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
 
@@ -28,6 +28,7 @@ export type WorkspaceManager = {
 export const createWorkspaceManager = (
   minimalContext: RuntimeContextInit,
   log: Logger,
+  onFilesUpdated: (absolutePaths: string[]) => Promise<void>,
 ): WorkspaceManager => {
   const workspaces = new Map<string, WorkspaceEntry>();
 
@@ -59,6 +60,15 @@ export const createWorkspaceManager = (
       const runtimeResult = await initializeFullRuntime(
         { ...minimalContext, silent: true, logFile: "lsp.log" },
         rootPath,
+        {
+          onFilesUpdated: async (relativePaths: string[]) => {
+            await onFilesUpdated(
+              relativePaths.map((path) =>
+                resolveRelativePath(path, runtime.config.paths),
+              ),
+            );
+          },
+        },
       );
 
       if (isErr(runtimeResult)) {

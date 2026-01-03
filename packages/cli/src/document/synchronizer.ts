@@ -3,11 +3,11 @@ import type {
   EntitySchema,
   Fieldset,
   FieldsetNested,
+  GraphVersion,
   Includes,
   KnowledgeGraph,
   NamespaceEditable,
   QueryParams,
-  TransactionId,
   TransactionInput,
 } from "@binder/db";
 import { includesWithUid } from "@binder/db";
@@ -19,6 +19,7 @@ import type { FileSystem } from "../lib/filesystem.ts";
 import {
   modifiedSnapshots,
   namespaceFromSnapshotPath,
+  refreshSnapshotMetadata,
   resolveSnapshotPath,
   type SnapshotChangeMetadata,
   snapshotRootForNamespace,
@@ -27,12 +28,12 @@ import type { DatabaseCli } from "../db";
 import { type AppConfig } from "../config.ts";
 import type { MatchOptions } from "../utils/file.ts";
 import type { Logger } from "../log.ts";
+import type { RuntimeContextWithDb } from "../runtime.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
   findNavigationItemByPath,
   getNavigationFilePatterns,
   getPathTemplate,
-  loadNavigation,
   loadTemplates,
   type NavigationItem,
   type Templates,
@@ -241,14 +242,15 @@ const synchronizeExtracted = (
 
 export const synchronizeFile = async <N extends NamespaceEditable>(
   fs: FileSystem,
+  db: DatabaseCli,
   kg: KnowledgeGraph,
   config: AppConfig,
+  version: GraphVersion,
   navigationItems: NavigationItem[],
   schema: EntitySchema,
   relativePath: string,
   namespace: N,
   templates: Templates,
-  _txVersion?: TransactionId,
 ): ResultAsync<ChangesetsInput<N>> => {
   const navItem = findNavigationItemByPath(navigationItems, relativePath);
   if (!navItem) {
@@ -279,7 +281,7 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
   );
   if (isErr(extractResult)) return extractResult;
 
-  return synchronizeExtracted(
+  const changesets = await synchronizeExtracted(
     kg,
     schema,
     namespace,
@@ -287,31 +289,47 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
     pathFields,
     navItem.includes,
   );
+  if (isErr(changesets)) return changesets;
+
+  const refreshResult = refreshSnapshotMetadata(
+    db,
+    fs,
+    config.paths,
+    absolutePath,
+    contentResult.data,
+    version,
+  );
+  if (isErr(refreshResult)) return refreshResult;
+
+  return changesets;
 };
 
 const synchronizeNamespaceFiles = async <N extends NamespaceEditable>(
-  fs: FileSystem,
-  kg: KnowledgeGraph,
-  config: AppConfig,
-  navigationItems: NavigationItem[],
-  schema: EntitySchema,
+  { fs, db, config, kg, nav }: RuntimeContextWithDb,
   modifiedFiles: SnapshotChangeMetadata[],
   namespace: N,
   templates: Templates,
 ): ResultAsync<ChangesetsInput<N>> => {
   const changesets: ChangesetsInput<N> = [];
+  const navigationItemsResult = await nav(namespace);
+  if (isErr(navigationItemsResult)) return navigationItemsResult;
+  const versionResult = await kg.version();
+  if (isErr(versionResult)) return versionResult;
+  const schemaResult = await kg.getSchema(namespace);
+  if (isErr(schemaResult)) return schemaResult;
 
   for (const file of modifiedFiles) {
     const syncResult = await synchronizeFile(
       fs,
+      db,
       kg,
       config,
-      navigationItems,
-      schema,
+      versionResult.data,
+      navigationItemsResult.data,
+      schemaResult.data,
       file.path,
       namespace,
       templates,
-      undefined,
     );
     if (isErr(syncResult)) return syncResult;
 
@@ -322,13 +340,11 @@ const synchronizeNamespaceFiles = async <N extends NamespaceEditable>(
 };
 
 export const synchronizeModifiedFiles = async (
-  db: DatabaseCli,
-  fs: FileSystem,
-  kg: KnowledgeGraph,
-  config: AppConfig,
+  runtime: RuntimeContextWithDb,
   scopePath?: string,
   log?: Logger,
 ): ResultAsync<TransactionInput | null> => {
+  const { config, db, kg, fs } = runtime;
   const scopeAbsolute = scopePath
     ? resolveSnapshotPath(scopePath, config.paths)
     : null;
@@ -363,41 +379,13 @@ export const synchronizeModifiedFiles = async (
 
   if (configFiles.length === 0 && nodeFiles.length === 0) return ok(null);
 
-  const configSchema = kg.getConfigSchema();
-  const nodeSchemaResult = await kg.getNodeSchema();
-  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
-
-  const configNavigationResult = await loadNavigation(kg, "config");
-  if (isErr(configNavigationResult)) return configNavigationResult;
-
-  const nodeNavigationResult = await loadNavigation(kg, "node");
-  if (isErr(nodeNavigationResult)) return nodeNavigationResult;
-
   const templatesResult = await loadTemplates(kg);
   if (isErr(templatesResult)) return templatesResult;
   const templates = templatesResult.data;
 
   const [configsResult, nodesResult] = await Promise.all([
-    synchronizeNamespaceFiles(
-      fs,
-      kg,
-      config,
-      configNavigationResult.data,
-      configSchema,
-      configFiles,
-      "config",
-      templates,
-    ),
-    synchronizeNamespaceFiles(
-      fs,
-      kg,
-      config,
-      nodeNavigationResult.data,
-      nodeSchemaResult.data,
-      nodeFiles,
-      "node",
-      templates,
-    ),
+    synchronizeNamespaceFiles(runtime, configFiles, "config", templates),
+    synchronizeNamespaceFiles(runtime, nodeFiles, "node", templates),
   ]);
 
   if (isErr(configsResult)) return configsResult;

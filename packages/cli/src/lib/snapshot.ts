@@ -44,6 +44,32 @@ const calculateContentHash = (content: string): string => {
   return hasher.digest("hex");
 };
 
+const upsertSnapshotMetadata = (
+  db: DatabaseCli,
+  metadata: {
+    path: string;
+    txId: TransactionId;
+    mtime: number;
+    size: number;
+    hash: string;
+  },
+): Result<void> => {
+  return tryCatch(() => {
+    db.insert(cliSnapshotMetadataTable)
+      .values(metadata)
+      .onConflictDoUpdate({
+        target: cliSnapshotMetadataTable.path,
+        set: {
+          txId: metadata.txId,
+          mtime: metadata.mtime,
+          size: metadata.size,
+          hash: metadata.hash,
+        },
+      })
+      .run();
+  });
+};
+
 export const saveSnapshotMetadata = async (
   db: DatabaseCli,
   snapshots: SnapshotMetadata[],
@@ -248,33 +274,39 @@ export const saveSnapshot = async (
   const statResult = fs.stat(absolutePath);
   if (isErr(statResult)) return statResult;
 
-  const size = statResult.data.size;
-  const mtime = statResult.data.mtime;
-
-  const insertResult = tryCatch(() => {
-    db.insert(cliSnapshotMetadataTable)
-      .values({
-        path: snapshotPath,
-        txId: version.id,
-        mtime,
-        size,
-        hash: newHash,
-      })
-      .onConflictDoUpdate({
-        target: cliSnapshotMetadataTable.path,
-        set: {
-          txId: version.id,
-          mtime,
-          size,
-          hash: newHash,
-        },
-      })
-      .run();
+  const insertResult = upsertSnapshotMetadata(db, {
+    path: snapshotPath,
+    txId: version.id,
+    mtime: statResult.data.mtime,
+    size: statResult.data.size,
+    hash: newHash,
   });
-
   if (isErr(insertResult)) return insertResult;
 
   return ok(true);
+};
+
+export const refreshSnapshotMetadata = (
+  db: DatabaseCli,
+  fs: FileSystem,
+  paths: ConfigPaths,
+  absolutePath: string,
+  content: string,
+  version: GraphVersion,
+): Result<void> => {
+  const snapshotPath = getRelativeSnapshotPath(absolutePath, paths);
+  const hash = calculateContentHash(content);
+
+  const statResult = fs.stat(absolutePath);
+  if (isErr(statResult)) return statResult;
+
+  return upsertSnapshotMetadata(db, {
+    path: snapshotPath,
+    txId: version.id,
+    mtime: statResult.data.mtime,
+    size: statResult.data.size,
+    hash,
+  });
 };
 
 export const cleanupOrphanSnapshots = async (

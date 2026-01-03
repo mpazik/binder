@@ -11,7 +11,7 @@ export const handleDocumentSave = async (
   context: RuntimeContextWithDb,
   uri: string,
 ): ResultAsync<void> => {
-  const { log, config, fs, kg } = context;
+  const { log, config, fs, kg, db } = context;
 
   const uriObj = new URL(uri);
   if (uriObj.protocol !== "file:") {
@@ -39,10 +39,15 @@ export const handleDocumentSave = async (
   const templatesResult = await loadTemplates(kg);
   if (isErr(templatesResult)) return templatesResult;
 
+  const versionResult = await kg.version();
+  if (isErr(versionResult)) return versionResult;
+
   const syncResult = await synchronizeFile(
     fs,
+    db,
     kg,
     config,
+    versionResult.data,
     navResult.data,
     schemaResult.data,
     relativePath,
