@@ -38,7 +38,7 @@ export const nodeCreateHandler: CommandHandlerWithDb<{
 export const nodeReadHandler: CommandHandlerWithDb<{
   ref: NodeRef;
 }> = async ({ kg, ui, args }) => {
-  const result = await kg.fetchNode(args.ref);
+  const result = await kg.fetchEntity(args.ref);
   if (isErr(result)) return result;
 
   ui.printData(result.data);

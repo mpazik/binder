@@ -47,7 +47,7 @@ export const configCreateHandler: CommandHandlerWithDb<{
 export const configReadHandler: CommandHandlerWithDb<{
   ref: ConfigRef;
 }> = async ({ kg, ui, args }) => {
-  const result = await kg.fetchConfig(args.ref);
+  const result = await kg.fetchEntity(args.ref, undefined, "config");
   if (isErr(result)) return result;
 
   ui.printData(result.data);

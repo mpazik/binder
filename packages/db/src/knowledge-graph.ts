@@ -10,9 +10,9 @@ import {
 import { and, asc, desc, inArray, or, sql } from "drizzle-orm";
 import {
   type ConfigDataType,
-  type ConfigRef,
   type ConfigSchemaExtended,
   coreConfigSchema,
+  type EntityRef,
   type EntitySchema,
   type Fieldset,
   fieldTypes,
@@ -51,8 +51,11 @@ import { resolveIncludes } from "./relationship-resolver.ts";
 export type KnowledgeGraph<
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
 > = {
-  fetchNode: (ref: NodeRef, includes?: Includes) => ResultAsync<Fieldset>;
-  fetchConfig: (ref: ConfigRef, includes?: Includes) => ResultAsync<Fieldset>;
+  fetchEntity: (
+    ref: EntityRef,
+    includes?: Includes,
+    namespace?: NamespaceEditable,
+  ) => ResultAsync<Fieldset>;
   fetchTransaction: (ref: TransactionRef) => ResultAsync<Transaction>;
   search: (
     query: QueryParams,
@@ -157,31 +160,6 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
   ): ResultAsync<NodeSchema | ConfigSchemaExtended<C>> =>
     namespace === "config" ? ok(configSchema) : getNodeSchema();
 
-  const fetchEntityWithIncludes = async <N extends NamespaceEditable>(
-    namespace: N,
-    ref: N extends "node" ? NodeRef : ConfigRef,
-    includes: Includes | undefined,
-  ): ResultAsync<Fieldset> =>
-    db.transaction(async (tx) => {
-      const entityResult = await fetchEntity(tx, namespace, ref as any);
-      if (isErr(entityResult)) return entityResult;
-
-      const schemaResult = await getSchema(namespace);
-      if (isErr(schemaResult)) return schemaResult;
-
-      const resolvedResult = await resolveIncludes(
-        tx,
-        [entityResult.data],
-        includes,
-        namespace,
-        schemaResult.data,
-        internalSearch,
-      );
-      if (isErr(resolvedResult)) return resolvedResult;
-
-      return ok(resolvedResult.data[0]!);
-    });
-
   const applyAndNotify = async (transaction: Transaction) => {
     let rollbackBeforeHook: TransactionRollback | null = null;
 
@@ -222,11 +200,30 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
   };
 
   return {
-    fetchNode: async (ref: NodeRef, includes?: Includes) => {
-      return fetchEntityWithIncludes("node", ref, includes);
-    },
-    fetchConfig: async (ref: ConfigRef, includes?: Includes) => {
-      return fetchEntityWithIncludes("config", ref, includes);
+    fetchEntity: async (
+      ref: NodeRef,
+      includes?: Includes,
+      namespace = "node",
+    ) => {
+      return db.transaction(async (tx) => {
+        const entityResult = await fetchEntity(tx, namespace, ref as any);
+        if (isErr(entityResult)) return entityResult;
+
+        const schemaResult = await getSchema(namespace);
+        if (isErr(schemaResult)) return schemaResult;
+
+        const resolvedResult = await resolveIncludes(
+          tx,
+          [entityResult.data],
+          includes,
+          namespace,
+          schemaResult.data,
+          internalSearch,
+        );
+        if (isErr(resolvedResult)) return resolvedResult;
+
+        return ok(resolvedResult.data[0]!);
+      });
     },
     fetchTransaction: async (ref: TransactionRef) => {
       return db.transaction(async (tx) => {

@@ -41,7 +41,7 @@ export const fetchDocumentNodes = async (
   kg: KnowledgeGraph,
   documentRef: NodeRef,
 ): ResultAsync<FieldsetNested> => {
-  const documentResult = await kg.fetchNode(documentRef);
+  const documentResult = await kg.fetchEntity(documentRef);
   if (isErr(documentResult)) return documentResult;
 
   const document = documentResult.data;
@@ -67,7 +67,7 @@ export const fetchDocumentNodes = async (
 
     const nestedBlockContent = await Promise.all(
       blockContent.map(async (uid) => {
-        const childResult = await kg.fetchNode(uid as NodeRef);
+        const childResult = await kg.fetchEntity(uid as NodeRef);
         if (isErr(childResult)) return null;
         return buildNestedNode(childResult.data);
       }),

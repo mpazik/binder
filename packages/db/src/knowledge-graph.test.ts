@@ -76,7 +76,7 @@ describe("knowledge graph", () => {
       });
     });
 
-    describe("fetchNode", () => {
+    describe("fetchEntity", () => {
       beforeEach(async () => {
         await db.transaction(async (tx) => {
           await createEntity(tx, "node", mockProjectNode);
@@ -86,32 +86,32 @@ describe("knowledge graph", () => {
       });
 
       it("fetches node by id", async () => {
-        const result = throwIfError(await kg.fetchNode(mockTask1Node.id));
+        const result = throwIfError(await kg.fetchEntity(mockTask1Node.id));
 
         expect(result).toEqual(mockTask1Node);
       });
 
       it("fetches node by uid", async () => {
-        const result = throwIfError(await kg.fetchNode(mockTask1Uid));
+        const result = throwIfError(await kg.fetchEntity(mockTask1Uid));
 
         expect(result).toEqual(mockTask1Node);
       });
 
       it("fetches node by key", async () => {
-        const result = throwIfError(await kg.fetchNode(mockTask1Key));
+        const result = throwIfError(await kg.fetchEntity(mockTask1Key));
 
         expect(result).toEqual(mockTask1Node);
       });
 
       it("returns error when node doesn't exist", async () => {
-        const result = await kg.fetchNode(NONEXISTENT_NODE_UID);
+        const result = await kg.fetchEntity(NONEXISTENT_NODE_UID);
 
         expect(result).toBeErr();
       });
 
       it("fetches node with relationship includes - returns uid without expansion", async () => {
         const result = throwIfError(
-          await kg.fetchNode(mockTask2Node.uid, { uid: true, project: true }),
+          await kg.fetchEntity(mockTask2Node.uid, { uid: true, project: true }),
         );
 
         expect(result).toEqual({
@@ -122,7 +122,7 @@ describe("knowledge graph", () => {
 
       it("applies field selection with includes", async () => {
         const result = throwIfError(
-          await kg.fetchNode(mockTask2Node.uid, {
+          await kg.fetchEntity(mockTask2Node.uid, {
             title: true,
             project: { includes: { title: true } },
           }),
@@ -143,7 +143,7 @@ describe("knowledge graph", () => {
         });
 
         const result = throwIfError(
-          await kg.fetchNode(mockProjectNode.uid, {
+          await kg.fetchEntity(mockProjectNode.uid, {
             title: true,
             tasks: {
               filters: { uid: mockTask2Node.uid },
@@ -165,25 +165,29 @@ describe("knowledge graph", () => {
           ],
         });
       });
-    });
 
-    describe("fetchConfig", () => {
       it("fetches config by uid", async () => {
-        const result = throwIfError(await kg.fetchConfig(mockTaskType.uid));
+        const result = throwIfError(
+          await kg.fetchEntity(mockTaskType.uid, undefined, "config"),
+        );
 
         expect(result).toEqual(mockTaskType);
       });
 
       it("fetches config by key", async () => {
         const result = throwIfError(
-          await kg.fetchConfig(mockTaskTypeKey as any),
+          await kg.fetchEntity(mockTaskTypeKey as any, undefined, "config"),
         );
 
         expect(result).toEqual(mockTaskType);
       });
 
       it("returns error when config doesn't exist", async () => {
-        const result = await kg.fetchConfig(NONEXISTENT_NODE_UID as ConfigUid);
+        const result = await kg.fetchEntity(
+          NONEXISTENT_NODE_UID as ConfigUid,
+          undefined,
+          "config",
+        );
 
         expect(result).toBeErr();
       });
@@ -416,24 +420,24 @@ describe("knowledge graph", () => {
     describe("rollback", () => {
       it("reverts changes", async () => {
         throwIfError(await kg.update(mockTransactionInputUpdate));
-        const updatedNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+        const updatedNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
         expect(updatedNode).toEqual(mockTaskNode1Updated);
 
         throwIfError(await kg.rollback(1));
 
-        const rolledBackNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+        const rolledBackNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
         expect(rolledBackNode).toEqual(mockTask1Node);
       });
 
       it("reverts changes with explicit version", async () => {
         throwIfError(await kg.update(mockTransactionInputUpdate));
         const version = throwIfError(await kg.version());
-        const updatedNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+        const updatedNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
         expect(updatedNode).toEqual(mockTaskNode1Updated);
 
         throwIfError(await kg.rollback(1, version.id));
 
-        const rolledBackNode = throwIfError(await kg.fetchNode(mockTask1Uid));
+        const rolledBackNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
         expect(rolledBackNode).toEqual(mockTask1Node);
       });
 

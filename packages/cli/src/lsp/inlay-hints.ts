@@ -85,7 +85,7 @@ const resolveEntityTitle = async (
   ref: string,
   runtime: RuntimeContextWithDb,
 ): Promise<string | undefined> => {
-  const result = await runtime.kg.fetchNode(ref as NodeRef);
+  const result = await runtime.kg.fetchEntity(ref as NodeRef);
   if (isErr(result)) return undefined;
 
   const entity = result.data;
