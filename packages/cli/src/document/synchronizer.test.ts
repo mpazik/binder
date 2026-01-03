@@ -1,14 +1,18 @@
 import { dirname, join } from "path";
 import { beforeEach, describe, expect, it } from "bun:test";
-import { throwIfError } from "@binder/utils";
+import { pick, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { type EntityChangesetInput, type KnowledgeGraph } from "@binder/db";
 import {
   mockNodeSchema,
+  mockProjectNode,
+  mockProjectUid,
   mockTask1Node,
   mockTask1Uid,
   mockTask2Node,
   mockTask2Uid,
+  mockTask3Node,
+  mockTask3Uid,
   mockTaskType,
   mockTaskTypeKey,
   mockTransactionInitInput,
@@ -46,6 +50,14 @@ const navigationItems: NavigationItem[] = [
   {
     path: "all-tasks",
     query: { filters: { type: "Task" } },
+  },
+  {
+    path: "projects/{key}",
+    includes: {
+      title: true,
+      status: true,
+      tasks: { title: true, status: true },
+    },
   },
 ];
 
@@ -129,11 +141,9 @@ describe("synchronizeFile", () => {
     it("returns empty array when no changes", async () => {
       await check(
         `tasks/${mockTask1Node.key}.yaml`,
-        renderYamlEntity({
-          title: mockTask1Node.title,
-          status: mockTask1Node.status,
-          description: mockTask1Node.description,
-        }),
+        renderYamlEntity(
+          pick(mockTask1Node, ["title", "status", "description"]),
+        ),
         [],
       );
     });
@@ -147,6 +157,30 @@ describe("synchronizeFile", () => {
           description: mockTask1Node.description,
         }),
         [{ $ref: mockTask1Uid, title: "Updated Task Title", status: "done" }],
+      );
+    });
+  });
+
+  describe("yaml with nested includes", () => {
+    beforeEach(async () => {
+      throwIfError(
+        await kg.update({
+          author: "test",
+          nodes: [
+            pick(mockTask3Node, ["uid", "type", "title", "status", "project"]),
+          ],
+        }),
+      );
+    });
+
+    it("detects removed task from project", async () => {
+      await check(
+        `projects/${mockProjectNode.key}.yaml`,
+        renderYamlEntity({
+          ...pick(mockProjectNode, ["title", "status"]),
+          tasks: [pick(mockTask2Node, ["uid", "title", "status"])],
+        }),
+        [{ $ref: mockProjectUid, tasks: [["remove", mockTask3Uid]] }],
       );
     });
   });
@@ -197,6 +231,28 @@ describe("synchronizeFile", () => {
       );
     });
 
+    const check = async (
+      filePath: string,
+      content: string,
+      expected: Record<string, unknown> | null,
+    ) => {
+      throwIfError(await ctx.fs.writeFile(filePath, content));
+      const result = throwIfError(
+        await synchronizeModifiedFiles(
+          ctx.db,
+          ctx.fs,
+          ctx.kg,
+          ctx.config,
+          filePath,
+        ),
+      );
+      if (expected === null) {
+        expect(result).toEqual(null);
+      } else {
+        expect(result).toMatchObject(expected);
+      }
+    };
+
     it("returns null when no modified files in docs folder", async () => {
       const result = throwIfError(
         await synchronizeModifiedFiles(
@@ -211,78 +267,36 @@ describe("synchronizeFile", () => {
     });
 
     it("detects changes in a single modified file", async () => {
-      const fullPath = join(ctx.config.paths.docs, "all-tasks.yaml");
-      throwIfError(
-        await ctx.fs.writeFile(
-          fullPath,
-          renderYamlList([{ ...mockTask1Node, title: "Updated Title" }]),
-        ),
+      await check(
+        join(ctx.config.paths.docs, "all-tasks.yaml"),
+        renderYamlList([{ ...mockTask1Node, title: "Updated Title" }]),
+        {
+          author: ctx.config.author,
+          nodes: [{ $ref: mockTask1Uid, title: "Updated Title" }],
+          configurations: [],
+        },
       );
-
-      const result = throwIfError(
-        await synchronizeModifiedFiles(
-          ctx.db,
-          ctx.fs,
-          ctx.kg,
-          ctx.config,
-          ctx.config.paths.docs,
-        ),
-      );
-
-      expect(result).toMatchObject({
-        author: ctx.config.author,
-        nodes: [{ $ref: mockTask1Uid, title: "Updated Title" }],
-        configurations: [],
-      });
     });
 
     it("detects changes when scoped to specific file", async () => {
-      const fullPath = join(ctx.config.paths.docs, "all-tasks.yaml");
-      throwIfError(
-        await ctx.fs.writeFile(
-          fullPath,
-          renderYamlList([{ ...mockTask1Node, title: "Scoped Update" }]),
-        ),
+      await check(
+        join(ctx.config.paths.docs, "all-tasks.yaml"),
+        renderYamlList([{ ...mockTask1Node, title: "Scoped Update" }]),
+        { nodes: [{ $ref: mockTask1Uid, title: "Scoped Update" }] },
       );
-
-      const result = throwIfError(
-        await synchronizeModifiedFiles(
-          ctx.db,
-          ctx.fs,
-          ctx.kg,
-          ctx.config,
-          fullPath,
-        ),
-      );
-
-      expect(result).toMatchObject({
-        nodes: [{ $ref: mockTask1Uid, title: "Scoped Update" }],
-      });
     });
 
     it("detects changes in config namespace", async () => {
-      const configFile = join(ctx.config.paths.binder, "types.yaml");
-      throwIfError(
-        await ctx.fs.writeFile(
-          configFile,
-          renderYamlList([{ ...mockTaskType, name: "Updated Task Type" }]),
-        ),
+      await check(
+        join(ctx.config.paths.binder, "types.yaml"),
+        renderYamlList([{ ...mockTaskType, name: "Updated Task Type" }]),
+        {
+          nodes: [],
+          configurations: [
+            { $ref: mockTaskType.uid, name: "Updated Task Type" },
+          ],
+        },
       );
-
-      const result = throwIfError(
-        await synchronizeModifiedFiles(
-          ctx.db,
-          ctx.fs,
-          ctx.kg,
-          ctx.config,
-          configFile,
-        ),
-      );
-
-      expect(result).toMatchObject({
-        nodes: [],
-        configurations: [{ $ref: mockTaskType.uid, name: "Updated Task Type" }],
-      });
     });
   });
 });

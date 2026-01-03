@@ -141,6 +141,19 @@ export function assertInRange(
   );
 }
 
+export function assertInArrayRange(
+  index: number,
+  array: unknown[],
+  name?: string,
+): asserts index is number {
+  if (index >= 0 && index < array.length) return;
+  assertFailed(
+    name
+      ? `${name} is ${index}, expected to be in range [0, ${array.length - 1}] (array length: ${array.length})`
+      : `Index ${index} out of bounds for array of length ${array.length}`,
+  );
+}
+
 export function assertOk<T, E>(
   result: Result<T, E>,
   name?: string,

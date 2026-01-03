@@ -67,11 +67,8 @@ describe("diffEntities", () => {
         {
           $ref: mockTask1Uid,
           tags: [
-            "seq",
-            [
-              ["remove", "important"],
-              ["insert", "new-tag"],
-            ],
+            ["remove", "important"],
+            ["insert", "new-tag"],
           ],
         },
       ]);
@@ -154,7 +151,7 @@ describe("diffEntities", () => {
       expect(result).toEqual([
         {
           $ref: mockProjectUid,
-          tasks: ["seq", [["remove", mockTask2Uid]]],
+          tasks: [["remove", mockTask2Uid]],
         },
       ]);
     });
@@ -173,7 +170,7 @@ describe("diffEntities", () => {
       expect(result).toEqual([
         {
           $ref: mockProjectUid,
-          tasks: ["seq", [["insert", expect.any(String)]]],
+          tasks: [["insert", expect.any(String)]],
         },
         expect.objectContaining({
           type: mockTaskTypeKey,
@@ -185,10 +182,6 @@ describe("diffEntities", () => {
   });
 
   describe("edge cases", () => {
-    it("returns empty when old entity has no uid", () => {
-      check(task1, omit(task1, ["uid"]), []);
-    });
-
     it("handles empty multi-relation arrays", () => {
       const oldProject = { ...project, tasks: [] };
       const newProject = { ...project, tasks: [] };

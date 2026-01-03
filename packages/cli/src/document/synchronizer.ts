@@ -10,6 +10,7 @@ import type {
   TransactionId,
   TransactionInput,
 } from "@binder/db";
+import { includesWithUid } from "@binder/db";
 import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
@@ -52,7 +53,10 @@ const synchronizeSingle = async (
   includes?: Includes,
 ): ResultAsync<ChangesetsInput> => {
   const kgResult = await kg.search(
-    { filters: pathFields as Record<string, string> },
+    {
+      filters: pathFields as Record<string, string>,
+      includes: includes ? includesWithUid(includes) : undefined,
+    },
     namespace,
   );
   if (isErr(kgResult)) return kgResult;

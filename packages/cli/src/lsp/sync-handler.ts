@@ -56,6 +56,8 @@ export const handleDocumentSave = async (
     return ok(undefined);
   }
 
+  log.debug("Changesets to apply", { changesets: syncResult.data });
+
   const transactionInput =
     namespace === "config"
       ? { author: config.author, configs: syncResult.data }

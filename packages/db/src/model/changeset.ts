@@ -1,6 +1,9 @@
 import {
+  assert,
   assertEqual,
   assertFailed,
+  assertInArrayRange,
+  assertInRange,
   assertType,
   assertUndefined,
   filterObjectValues,
@@ -273,6 +276,8 @@ const applyInsertMutation = (
   const [, value, position] = mutation;
   const result = [...arr];
   const pos = position ?? result.length;
+  // Insert position can be 0..length (inserting at end is valid)
+  assertInRange(pos, 0, result.length, "insert mutation position");
   if (isEqual(result[pos], value)) result.splice(pos, 1);
   else result.splice(pos, 0, value);
   return result;
@@ -285,16 +290,8 @@ const applyRemoveMutation = (
   const [, value, position] = mutation;
   const result = [...arr];
   const pos = position ?? result.length - 1;
-  if (pos >= result.length) {
-    assertFailed(
-      `Remove mutation position ${pos} is out of bounds for array of length ${result.length}`,
-    );
-  }
-  if (!isEqual(result[pos], value)) {
-    assertFailed(
-      `Remove mutation expected ${JSON.stringify(value)} at position ${pos}, but found ${JSON.stringify(result[pos])}`,
-    );
-  }
+  assertInArrayRange(pos, result, "remove mutation position");
+  assertEqual(result[pos], value, "remove mutation value");
   result.splice(pos, 1);
   return result;
 };
@@ -305,9 +302,7 @@ const applyPatchMutation = (
 ): FieldValue[] => {
   const [, ref, attrChangeset] = mutation;
   const idx = arr.findIndex((item) => getRelationRef(item) === ref);
-  if (idx === -1) {
-    assertFailed(`Patch mutation: ref "${ref}" not found in array`);
-  }
+  assert(idx !== -1, "patch mutation ref", `ref "${ref}" not found in array`);
 
   const currentItem = arr[idx]!;
   const currentAttrs = isRelationTuple(currentItem) ? currentItem[1] : {};

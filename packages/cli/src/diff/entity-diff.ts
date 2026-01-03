@@ -19,7 +19,7 @@ import {
   getFieldDef,
   isFieldsetNested,
 } from "@binder/db";
-import { includes, isEqual } from "@binder/utils";
+import { assertDefined, includes, isEqual } from "@binder/utils";
 import { extractFieldsetFromQuery } from "../utils/query.ts";
 import { matchEntities, type MatcherConfig } from "./entity-matcher.ts";
 import { classifyFields } from "./field-classifier.ts";
@@ -86,9 +86,8 @@ const diffOwnedChildren = (
   for (const oldIdx of matchResult.toRemove) {
     const oldNode = oldChildren[oldIdx]!;
     const oldUid = getUid(oldNode);
-    if (oldUid) {
-      mutations.push(["remove", oldUid]);
-    }
+    assertDefined(oldUid, "oldUid in diffOwnedChildren toRemove");
+    mutations.push(["remove", oldUid]);
   }
 
   for (const { newIndex, oldIndex } of matchResult.matches) {
@@ -176,7 +175,7 @@ const diffField = (
     const result = diffOwnedChildren(schema, newChildren, oldChildren);
     const fieldChange =
       result.mutations.length > 0
-        ? (["seq", result.mutations] as FieldValue)
+        ? (result.mutations as FieldValue)
         : undefined;
     return { changesets: result.changesets, fieldChange };
   }
@@ -194,7 +193,7 @@ const diffField = (
   if (fieldDef?.allowMultiple) {
     const mutations = diffMultipleValues(newValue, oldValue);
     if (mutations.length === 0) return null;
-    return { fieldChange: ["seq", mutations] as FieldValue };
+    return { fieldChange: mutations as FieldValue };
   }
 
   if (!isEqual(newValue, oldValue)) {
@@ -210,7 +209,7 @@ export const diffEntities = (
   oldEntity: FieldsetNested,
 ): ChangesetsInput => {
   const uid = getUid(oldEntity);
-  if (!uid) return [];
+  assertDefined(uid, "uid in diffEntities oldEntity");
 
   const changesets: ChangesetsInput = [];
   const fieldChanges: Record<FieldKey, FieldValue> = {};

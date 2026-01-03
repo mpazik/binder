@@ -1,3 +1,4 @@
+import { mapObjectValues } from "@binder/utils";
 import { z } from "zod";
 
 const FilterOperatorSchema = z.enum([
@@ -40,23 +41,21 @@ export const FiltersSchema = z.record(z.string(), FilterSchema);
 export type Filters = z.infer<typeof FiltersSchema>;
 
 const IncludesValueSchema = z.lazy(() =>
-  z.union([
-    z.boolean(),
-    IncludesBaseSchema,
-    z.object({
-      includes: IncludesBaseSchema.optional(),
-      filters: FiltersSchema.optional(),
-    }),
-  ]),
+  z.union([z.boolean(), IncludesBaseSchema, NestedIncludesSchema]),
 );
 const IncludesBaseSchema: z.ZodType<any> = z.record(
   z.string(),
   IncludesValueSchema,
 );
+const NestedIncludesSchema = z.object({
+  includes: IncludesBaseSchema.optional(),
+  filters: FiltersSchema.optional(),
+});
 
 export const IncludesSchema = IncludesBaseSchema;
 export type Includes = z.infer<typeof IncludesSchema>;
 export type IncludesValue = z.infer<typeof IncludesValueSchema>;
+export type NestedIncludes = z.infer<typeof NestedIncludesSchema>;
 
 const PaginationSchema = z.object({
   limit: z.number().int().positive().optional(),
@@ -83,3 +82,24 @@ const PaginationInfoSchema = z.object({
   previousCursor: z.string().nullable(),
 });
 export type PaginationInfo = z.infer<typeof PaginationInfoSchema>;
+
+const isNestedIncludes = (value: IncludesValue): value is NestedIncludes =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const addUidToNested = (value: IncludesValue): IncludesValue => {
+  if (!isNestedIncludes(value)) return value;
+  if ("includes" in value || "filters" in value) {
+    return {
+      ...value,
+      includes: value.includes
+        ? includesWithUid(value.includes)
+        : { uid: true },
+    };
+  }
+  return includesWithUid(value as Includes);
+};
+
+export const includesWithUid = (includes: Includes): Includes => ({
+  uid: true,
+  ...mapObjectValues(includes, addUidToNested),
+});
