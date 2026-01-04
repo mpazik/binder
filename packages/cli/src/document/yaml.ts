@@ -61,7 +61,7 @@ const shouldRenderInline = (node: YAMLMap | YAMLSeq): boolean => {
   return true;
 };
 
-const applyInlineFormatting = (node: YAMLMap | YAMLSeq): void => {
+export const applyInlineFormatting = (node: YAMLMap | YAMLSeq): void => {
   if (isSeq(node)) {
     for (const item of node.items) {
       if (isMap(item)) {

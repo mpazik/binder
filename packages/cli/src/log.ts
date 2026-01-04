@@ -5,6 +5,8 @@ import {
   type ResultAsync,
   wrapError,
 } from "@binder/utils";
+import { Document, isMap, isSeq } from "yaml";
+import { applyInlineFormatting } from "./document/yaml.ts";
 import type { FileSystem } from "./lib/filesystem.ts";
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
@@ -50,9 +52,11 @@ const rotateLogFile = async (logFilePath: string): Promise<void> => {
 };
 
 const formatError = (error: Error, depth = 0): string => {
-  const result = error.message;
+  const message = error.message;
+  const stack = error.stack ? `\n${error.stack}` : "";
+  const result = message + stack;
   return error.cause instanceof Error && depth < 10
-    ? result + " Caused by: " + formatError(error.cause, depth + 1)
+    ? result + "\nCaused by: " + formatError(error.cause, depth + 1)
     : result;
 };
 
@@ -102,10 +106,46 @@ export const createLogger = async (
   };
 
   const level = options.level ?? "info";
-  let last = Date.now();
 
   const shouldLog = (input: LogLevel): boolean => {
     return levelPriority[input] >= levelPriority[level];
+  };
+
+  const formatTime = (date: Date): string => {
+    const iso = date.toISOString();
+    return iso.slice(11, 23);
+  };
+
+  const formatValue = (value: unknown): string => {
+    if (value && typeof value === "object" && "message" in value) {
+      return formatErrorObject(value);
+    }
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  };
+
+  const isPrimitive = (value: unknown): boolean =>
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean";
+
+  const formatYaml = (obj: Record<string, unknown>, indent: string): string => {
+    const filtered = Object.fromEntries(
+      Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null),
+    );
+    const doc = new Document(filtered);
+    if (isMap(doc.contents)) {
+      applyInlineFormatting(doc.contents);
+    }
+    const yaml = doc.toString({ indent: 2, lineWidth: 0 });
+    return yaml
+      .trimEnd()
+      .split("\n")
+      .map((line) => indent + line)
+      .join("\n");
   };
 
   const build = (
@@ -113,38 +153,27 @@ export const createLogger = async (
     message: any,
     extra?: Record<string, any>,
   ): string => {
-    const metadata = {
-      pid: process.pid,
-      ...extra,
-    };
+    const time = formatTime(new Date());
+    const lvl = level.toUpperCase().padEnd(5);
+    const header = `[${time}] ${lvl}: ${message}`;
 
-    const prefix = Object.entries(metadata)
-      .filter(([_, value]) => value !== undefined && value !== null)
-      .map(([key, value]) => {
-        const pfx = `${key}=`;
-        if (value && typeof value === "object" && "message" in value) {
-          return pfx + formatErrorObject(value);
-        }
-        if (typeof value === "object") return pfx + JSON.stringify(value);
-        return pfx + value;
-      })
-      .join(" ");
+    if (!extra || Object.keys(extra).length === 0) {
+      return header + "\n";
+    }
 
-    const next = new Date();
-    const diff = next.getTime() - last;
-    last = next.getTime();
-
-    return (
-      [
-        level.toUpperCase().padEnd(5),
-        next.toISOString().split(".")[0],
-        "+" + diff + "ms",
-        prefix,
-        message,
-      ]
-        .filter(Boolean)
-        .join(" ") + "\n"
+    const entries = Object.entries(extra).filter(
+      ([_, v]) => v !== undefined && v !== null,
     );
+
+    const allPrimitive = entries.every(([_, v]) => isPrimitive(v));
+    const inline = entries.map(([k, v]) => `${k}=${formatValue(v)}`).join(" ");
+
+    if (allPrimitive && header.length + 1 + inline.length <= 120) {
+      return `${header} ${inline}\n`;
+    }
+
+    const multiline = formatYaml(extra, "    ");
+    return `${header}\n${multiline}\n\n`;
   };
 
   const info = (message?: any, extra?: Record<string, any>) => {
