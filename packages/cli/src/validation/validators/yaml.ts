@@ -16,8 +16,8 @@ import {
   getAllFieldsForType,
   getFieldDef,
   type Includes,
-  type IncludesValue,
   isFieldInSchema,
+  isIncludesQuery,
   matchesFilters,
   type Namespace,
   validateDataType,
@@ -93,15 +93,6 @@ const yamlNodeToJson = (node: unknown | null): JsonValue | undefined => {
     return obj;
   }
   return undefined;
-};
-
-const getNestedIncludes = (
-  includesValue: IncludesValue | undefined,
-): Includes | undefined => {
-  if (!includesValue || includesValue === true) return undefined;
-  if (typeof includesValue === "object" && "includes" in includesValue)
-    return includesValue.includes;
-  return includesValue as Includes;
 };
 
 const visitEntityNode = <N extends Namespace>(
@@ -196,9 +187,13 @@ const visitEntityNode = <N extends Namespace>(
 
     const valueNode = item.value;
 
+    const fieldInclude = currentIncludes?.[fieldKey];
     const nestedIncludes =
-      currentIncludes &&
-      getNestedIncludes(currentIncludes[fieldKey] as IncludesValue);
+      typeof fieldInclude === "object" && fieldInclude !== null
+        ? isIncludesQuery(fieldInclude)
+          ? fieldInclude.includes
+          : fieldInclude
+        : undefined;
 
     if (fieldDef.dataType === "relation" && nestedIncludes) {
       const range = fieldDef.range;

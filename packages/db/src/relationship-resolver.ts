@@ -6,21 +6,11 @@ import {
   type FieldValue,
   type Filters,
   type Includes,
+  isIncludesQuery,
+  isObjectIncludes,
   type NamespaceEditable,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
-
-type NestedIncludes = {
-  includes?: Includes;
-  filters?: Filters;
-};
-
-const isNestedInclude = (
-  includeValue: unknown,
-): includeValue is NestedIncludes => {
-  if (typeof includeValue !== "object" || includeValue === null) return false;
-  return typeof includeValue !== "boolean";
-};
 
 const getEntityFieldValue = (
   entity: Fieldset,
@@ -132,7 +122,7 @@ const applyFieldSelection = (
 
     for (const fieldName of Object.keys(includes)) {
       const includeValue = includes[fieldName];
-      if (isNestedInclude(includeValue)) {
+      if (isObjectIncludes(includeValue)) {
         if (fieldName in entity) {
           selectedEntity[fieldName] = entity[fieldName];
         }
@@ -145,15 +135,6 @@ const applyFieldSelection = (
   });
 };
 
-const getNestedIncludes = (
-  fieldInclude: NestedIncludes | Includes,
-): Includes | undefined => {
-  if ("includes" in fieldInclude) return fieldInclude.includes;
-  if ("filters" in fieldInclude && Object.keys(fieldInclude).length === 1)
-    return undefined;
-  return fieldInclude as Includes;
-};
-
 const cleanRelatedEntities = (
   entities: Fieldset[],
   includes: Includes,
@@ -162,8 +143,10 @@ const cleanRelatedEntities = (
     for (const [fieldKey, fieldValue] of Object.entries(entity)) {
       const fieldInclude = includes[fieldKey];
 
-      if (isNestedInclude(fieldInclude)) {
-        const nestedIncludes = getNestedIncludes(fieldInclude);
+      if (isObjectIncludes(fieldInclude)) {
+        const nestedIncludes = isIncludesQuery(fieldInclude)
+          ? fieldInclude.includes
+          : fieldInclude;
         if (!nestedIncludes) continue;
 
         if (Array.isArray(fieldValue)) {
@@ -207,14 +190,16 @@ export const resolveIncludes = async (
   if (!includes) return ok(entities);
 
   for (const [fieldKey, includeValue] of Object.entries(includes)) {
-    if (!isNestedInclude(includeValue)) continue;
-
     const field = schema.fields[fieldKey];
     if (!field || field.dataType !== "relation") continue;
-    if (!field.range && !field.inverseOf) continue;
+    if (!isObjectIncludes(includeValue)) continue;
 
-    const nestedFilters = (includeValue as NestedIncludes).filters;
-    const nestedIncludes = getNestedIncludes(includeValue as NestedIncludes);
+    const nestedFilters = isIncludesQuery(includeValue)
+      ? includeValue.filters
+      : undefined;
+    const nestedIncludes = isIncludesQuery(includeValue)
+      ? includeValue.includes
+      : includeValue;
 
     let relatedFilters: Filters = {};
 
@@ -265,7 +250,7 @@ export const resolveIncludes = async (
             uid: true,
             ...(field.inverseOf ? { [field.inverseOf]: true } : {}),
           }
-        : nestedIncludes,
+        : undefined,
       namespace,
       schema,
       searchFn,

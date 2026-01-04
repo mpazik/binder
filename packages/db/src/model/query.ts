@@ -40,22 +40,26 @@ export type Filter = z.infer<typeof FilterSchema>;
 export const FiltersSchema = z.record(z.string(), FilterSchema);
 export type Filters = z.infer<typeof FiltersSchema>;
 
-const IncludesValueSchema = z.lazy(() =>
-  z.union([z.boolean(), IncludesBaseSchema, NestedIncludesSchema]),
+export type IncludesQuery = {
+  includes?: Includes;
+  filters?: Filters;
+};
+export type Includes = { [key: string]: IncludesValue };
+export type IncludesValue = boolean | Includes | IncludesQuery;
+
+const IncludesValueSchema: z.ZodType<IncludesValue> = z.lazy(() =>
+  z.union([z.boolean(), IncludesBaseSchema, IncludesQuerySchema]),
 );
-const IncludesBaseSchema: z.ZodType<any> = z.record(
+const IncludesBaseSchema: z.ZodType<Includes> = z.record(
   z.string(),
   IncludesValueSchema,
 );
-const NestedIncludesSchema = z.object({
+const IncludesQuerySchema: z.ZodType<IncludesQuery> = z.object({
   includes: IncludesBaseSchema.optional(),
   filters: FiltersSchema.optional(),
 });
 
 export const IncludesSchema = IncludesBaseSchema;
-export type Includes = z.infer<typeof IncludesSchema>;
-export type IncludesValue = z.infer<typeof IncludesValueSchema>;
-export type NestedIncludes = z.infer<typeof NestedIncludesSchema>;
 
 const PaginationSchema = z.object({
   limit: z.number().int().positive().optional(),
@@ -83,12 +87,19 @@ const PaginationInfoSchema = z.object({
 });
 export type PaginationInfo = z.infer<typeof PaginationInfoSchema>;
 
-const isNestedIncludes = (value: IncludesValue): value is NestedIncludes =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+export const isIncludesQuery = (value: IncludesValue): value is IncludesQuery =>
+  typeof value === "object" &&
+  value !== null &&
+  ("includes" in value || "filters" in value);
 
-const addUidToNested = (value: IncludesValue): IncludesValue => {
-  if (!isNestedIncludes(value)) return value;
-  if ("includes" in value || "filters" in value) {
+export const isObjectIncludes = (
+  value: IncludesValue,
+): value is IncludesQuery | Includes =>
+  typeof value === "object" && value !== null;
+
+const addUidToIncludesRecursively = (value: IncludesValue): IncludesValue => {
+  if (typeof value === "boolean") return value;
+  if (isIncludesQuery(value)) {
     return {
       ...value,
       includes: value.includes
@@ -96,10 +107,10 @@ const addUidToNested = (value: IncludesValue): IncludesValue => {
         : { uid: true },
     };
   }
-  return includesWithUid(value as Includes);
+  return includesWithUid(value);
 };
 
 export const includesWithUid = (includes: Includes): Includes => ({
   uid: true,
-  ...mapObjectValues(includes, addUidToNested),
+  ...mapObjectValues(includes, addUidToIncludesRecursively),
 });
