@@ -18,7 +18,12 @@ import {
   mockUserType,
   mockUserTypeKey,
 } from "@binder/db/mocks";
-import type { FieldDef, NodeType, TypeDef } from "@binder/db";
+import {
+  coreFields,
+  type FieldDef,
+  type NodeType,
+  type TypeDef,
+} from "@binder/db";
 import { groupByToObject } from "@binder/utils";
 import { filterSchemaByTypes } from "./schema-filter.ts";
 
@@ -47,7 +52,7 @@ describe("filterSchemaByTypes", () => {
   it("should include simple type", () => {
     check([mockUserTypeKey], {
       types: [mockUserType],
-      fields: [mockEmailField],
+      fields: [coreFields.name, mockEmailField],
     });
   });
 
@@ -55,6 +60,7 @@ describe("filterSchemaByTypes", () => {
     check([mockTaskTypeKey], {
       types: [mockTaskType],
       fields: [
+        coreFields.title,
         mockStatusField,
         mockPriorityField,
         mockAssignedToField,
@@ -70,6 +76,7 @@ describe("filterSchemaByTypes", () => {
     check([mockTaskTypeKey, mockProjectTypeKey], {
       types: [mockTaskType, mockProjectType],
       fields: [
+        coreFields.title,
         mockStatusField,
         mockPriorityField,
         mockAssignedToField,
@@ -92,7 +99,7 @@ describe("filterSchemaByTypes", () => {
   it("should ignore non-existent types", () => {
     check([mockUserTypeKey, mockNotExistingNodeTypeKey], {
       types: [mockUserType],
-      fields: [mockEmailField],
+      fields: [coreFields.name, mockEmailField],
     });
   });
 });

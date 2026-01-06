@@ -12,6 +12,7 @@ import {
   type ConfigDataType,
   type ConfigSchemaExtended,
   coreConfigSchema,
+  coreSchema,
   type EntityRef,
   type EntitySchema,
   type Fieldset,
@@ -146,10 +147,13 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         (config) => config.type === typeSystemType,
       ) as unknown as TypeDef[];
 
-      const schema: NodeSchema = mergeSchema(options?.providerSchema, {
-        fields: groupByToObject(fields, (f) => f.key),
-        types: groupByToObject(types, (t) => t.key),
-      });
+      const schema: NodeSchema = mergeSchema(
+        mergeSchema(coreSchema(), options?.providerSchema),
+        {
+          fields: groupByToObject(fields, (f) => f.key),
+          types: groupByToObject(types, (t) => t.key),
+        },
+      );
 
       nodeSchemaCache = schema;
       return ok(schema);

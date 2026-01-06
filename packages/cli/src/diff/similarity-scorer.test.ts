@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { coreFields, type FieldsetNested, mergeSchema } from "@binder/db";
+import { type FieldsetNested } from "@binder/db";
 import {
   mockNodeSchema,
   mockProjectNode,
@@ -10,7 +10,7 @@ import { computeMatchScore, type ScorerConfig } from "./similarity-scorer.ts";
 import { classifyFields } from "./field-classifier.ts";
 
 describe("computeMatchScore", () => {
-  const schema = mergeSchema({ fields: coreFields, types: {} }, mockNodeSchema);
+  const schema = mockNodeSchema;
   const classifications = classifyFields(schema);
   const defaultListLength = 10;
 

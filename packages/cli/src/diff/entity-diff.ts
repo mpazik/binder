@@ -2,23 +2,18 @@ import type {
   ChangesetsInput,
   EntityChangesetInput,
   EntitySchema,
-  Fieldset,
+  EntityType,
+  EntityUid,
   FieldKey,
   FieldNestedValue,
+  Fieldset,
   FieldsetNested,
   FieldValue,
   ListMutation,
   NodeUid,
   QueryParams,
-  EntityUid,
-  EntityType,
 } from "@binder/db";
-import {
-  coreIdentityFieldKeys,
-  createUid,
-  getFieldDef,
-  isFieldsetNested,
-} from "@binder/db";
+import { coreIdentityFieldKeys, createUid, isFieldsetNested } from "@binder/db";
 import { assertDefined, includes, isEqual } from "@binder/utils";
 import { extractFieldsetFromQuery } from "../utils/query.ts";
 import { matchEntities, type MatcherConfig } from "./entity-matcher.ts";
@@ -46,7 +41,7 @@ const buildEntityCreate = (
   for (const [key, value] of Object.entries(node)) {
     if (includes(coreIdentityFieldKeys, key)) continue;
 
-    const fieldDef = getFieldDef(schema, key as FieldKey);
+    const fieldDef = schema.fields[key as FieldKey];
     if (fieldDef?.dataType === "relation" && fieldDef.allowMultiple) continue;
 
     fields[key] = value;
@@ -165,7 +160,7 @@ const diffField = (
 ): FieldDiffResult | null => {
   if (includes(coreIdentityFieldKeys, fieldKey)) return null;
 
-  const fieldDef = getFieldDef(schema, fieldKey);
+  const fieldDef = schema.fields[fieldKey];
 
   if (fieldDef?.dataType === "relation" && fieldDef.allowMultiple) {
     const newChildren = extractOwnedChildren(newValue);
@@ -255,7 +250,7 @@ const hydrateEntity = (
   const fields: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(hydrated)) {
     if (includes(coreIdentityFieldKeys, key)) continue;
-    const fieldDef = getFieldDef(schema, key as FieldKey);
+    const fieldDef = schema.fields[key as FieldKey];
     if (fieldDef?.dataType === "relation" && fieldDef.allowMultiple) continue;
     fields[key] = value;
   }

@@ -1,9 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   type ChangesetsInput,
-  coreFields,
   type FieldsetNested,
-  mergeSchema,
   type NodeUid,
 } from "@binder/db";
 import {
@@ -20,7 +18,7 @@ import { omit } from "@binder/utils";
 import { diffEntities, diffQueryResults } from "./entity-diff.ts";
 
 describe("diffEntities", () => {
-  const schema = mergeSchema({ fields: coreFields, types: {} }, mockNodeSchema);
+  const schema = mockNodeSchema;
 
   const task1 = mockTask1Node as FieldsetNested;
   const task2 = mockTask2Node as FieldsetNested;
@@ -191,7 +189,7 @@ describe("diffEntities", () => {
 });
 
 describe("diffQueryResults", () => {
-  const schema = mergeSchema({ fields: coreFields, types: {} }, mockNodeSchema);
+  const schema = mockNodeSchema;
 
   const task1 = mockTask1Node as FieldsetNested;
   const task2 = mockTask2Node as FieldsetNested;

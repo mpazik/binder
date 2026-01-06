@@ -10,7 +10,6 @@ import {
   type FieldsetNested,
   type FieldValue,
   getAllFieldsForType,
-  getFieldDef,
   isFieldsetNested,
   type NodeDataType,
 } from "@binder/db";
@@ -96,7 +95,7 @@ const compareNestedFieldsets = (
     const oldValue = oldObj[key];
     if (oldValue === undefined) continue;
 
-    const fieldDef = getFieldDef(config.schema, key as FieldKey);
+    const fieldDef = config.schema.fields[key as FieldKey];
     if (!fieldDef) continue;
 
     totalSimilarity += compareFieldValues(
@@ -265,7 +264,7 @@ export const computeMatchScore = (
     const classification = config.classifications.get(fieldKey);
     if (!classification) continue;
 
-    const fieldDef = getFieldDef(config.schema, fieldKey);
+    const fieldDef = config.schema.fields[fieldKey];
     assertDefined(fieldDef, `fieldDef for ${fieldKey}`);
 
     const similarity = compareFieldValues(config, fieldDef, newValue, oldValue);

@@ -10,7 +10,7 @@ import {
   mockChangesetCreateTask1,
   mockChangesetUpdateTask1,
 } from "./changeset.mock.ts";
-import { mockNodeSchema } from "./schema.mock.ts";
+import { mockNodeSchemaRaw } from "./schema.mock.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
@@ -33,10 +33,13 @@ export const mockTransactionInit: Transaction = {
   },
   configurations: {
     ...Object.fromEntries(
-      Object.values(mockNodeSchema.fields).map((field) => [field.key, field]),
+      Object.values(mockNodeSchemaRaw.fields).map((field) => [
+        field.key,
+        field,
+      ]),
     ),
     ...Object.fromEntries(
-      Object.values(mockNodeSchema.types).map((type) => [type.key, type]),
+      Object.values(mockNodeSchemaRaw.types).map((type) => [type.key, type]),
     ),
   },
 };

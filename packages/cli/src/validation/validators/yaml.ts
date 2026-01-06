@@ -10,11 +10,9 @@ import {
 import { assertNotEmpty, includes, isErr, type JsonValue } from "@binder/utils";
 import {
   coreIdentityFieldKeys,
-  type DataTypeNs,
   type EntityType,
   type Fieldset,
   getAllFieldsForType,
-  getFieldDef,
   type Includes,
   isFieldInSchema,
   isIncludesQuery,
@@ -159,7 +157,7 @@ const visitEntityNode = <N extends Namespace>(
 
     if (includes(coreIdentityFieldKeys, fieldKey)) continue;
 
-    const fieldDef = getFieldDef<DataTypeNs[N]>(schema, fieldKey);
+    const fieldDef = schema.fields[fieldKey];
     if (!fieldDef) {
       errors.push(
         createValidationError(

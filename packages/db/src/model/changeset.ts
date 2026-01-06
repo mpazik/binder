@@ -15,7 +15,7 @@ import type { NamespaceEditable, NamespaceSchema } from "./namespace.ts";
 import type { NodeUid } from "./node.ts";
 import type { ConfigKey } from "./config.ts";
 import { type FieldKey, type Fieldset, type FieldValue } from "./field.ts";
-import { type EntitySchema, getFieldDef } from "./schema.ts";
+import { type EntitySchema } from "./schema.ts";
 import type { EntityKey } from "./entity.ts";
 
 export type ListMutationInsert = [
@@ -617,7 +617,7 @@ export const canonicalizeFieldChangeset = (
   transformEntries(changeset, (entries) =>
     entries
       .map(([key, value]) => {
-        const fieldDef = getFieldDef(schema, key);
+        const fieldDef = schema.fields[key];
         if (fieldDef === undefined) return null;
         const normalized = normalizeValueChange(value);
         const canonical = canonicalizeValueChange(normalized);

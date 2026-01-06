@@ -6,7 +6,7 @@ import {
   mockTask1Uid,
   mockTask2Node,
 } from "./node.mock.ts";
-import { mockNodeSchema } from "./schema.mock.ts";
+import { mockNodeSchemaRaw } from "./schema.mock.ts";
 import {
   mockAuthor,
   mockCreatedTime,
@@ -22,10 +22,10 @@ export const mockTransactionInitInput: TransactionInput = {
     changesetInputForNewEntity(mockTask2Node),
   ],
   configurations: [
-    ...Object.values(mockNodeSchema.fields).map((field) =>
+    ...Object.values(mockNodeSchemaRaw.fields).map((field) =>
       changesetInputForNewEntity<"config">(field),
     ),
-    ...Object.values(mockNodeSchema.types).map((type) =>
+    ...Object.values(mockNodeSchemaRaw.types).map((type) =>
       changesetInputForNewEntity<"config">(type),
     ),
   ],

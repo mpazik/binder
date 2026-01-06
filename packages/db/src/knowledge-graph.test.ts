@@ -23,42 +23,18 @@ import {
 import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
 import {
   type ConfigUid,
+  coreFieldKeys,
+  coreFields,
   GENESIS_VERSION,
   type Transaction,
   versionFromTransaction,
 } from "./model";
 import { applyAndSaveTransaction } from "./transaction-processor.ts";
-import { mockNodeSchema } from "./model/schema.mock.ts";
+import { mockNodeSchemaRaw } from "./model/schema.mock.ts";
 import {
   mockTransactionInitInput,
   mockTransactionInputUpdate,
 } from "./model/transaction-input.mock.ts";
-
-describe("knowledge-graph-setup", () => {
-  let db: Database;
-  let kg: ReturnType<typeof openKnowledgeGraph>;
-
-  beforeEach(() => {
-    db = getTestDatabase();
-    kg = openKnowledgeGraph(db);
-  });
-
-  it("processes transaction input and fetches task nodes", async () => {
-    const transaction = throwIfError(await kg.update(mockTransactionInitInput));
-
-    expect(transaction.nodes).toBeDefined();
-
-    const taskUids = Object.keys(transaction.nodes);
-    expect(taskUids.length).toBe(3);
-
-    const taskResults = throwIfError(
-      await kg.search({ filters: { type: "Task" } }),
-    );
-    expect(taskResults.items.length).toBe(2);
-    expect(taskResults.items[0]!.type).toBe("Task");
-    expect(taskResults.items[1]!.type).toBe("Task");
-  });
-});
 
 describe("knowledge graph", () => {
   let db: Database;
@@ -67,6 +43,31 @@ describe("knowledge graph", () => {
   beforeEach(async () => {
     db = getTestDatabase();
     kg = openKnowledgeGraph(db);
+  });
+
+  describe("setup", () => {
+    it("processes transaction input and fetches task nodes", async () => {
+      const transaction = throwIfError(
+        await kg.update(mockTransactionInitInput),
+      );
+
+      expect(Object.keys(transaction.nodes)).toEqual([
+        mockProjectNode.uid,
+        mockTask1Node.uid,
+        mockTask2Node.uid,
+      ]);
+
+      const taskResults = throwIfError(
+        await kg.search({ filters: { type: "Task" } }),
+      );
+      expect(taskResults.items).toEqual([mockTask1Node, mockTask2Node]);
+    });
+
+    it("includes core fields in node schema", async () => {
+      const schema = throwIfError(await kg.getNodeSchema());
+
+      expect(Object.keys(schema.fields)).toEqual(coreFieldKeys);
+    });
   });
 
   describe("with data", () => {
@@ -233,8 +234,13 @@ describe("knowledge graph", () => {
       it("returns all nodes without filters", async () => {
         const result = throwIfError(await kg.search({}));
 
-        expect(result.items.length).toBe(4);
-        expect(result.pagination.hasNext).toBe(false);
+        expect(result.items).toEqual([
+          mockTask1Node,
+          mockProjectNode,
+          mockTask2Node,
+          mockTask3Node,
+        ]);
+        expect(result.pagination).toMatchObject({ hasNext: false });
       });
 
       it("filters by type", async () => {
@@ -273,8 +279,8 @@ describe("knowledge graph", () => {
           }),
         );
 
-        expect(result.items.length).toBe(2);
-        expect(result.pagination.hasNext).toBe(true);
+        expect(result.items).toEqual([mockTask1Node, mockProjectNode]);
+        expect(result.pagination).toMatchObject({ hasNext: true });
       });
 
       it("rejects filters with invalid field names", async () => {
@@ -294,7 +300,7 @@ describe("knowledge graph", () => {
           ),
         );
 
-        const types = Object.keys(mockNodeSchema.types);
+        const types = Object.keys(mockNodeSchemaRaw.types);
         expect(result.items.map((it) => it.key)).toEqual(types);
       });
 
@@ -306,9 +312,7 @@ describe("knowledge graph", () => {
           }),
         );
 
-        expect(result.items.length).toBe(1);
-        const task = result.items[0]!;
-        expect(task.project).toBe(mockProjectNode.uid);
+        expect(result.items).toEqual([{ project: mockProjectNode.uid }]);
       });
 
       it("expands relation with nested includes", async () => {
@@ -319,12 +323,14 @@ describe("knowledge graph", () => {
           }),
         );
 
-        expect(result.items.length).toBe(1);
-        const task = result.items[0]!;
-        expect(task.project).toEqual({
-          uid: mockProjectNode.uid,
-          title: mockProjectNode.title,
-        });
+        expect(result.items).toEqual([
+          {
+            project: {
+              uid: mockProjectNode.uid,
+              title: mockProjectNode.title,
+            },
+          },
+        ]);
       });
 
       it("does not expand inverse relationship without nested includes", async () => {
@@ -336,10 +342,8 @@ describe("knowledge graph", () => {
           }),
         );
 
-        expect(result.items.length).toBe(1);
-        const project = result.items[0]!;
         // Inverse relations without nested includes are not expanded
-        expect(project[mockTasksFieldKey]).toBeUndefined();
+        expect(result.items).toEqual([{}]);
       });
 
       it("expands inverse relationship with nested includes", async () => {
@@ -351,10 +355,14 @@ describe("knowledge graph", () => {
           }),
         );
 
-        expect(result.items.length).toBe(1);
-        const project = result.items[0]!;
-        expect(Array.isArray(project[mockTasksFieldKey])).toBe(true);
-        expect((project[mockTasksFieldKey] as any[]).length).toBe(2);
+        expect(result.items).toEqual([
+          {
+            [mockTasksFieldKey]: [
+              { uid: mockTask2Node.uid, title: mockTask2Node.title },
+              { uid: mockTask3Node.uid, title: mockTask3Node.title },
+            ],
+          },
+        ]);
       });
 
       it("applies field selection with includes", async () => {
@@ -368,15 +376,15 @@ describe("knowledge graph", () => {
           }),
         );
 
-        expect(result.items.length).toBe(1);
-        const task = result.items[0]!;
-        expect(task.title).toBe(mockTask2Node.title);
-        expect(task.description).toBeUndefined();
-        expect(task.project).toEqual({
-          uid: mockProjectNode.uid,
-          title: mockProjectNode.title,
-        });
-        expect((task.project as any).description).toBeUndefined();
+        expect(result.items).toEqual([
+          {
+            title: mockTask2Node.title,
+            project: {
+              uid: mockProjectNode.uid,
+              title: mockProjectNode.title,
+            },
+          },
+        ]);
       });
 
       it("applies field selection with two levels of nested includes", async () => {
@@ -446,14 +454,7 @@ describe("knowledge graph", () => {
 
         const result = await kg.rollback(1, mockTransactionInit.id);
 
-        expect(result).toBeErr();
-        expect(result).toEqual(
-          expect.objectContaining({
-            error: expect.objectContaining({
-              key: "version-mismatch",
-            }),
-          }),
-        );
+        expect(result).toBeErrWithKey("version-mismatch");
       });
     });
   });

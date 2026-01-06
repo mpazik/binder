@@ -45,7 +45,6 @@ import {
   fieldSystemType,
   fieldTypes,
   type FieldValue,
-  getFieldDef,
   getTypeFieldAttrs,
   getTypeFieldKey,
   incrementEntityId,
@@ -264,7 +263,7 @@ const validateTypeFieldDefaults = (
     if (!attrs?.default) continue;
 
     const fieldKey = getTypeFieldKey(fieldRef);
-    const fieldDef = getFieldDef(schema, fieldKey);
+    const fieldDef = schema.fields[fieldKey];
     if (!fieldDef) continue;
 
     const tempFieldDef = {
@@ -308,7 +307,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
     if (fieldsToExcludeFromValidation.includes(fieldKey as any)) {
       continue;
     }
-    const fieldDef = getFieldDef(schema, fieldKey) as
+    const fieldDef = schema.fields[fieldKey] as
       | FieldDef<DataTypeNs[N]>
       | undefined;
     if (!fieldDef) {
@@ -487,7 +486,7 @@ const validateChangesetInput = <N extends NamespaceEditable>(
     const hasValueConstraint = attrs?.value !== undefined;
     const hasDefault =
       attrs?.default !== undefined ||
-      getFieldDef(schema, fieldKey)?.default !== undefined;
+      schema.fields[fieldKey]?.default !== undefined;
     if (
       !hasValueConstraint &&
       !hasDefault &&
@@ -677,7 +676,7 @@ const collectRelationKeys = <N extends NamespaceEditable>(
     for (const [fieldKey, value] of objEntries(input)) {
       if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
         continue;
-      const fieldDef = getFieldDef(schema, fieldKey);
+      const fieldDef = schema.fields[fieldKey];
       if (fieldDef?.dataType !== "relation") continue;
 
       const fieldValue = value as FieldValue;
@@ -782,7 +781,7 @@ const normalizeInput = <N extends NamespaceEditable>(
     if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
       continue;
 
-    const fieldDef = getFieldDef(schema, fieldKey);
+    const fieldDef = schema.fields[fieldKey];
     normalized[fieldKey] = normalizeFieldValue(
       fieldDef,
       value as FieldValue,
@@ -844,7 +843,7 @@ const resolveRelations = <N extends NamespaceEditable>(
     if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
       continue;
 
-    const fieldDef = getFieldDef(schema, fieldKey);
+    const fieldDef = schema.fields[fieldKey];
     if (fieldDef?.dataType !== "relation") continue;
 
     const fieldValue = value as FieldValue;
@@ -892,7 +891,7 @@ const expandInverseRelations = async <N extends NamespaceEditable>(
     const filteredChangeset: FieldChangeset = {};
 
     for (const [fieldKey, change] of objEntries(changeset)) {
-      const fieldDef = getFieldDef(schema, fieldKey);
+      const fieldDef = schema.fields[fieldKey];
       if (!fieldDef?.inverseOf) {
         filteredChangeset[fieldKey] = change;
         continue;
@@ -1041,7 +1040,7 @@ const buildChangeset = async <N extends NamespaceEditable>(
         continue;
       }
 
-      const fieldDef = getFieldDef(schema, fieldKey);
+      const fieldDef = schema.fields[fieldKey];
       if (fieldDef?.default !== undefined) {
         // TODO: later this should be a function
         if (fieldDef.when && !matchesFilters(fieldDef.when, input as Fieldset))

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { coreFields, type FieldsetNested, mergeSchema } from "@binder/db";
+import { type FieldsetNested } from "@binder/db";
 import {
   mockNodeSchema,
   mockProjectNode,
@@ -11,7 +11,7 @@ import { matchEntities } from "./entity-matcher.ts";
 import { classifyFields } from "./field-classifier.ts";
 
 describe("matchNodes", () => {
-  const schema = mergeSchema({ fields: coreFields, types: {} }, mockNodeSchema);
+  const schema = mockNodeSchema;
   const classifications = classifyFields(schema);
   const config = { schema, classifications };
 

@@ -191,16 +191,6 @@ export const getAllFieldsForType = (
   return includeIdentityFields ? [...coreIdentityFieldKeys, ...fields] : fields;
 };
 
-export const getFieldDef = <D extends string = CoreDataType>(
-  schema: EntitySchema<D>,
-  field: FieldKey,
-): FieldDef<D> | undefined => {
-  if (field in coreFields) {
-    return coreFields[field as keyof typeof coreFields] as FieldDef<D>;
-  }
-  return schema.fields[field];
-};
-
 const isCoreIdentityFieldKey = (key: string): key is CoreIdentityFieldKey =>
   coreIdentityFieldKeys.includes(key as CoreIdentityFieldKey);
 
@@ -249,6 +239,11 @@ export const getFieldDefNested = <D extends string = CoreDataType>(
 
 export const emptySchema = <D extends string>(): EntitySchema<D> => ({
   fields: {},
+  types: {},
+});
+
+export const coreSchema = (): EntitySchema<CoreDataType> => ({
+  fields: coreFields,
   types: {},
 });
 

@@ -1,6 +1,6 @@
 import { includes } from "@binder/utils";
 import { and, sql, type SQL } from "drizzle-orm";
-import { tableStoredFields, type nodeTable, type configTable } from "./schema";
+import { type configTable, type nodeTable, tableStoredFields } from "./schema";
 import type {
   ComplexFilter,
   EntitySchema,
@@ -9,7 +9,6 @@ import type {
   Filter,
   Filters,
 } from "./model";
-import { getFieldDef } from "./model";
 
 type EntityTable = typeof nodeTable | typeof configTable;
 
@@ -133,7 +132,7 @@ const buildFilterCondition = (
 ): SQL | undefined => {
   const fieldSql = getFieldSql(table, fieldKey);
   const normalized = normalizeFilter(filter);
-  const fieldDef = schema ? getFieldDef(schema, fieldKey) : undefined;
+  const fieldDef = schema ? schema.fields[fieldKey] : undefined;
   const isMultiValue = fieldDef?.allowMultiple === true;
 
   if (!isComplexNormalized(normalized)) {
