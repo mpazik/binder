@@ -2,6 +2,7 @@ import { extname, join } from "path";
 import {
   type AncestralFieldsetChain,
   emptyFieldset,
+  type EntitySchema,
   type Fieldset,
   type FieldsetNested,
   type Filter,
@@ -12,18 +13,13 @@ import {
   type KnowledgeGraph,
   matchesFilters,
   type NamespaceEditable,
-  type NodeSchema,
   type QueryParams,
 } from "@binder/db";
 import {
   assertDefined,
   assertDefinedPass,
-  createError,
-  err,
-  fail,
   isErr,
   ok,
-  okVoid,
   omit,
   type Result,
   type ResultAsync,
@@ -280,7 +276,7 @@ const resolveTemplateContent = (
 
 const renderContent = async (
   kg: KnowledgeGraph,
-  schema: NodeSchema,
+  schema: EntitySchema,
   item: NavigationItem,
   entity: FieldsetNested,
   parentEntities: Fieldset[],
@@ -337,7 +333,7 @@ const renderNavigationItem = async (
   kg: KnowledgeGraph,
   fs: FileSystem,
   paths: ConfigPaths,
-  schema: NodeSchema,
+  schema: EntitySchema,
   version: GraphVersion,
   item: NavigationItem,
   parentPath: string,
@@ -448,8 +444,10 @@ export const renderNavigation = async (
   navigationItems: NavigationItem[],
   namespace: NamespaceEditable = "node",
 ): ResultAsync<RenderResult> => {
-  const schemaResult = await kg.getNodeSchema();
+  const schemaResult = await kg.getSchema(namespace);
   if (isErr(schemaResult)) return schemaResult;
+  const schema = schemaResult.data;
+
   const versionResult = await kg.version();
   if (isErr(versionResult)) return versionResult;
   const templatesResult = await loadTemplates(kg);
@@ -463,7 +461,7 @@ export const renderNavigation = async (
       kg,
       fs,
       paths,
-      schemaResult.data,
+      schema,
       versionResult.data,
       item,
       "",

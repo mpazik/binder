@@ -8,19 +8,21 @@ import {
 } from "@binder/utils";
 import {
   type EntitySchema,
+  type FieldDef,
   type FieldKey,
+  type FieldPath,
   type FieldsetNested,
   formatFieldValue,
   getFieldDefNested,
   getNestedValue,
-  type NodeSchema,
   parseFieldValue,
   setNestedValue,
 } from "@binder/db";
-import type { Nodes, Parent, Text } from "mdast";
+import type { Nodes, Parent, PhrasingContent, Root, Text } from "mdast";
 import { visit } from "unist-util-visit";
 import {
   type BlockAST,
+  parseAst,
   renderAstToMarkdown,
   simplifyViewAst,
   type ViewAST,
@@ -29,26 +31,85 @@ import type { ViewSlot } from "./remark-view-slot.ts";
 
 type SimplifiedViewNode = ViewSlot | Text;
 
+const parseRichtextToInlineNodes = (text: string): PhrasingContent[] => {
+  const ast = parseAst(text);
+  const firstChild = ast.children[0];
+  if (firstChild?.type === "paragraph" && "children" in firstChild) {
+    return firstChild.children;
+  }
+  return [{ type: "text", value: text }];
+};
+
+const isRichtextField = (fieldDef: FieldDef | undefined): boolean =>
+  fieldDef?.dataType === "richtext";
+
+const isBlockLevelRichtext = (fieldDef: FieldDef | undefined): boolean =>
+  fieldDef?.dataType === "richtext" &&
+  (fieldDef.richtextAlphabet === "section" ||
+    fieldDef.richtextAlphabet === "document");
+
+const isSoleChildOfParagraph = (
+  parent: Parent | undefined,
+  index: number | undefined,
+): boolean =>
+  parent?.type === "paragraph" && parent.children.length === 1 && index === 0;
+
 export const renderView = (
-  _schema: NodeSchema,
+  schema: EntitySchema,
   view: ViewAST,
   fieldset: FieldsetNested,
 ): Result<string> => {
-  const ast = structuredClone(view) as Nodes;
+  const ast = structuredClone(view) as Root;
+
+  // Track paragraphs to replace with block content (paragraph -> replacement blocks)
+  const blockReplacements = new Map<Parent, Nodes[]>();
 
   visit(
     ast,
     "viewSlot",
     (node: ViewSlot, index: number | undefined, parent: Parent | undefined) => {
-      const fieldPath = node.value.split(".");
-      const value = getNestedValue(fieldset, fieldPath);
-      const textValue = formatFieldValue(value);
+      if (!parent || typeof index !== "number") return;
 
-      if (parent && typeof index === "number") {
-        parent.children[index] = { type: "text", value: textValue };
+      const fieldPath = node.value.split(".") as FieldPath;
+      const value = getNestedValue(fieldset, fieldPath);
+      const fieldDef = getFieldDefNested(schema, fieldPath);
+      const text = formatFieldValue(value ?? "");
+
+      // Block-level richtext as sole paragraph child: schedule paragraph replacement
+      if (
+        isBlockLevelRichtext(fieldDef) &&
+        isSoleChildOfParagraph(parent, index)
+      ) {
+        const parsed = parseAst(text);
+        blockReplacements.set(parent, parsed.children as Nodes[]);
+        return;
       }
+
+      // Inline richtext: splice parsed inline nodes
+      if (isRichtextField(fieldDef)) {
+        const inlineNodes = parseRichtextToInlineNodes(text);
+        parent.children.splice(index, 1, ...inlineNodes);
+        return;
+      }
+
+      // Plaintext: replace with escaped text node
+      parent.children[index] = { type: "text", value: text };
     },
   );
+
+  // Apply block replacements: replace marked paragraphs with their block content
+  if (blockReplacements.size > 0 && "children" in ast) {
+    const newChildren: typeof ast.children = [];
+    for (const child of ast.children) {
+      const replacement = blockReplacements.get(child as Parent);
+      if (replacement) {
+        newChildren.push(...(replacement as typeof ast.children));
+      } else {
+        newChildren.push(child);
+      }
+    }
+    ast.children = newChildren;
+  }
 
   return ok(renderAstToMarkdown(ast));
 };

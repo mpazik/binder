@@ -6,12 +6,14 @@
 
 import { unified } from "unified";
 import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkParseFrontmatter from "remark-parse-frontmatter";
 import remarkDirective from "remark-directive";
 import { type Options } from "remark-stringify";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { directiveToMarkdown } from "mdast-util-directive";
+import { gfmToMarkdown } from "mdast-util-gfm";
 import { type Brand } from "@binder/utils";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import type { Data, Literal, Node } from "unist";
@@ -86,20 +88,11 @@ const renderInlineToMarkdown = (node: RootContent): string => {
   return extractTextFromInline(node);
 };
 
-export const renderAstToMarkdown = (ast: Nodes): string => {
-  const markdown = toMarkdown(ast, {
+export const renderAstToMarkdown = (ast: Nodes): string =>
+  toMarkdown(ast, {
     ...defaultRenderOptions,
-    extensions: [directiveToMarkdown()],
+    extensions: [gfmToMarkdown(), directiveToMarkdown()],
   });
-
-  return markdown
-    .replace(/\\(\*)/g, "$1")
-    .replace(/\\(_)/g, "$1")
-    .replace(/\\(`)/g, "$1")
-    .replace(/\\(\[)/g, "$1")
-    .replace(/\\(\])/g, "$1")
-    .replace(/\\(~)/g, "$1");
-};
 
 const inlineTypes = [
   "strong",
@@ -230,6 +223,7 @@ export const simplifyViewAst = (ast: ViewAST): SimplifiedViewRoot => {
 export const parseAst = (content: string): FullAST => {
   const processor = unified()
     .use(remarkParse)
+    .use(remarkGfm)
     .use(remarkDirective)
     .use(remarkFrontmatter)
     .use(remarkParseFrontmatter);

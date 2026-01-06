@@ -9,7 +9,6 @@ import {
 } from "@binder/db/mocks";
 import { renderView, extractFields } from "./view.ts";
 import { parseMarkdown, parseView } from "./markdown.ts";
-import { extractFieldsFromItems } from "./doc-builder.test.ts";
 
 describe("view", () => {
   describe("renderView", () => {
@@ -21,16 +20,6 @@ describe("view", () => {
       const ast = parseView(view);
       const result = throwIfError(renderView(mockNodeSchema, ast, data));
       expect(result).toBe(expectedOutput);
-    };
-
-    const checkIfError = (
-      view: string,
-      data: FieldsetNested,
-      expectedErrorKey: string,
-    ) => {
-      const ast = parseView(view);
-      const result = renderView(mockNodeSchema, ast, data);
-      expect(result).toBeErrWithKey(expectedErrorKey);
     };
 
     it("renders simple view with single field", () => {
@@ -45,8 +34,38 @@ describe("view", () => {
       );
     });
 
-    it("renders field value that contains formating", () => {
-      check("{title}\n", { title: "**Bold Title**" }, "**Bold Title**\n");
+    it("escapes plaintext field value that contains formatting", () => {
+      check(
+        "{title}\n",
+        { title: "**Bold Title**" },
+        "\\*\\*Bold Title\\*\\*\n",
+      );
+    });
+
+    it("preserves richtext field value formatting", () => {
+      check(
+        "{description}\n",
+        { description: "**Bold Description**" },
+        "**Bold Description**\n",
+      );
+    });
+
+    it("renders block-level richtext with headers as block content", () => {
+      // templates field has richtextAlphabet: "document" which allows headers
+      check(
+        "{templates}\n",
+        { templates: "# Heading\n\nParagraph text" },
+        "# Heading\n\nParagraph text\n",
+      );
+    });
+
+    it("renders block-level richtext with lists as block content", () => {
+      // chapters field has richtextAlphabet: "section" which allows lists
+      check(
+        "{chapters}\n",
+        { chapters: "- Item one\n- Item two" },
+        "- Item one\n- Item two\n",
+      );
     });
 
     it("renders null fields as empty string", () => {

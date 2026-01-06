@@ -240,6 +240,13 @@ describe("patch-parser", () => {
         ],
       });
     });
+
+    it("parses core fields like key", () => {
+      checkWithSchema(["key=my-key", "title=test"], {
+        key: "my-key",
+        title: "test",
+      });
+    });
   });
 
   describe("error handling", () => {
