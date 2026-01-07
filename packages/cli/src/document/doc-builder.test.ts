@@ -27,8 +27,8 @@ import {
   mockDocumentTransactionInput,
   mockDocumentUid,
 } from "./document.mock.ts";
-import { parseMarkdown, type ViewAST } from "./markdown.ts";
-import { extractFields } from "./view.ts";
+import { parseMarkdown } from "./markdown.ts";
+import { extractFields, type TemplateAST } from "./template.ts";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -417,7 +417,7 @@ After directive`,
 
 export const extractFieldsFromItems = (
   schema: NodeSchema,
-  view: ViewAST,
+  view: TemplateAST,
   renderedContent: string,
 ): Result<FieldsetNested[]> => {
   if (renderedContent.trim().length === 0) {

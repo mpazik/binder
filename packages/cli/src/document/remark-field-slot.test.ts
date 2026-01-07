@@ -1,23 +1,23 @@
 import { describe, it, expect } from "bun:test";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
-import { remarkViewSlot } from "./remark-view-slot.ts";
+import { remarkFieldSlot } from "./remark-field-slot.ts";
 import { astNode, astTextNode } from "./markdown.ts";
 
-describe("remarkViewSlots", () => {
-  const viewSlot = (value: string) =>
-    astNode("viewSlot", {
+describe("remarkFieldSlots", () => {
+  const fieldSlot = (value: string) =>
+    astNode("fieldSlot", {
       value,
       data: {
         hName: "span",
         hProperties: {
-          className: "view-slot",
+          className: "field-slot",
         },
       },
     });
 
   const check = (input: string, expectedAst: any) => {
-    const processor = unified().use(remarkParse).use(remarkViewSlot);
+    const processor = unified().use(remarkParse).use(remarkFieldSlot);
     const ast = processor.parse(input);
     expect(ast).toMatchObject(expectedAst);
   };
@@ -25,13 +25,13 @@ describe("remarkViewSlots", () => {
   it("parses simple slot", () =>
     check(
       "{title}",
-      astNode("root", [astNode("paragraph", [viewSlot("title")])]),
+      astNode("root", [astNode("paragraph", [fieldSlot("title")])]),
     ));
 
   it("parses heading with slot", () =>
     check(
       "# {title}\n",
-      astNode("root", [astNode("heading", { depth: 1 }, [viewSlot("title")])]),
+      astNode("root", [astNode("heading", { depth: 1 }, [fieldSlot("title")])]),
     ));
 
   it("parses text with slot after markdown", () =>
@@ -41,7 +41,7 @@ describe("remarkViewSlots", () => {
         astNode("paragraph", [
           astNode("strong", [astTextNode("Status:")]),
           astTextNode(" "),
-          viewSlot("status"),
+          fieldSlot("status"),
         ]),
       ]),
     ));
@@ -50,7 +50,7 @@ describe("remarkViewSlots", () => {
     check(
       "\\{status\\} {title}",
       astNode("root", [
-        astNode("paragraph", [astTextNode("{status} "), viewSlot("title")]),
+        astNode("paragraph", [astTextNode("{status} "), fieldSlot("title")]),
       ]),
     ));
 
@@ -60,7 +60,7 @@ describe("remarkViewSlots", () => {
       astNode("root", [
         astNode("paragraph", [
           astTextNode("{invalid field} "),
-          viewSlot("title"),
+          fieldSlot("title"),
         ]),
       ]),
     ));
@@ -72,7 +72,7 @@ describe("remarkViewSlots", () => {
         astNode("paragraph", [
           astNode("strong", [astTextNode("Project:")]),
           astTextNode(" "),
-          viewSlot("project.title"),
+          fieldSlot("project.title"),
         ]),
       ]),
     ));
@@ -81,7 +81,7 @@ describe("remarkViewSlots", () => {
     check(
       "{parent.child.grandchild}",
       astNode("root", [
-        astNode("paragraph", [viewSlot("parent.child.grandchild")]),
+        astNode("paragraph", [fieldSlot("parent.child.grandchild")]),
       ]),
     ));
 });

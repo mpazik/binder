@@ -1,4 +1,5 @@
 import {
+  type Brand,
   createError,
   err,
   type ErrorObject,
@@ -20,16 +21,31 @@ import {
 } from "@binder/db";
 import type { Nodes, Parent, PhrasingContent, Root, Text } from "mdast";
 import { visit } from "unist-util-visit";
+import type { Data, Node } from "unist";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import { remarkFieldSlot, type FieldSlot } from "./remark-field-slot.ts";
 import {
   type BlockAST,
   parseAst,
   renderAstToMarkdown,
   simplifyViewAst,
-  type ViewAST,
 } from "./markdown.ts";
-import type { ViewSlot } from "./remark-view-slot.ts";
 
-type SimplifiedViewNode = ViewSlot | Text;
+type SimplifiedViewNode = FieldSlot | Text;
+
+export interface TemplateRoot extends Node {
+  type: "root";
+  children: (FieldSlot | Text)[];
+  data?: Data;
+}
+
+export type TemplateAST = Brand<TemplateRoot, "TemplateAST">;
+
+export const parseTemplate = (content: string): TemplateAST => {
+  const processor = unified().use(remarkParse).use(remarkFieldSlot);
+  return processor.parse(content) as TemplateAST;
+};
 
 const parseRichtextToInlineNodes = (text: string): PhrasingContent[] => {
   const ast = parseAst(text);
@@ -54,9 +70,9 @@ const isSoleChildOfParagraph = (
 ): boolean =>
   parent?.type === "paragraph" && parent.children.length === 1 && index === 0;
 
-export const renderView = (
+export const renderTemplate = (
   schema: EntitySchema,
-  view: ViewAST,
+  view: TemplateAST,
   fieldset: FieldsetNested,
 ): Result<string> => {
   const ast = structuredClone(view) as Root;
@@ -66,8 +82,12 @@ export const renderView = (
 
   visit(
     ast,
-    "viewSlot",
-    (node: ViewSlot, index: number | undefined, parent: Parent | undefined) => {
+    "fieldSlot",
+    (
+      node: FieldSlot,
+      index: number | undefined,
+      parent: Parent | undefined,
+    ) => {
       if (!parent || typeof index !== "number") return;
 
       const fieldPath = node.value.split(".") as FieldPath;
@@ -122,7 +142,7 @@ type MatchState = {
 
 export const extractFields = (
   schema: EntitySchema,
-  view: ViewAST,
+  view: TemplateAST,
   snapshot: BlockAST,
 ): Result<FieldsetNested> => {
   const fieldset: FieldsetNested = {};
@@ -135,8 +155,8 @@ export const extractFields = (
       context,
     });
 
-  const matchViewSlot = (
-    viewChild: ViewSlot,
+  const matchFieldSlot = (
+    viewChild: FieldSlot,
     snapChildren: Nodes[],
     state: MatchState,
     viewChildren: SimplifiedViewNode[],
@@ -173,7 +193,7 @@ export const extractFields = (
 
         if (endIndex === -1) {
           error = literalMismatch(
-            `Cannot find next literal "${nextLiteral}" after viewSlot`,
+            `Cannot find next literal "${nextLiteral}" after fieldSlot`,
           );
           return false;
         }
@@ -231,7 +251,7 @@ export const extractFields = (
       const trimmedViewText = viewText.trimEnd();
 
       if (
-        nextViewChild?.type === "viewSlot" &&
+        nextViewChild?.type === "fieldSlot" &&
         snapText.startsWith(trimmedViewText)
       ) {
         viewText = trimmedViewText;
@@ -304,8 +324,8 @@ export const extractFields = (
     while (state.viewIndex < viewChildren.length) {
       const viewChild = viewChildren[state.viewIndex]!;
 
-      if (viewChild.type === "viewSlot") {
-        if (!matchViewSlot(viewChild, snapChildren, state, viewChildren))
+      if (viewChild.type === "fieldSlot") {
+        if (!matchFieldSlot(viewChild, snapChildren, state, viewChildren))
           return false;
       } else if (viewChild.type === "text") {
         if (!matchTextNode(viewChild, snapChildren, state, viewChildren))

@@ -10,8 +10,8 @@ import {
   type NavigationItem,
   type Templates,
 } from "./navigation.ts";
-import { parseMarkdown, parseView } from "./markdown.ts";
-import { extractFields } from "./view.ts";
+import { parseMarkdown } from "./markdown.ts";
+import { extractFields, parseTemplate } from "./template.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 import { getDocumentFileType } from "./document.ts";
 
@@ -114,9 +114,9 @@ const extractFromMarkdown = (
   templates: Templates,
 ): Result<ExtractedFileData> => {
   const templateString = resolveTemplateContent(navItem, templates);
-  const viewAst = parseView(templateString);
+  const templateAst = parseTemplate(templateString);
   const markdownAst = parseMarkdown(markdown);
-  const fileFieldsResult = extractFields(schema, viewAst, markdownAst);
+  const fileFieldsResult = extractFields(schema, templateAst, markdownAst);
   if (isErr(fileFieldsResult)) return fileFieldsResult;
 
   const entity = fileFieldsResult.data;

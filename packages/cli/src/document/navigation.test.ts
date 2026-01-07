@@ -26,8 +26,7 @@ import { createMockRuntimeContextWithDb, mockConfig } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { BINDER_DIR } from "../config.ts";
 import { cliConfigSchema, typeTemplateKey } from "../cli-config-schema.ts";
-import { parseView } from "./markdown.ts";
-import { renderView } from "./view.ts";
+import { parseTemplate, renderTemplate } from "./template.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
@@ -194,9 +193,9 @@ describe("navigation", () => {
         } else if ("content" in file) {
           expect(fileContent).toEqual(file.content);
         } else {
-          const viewAst = parseView(file.view ?? defaultTemplateContent);
+          const viewAst = parseTemplate(file.view ?? defaultTemplateContent);
           const snapshot = throwIfError(
-            renderView(mockNodeSchema, viewAst, file.data),
+            renderTemplate(mockNodeSchema, viewAst, file.data),
           );
           expect(fileContent).toEqual(snapshot);
         }

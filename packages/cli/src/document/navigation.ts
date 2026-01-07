@@ -34,8 +34,7 @@ import { interpolateQueryParams } from "../utils/query.ts";
 import { saveSnapshot } from "../lib/snapshot.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import { BINDER_DIR, type ConfigPaths } from "../config.ts";
-import { parseView } from "./markdown.ts";
-import { renderView } from "./view.ts";
+import { parseTemplate, renderTemplate } from "./template.ts";
 import {
   findEntityInYamlList,
   renderYamlEntity,
@@ -287,10 +286,14 @@ const renderContent = async (
   if (fileType === "markdown") {
     const templateContent = resolveTemplateContent(item, templates);
     assertDefined(templateContent, "templateContent");
-    const viewAst = parseView(templateContent);
-    const viewResult = renderView(schema, viewAst, entity as Fieldset);
-    if (isErr(viewResult)) return viewResult;
-    return ok(viewResult.data);
+    const templateAst = parseTemplate(templateContent);
+    const templateResult = renderTemplate(
+      schema,
+      templateAst,
+      entity as Fieldset,
+    );
+    if (isErr(templateResult)) return templateResult;
+    return ok(templateResult.data);
   }
   if (fileType === "yaml") {
     if (item.query) {

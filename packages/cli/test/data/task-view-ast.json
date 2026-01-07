@@ -6,12 +6,12 @@
       "depth": 1,
       "children": [
         {
-          "type": "viewSlot",
+          "type": "fieldSlot",
           "value": "title",
           "data": {
             "hName": "span",
             "hProperties": {
-              "className": "view-slot"
+              "className": "field-slot"
             }
           }
         }
@@ -34,12 +34,12 @@
           "value": " "
         },
         {
-          "type": "viewSlot",
+          "type": "fieldSlot",
           "value": "status",
           "data": {
             "hName": "span",
             "hProperties": {
-              "className": "view-slot"
+              "className": "field-slot"
             }
           }
         },
@@ -61,12 +61,12 @@
           "value": " "
         },
         {
-          "type": "viewSlot",
+          "type": "fieldSlot",
           "value": "tags",
           "data": {
             "hName": "span",
             "hProperties": {
-              "className": "view-slot"
+              "className": "field-slot"
             }
           }
         }
@@ -86,12 +86,12 @@
       "type": "paragraph",
       "children": [
         {
-          "type": "viewSlot",
+          "type": "fieldSlot",
           "value": "description",
           "data": {
             "hName": "span",
             "hProperties": {
-              "className": "view-slot"
+              "className": "field-slot"
             }
           }
         }

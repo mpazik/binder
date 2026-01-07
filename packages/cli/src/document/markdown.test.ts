@@ -3,10 +3,10 @@ import { fileURLToPath } from "url";
 import { describe, expect, it } from "bun:test";
 import {
   parseMarkdown,
-  parseView,
   removePosition,
   renderAstToMarkdown,
 } from "./markdown.ts";
+import { parseTemplate } from "./template.ts";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const mdPath = join(__dirname, "../../test/data/document.md");
@@ -42,7 +42,7 @@ describe("renderAstToMarkdown", () => {
 describe("parseViewAst", () => {
   it("parses task view template with slots", async () => {
     const expected = JSON.parse(await Bun.file(taskViewAstPath).text());
-    const ast = parseView(await Bun.file(taskViewPath).text());
+    const ast = parseTemplate(await Bun.file(taskViewPath).text());
     expect(removePosition(ast)).toEqual(expected);
   });
 });

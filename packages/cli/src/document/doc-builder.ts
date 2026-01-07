@@ -26,13 +26,13 @@ import type {
 } from "mdast";
 import type { ContainerDirective } from "mdast-util-directive";
 import { parseStringQuery, stringifyQuery } from "../utils/query.ts";
+import { type BlockAST, parseMarkdown } from "./markdown.ts";
 import {
-  type BlockAST,
-  parseView,
-  type ViewAST,
-  parseMarkdown,
-} from "./markdown.ts";
-import { renderView, extractFields } from "./view.ts";
+  renderTemplate,
+  extractFields,
+  parseTemplate,
+  type TemplateAST,
+} from "./template.ts";
 
 export const DEFAULT_DATAVIEW_VIEW_STRING =
   "title: {title}\n  description: {description}";
@@ -87,13 +87,13 @@ export const fetchDocumentNodes = async (
 
 export const renderViewForItems = (
   schema: NodeSchema,
-  view: ViewAST,
+  template: TemplateAST,
   items: FieldsetNested[],
 ): Result<string> => {
   const renderedItems: string[] = [];
 
   for (const item of items) {
-    const renderResult = renderView(schema, view, item);
+    const renderResult = renderTemplate(schema, template, item);
     if (isErr(renderResult)) return renderResult;
     const rendered = renderResult.data.trim();
     renderedItems.push(`- ${rendered}`);
@@ -218,10 +218,10 @@ export const buildAstDoc = async (
           ];
         }
 
-        const viewString = node.template
+        const templateString = node.template
           ? (node.template as string)
           : DEFAULT_DATAVIEW_VIEW_STRING;
-        const view = parseView(viewString);
+        const view = parseTemplate(templateString);
         const renderResult = renderViewForItems(schema, view, data);
 
         if (isErr(renderResult)) {
@@ -396,7 +396,7 @@ export const deconstructAstDocument = (
             const content = extractDirectiveContent(directive);
             if (content) {
               const viewString = template || DEFAULT_DATAVIEW_VIEW_STRING;
-              const view = parseView(viewString);
+              const view = parseTemplate(viewString);
               const contentLines = content.split("\n");
               const extractedItems: Fieldset[] = [];
               for (const line of contentLines) {

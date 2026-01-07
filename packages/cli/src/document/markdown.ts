@@ -17,13 +17,14 @@ import { gfmToMarkdown } from "mdast-util-gfm";
 import { type Brand } from "@binder/utils";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import type { Data, Literal, Node } from "unist";
-import { remarkViewSlot, type ViewSlot } from "./remark-view-slot.ts";
+import { type FieldSlot } from "./remark-field-slot.ts";
+import type { TemplateAST } from "./template.ts";
 
-type ExtendedNode = Nodes | ViewSlot;
+type ExtendedNode = Nodes | FieldSlot;
 
 interface SimplifiedViewRoot extends Node {
   type: "root";
-  children: Array<ViewSlot | Text>;
+  children: Array<FieldSlot | Text>;
 }
 
 type SimplifiedNode<T> = T extends { children: infer C }
@@ -56,7 +57,7 @@ const extractTextFromInline = (node: ExtendedNode): string => {
   if (node.type === "text") {
     return node.value || "";
   }
-  if (node.type === "viewSlot") {
+  if (node.type === "fieldSlot") {
     return SLOT_PLACEHOLDER;
   }
   if (node.type === "strong") {
@@ -101,7 +102,7 @@ const inlineTypes = [
   "inlineCode",
   "delete",
   "html",
-  "viewSlot",
+  "fieldSlot",
 ] as const;
 
 type InlineType = (typeof inlineTypes)[number];
@@ -146,10 +147,10 @@ const flattenInline = (value: RootContent): SimplifiedNode<RootContent> => {
 
 const splitByPlaceholder = (
   text: string,
-  slots: ViewSlot[],
-): Array<ViewSlot | Text> => {
+  slots: FieldSlot[],
+): Array<FieldSlot | Text> => {
   const parts = text.split(SLOT_PLACEHOLDER);
-  const result: Array<ViewSlot | Text> = [];
+  const result: Array<FieldSlot | Text> = [];
 
   for (let i = 0; i < parts.length; i++) {
     if (parts[i]) {
@@ -163,11 +164,11 @@ const splitByPlaceholder = (
   return result;
 };
 
-const extractSlots = (children: ExtendedNode[]): ViewSlot[] => {
-  const slots: ViewSlot[] = [];
+const extractSlots = (children: ExtendedNode[]): FieldSlot[] => {
+  const slots: FieldSlot[] = [];
 
   const traverse = (node: ExtendedNode): void => {
-    if (node.type === "viewSlot") {
+    if (node.type === "fieldSlot") {
       slots.push(node);
     } else if ("children" in node && Array.isArray(node.children)) {
       for (const child of node.children) {
@@ -184,7 +185,7 @@ const extractSlots = (children: ExtendedNode[]): ViewSlot[] => {
 };
 
 const flattenInlinePreservingSlots = (value: ExtendedNode): ExtendedNode => {
-  if (value.type === "viewSlot") return value;
+  if (value.type === "fieldSlot") return value;
 
   if ("children" in value && hasInlineChildren(value)) {
     const textWithPlaceholders = value.children
@@ -210,13 +211,13 @@ const flattenInlinePreservingSlots = (value: ExtendedNode): ExtendedNode => {
   return value;
 };
 
-export const simplifyViewAst = (ast: ViewAST): SimplifiedViewRoot => {
+export const simplifyViewAst = (ast: TemplateAST): SimplifiedViewRoot => {
   const cleaned = removePosition(ast);
   return {
     ...cleaned,
     children: cleaned.children.map((child) =>
       flattenInlinePreservingSlots(child),
-    ) as Array<ViewSlot | Text>,
+    ) as Array<FieldSlot | Text>,
   } as SimplifiedViewRoot;
 };
 
@@ -241,18 +242,6 @@ export const simplifyAst = (ast: FullAST): BlockAST => {
 export const parseMarkdown = (content: string): BlockAST => {
   const ast = parseAst(content);
   return simplifyAst(ast);
-};
-
-export interface ViewRoot extends Node {
-  type: "root";
-  children: (ViewSlot | Text)[];
-  data?: Data;
-}
-export type ViewAST = Brand<ViewRoot, "ViewAST">;
-
-export const parseView = (content: string): ViewAST => {
-  const processor = unified().use(remarkParse).use(remarkViewSlot);
-  return processor.parse(content) as ViewAST;
 };
 
 export const astNode = (

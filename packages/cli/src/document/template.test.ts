@@ -7,18 +7,18 @@ import {
   mockTask1Node,
   mockProjectNode,
 } from "@binder/db/mocks";
-import { renderView, extractFields } from "./view.ts";
-import { parseMarkdown, parseView } from "./markdown.ts";
+import { renderTemplate, extractFields, parseTemplate } from "./template.ts";
+import { parseMarkdown } from "./markdown.ts";
 
 describe("view", () => {
-  describe("renderView", () => {
+  describe("renderTemplate", () => {
     const check = (
       view: string,
       data: FieldsetNested,
       expectedOutput: string,
     ) => {
-      const ast = parseView(view);
-      const result = throwIfError(renderView(mockNodeSchema, ast, data));
+      const ast = parseTemplate(view);
+      const result = throwIfError(renderTemplate(mockNodeSchema, ast, data));
       expect(result).toBe(expectedOutput);
     };
 
@@ -159,7 +159,7 @@ describe("view", () => {
       output: string,
       expectedData: FieldsetNested,
     ) => {
-      const viewAst = parseView(view);
+      const viewAst = parseTemplate(view);
       const snapAsp = parseMarkdown(output);
       const result = throwIfError(
         extractFields(mockNodeSchema, viewAst, snapAsp),
@@ -172,7 +172,7 @@ describe("view", () => {
       output: string,
       expectedErrorKey: string,
     ) => {
-      const ast = parseView(view);
+      const ast = parseTemplate(view);
       const snapAsp = parseMarkdown(output);
       const result = extractFields(mockNodeSchema, ast, snapAsp);
       expect(result).toBeErrWithKey(expectedErrorKey);
@@ -347,13 +347,13 @@ describe("view", () => {
         `${import.meta.dir}/../../test/data/task-snapshot.md`,
       ).text();
 
-      const viewAst = parseView(viewContent);
+      const viewAst = parseTemplate(viewContent);
       const snapAsp = parseMarkdown(docContent);
       const extracted = throwIfError(
         extractFields(mockNodeSchema, viewAst, snapAsp),
       );
       const rendered = throwIfError(
-        renderView(mockNodeSchema, viewAst, extracted),
+        renderTemplate(mockNodeSchema, viewAst, extracted),
       );
       expect(rendered).toBe(docContent);
     });

@@ -2,9 +2,9 @@
  * Micromark extension for {field} syntax in view templates
  *
  * Architecture:
- * 1. viewSlotExtension(): Creates micromark syntax extension that tokenizes {field} during parsing
- * 2. viewSlotFromMarkdown(): Creates mdast-util-from-markdown extension that converts tokens to AST nodes
- * 3. remarkViewSlot: Remark plugin that registers both extensions
+ * 1. fieldSlotExtension(): Creates micromark syntax extension that tokenizes {field} during parsing
+ * 2. fieldSlotFromMarkdown(): Creates mdast-util-from-markdown extension that converts tokens to AST nodes
+ * 3. remarkFieldSlot: Remark plugin that registers both extensions
  */
 import type {
   Code,
@@ -20,12 +20,11 @@ import type {
   Extension as FromMarkdownExtension,
   Handle,
 } from "mdast-util-from-markdown";
-import type { Literal, Text } from "mdast";
+import type { Literal } from "mdast";
 import type { Plugin } from "unified";
-import type { Data, Node } from "unist";
 
-export interface ViewSlot extends Literal {
-  type: "viewSlot";
+export interface FieldSlot extends Literal {
+  type: "fieldSlot";
   value: string;
   data?: {
     hName: string;
@@ -37,9 +36,9 @@ export interface ViewSlot extends Literal {
 
 declare module "micromark-util-types" {
   interface TokenTypeMap {
-    viewSlot: "viewSlot";
-    viewSlotMarker: "viewSlotMarker";
-    viewSlotField: "viewSlotField";
+    fieldSlot: "fieldSlot";
+    fieldSlotMarker: "fieldSlotMarker";
+    fieldSlotField: "fieldSlotField";
   }
 }
 
@@ -64,7 +63,7 @@ const isValidFieldChar = (code: Code): boolean => {
   );
 };
 
-const viewSlotExtension = (): MicromarkExtension => {
+const fieldSlotExtension = (): MicromarkExtension => {
   const tokenize: Tokenizer = function (
     this: TokenizeContext,
     effects: Effects,
@@ -75,33 +74,33 @@ const viewSlotExtension = (): MicromarkExtension => {
 
     function start(code: Code): State | undefined {
       if (code !== codes.leftBrace) return nok(code);
-      effects.enter("viewSlot");
-      effects.enter("viewSlotMarker");
+      effects.enter("fieldSlot");
+      effects.enter("fieldSlotMarker");
       effects.consume(code);
-      effects.exit("viewSlotMarker");
-      effects.enter("viewSlotField");
+      effects.exit("fieldSlotMarker");
+      effects.enter("fieldSlotField");
       return insideField;
     }
 
     function insideField(code: Code): State | undefined {
       if (code === null) {
-        effects.exit("viewSlotField");
-        effects.exit("viewSlot");
+        effects.exit("fieldSlotField");
+        effects.exit("fieldSlot");
         return nok(code);
       }
 
       if (code === codes.rightBrace) {
-        effects.exit("viewSlotField");
-        effects.enter("viewSlotMarker");
+        effects.exit("fieldSlotField");
+        effects.enter("fieldSlotMarker");
         effects.consume(code);
-        effects.exit("viewSlotMarker");
-        effects.exit("viewSlot");
+        effects.exit("fieldSlotMarker");
+        effects.exit("fieldSlot");
         return ok;
       }
 
       if (!isValidFieldChar(code)) {
-        effects.exit("viewSlotField");
-        effects.exit("viewSlot");
+        effects.exit("fieldSlotField");
+        effects.exit("fieldSlot");
         return nok(code);
       }
 
@@ -117,25 +116,25 @@ const viewSlotExtension = (): MicromarkExtension => {
   };
 };
 
-const viewSlotFromMarkdown = (): FromMarkdownExtension => {
-  const enterViewSlot: Handle = function (
+const fieldSlotFromMarkdown = (): FromMarkdownExtension => {
+  const enterFieldSlot: Handle = function (
     this: CompileContext,
     token: Token,
   ): void {
-    const node: ViewSlot = {
-      type: "viewSlot",
+    const node: FieldSlot = {
+      type: "fieldSlot",
       value: "",
       data: {
         hName: "span",
         hProperties: {
-          className: "view-slot",
+          className: "field-slot",
         },
       },
     };
     this.enter(node as any, token);
   };
 
-  const exitViewSlotField: Handle = function (
+  const exitFieldSlotField: Handle = function (
     this: CompileContext,
     token: Token,
   ): void {
@@ -145,7 +144,7 @@ const viewSlotFromMarkdown = (): FromMarkdownExtension => {
     }
   };
 
-  const exitViewSlot: Handle = function (
+  const exitFieldSlot: Handle = function (
     this: CompileContext,
     token: Token,
   ): void {
@@ -154,21 +153,21 @@ const viewSlotFromMarkdown = (): FromMarkdownExtension => {
 
   return {
     enter: {
-      viewSlot: enterViewSlot,
+      fieldSlot: enterFieldSlot,
     },
     exit: {
-      viewSlotField: exitViewSlotField,
-      viewSlot: exitViewSlot,
+      fieldSlotField: exitFieldSlotField,
+      fieldSlot: exitFieldSlot,
     },
   };
 };
 
-export const remarkViewSlot: Plugin = function (this) {
+export const remarkFieldSlot: Plugin = function (this) {
   const data = this.data();
 
   data.micromarkExtensions = data.micromarkExtensions ?? [];
   data.fromMarkdownExtensions = data.fromMarkdownExtensions ?? [];
 
-  data.micromarkExtensions.push(viewSlotExtension());
-  data.fromMarkdownExtensions.push(viewSlotFromMarkdown());
+  data.micromarkExtensions.push(fieldSlotExtension());
+  data.fromMarkdownExtensions.push(fieldSlotFromMarkdown());
 };
