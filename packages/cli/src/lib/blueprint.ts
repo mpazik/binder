@@ -7,7 +7,7 @@ import {
   type TransactionInput,
 } from "@binder/db";
 import { isBundled } from "../build-time.ts";
-import { parseTransactionInputContent } from "../utils/transaction-input.ts";
+import { parseTransactionInputContent } from "../utils/parse.ts";
 import type { FileSystem } from "./filesystem.ts";
 
 export type BlueprintInfo = {

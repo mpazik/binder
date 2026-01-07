@@ -1,9 +1,11 @@
+import { z } from "zod";
 import {
+  assertFailed,
   isObjTuple,
+  type ObjTuple,
   objTupleKey,
   objTupleToTuple,
   omit,
-  type ObjTuple,
 } from "@binder/utils";
 import { type FieldKey, type Fieldset, type FieldValue } from "./field.ts";
 import type {
@@ -12,12 +14,14 @@ import type {
   EntityNsType,
   NamespaceEditable,
 } from "./namespace.ts";
-import type {
-  FieldChangeset,
-  ListMutation,
-  ListMutationInsert,
-  ListMutationPatch,
-  ListMutationRemove,
+import {
+  type FieldChangeset,
+  isValueChange,
+  type ListMutation,
+  type ListMutationInsert,
+  type ListMutationPatch,
+  type ListMutationRemove,
+  type ValueChange,
 } from "./changeset.ts";
 import type { OptionDef } from "./data-type.ts";
 
@@ -164,3 +168,39 @@ export const normalizeOptionDef = (item: OptionDefInput): OptionDef =>
 
 export const normalizeOptionSet = (options: OptionDefInput[]): OptionDef[] =>
   options.map(normalizeOptionDef);
+
+const valueChangeToInput = (change: ValueChange): FieldChangeInput => {
+  if (change[0] === "set") return change[1];
+  if (change[0] === "clear") return null;
+  if (change[0] === "seq")
+    return change[1].map((m: ListMutation) =>
+      m[0] === "patch"
+        ? ([m[0], m[1], changesetToInput(m[2])] as ListMutationInput)
+        : m,
+    );
+  if (change[0] === "patch") return changesetToInput(change[1]) as FieldValue;
+  assertFailed("Unknown change kind");
+};
+
+export const changesetToInput = (
+  changeset: FieldChangeset,
+): FieldChangesetInput => {
+  const result: FieldChangesetInput = {};
+  for (const [key, value] of Object.entries(changeset)) {
+    if (key === "id") continue;
+    result[key] = isValueChange(value)
+      ? valueChangeToInput(value)
+      : (value as FieldChangeInput);
+  }
+  return result;
+};
+
+export const EntityCreateInputSchema = z
+  .object({ type: z.string(), key: z.string().optional() })
+  .passthrough()
+  .transform((val) => val as EntityCreate<NamespaceEditable>);
+
+export const EntityUpdateInputSchema = z
+  .object({ $ref: z.string() })
+  .passthrough()
+  .transform((val) => val as EntityUpdate<NamespaceEditable>);

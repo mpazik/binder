@@ -8,6 +8,7 @@ import {
   type TransactionInput,
   type TransactionRef,
   transactionToInput,
+  TransactionInputSchema,
 } from "@binder/db";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import {
@@ -25,10 +26,9 @@ import {
 import { TRANSACTION_LOG_FILE } from "../config.ts";
 import {
   detectFileFormat,
-  parseTransactionInputFile,
-  serializeTransactionInputs,
-  transactionToInput,
-} from "../utils/transaction-input.ts";
+  parseTransactionInputContent,
+} from "../utils/parse.ts";
+import { isStdinPiped, parseStdinAs } from "../cli/stdin.ts";
 import { types } from "../cli/types.ts";
 import { dryRunOption, itemFormatOption, yesOption } from "../cli/options.ts";
 import { serialize, type SerializeItemFormat } from "../utils/serialize.ts";
@@ -38,18 +38,41 @@ export const transactionImportHandler: CommandHandlerWithDb<{
   dryRun?: boolean;
   yes?: boolean;
 }> = async ({ kg, config, ui, log, fs, args }) => {
-  if (args.files.length === 0)
-    return fail("no-files", "At least one file path is required");
-
   const allInputs: TransactionInput[] = [];
-  for (const path of args.files) {
-    const parseResult = await parseTransactionInputFile(
-      fs,
-      path,
-      config.author,
+  const files = args.files ?? [];
+
+  if (files.length > 0 && isStdinPiped())
+    return fail(
+      "conflicting-input",
+      "Cannot combine stdin with file arguments",
+    );
+
+  if (files.length === 0 && isStdinPiped()) {
+    const parseResult = await parseStdinAs(
+      TransactionInputSchema,
+      undefined,
+      (raw) => ({
+        ...(raw as object),
+        author: (raw as { author?: string }).author ?? config.author,
+      }),
     );
     if (isErr(parseResult)) return parseResult;
     allInputs.push(...parseResult.data);
+  } else if (files.length === 0) {
+    return fail("no-input", "Provide file path(s) or pipe content via stdin");
+  } else {
+    for (const path of files) {
+      const contentResult = await fs.readFile(path);
+      if (isErr(contentResult)) return contentResult;
+
+      const parseResult = parseTransactionInputContent(
+        contentResult.data,
+        detectFileFormat(path),
+        config.author,
+      );
+      if (isErr(parseResult)) return parseResult;
+      allInputs.push(...parseResult.data);
+    }
   }
 
   if (allInputs.length === 0)
