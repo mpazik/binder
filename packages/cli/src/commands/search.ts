@@ -1,8 +1,9 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
-import type { Filters } from "@binder/db";
+import { type Filters, type NamespaceEditable } from "@binder/db";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { types } from "./types.ts";
+import { formatOption, namespaceOption, type OutputFormat } from "./options.ts";
 
 const parseQuery = (queryParts: string[]): Filters => {
   const filters: Filters = {};
@@ -40,26 +41,29 @@ const parseQuery = (queryParts: string[]): Filters => {
 
 const searchHandler: CommandHandlerWithDb<{
   query: string[];
+  namespace: NamespaceEditable;
+  format: OutputFormat;
 }> = async ({ kg, ui, args }) => {
   const filters = parseQuery(args.query);
 
-  const result = await kg.search({ filters });
+  const result = await kg.search({ filters }, args.namespace);
   if (isErr(result)) return result;
 
-  ui.printData(result.data);
+  ui.printData(result.data, args.format);
   return ok(undefined);
 };
 
 export const SearchCommand = types({
   command: "search [query..]",
   describe: "search using quick DSL (plain text or key=value)",
-  builder: (yargs: Argv) => {
-    return yargs.positional("query", {
-      describe: "search query (plain strings or key=value pairs)",
-      type: "string",
-      array: true,
-      default: [],
-    });
-  },
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("query", {
+        describe: "search query (plain strings or key=value pairs)",
+        type: "string",
+        array: true,
+        default: [],
+      })
+      .options({ ...namespaceOption, ...formatOption }),
   handler: runtimeWithDb(searchHandler),
 });

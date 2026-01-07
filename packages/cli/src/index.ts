@@ -3,8 +3,11 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
 import InitCommand from "./commands/init.ts";
-import NodeCommand from "./commands/node";
-import ConfigCommand from "./commands/config.ts";
+import CreateCommand from "./commands/create.ts";
+import ReadCommand from "./commands/read.ts";
+import UpdateCommand from "./commands/update.ts";
+import DeleteCommand from "./commands/delete.ts";
+import SchemaCommand from "./commands/schema.ts";
 import TransactionCommand from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
 import DocsCommand from "./commands/docs.ts";
@@ -43,8 +46,11 @@ let cli = yargs(hideBin(process.argv))
   .usage(UI.logo())
   .wrap(null)
   .command(InitCommand)
-  .command(NodeCommand)
-  .command(ConfigCommand)
+  .command(CreateCommand)
+  .command(ReadCommand)
+  .command(UpdateCommand)
+  .command(DeleteCommand)
+  .command(SchemaCommand)
   .command(TransactionCommand)
   .command(SearchCommand)
   .command(DocsCommand)

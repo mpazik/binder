@@ -3,13 +3,12 @@ import { fail, isErr, ok } from "@binder/utils";
 import {
   type EntityRef,
   type NamespaceEditable,
-  namespacesEditable,
   normalizeEntityRef,
-  resolveEntityRefType,
 } from "@binder/db";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { findEntityLocation, loadNavigation } from "../document/navigation.ts";
 import { types } from "./types.ts";
+import { namespaceOption } from "./options.ts";
 
 const locateHandler: CommandHandlerWithDb<{
   ref: EntityRef;
@@ -51,12 +50,7 @@ const LocateCommand = types({
         demandOption: true,
         coerce: (value: string) => normalizeEntityRef(value),
       })
-      .option("namespace", {
-        alias: "n",
-        describe: "entity namespace",
-        choices: namespacesEditable,
-        default: "node" as NamespaceEditable,
-      }),
+      .options(namespaceOption),
   handler: runtimeWithDb(locateHandler),
 });
 

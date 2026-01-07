@@ -203,12 +203,25 @@ export const printError = (error: ErrorObject) => {
   println(formatted);
 };
 
-export const printData = (data: unknown) => {
+export const printData = (
+  data: unknown,
+  format: "json" | "yaml" | "pretty" = "pretty",
+) => {
+  if (format === "json") {
+    println(JSON.stringify(data, null, 2));
+    return;
+  }
+
   const yamlOutput = YAML.stringify(data, {
     indent: 2,
     lineWidth: 0,
     defaultStringType: "PLAIN",
   });
+
+  if (format === "yaml") {
+    println(yamlOutput);
+    return;
+  }
 
   const highlighted = yamlOutput
     .split(EOL)
