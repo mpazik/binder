@@ -51,7 +51,7 @@ describe("view", () => {
     });
 
     it("renders block-level richtext with headers as block content", () => {
-      // templates field has richtextAlphabet: "document" which allows headers
+      // templates field has richtextFormat: "document" which allows headers
       check(
         "{templates}\n",
         { templates: "# Heading\n\nParagraph text" },
@@ -60,7 +60,7 @@ describe("view", () => {
     });
 
     it("renders block-level richtext with lists as block content", () => {
-      // chapters field has richtextAlphabet: "section" which allows lists
+      // chapters field has richtextFormat: "section" which allows lists
       check(
         "{chapters}\n",
         { chapters: "- Item one\n- Item two" },

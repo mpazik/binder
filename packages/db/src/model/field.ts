@@ -80,17 +80,17 @@ type MultiValueDelimiter =
 
 const getMultiValueDelimiter = (fieldDef: FieldDef): MultiValueDelimiter => {
   if (fieldDef.dataType === "plaintext") {
-    const alphabet = fieldDef.plaintextAlphabet;
-    if (alphabet === "line") return "newline";
-    if (alphabet === "paragraph") return "blankline";
+    const format = fieldDef.plaintextFormat;
+    if (format === "line") return "newline";
+    if (format === "paragraph") return "blankline";
     return "comma";
   }
   if (fieldDef.dataType === "richtext") {
-    const alphabet = fieldDef.richtextAlphabet;
-    if (alphabet === "line") return "newline";
-    if (alphabet === "block") return "blankline";
-    if (alphabet === "section") return "header";
-    if (alphabet === "document") return "hrule";
+    const format = fieldDef.richtextFormat;
+    if (format === "line") return "newline";
+    if (format === "block") return "blankline";
+    if (format === "section") return "header";
+    if (format === "document") return "hrule";
     return "comma";
   }
   return "comma";

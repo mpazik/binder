@@ -5,8 +5,8 @@ import {
   type GetValueType,
   type OptionDef,
   type PeriodFormat,
-  type PlaintextAlphabet,
-  type RichtextAlphabet,
+  type PlaintextFormat,
+  type RichtextFormat,
 } from "./data-type.ts";
 import type { FieldKey, FieldPath } from "./field.ts";
 import type { Filters } from "./query.ts";
@@ -43,8 +43,8 @@ export type FieldDef<D extends string = string> = {
   attributes?: FieldKey[];
   when?: Filters;
   default?: JsonValue;
-  plaintextAlphabet?: PlaintextAlphabet;
-  richtextAlphabet?: RichtextAlphabet;
+  plaintextFormat?: PlaintextFormat;
+  richtextFormat?: RichtextFormat;
   periodFormat?: PeriodFormat;
 };
 
@@ -97,7 +97,7 @@ export const coreFields = {
     key: "key" as EntityKey,
     name: "Key",
     dataType: "plaintext",
-    plaintextAlphabet: "code",
+    plaintextFormat: "code",
     description: "Unique key to identify the configuration record",
     unique: true,
   },
@@ -106,7 +106,7 @@ export const coreFields = {
     key: "type" as EntityKey,
     name: "type",
     dataType: "plaintext",
-    plaintextAlphabet: "code",
+    plaintextFormat: "code",
     immutable: true,
   },
   name: {
@@ -114,21 +114,21 @@ export const coreFields = {
     key: nameFieldKey,
     name: "name",
     dataType: "plaintext",
-    plaintextAlphabet: "line",
+    plaintextFormat: "line",
   },
   title: {
     id: coreIds.title,
     key: titleFieldKey,
     name: "title",
     dataType: "plaintext",
-    plaintextAlphabet: "line",
+    plaintextFormat: "line",
   },
   description: {
     id: coreIds.description,
     key: descriptionFieldKey,
     name: "description",
     dataType: "richtext",
-    richtextAlphabet: "section",
+    richtextFormat: "section",
   },
 } as const satisfies Record<string, FieldDef>;
 

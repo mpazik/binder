@@ -16,12 +16,10 @@ import {
   type FieldDef,
   type Namespace,
   type NodeDataType,
-} from "./model";
-import {
   periodFormats,
-  plaintextAlphabets,
+  plaintextFormats,
   QueryParamsSchema,
-  richtextAlphabets,
+  richtextFormats,
 } from "./model";
 
 export type DataTypeValidator<D extends string> = (
@@ -100,10 +98,9 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
         undefined,
       );
     if (value === "") return okVoid;
-    const alphabet: keyof typeof plaintextAlphabets =
-      fieldDef.plaintextAlphabet ?? configFieldsDefs.plaintextAlphabet.default;
-    const alphabetDef = plaintextAlphabets[alphabet];
-    const error = alphabetDef.validate(value, {});
+    const format: keyof typeof plaintextFormats =
+      fieldDef.plaintextFormat ?? configFieldsDefs.plaintextFormat.default;
+    const error = plaintextFormats[format].validate(value, {});
     if (error) return fail("validation-error", error);
     return okVoid;
   },
@@ -116,10 +113,9 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
         undefined,
       );
     if (value === "") return okVoid;
-    const alphabet: keyof typeof richtextAlphabets =
-      fieldDef.richtextAlphabet ?? configFieldsDefs.richtextAlphabet.default;
-    const alphabetDef = richtextAlphabets[alphabet];
-    const error = alphabetDef.validate(value, {
+    const format: keyof typeof richtextFormats =
+      fieldDef.richtextFormat ?? configFieldsDefs.richtextFormat.default;
+    const error = richtextFormats[format].validate(value, {
       allowMultiple: fieldDef.allowMultiple,
     });
     if (error) return fail("validation-error", error);

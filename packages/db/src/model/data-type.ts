@@ -8,20 +8,6 @@ export type DataTypeDef = {
 };
 export type DataTypeDefs = Record<string, DataTypeDef>;
 
-export type AlphabetValidatorContext = {
-  allowMultiple?: boolean;
-};
-
-export type AlphabetValidator = (
-  value: string,
-  context: AlphabetValidatorContext,
-) => string | undefined;
-
-export type AlphabetDef = DataTypeDef & {
-  validate: AlphabetValidator;
-};
-export type AlphabetDefs = Record<string, AlphabetDef>;
-
 export const coreDataTypes = {
   seqId: { name: "Sequential Id" },
   uid: { name: "Uid" },
@@ -39,12 +25,24 @@ export const coreDataTypes = {
   period: { name: "Period" },
 } as const satisfies DataTypeDefs;
 
+export type TextFormatValidator = (
+  value: string,
+  context: {
+    allowMultiple?: boolean;
+  },
+) => string | undefined;
+
+export type TextFormatDef = DataTypeDef & {
+  validate: TextFormatValidator;
+};
+export type TextFormatDefs = Record<string, TextFormatDef>;
+
 const createPatternValidator =
-  (pattern: RegExp, errorMessage: string): AlphabetValidator =>
+  (pattern: RegExp, errorMessage: string): TextFormatValidator =>
   (value, _context) =>
     pattern.test(value) ? undefined : errorMessage;
 
-export const plaintextAlphabets = {
+export const plaintextFormats = {
   token: {
     name: "Token",
     description: "Contains only letters and digits (e.g., abc123)",
@@ -88,7 +86,7 @@ export const plaintextAlphabets = {
       "Value must not contain blank lines",
     ),
   },
-} as const satisfies AlphabetDefs;
+} as const satisfies TextFormatDefs;
 
 const containsMarkdownHeader = (value: string): boolean =>
   /^#{1,6}\s/m.test(value);
@@ -96,7 +94,7 @@ const containsMarkdownHeader = (value: string): boolean =>
 const containsHorizontalRule = (value: string): boolean =>
   /^-{3,}\s*$/m.test(value);
 
-export const richtextAlphabets = {
+export const richtextFormats = {
   word: {
     name: "Word",
     description: "Single styled word without spaces",
@@ -144,7 +142,7 @@ export const richtextAlphabets = {
       return undefined;
     },
   },
-} as const satisfies AlphabetDefs;
+} as const satisfies TextFormatDefs;
 
 export const periodFormats = {
   year: {
@@ -184,10 +182,10 @@ export const periodFormats = {
       "Invalid day format",
     ),
   },
-} as const satisfies AlphabetDefs;
+} as const satisfies TextFormatDefs;
 
-export type PlaintextAlphabet = keyof typeof plaintextAlphabets;
-export type RichtextAlphabet = keyof typeof richtextAlphabets;
+export type PlaintextFormat = keyof typeof plaintextFormats;
+export type RichtextFormat = keyof typeof richtextFormats;
 export type PeriodFormat = keyof typeof periodFormats;
 
 export const dataTypeDefsToOptions = (
@@ -230,9 +228,8 @@ export type DataTypeValueMap = {
   optionSet: OptionDef[];
 };
 
-export const plaintextAlphabetOptions =
-  dataTypeDefsToOptions(plaintextAlphabets);
-export const richtextAlphabetOptions = dataTypeDefsToOptions(richtextAlphabets);
+export const plaintextFormatOptions = dataTypeDefsToOptions(plaintextFormats);
+export const richtextFormatOptions = dataTypeDefsToOptions(richtextFormats);
 export const periodFormatOptions = dataTypeDefsToOptions(periodFormats);
 
 const _validateDataTypeMapCompleteness: {

@@ -60,7 +60,7 @@ export const mockRoleField = {
   name: "Role",
   description: "Role in relation",
   dataType: "plaintext",
-  plaintextAlphabet: "line",
+  plaintextFormat: "line",
 } as const satisfies NodeFieldDef;
 
 export const mockOwnersFieldKey = "owners" as ConfigKey;
@@ -115,7 +115,7 @@ export const mockTagsField = {
   name: "Tags",
   description: "Category labels",
   dataType: "plaintext",
-  plaintextAlphabet: "code",
+  plaintextFormat: "code",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -140,7 +140,7 @@ export const mockEmailField = {
   description: "Email address",
   dataType: "plaintext",
   unique: true,
-  plaintextAlphabet: "word",
+  plaintextFormat: "word",
 } as const satisfies NodeFieldDef;
 
 export const mockProjectFieldKey = "project" as ConfigKey;
@@ -188,7 +188,7 @@ export const mockCancelReasonField = {
   name: "Cancel Reason",
   description: "Reason for cancellation",
   dataType: "plaintext",
-  plaintextAlphabet: "line",
+  plaintextFormat: "line",
   when: { status: "cancelled" },
 } as const satisfies NodeFieldDef;
 
@@ -276,7 +276,7 @@ export const mockAliasesField = {
   name: "Aliases",
   description: "Alternative names",
   dataType: "plaintext",
-  plaintextAlphabet: "line",
+  plaintextFormat: "line",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -289,7 +289,7 @@ export const mockNotesField = {
   name: "Notes",
   description: "Multiple note paragraphs",
   dataType: "plaintext",
-  plaintextAlphabet: "paragraph",
+  plaintextFormat: "paragraph",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -302,7 +302,7 @@ export const mockStepsField = {
   name: "Steps",
   description: "Instruction steps",
   dataType: "richtext",
-  richtextAlphabet: "block",
+  richtextFormat: "block",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -315,7 +315,7 @@ export const mockChaptersField = {
   name: "Chapters",
   description: "Document chapters",
   dataType: "richtext",
-  richtextAlphabet: "section",
+  richtextFormat: "section",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -328,7 +328,7 @@ export const mockTemplatesField = {
   name: "Templates",
   description: "Document templates",
   dataType: "richtext",
-  richtextAlphabet: "document",
+  richtextFormat: "document",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 

@@ -191,7 +191,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: token", () => {
-      const fieldDef = { plaintextAlphabet: "token" as const };
+      const fieldDef = { plaintextFormat: "token" as const };
 
       it("accepts letters and digits", () => {
         checkOk("plaintext", "abc123", { fieldDef });
@@ -212,7 +212,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: code", () => {
-      const fieldDef = { plaintextAlphabet: "code" as const };
+      const fieldDef = { plaintextFormat: "code" as const };
 
       it("accepts valid code identifiers", () => {
         checkOk("plaintext", "myItem", { fieldDef });
@@ -234,7 +234,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: word", () => {
-      const fieldDef = { plaintextAlphabet: "word" as const };
+      const fieldDef = { plaintextFormat: "word" as const };
 
       it("accepts words without whitespace", () => {
         checkOk("plaintext", "hello", { fieldDef });
@@ -255,7 +255,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: paragraph", () => {
-      const fieldDef = { plaintextAlphabet: "paragraph" as const };
+      const fieldDef = { plaintextFormat: "paragraph" as const };
 
       it("accepts multiple lines without blank lines", () => {
         checkOk("plaintext", "line1\nline2\nline3", { fieldDef });
@@ -289,7 +289,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: word", () => {
-      const fieldDef = { richtextAlphabet: "word" as const };
+      const fieldDef = { richtextFormat: "word" as const };
 
       it("accepts single words", () => {
         checkOk("richtext", "hello", { fieldDef });
@@ -305,7 +305,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: line", () => {
-      const fieldDef = { richtextAlphabet: "line" as const };
+      const fieldDef = { richtextFormat: "line" as const };
 
       it("accepts single lines with formatting", () => {
         checkOk("richtext", "hello **world**", { fieldDef });
@@ -321,7 +321,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: block", () => {
-      const fieldDef = { richtextAlphabet: "block" as const };
+      const fieldDef = { richtextFormat: "block" as const };
 
       it("accepts paragraphs and lists", () => {
         checkOk("richtext", "paragraph content", { fieldDef });
@@ -356,7 +356,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: section", () => {
-      const fieldDef = { richtextAlphabet: "section" as const };
+      const fieldDef = { richtextFormat: "section" as const };
 
       it("accepts content with blank lines", () => {
         checkOk("richtext", "paragraph\n\nanother paragraph", { fieldDef });
@@ -373,7 +373,7 @@ describe("data-type-validators", () => {
     });
 
     describe("alphabet: document", () => {
-      const fieldDef = { richtextAlphabet: "document" as const };
+      const fieldDef = { richtextFormat: "document" as const };
 
       it("accepts content with headers", () => {
         checkOk("richtext", "# Heading\n\nContent", { fieldDef });

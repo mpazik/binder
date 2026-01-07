@@ -61,8 +61,8 @@ const isRichtextField = (fieldDef: FieldDef | undefined): boolean =>
 
 const isBlockLevelRichtext = (fieldDef: FieldDef | undefined): boolean =>
   fieldDef?.dataType === "richtext" &&
-  (fieldDef.richtextAlphabet === "section" ||
-    fieldDef.richtextAlphabet === "document");
+  (fieldDef.richtextFormat === "section" ||
+    fieldDef.richtextFormat === "document");
 
 const isSoleChildOfParagraph = (
   parent: Parent | undefined,

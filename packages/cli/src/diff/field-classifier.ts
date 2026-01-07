@@ -14,8 +14,8 @@ import type {
   EntitySchema,
   FieldDef,
   FieldKey,
-  PlaintextAlphabet,
-  RichtextAlphabet,
+  PlaintextFormat,
+  RichtextFormat,
 } from "@binder/db";
 
 export type FieldClassification = {
@@ -29,7 +29,7 @@ export type SchemaContext = {
   typeCount: number;
 };
 
-const PLAINTEXT_U_VALUES: Record<PlaintextAlphabet, number> = {
+const PLAINTEXT_U_VALUES: Record<PlaintextFormat, number> = {
   token: 0.001,
   code: 0.0001,
   word: 0.001,
@@ -37,7 +37,7 @@ const PLAINTEXT_U_VALUES: Record<PlaintextAlphabet, number> = {
   paragraph: 0.00001,
 };
 
-const RICHTEXT_U_VALUES: Record<RichtextAlphabet, number> = {
+const RICHTEXT_U_VALUES: Record<RichtextFormat, number> = {
   word: 0.001,
   line: 0.0001,
   block: 0.00001,
@@ -75,12 +75,12 @@ const getBaseUnrelatedMatchChance = (
 
   const dataType = fieldDef.dataType as CoreDataType;
 
-  if (dataType === "plaintext" && fieldDef.plaintextAlphabet) {
-    return PLAINTEXT_U_VALUES[fieldDef.plaintextAlphabet];
+  if (dataType === "plaintext" && fieldDef.plaintextFormat) {
+    return PLAINTEXT_U_VALUES[fieldDef.plaintextFormat];
   }
 
-  if (dataType === "richtext" && fieldDef.richtextAlphabet) {
-    return RICHTEXT_U_VALUES[fieldDef.richtextAlphabet];
+  if (dataType === "richtext" && fieldDef.richtextFormat) {
+    return RICHTEXT_U_VALUES[fieldDef.richtextFormat];
   }
 
   return BASE_U_VALUES[dataType] ?? 0.01;
