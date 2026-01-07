@@ -2,7 +2,7 @@ import type { Argv } from "yargs";
 import { createError, err, isErr, ok } from "@binder/utils";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { redoTransactions } from "../lib/orchestrator.ts";
-import { types } from "./types.ts";
+import { types } from "../cli/types.ts";
 
 export const redoHandler: CommandHandlerWithDb<{
   steps: number;
@@ -37,7 +37,7 @@ export const redoHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
-const RedoCommand = types({
+export const RedoCommand = types({
   command: "redo [steps]",
   describe: "redo the last N undone transactions",
   builder: (yargs: Argv) => {
@@ -49,5 +49,3 @@ const RedoCommand = types({
   },
   handler: runtimeWithDb(redoHandler),
 });
-
-export default RedoCommand;

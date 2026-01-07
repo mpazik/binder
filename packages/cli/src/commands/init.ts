@@ -29,8 +29,10 @@ import {
   listBlueprints,
   loadBlueprint,
 } from "../lib/blueprint.ts";
-import * as ui from "../ui.ts";
-import { types } from "./types.ts";
+import { createUi } from "../cli/ui.ts";
+
+const ui = createUi();
+import { types } from "../cli/types.ts";
 
 const GITIGNORE_CONTENT = `*
 !transactions.jsonl
@@ -231,7 +233,7 @@ const initSchemaHandler: CommandHandlerWithDb<InitSchemaArgs> = async ({
   return ok(undefined);
 };
 
-const InitCommand = types({
+export const InitCommand = types({
   command: "init",
   describe: "initialize a new binder workspace",
   builder: (yargs: Argv) => {
@@ -254,5 +256,3 @@ const InitCommand = types({
   },
   handler: bootstrapMinimal(initSetupHandler),
 });
-
-export default InitCommand;

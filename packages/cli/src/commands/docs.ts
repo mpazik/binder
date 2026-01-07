@@ -22,7 +22,7 @@ import type { ValidationError } from "../validation";
 import { validateDocument } from "../validation";
 import { getDocumentFileType, parseDocument } from "../document/document.ts";
 import { createPathMatcher } from "../utils/file.ts";
-import { types } from "./types.ts";
+import { types } from "../cli/types.ts";
 
 export const docsRenderHandler: CommandHandlerWithDb = async (context) => {
   const { ui } = context;
@@ -203,7 +203,7 @@ export const docsLintHandler: CommandHandlerWithDb<{
   return ok("No validation issues found");
 };
 
-const DocsCommand = types({
+export const DocsCommand = types({
   command: "docs <command>",
   describe: "manage documentation",
   builder: (yargs: Argv) => {
@@ -260,4 +260,3 @@ const DocsCommand = types({
   },
   handler: async () => {},
 });
-export default DocsCommand;

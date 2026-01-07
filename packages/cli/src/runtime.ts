@@ -24,7 +24,7 @@ import {
   loadGlobalConfig,
   loadWorkspaceConfig,
 } from "./config.ts";
-import * as ui from "./ui.ts";
+import { createUi, Style, type Ui } from "./cli/ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 import { setupCleanupHandlers } from "./lib/lock.ts";
 import {
@@ -46,6 +46,7 @@ type RuntimeOptions = {
 
 export type GlobalOptions = RuntimeOptions & {
   cwd?: string;
+  quiet?: boolean;
 };
 
 export type RuntimeContextInit = RuntimeOptions & {
@@ -58,7 +59,7 @@ export type RuntimeContextInit = RuntimeOptions & {
 export type RuntimeContext = {
   config: AppConfig;
   log: Logger;
-  ui: typeof ui;
+  ui: Ui;
   fs: FileSystem;
 };
 
@@ -84,6 +85,8 @@ export type CommandHandlerWithDb<TArgs = object> = (
   context: RuntimeContextWithDb & { args: TArgs & GlobalOptions },
 ) => ResultAsync<string | void>;
 
+const defaultUi = createUi();
+
 const fatalError = (
   error: ErrorObject | Err<ErrorObject>,
   log?: Logger,
@@ -92,9 +95,9 @@ const fatalError = (
   const errorObj = normalizeError(error);
   log?.error(`${errorObj.key}: ${errorObj.message}`, errorObj.data);
   if (!silent) {
-    ui.printError(errorObj);
+    defaultUi.printError(errorObj);
     if (log) {
-      ui.error(`See log: ${log.logPath}`);
+      defaultUi.error(`See log: ${log.logPath}`);
     }
   }
   process.exit(1);
@@ -179,7 +182,7 @@ export const initializeRuntime = async (
   const { log, close } = logResult.data;
 
   return ok({
-    runtime: { config, log, ui, fs },
+    runtime: { config, log, ui: createUi(), fs },
     close,
   });
 };
@@ -298,10 +301,15 @@ export const bootstrapMinimal = <TArgs extends object = object>(
 
     const data = result.data.data;
     if (data && !opts.silent) {
-      ui.println(ui.Style.TEXT_SUCCESS + data + ui.Style.TEXT_NORMAL);
+      defaultUi.println(Style.TEXT_SUCCESS + data + Style.TEXT_NORMAL);
     }
     close();
   };
+};
+
+const isQuiet = (args: GlobalOptions & { format?: string }): boolean => {
+  if (args.quiet) return true;
+  return args.format !== undefined && args.format !== "pretty";
 };
 
 export const runtime = <TArgs extends object = object>(
@@ -338,16 +346,18 @@ export const runtime = <TArgs extends object = object>(
       if (isErr(contextResult)) return contextResult;
 
       const { runtime: context, close } = contextResult.data;
+      const quiet = isQuiet(contextInit.args);
+      const quietContext = { ...context, ui: createUi({ quiet }) };
+
       const result = await tryCatch(() =>
         handler({
-          ...context,
+          ...quietContext,
           args: contextInit.args,
         }),
       );
 
       if (isErr(result) || isErr(result.data)) {
         const error = isErr(result) ? result.error : result.data.error!;
-        // we want to use local logger
         return fatalError(error, context.log, options?.silent);
       }
       close();

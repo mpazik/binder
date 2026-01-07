@@ -8,6 +8,7 @@ export * from "./result.ts";
 export * from "./json.ts";
 export type * from "./json.ts";
 export type * from "./function.ts";
+export * from "./function.ts";
 export * from "./assert.ts";
 export * from "./object.ts";
 export type * from "./object.ts";

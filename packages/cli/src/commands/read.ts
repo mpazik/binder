@@ -5,14 +5,15 @@ import {
   type NamespaceEditable,
   normalizeEntityRef,
 } from "@binder/db";
-import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
-import { types } from "./types.ts";
-import { formatOption, namespaceOption, type OutputFormat } from "./options.ts";
+import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
+import { types } from "../cli/types.ts";
+import { itemFormatOption, namespaceOption } from "../cli/options.ts";
+import type { SerializeItemFormat } from "../utils/serialize.ts";
 
 const readHandler: CommandHandlerWithDb<{
   ref: EntityRef;
   namespace: NamespaceEditable;
-  format: OutputFormat;
+  format?: SerializeItemFormat;
 }> = async ({ kg, ui, args }) => {
   const result = await kg.fetchEntity(args.ref, undefined, args.namespace);
   if (isErr(result)) return result;
@@ -21,7 +22,7 @@ const readHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
-const ReadCommand = types({
+export const ReadCommand = types({
   command: "read <ref>",
   aliases: ["fetch", "get"],
   describe: "fetch by reference",
@@ -33,8 +34,6 @@ const ReadCommand = types({
         demandOption: true,
         coerce: (value: string) => normalizeEntityRef(value),
       })
-      .options({ ...namespaceOption, ...formatOption }),
+      .options({ ...namespaceOption, ...itemFormatOption }),
   handler: runtimeWithDb(readHandler),
 });
-
-export default ReadCommand;

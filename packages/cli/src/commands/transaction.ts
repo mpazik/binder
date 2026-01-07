@@ -3,15 +3,17 @@ import type { Argv } from "yargs";
 import { createError, err, fail, isErr, ok } from "@binder/utils";
 import {
   normalizeEntityRef,
-  type TransactionInput,
+  normalizeTransactionInput,
   type Transaction,
+  type TransactionInput,
   type TransactionRef,
+  transactionToInput,
 } from "@binder/db";
-import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import {
-  verifySync,
   repairDbFromLog,
   squashTransactions,
+  verifySync,
 } from "../lib/orchestrator.ts";
 import {
   readLastTransactions,
@@ -27,10 +29,12 @@ import {
   serializeTransactionInputs,
   transactionToInput,
 } from "../utils/transaction-input.ts";
-import { types } from "./types.ts";
+import { types } from "../cli/types.ts";
+import { dryRunOption, itemFormatOption, yesOption } from "../cli/options.ts";
+import { serialize, type SerializeItemFormat } from "../utils/serialize.ts";
 
 export const transactionImportHandler: CommandHandlerWithDb<{
-  files: string[];
+  files?: string[];
   dryRun?: boolean;
   yes?: boolean;
 }> = async ({ kg, config, ui, log, fs, args }) => {
@@ -98,11 +102,12 @@ export const transactionImportHandler: CommandHandlerWithDb<{
 
 export const transactionReadHandler: CommandHandlerWithDb<{
   ref: TransactionRef;
+  format?: SerializeItemFormat;
 }> = async ({ kg, ui, args }) => {
   const result = await kg.fetchTransaction(args.ref);
   if (isErr(result)) return result;
 
-  ui.printData(result.data);
+  ui.printData(result.data, args.format);
   return ok(undefined);
 };
 
@@ -483,6 +488,13 @@ export const transactionLogHandler: CommandHandlerWithDb<{
     return ok(undefined);
   }
 
+  if (args.format === "jsonl") {
+    for (const tx of transactions) {
+      ui.println(JSON.stringify(tx));
+    }
+    return ok(undefined);
+  }
+
   if (args.format === "yaml") {
     ui.printData(transactions);
     return ok(undefined);
@@ -520,7 +532,7 @@ export const transactionExportHandler: CommandHandlerWithDb<{
 
   const inputs = transactionsResult.data.map(transactionToInput);
   const format = args.output ? detectFileFormat(args.output) : "jsonl";
-  const serialized = serializeTransactionInputs(inputs, format);
+  const serialized = serialize(inputs, format, normalizeTransactionInput);
 
   if (args.output) {
     const writeResult = await fs.writeFile(args.output, serialized);
@@ -533,7 +545,7 @@ export const transactionExportHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
-const TransactionCommand = types({
+export const TransactionCommand = types({
   command: "transaction <command>",
   aliases: ["tx"],
   describe: "create transactions",
@@ -541,29 +553,17 @@ const TransactionCommand = types({
     return yargs
       .command(
         types({
-          command: "import <files...>",
+          command: "import [files...]",
           aliases: ["create", "add"],
-          describe: "import transactions from file(s)",
+          describe: "import transactions from file(s) or stdin",
           builder: (yargs: Argv) => {
             return yargs
               .positional("files", {
-                describe: "path(s) to transaction file(s)",
+                describe: "path(s) to transaction file(s), or pipe via stdin",
                 type: "string",
                 array: true,
-                demandOption: true,
               })
-              .option("dry-run", {
-                alias: "d",
-                describe: "preview transactions without applying",
-                type: "boolean",
-                default: false,
-              })
-              .option("yes", {
-                alias: "y",
-                describe: "skip confirmation prompt",
-                type: "boolean",
-                default: false,
-              });
+              .options({ ...dryRunOption, ...yesOption });
           },
           handler: runtimeWithDb(transactionImportHandler),
         }),
@@ -604,13 +604,15 @@ const TransactionCommand = types({
           aliases: ["fetch", "get"],
           describe: "read a transaction by reference",
           builder: (yargs: Argv) => {
-            return yargs.positional("ref", {
-              describe: "transaction reference (id | hash)",
-              type: "string",
-              demandOption: true,
-              coerce: (value: string) =>
-                normalizeEntityRef<"transaction">(value),
-            });
+            return yargs
+              .positional("ref", {
+                describe: "transaction reference (id | hash)",
+                type: "string",
+                demandOption: true,
+                coerce: (value: string) =>
+                  normalizeEntityRef<"transaction">(value),
+              })
+              .options(itemFormatOption);
           },
           handler: runtimeWithDb(transactionReadHandler),
         }),
@@ -640,12 +642,7 @@ const TransactionCommand = types({
                 type: "number",
                 default: 2,
               })
-              .option("yes", {
-                alias: "y",
-                describe: "auto-confirm all prompts",
-                type: "boolean",
-                default: false,
-              });
+              .options(yesOption);
           },
           handler: runtimeWithDb(transactionSquashHandler),
         }),
@@ -664,18 +661,7 @@ const TransactionCommand = types({
             "repair database and log sync by applying missing transactions",
           builder: (yargs: Argv) => {
             return yargs
-              .option("dry-run", {
-                alias: "d",
-                describe: "show what would be done without making changes",
-                type: "boolean",
-                default: false,
-              })
-              .option("yes", {
-                alias: "y",
-                describe: "auto-confirm all prompts",
-                type: "boolean",
-                default: false,
-              })
+              .options({ ...dryRunOption, ...yesOption })
               .option("rehash", {
                 describe:
                   "recompute all transaction hashes (use for algorithm migration)",
@@ -702,7 +688,14 @@ const TransactionCommand = types({
                 alias: "f",
                 describe: "output format",
                 type: "string",
-                choices: ["compact", "full", "oneline", "json", "yaml"],
+                choices: [
+                  "compact",
+                  "full",
+                  "oneline",
+                  "json",
+                  "jsonl",
+                  "yaml",
+                ],
                 default: "compact",
               })
               .option("oneline", {
@@ -732,4 +725,3 @@ const TransactionCommand = types({
   },
   handler: async () => {},
 });
-export default TransactionCommand;

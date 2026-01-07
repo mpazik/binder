@@ -1,5 +1,6 @@
+import { noop, noopAsync } from "@binder/utils";
 import { type Logger } from "./log.ts";
-import * as ui from "./ui.ts";
+import { createUi, type Ui } from "./cli/ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 import { getTestDatabaseCli } from "./db/db.mock.ts";
 import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
@@ -17,14 +18,26 @@ export const mockConfig: AppConfig = {
   },
 };
 
-export const mockUi: typeof ui = {
-  ...ui,
-  println: () => {},
-  print: () => {},
-  error: () => {},
-  printError: () => {},
-  printData: () => {},
-  printTransaction: () => {},
+export const mockUi: Ui = {
+  ...createUi(),
+  println: noop,
+  print: noop,
+  success: noop,
+  warning: noop,
+  info: noop,
+  danger: noop,
+  divider: noop,
+  heading: noop,
+  block: noop,
+  keyValue: noop,
+  keyValuesInline: noop,
+  list: noop,
+  confirm: noopAsync,
+  printTransactions: noop,
+  error: noop,
+  printError: noop,
+  printData: noop,
+  printTransaction: noop,
 };
 
 export const mockLog: Logger = {

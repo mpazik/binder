@@ -8,3 +8,6 @@ export type AsyncPredicate<T> = (value: T) => Promise<boolean>;
  * The number is negative if a is less than b, positive if a is greater than b, and zero if a is equal to b
  */
 export type Comparator<T> = (a: T, b: T) => number;
+
+export const noop = () => {};
+export const noopAsync = async () => false;

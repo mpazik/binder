@@ -2,22 +2,24 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
-import InitCommand from "./commands/init.ts";
-import CreateCommand from "./commands/create.ts";
-import ReadCommand from "./commands/read.ts";
-import UpdateCommand from "./commands/update.ts";
-import DeleteCommand from "./commands/delete.ts";
-import SchemaCommand from "./commands/schema.ts";
-import TransactionCommand from "./commands/transaction.ts";
+import { InitCommand } from "./commands/init.ts";
+import { CreateCommand } from "./commands/create.ts";
+import { ReadCommand } from "./commands/read.ts";
+import { UpdateCommand } from "./commands/update.ts";
+import { DeleteCommand } from "./commands/delete.ts";
+import { SchemaCommand } from "./commands/schema.ts";
+import { TransactionCommand } from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
-import DocsCommand from "./commands/docs.ts";
-import DevCommand from "./commands/dev.ts";
-import UndoCommand from "./commands/undo.ts";
-import RedoCommand from "./commands/redo.ts";
-import McpCommand from "./commands/mcp.ts";
-import LspCommand from "./commands/lsp.ts";
-import LocateCommand from "./commands/locate.ts";
-import * as UI from "./ui";
+import { DocsCommand } from "./commands/docs.ts";
+import { DevCommand } from "./commands/dev.ts";
+import { UndoCommand } from "./commands/undo.ts";
+import { RedoCommand } from "./commands/redo.ts";
+import { McpCommand } from "./commands/mcp.ts";
+import { LspCommand } from "./commands/lsp.ts";
+import { LocateCommand } from "./commands/locate.ts";
+import { createUi, logo } from "./cli/ui.ts";
+
+const ui = createUi();
 import { BINDER_VERSION, isDevMode } from "./build-time";
 import { LOG_LEVELS } from "./log.ts";
 
@@ -33,6 +35,13 @@ let cli = yargs(hideBin(process.argv))
     type: "string",
     alias: "C",
   })
+  .option("quiet", {
+    describe:
+      "suppress non-essential output (auto-enabled for non-pretty formats)",
+    type: "boolean",
+    alias: "q",
+    default: false,
+  })
   .option("print-logs", {
     describe: "print logs to stderr",
     type: "boolean",
@@ -43,7 +52,7 @@ let cli = yargs(hideBin(process.argv))
     type: "string",
     choices: LOG_LEVELS,
   })
-  .usage(UI.logo())
+  .usage(logo())
   .wrap(null)
   .command(InitCommand)
   .command(CreateCommand)
@@ -68,7 +77,7 @@ cli = cli
   .demandCommand(1, "You need to specify a command")
   .fail((msg) => {
     if (msg) {
-      UI.error(msg);
+      ui.error(msg);
       cli.showHelp("log");
     }
     process.exit(1);

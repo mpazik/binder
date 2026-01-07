@@ -1,23 +1,26 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import {
+  createTransactionInput,
   type EntityRef,
   type NamespaceEditable,
   normalizeEntityRef,
 } from "@binder/db";
-import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import {
   createPatchExamples,
   parsePatches,
   patchesDescription,
 } from "../lib/patch-parser.ts";
-import { types } from "./types.ts";
-import { namespaceOption } from "./options.ts";
+import { types } from "../cli/types.ts";
+import { itemFormatOption, namespaceOption } from "../cli/options.ts";
+import type { SerializeItemFormat } from "../utils/serialize.ts";
 
 const updateHandler: CommandHandlerWithDb<{
   ref: EntityRef;
   patches: string[];
   namespace: NamespaceEditable;
+  format?: SerializeItemFormat;
 }> = async ({ kg, config, ui, args }) => {
   const schemaResult = await kg.getSchema(args.namespace);
   if (isErr(schemaResult)) return schemaResult;
@@ -30,19 +33,18 @@ const updateHandler: CommandHandlerWithDb<{
     ...fieldsResult.data,
   };
 
-  const result = await kg.update({
-    author: config.author,
-    nodes: args.namespace === "node" ? [entityInput] : [],
-    configurations: args.namespace === "config" ? [entityInput] : [],
-  });
+  const result = await kg.update(
+    createTransactionInput(config.author, args.namespace, [entityInput]),
+  );
   if (isErr(result)) return result;
 
-  ui.printData(result.data);
-  return ok("Updated successfully");
+  ui.printData(result.data, args.format);
+  return ok(undefined);
 };
 
-const UpdateCommand = types({
+export const UpdateCommand = types({
   command: "update <ref> [patches..]",
+  aliases: ["edit"],
   describe: "update with field=value patches",
   builder: (yargs: Argv) =>
     yargs
@@ -58,9 +60,7 @@ const UpdateCommand = types({
         array: true,
         default: [],
       })
-      .options(namespaceOption)
+      .options({ ...namespaceOption, ...itemFormatOption })
       .example(createPatchExamples("update <ref>")),
   handler: runtimeWithDb(updateHandler),
 });
-
-export default UpdateCommand;

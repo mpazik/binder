@@ -19,7 +19,7 @@ import {
 } from "../config.ts";
 import { repairDbFromLog } from "../lib/orchestrator.ts";
 import { verifyLog } from "../lib/journal.ts";
-import { types } from "./types.ts";
+import { types } from "../cli/types.ts";
 
 export const backupHandler: CommandHandlerWithDb = async ({
   ui,
@@ -244,7 +244,7 @@ export const resetHandler: CommandHandlerWithDb<{ yes?: boolean }> = async ({
   return ok(undefined);
 };
 
-const DevCommand = types({
+export const DevCommand = types({
   command: "dev <command>",
   describe: "development utilities",
   builder: (yargs: Argv) => {
@@ -271,11 +271,7 @@ const DevCommand = types({
           handler: runtimeWithDb(resetHandler),
         }),
       )
-      .demandCommand(
-        1,
-        "You need to specify a subcommand: setup, backup, reset",
-      );
+      .demandCommand(1, "You need to specify a subcommand: backup, reset");
   },
   handler: async () => {},
 });
-export default DevCommand;

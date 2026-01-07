@@ -7,8 +7,8 @@ import {
 } from "@binder/db";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { findEntityLocation, loadNavigation } from "../document/navigation.ts";
-import { types } from "./types.ts";
-import { namespaceOption } from "./options.ts";
+import { types } from "../cli/types.ts";
+import { namespaceOption } from "../cli/options.ts";
 
 const locateHandler: CommandHandlerWithDb<{
   ref: EntityRef;
@@ -39,7 +39,7 @@ const locateHandler: CommandHandlerWithDb<{
   return ok(undefined);
 };
 
-const LocateCommand = types({
+export const LocateCommand = types({
   command: "locate <ref>",
   describe: "print file path and line number for an entity",
   builder: (yargs: Argv) =>
@@ -53,5 +53,3 @@ const LocateCommand = types({
       .options(namespaceOption),
   handler: runtimeWithDb(locateHandler),
 });
-
-export default LocateCommand;

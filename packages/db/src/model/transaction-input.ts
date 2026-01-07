@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { IsoTimestamp } from "@binder/utils";
-import type { ChangesetsInput } from "./changeset-input.ts";
+import type {
+  ChangesetsInput,
+  EntityChangesetInput,
+} from "./changeset-input.ts";
+import type { NamespaceEditable } from "./namespace.ts";
 
 export const TransactionInputSchema = z.object({
   author: z.string(),
@@ -18,3 +22,12 @@ export const TransactionInputSchema = z.object({
     .optional(),
 });
 export type TransactionInput = z.infer<typeof TransactionInputSchema>;
+
+export const createTransactionInput = (
+  author: string,
+  namespace: NamespaceEditable,
+  changesets: EntityChangesetInput<NamespaceEditable>[],
+): TransactionInput =>
+  namespace === "node"
+    ? { author, nodes: changesets, configurations: [] }
+    : { author, nodes: [], configurations: changesets };

@@ -13,7 +13,8 @@ import {
   type Transaction,
   type ValueChange,
 } from "@binder/db";
-import type { ErrorObject } from "@binder/utils";
+import { type ErrorObject, noop, noopAsync } from "@binder/utils";
+import { serialize, type SerializeFormat } from "../utils/serialize.ts";
 
 export const Style = {
   TEXT_HIGHLIGHT: "\x1b[95m",
@@ -48,62 +49,61 @@ export const logo = () => {
   );
 };
 
-export function println(...message: string[]) {
+const print = (...message: string[]) => {
+  Bun.stdout.write(message.join(" "));
+};
+
+const println = (...message: string[]) => {
   print(...message);
   Bun.stdout.write(EOL);
-}
+};
 
-export function print(...message: string[]) {
-  Bun.stdout.write(message.join(" "));
-}
-
-export async function input(prompt: string): Promise<string> {
+const input = async (prompt: string): Promise<string> => {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
-
   const answer = await rl.question(prompt);
   rl.close();
   return answer;
-}
+};
 
-export const success = (message: string) => {
+const success = (message: string) => {
   println(Style.TEXT_SUCCESS + message + Style.TEXT_NORMAL);
 };
 
-export const warning = (message: string) => {
+const warning = (message: string) => {
   println(Style.TEXT_WARNING + "WARNING: " + Style.TEXT_NORMAL + message);
 };
 
-export const info = (message: string) => {
+const info = (message: string) => {
   println(Style.TEXT_INFO + message + Style.TEXT_NORMAL);
 };
 
-export const danger = (message: string) => {
+const danger = (message: string) => {
   println(Style.TEXT_DANGER + message + Style.TEXT_NORMAL);
 };
 
-export const divider = () => {
+const divider = () => {
   println(Style.TEXT_DIM + "─".repeat(60) + Style.TEXT_NORMAL);
 };
 
-export const heading = (message: string) => {
+const heading = (message: string) => {
   println("");
   println(Style.TEXT_INFO_BOLD + message + Style.TEXT_NORMAL);
 };
 
-export const block = (fn: () => void) => {
+const block = (fn: () => void) => {
   println("");
   fn();
   println("");
 };
 
-export const keyValue = (key: string, value: string) => {
+const keyValue = (key: string, value: string) => {
   println(`  ${Style.TEXT_DIM}${key}:${Style.TEXT_NORMAL} ${value}`);
 };
 
-export const keyValuesInline = (...pairs: [string, string][]) => {
+const keyValuesInline = (...pairs: [string, string][]) => {
   const formatted = pairs
     .map(
       ([key, value]) => `${Style.TEXT_DIM}${key}:${Style.TEXT_NORMAL} ${value}`,
@@ -112,38 +112,16 @@ export const keyValuesInline = (...pairs: [string, string][]) => {
   println(`  ${formatted}`);
 };
 
-export const list = (items: string[], indent: number = 2) => {
-  const prefix = " ".repeat(indent);
-  for (const item of items) {
-    println(`${prefix}- ${item}`);
-  }
-};
-
-export const confirm = async (prompt: string): Promise<boolean> => {
-  const answer = await input(prompt);
-  return answer.toLowerCase() === "yes" || answer.toLowerCase() === "y";
-};
-
-export const printTransactions = (
-  transactions: Transaction[],
-  format: TransactionFormat = "concise",
-) => {
-  for (const tx of transactions) {
-    printTransaction(tx, format);
-    if (format === "full") println("");
-  }
-};
-
-export const error = (message: string) => {
+const error = (message: string) => {
   println(Style.TEXT_DANGER_BOLD + "Error: " + Style.TEXT_NORMAL + message);
 };
 
-export const printError = (error: ErrorObject) => {
+const printError = (err: ErrorObject) => {
   println(
     Style.TEXT_DANGER_BOLD +
       "Error: " +
       Style.TEXT_NORMAL +
-      (error.message || error.key),
+      (err.message || err.key),
   );
 
   const formatValue = (value: unknown, indent: string): string => {
@@ -180,11 +158,11 @@ export const printError = (error: ErrorObject) => {
   };
 
   if (
-    error.key === "changeset-input-process-failed" &&
-    error.data &&
-    "errors" in error.data
+    err.key === "changeset-input-process-failed" &&
+    err.data &&
+    "errors" in err.data
   ) {
-    const errors = (error.data as any).errors as any[];
+    const errors = (err.data as any).errors as any[];
     if (Array.isArray(errors) && errors.length > 0) {
       println(Style.TEXT_DANGER + "Validation errors:" + Style.TEXT_NORMAL);
       for (const validationError of errors) {
@@ -199,16 +177,13 @@ export const printError = (error: ErrorObject) => {
   }
 
   println(Style.TEXT_DIM + "Error details:" + Style.TEXT_NORMAL);
-  const formatted = formatValue(error.data, "");
+  const formatted = formatValue(err.data, "");
   println(formatted);
 };
 
-export const printData = (
-  data: unknown,
-  format: "json" | "yaml" | "pretty" = "pretty",
-) => {
-  if (format === "json") {
-    println(JSON.stringify(data, null, 2));
+const printData = (data: unknown, format?: SerializeFormat) => {
+  if (format) {
+    println(serialize(data, format));
     return;
   }
 
@@ -217,11 +192,6 @@ export const printData = (
     lineWidth: 0,
     defaultStringType: "PLAIN",
   });
-
-  if (format === "yaml") {
-    println(yamlOutput);
-    return;
-  }
 
   const highlighted = yamlOutput
     .split(EOL)
@@ -262,12 +232,10 @@ const getEntityLabel = (changeset: FieldChangeset): string => {
   return label ? ` (${label})` : "";
 };
 
-type EntityChangesFormat = "concise" | "full";
-
 const printEntityChanges = (
   label: string,
   changes: EntitiesChangeset,
-  format: EntityChangesFormat = "concise",
+  format: "concise" | "full" = "concise",
 ) => {
   const entries = Object.entries(changes) as [string, FieldChangeset][];
   if (entries.length === 0) return;
@@ -297,7 +265,7 @@ const printEntityChanges = (
 };
 
 export type TransactionFormat = "oneline" | "concise" | "full";
-export const printTransaction = (
+const printTransaction = (
   transaction: Transaction,
   format: TransactionFormat = "concise",
 ) => {
@@ -331,6 +299,19 @@ export const printTransaction = (
 
   printEntityChanges("Node changes", transaction.nodes, format);
   printEntityChanges("Config changes", transaction.configurations, format);
+};
+
+const formatFieldValue = (value: FieldValue | undefined): string => {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === "string") {
+    if (value.length > 50) return `"${value.slice(0, 47)}..."`;
+    return `"${value}"`;
+  }
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
+  if (Array.isArray(value)) return `[${value.length} items]`;
+  if (typeof value === "object") return `{${Object.keys(value).length} fields}`;
+  return String(value);
 };
 
 const printFieldChange = (
@@ -375,15 +356,93 @@ const printFieldChange = (
   }
 };
 
-const formatFieldValue = (value: FieldValue | undefined): string => {
-  if (value === null || value === undefined) return String(value);
-  if (typeof value === "string") {
-    if (value.length > 50) return `"${value.slice(0, 47)}..."`;
-    return `"${value}"`;
+export type Ui = {
+  println(...message: string[]): void;
+  print(...message: string[]): void;
+  input(prompt: string): Promise<string>;
+  success(message: string): void;
+  warning(message: string): void;
+  info(message: string): void;
+  danger(message: string): void;
+  divider(): void;
+  heading(message: string): void;
+  block(fn: () => void): void;
+  keyValue(key: string, value: string): void;
+  keyValuesInline(...pairs: [string, string][]): void;
+  list(items: string[], indent?: number): void;
+  confirm(prompt: string): Promise<boolean>;
+  printTransactions(
+    transactions: Transaction[],
+    format?: TransactionFormat,
+  ): void;
+  error(message: string): void;
+  printError(error: ErrorObject): void;
+  printData(data: unknown, format?: SerializeFormat): void;
+  printTransaction(transaction: Transaction, format?: TransactionFormat): void;
+};
+
+export const createUi = (options: { quiet?: boolean } = {}): Ui => {
+  const { quiet = false } = options;
+
+  if (quiet) {
+    return {
+      println: noop,
+      print: noop,
+      input,
+      success: noop,
+      warning: noop,
+      info: noop,
+      danger: noop,
+      divider: noop,
+      heading: noop,
+      block: noop,
+      keyValue: noop,
+      keyValuesInline: noop,
+      list: noop,
+      confirm: noopAsync,
+      printTransactions: noop,
+      error,
+      printError,
+      printData,
+      printTransaction: noop,
+    };
   }
-  if (typeof value === "number" || typeof value === "boolean")
-    return String(value);
-  if (Array.isArray(value)) return `[${value.length} items]`;
-  if (typeof value === "object") return `{${Object.keys(value).length} fields}`;
-  return String(value);
+
+  return {
+    println,
+    print,
+    input,
+    success,
+    warning,
+    info,
+    danger,
+    divider,
+    heading,
+    block,
+    keyValue,
+    keyValuesInline,
+    list: (items: string[], indent: number = 2) => {
+      const prefix = " ".repeat(indent);
+      for (const item of items) {
+        println(`${prefix}- ${item}`);
+      }
+    },
+    confirm: async (prompt: string): Promise<boolean> => {
+      const answer = await input(prompt);
+      return answer.toLowerCase() === "yes" || answer.toLowerCase() === "y";
+    },
+    printTransactions: (
+      transactions: Transaction[],
+      format: TransactionFormat = "concise",
+    ) => {
+      for (const tx of transactions) {
+        printTransaction(tx, format);
+        if (format === "full") println("");
+      }
+    },
+    error,
+    printError,
+    printData,
+    printTransaction,
+  };
 };

@@ -1,9 +1,10 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
 import { type Filters, type NamespaceEditable } from "@binder/db";
-import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
-import { types } from "./types.ts";
-import { formatOption, namespaceOption, type OutputFormat } from "./options.ts";
+import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
+import { types } from "../cli/types.ts";
+import { listFormatOption, namespaceOption } from "../cli/options.ts";
+import type { SerializeFormat } from "../utils/serialize.ts";
 
 const parseQuery = (queryParts: string[]): Filters => {
   const filters: Filters = {};
@@ -42,14 +43,15 @@ const parseQuery = (queryParts: string[]): Filters => {
 const searchHandler: CommandHandlerWithDb<{
   query: string[];
   namespace: NamespaceEditable;
-  format: OutputFormat;
+  format?: SerializeFormat;
 }> = async ({ kg, ui, args }) => {
   const filters = parseQuery(args.query);
 
   const result = await kg.search({ filters }, args.namespace);
   if (isErr(result)) return result;
 
-  ui.printData(result.data, args.format);
+  const data = args.format === "jsonl" ? result.data.items : result.data;
+  ui.printData(data, args.format);
   return ok(undefined);
 };
 
@@ -64,6 +66,6 @@ export const SearchCommand = types({
         array: true,
         default: [],
       })
-      .options({ ...namespaceOption, ...formatOption }),
+      .options({ ...namespaceOption, ...listFormatOption }),
   handler: runtimeWithDb(searchHandler),
 });

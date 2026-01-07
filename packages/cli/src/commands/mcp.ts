@@ -13,7 +13,7 @@ import {
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
 import { processRequest } from "../mcp";
-import { types } from "./types.ts";
+import { types } from "../cli/types.ts";
 
 const respond = (response: JsonRpcResponse) => {
   process.stdout.write(JSON.stringify(response) + "\n");
@@ -88,7 +88,7 @@ const mcpHandler: CommandHandlerWithDb = async ({ kg, log, config, fs }) => {
   return ok(undefined);
 };
 
-const McpCommand = types({
+export const McpCommand = types({
   command: "mcp",
   describe: "start MCP server over stdio",
   builder: (yargs: Argv) => {
@@ -117,8 +117,5 @@ AVAILABLE TOOLS:
   - get-schema: Retrieve node schema definitions
     `);
   },
-  // as it is a long-running process, we cannot open db in writing mode because it would lock a database, tools should open db in writing mode themselves if need it
   handler: runtimeWithDb(mcpHandler, { logFile: "mcp.log", silent: true }),
 });
-
-export default McpCommand;

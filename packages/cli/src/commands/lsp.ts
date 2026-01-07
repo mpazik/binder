@@ -2,7 +2,7 @@ import type { Argv } from "yargs";
 import { ok } from "@binder/utils";
 import { bootstrapMinimal, type CommandHandlerMinimal } from "../runtime.ts";
 import { createLspServer } from "../lsp";
-import { types } from "./types.ts";
+import { types } from "../cli/types.ts";
 
 const lspHandler: CommandHandlerMinimal = async (context) => {
   const connection = createLspServer(context);
@@ -19,7 +19,7 @@ const lspHandler: CommandHandlerMinimal = async (context) => {
   return ok(undefined);
 };
 
-const LspCommand = types({
+export const LspCommand = types({
   command: "lsp",
   describe: "start LSP server over stdio",
   builder: (yargs: Argv) => {
@@ -41,5 +41,3 @@ Please read documentation to setup Binder with your editor
   },
   handler: bootstrapMinimal(lspHandler, { logFile: "lsp.log", silent: true }),
 });
-
-export default LspCommand;

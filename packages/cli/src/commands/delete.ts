@@ -6,8 +6,8 @@ import {
   normalizeEntityRef,
 } from "@binder/db";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
-import { types } from "./types.ts";
-import { namespaceOption } from "./options.ts";
+import { types } from "../cli/types.ts";
+import { namespaceOption } from "../cli/options.ts";
 
 const deleteHandler: CommandHandlerWithDb<{
   ref: EntityRef;
@@ -16,7 +16,7 @@ const deleteHandler: CommandHandlerWithDb<{
   return ok(`Delete not yet implemented for ${args.namespace}: ${args.ref}`);
 };
 
-const DeleteCommand = types({
+export const DeleteCommand = types({
   command: "delete <ref>",
   aliases: ["remove"],
   describe: "delete by reference",
@@ -31,5 +31,3 @@ const DeleteCommand = types({
       .options(namespaceOption),
   handler: runtimeWithDb(deleteHandler),
 });
-
-export default DeleteCommand;
