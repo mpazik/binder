@@ -4,8 +4,10 @@ import { omit, throwIfError } from "@binder/utils";
 import {
   openKnowledgeGraph,
   type ConfigKey,
+  type EntitySchema,
   type Fieldset,
   type FieldsetNested,
+  type GraphVersion,
   type KnowledgeGraph,
 } from "@binder/db";
 import {
@@ -39,6 +41,8 @@ import {
   loadTemplates,
   type NavigationItem,
   renderNavigation,
+  renderNavigationItem,
+  type Templates,
 } from "./navigation.ts";
 import { mockNavigationConfigInput } from "./navigation.mock.ts";
 
@@ -179,7 +183,10 @@ describe("navigation", () => {
       navigationItems: NavigationItem[],
       files: FileSpec[],
     ) => {
-      throwIfError(await renderNavigation(db, kg, fs, paths, navigationItems));
+      const templates = throwIfError(await loadTemplates(kg));
+      throwIfError(
+        await renderNavigation(db, kg, fs, paths, navigationItems, templates),
+      );
 
       for (const file of files) {
         const fileContent = throwIfError(
@@ -214,28 +221,6 @@ describe("navigation", () => {
       );
     });
 
-    it("renders flat navigation item", async () => {
-      await check(
-        [
-          {
-            path: "tasks/{title}",
-            where: { type: "Task" },
-            template: DEFAULT_TEMPLATE_KEY,
-          },
-        ],
-        [
-          {
-            path: `tasks/${mockTask1Node.title}.md`,
-            data: mockTask1Node,
-          },
-          {
-            path: `tasks/${mockTask2Node.title}.md`,
-            data: mockTask2Node,
-          },
-        ],
-      );
-    });
-
     it("renders nested item for directory", async () => {
       await check(
         [
@@ -260,79 +245,6 @@ describe("navigation", () => {
             path: `tasks/${mockTask2Node.title}/info.md`,
             view: infoViewContent,
             data: mockTask2Node,
-          },
-        ],
-      );
-    });
-
-    it("renders nested item with query", async () => {
-      await check(
-        [
-          {
-            path: "projects/{title}",
-            where: { type: "Project" },
-            template: DEFAULT_TEMPLATE_KEY,
-            children: [
-              {
-                path: "tasks/{title}",
-                where: { type: "Task" },
-                template: DEFAULT_TEMPLATE_KEY,
-              },
-            ],
-          },
-        ],
-        [
-          {
-            path: `projects/${mockProjectNode.title}.md`,
-            data: mockProjectNode,
-          },
-          {
-            path: `projects/${mockProjectNode.title}/tasks/${mockTask1Node.title}.md`,
-            data: mockTask1Node,
-          },
-          {
-            path: `projects/${mockProjectNode.title}/tasks/${mockTask2Node.title}.md`,
-            data: mockTask2Node,
-          },
-        ],
-      );
-    });
-
-    it("renders yaml entity", async () => {
-      await check(
-        [
-          {
-            path: "projects/{title}",
-            where: { type: "Project" },
-          },
-        ],
-        [
-          {
-            path: `projects/${mockProjectNode.title}.yaml`,
-            yaml: omit(mockProjectNode, ["id", "type"]),
-          },
-        ],
-      );
-    });
-
-    it("renders yaml query results", async () => {
-      await check(
-        [
-          {
-            path: "all-tasks",
-            query: { filters: { type: "Task" } },
-          },
-        ],
-        [
-          {
-            path: "all-tasks.yaml",
-            yamlList: [
-              omit(mockTask1Node, ["id", "type"]),
-              omit({ ...mockTask2Node, project: mockProjectKey }, [
-                "id",
-                "type",
-              ]),
-            ],
           },
         ],
       );
@@ -366,39 +278,6 @@ describe("navigation", () => {
       );
     });
 
-    it("renders config files from query", async () => {
-      const typesResult = throwIfError(
-        await kg.search({ filters: { type: "Type" } }),
-      );
-
-      const allFieldConfigs = throwIfError(
-        await kg.search({ filters: { type: "Field" } }),
-      ).items;
-
-      await check(
-        [
-          {
-            path: "fields",
-            query: { filters: { type: "Field" } },
-          },
-          {
-            path: "types",
-            query: { filters: { type: "Type" } },
-          },
-        ],
-        [
-          {
-            path: "fields.yaml",
-            yamlList: allFieldConfigs,
-          },
-          {
-            path: "types.yaml",
-            yamlList: typesResult.items,
-          },
-        ],
-      );
-    });
-
     it("renders nested item", async () => {
       await check(
         [
@@ -422,44 +301,17 @@ describe("navigation", () => {
       );
     });
 
-    it("renders yaml with includes option", async () => {
-      const tasksWithProject = throwIfError(
-        await kg.search({
-          filters: { type: "Task", project: mockProjectNode.uid },
-          includes: { project: true },
-        }),
-      );
-
-      // formatReferencesList converts uid to key for yaml output
-      const expectedItems = tasksWithProject.items.map((item) => ({
-        ...item,
-        project: mockProjectKey,
-      }));
-
-      await check(
-        [
-          {
-            path: "tasks-with-project",
-            query: {
-              filters: { type: "Task", project: mockProjectNode.uid },
-              includes: { project: true },
-            },
-          },
-        ],
-        [
-          {
-            path: "tasks-with-project.yaml",
-            yamlList: expectedItems,
-          },
-        ],
-      );
-    });
-
     it("returns rendered and modified paths on first render", async () => {
+      const templates = throwIfError(await loadTemplates(kg));
       const result = throwIfError(
-        await renderNavigation(db, kg, fs, paths, [
-          { path: "README", template: "static-template" },
-        ]),
+        await renderNavigation(
+          db,
+          kg,
+          fs,
+          paths,
+          [{ path: "README", template: "static-template" }],
+          templates,
+        ),
       );
 
       expect(result).toEqual({
@@ -469,20 +321,192 @@ describe("navigation", () => {
     });
 
     it("returns empty modifiedPaths when content unchanged", async () => {
+      const templates = throwIfError(await loadTemplates(kg));
       const navigationItems: NavigationItem[] = [
         { path: "README", template: "static-template" },
       ];
 
-      throwIfError(await renderNavigation(db, kg, fs, paths, navigationItems));
+      throwIfError(
+        await renderNavigation(db, kg, fs, paths, navigationItems, templates),
+      );
 
       const result = throwIfError(
-        await renderNavigation(db, kg, fs, paths, navigationItems),
+        await renderNavigation(db, kg, fs, paths, navigationItems, templates),
       );
 
       expect(result).toEqual({
         renderedPaths: ["README.md"],
         modifiedPaths: [],
       });
+    });
+  });
+
+  describe("renderNavigationItem", () => {
+    let db: DatabaseCli;
+    let kg: KnowledgeGraph;
+    let fs: MockFileSystem;
+    let schema: EntitySchema;
+    let version: GraphVersion;
+    let templates: Templates;
+    const paths = mockConfig.paths;
+    const docsPath = mockConfig.paths.docs;
+
+    beforeEach(async () => {
+      db = getTestDatabaseCli();
+      kg = openKnowledgeGraph(db, { configSchema: cliConfigSchema });
+      fs = createInMemoryFileSystem();
+      throwIfError(await kg.apply(mockTransactionInit));
+
+      schema = throwIfError(await kg.getSchema("node"));
+      version = throwIfError(await kg.version());
+      templates = throwIfError(await loadTemplates(kg));
+    });
+
+    const addTemplate = async (key: string, templateContent: string) => {
+      throwIfError(
+        await kg.update({
+          author: "test",
+          configurations: [
+            { type: typeTemplateKey, key: key as ConfigKey, templateContent },
+          ],
+        }),
+      );
+      templates = throwIfError(await loadTemplates(kg));
+    };
+
+    type CheckOptions = {
+      parentPath?: string;
+      parentEntities?: Fieldset[];
+    };
+
+    const check = async (
+      item: NavigationItem,
+      expectedPath: string,
+      expectedContent: string,
+      options: CheckOptions = {},
+    ) => {
+      const { parentPath = "", parentEntities = [] } = options;
+      throwIfError(
+        await renderNavigationItem(
+          db,
+          kg,
+          fs,
+          paths,
+          schema,
+          version,
+          item,
+          parentPath,
+          parentEntities,
+          "node",
+          templates,
+        ),
+      );
+      const content = throwIfError(
+        await fs.readFile(`${docsPath}/${expectedPath}`),
+      );
+      expect(content).toBe(expectedContent);
+    };
+
+    it("renders markdown with local fields only", async () => {
+      await addTemplate("local-template", "# {title}\n\n{description}\n");
+      await check(
+        {
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          template: "local-template",
+        },
+        `tasks/${mockTask1Node.title}.md`,
+        `# ${mockTask1Node.title}\n\n${mockTask1Node.description}\n`,
+      );
+    });
+
+    it("renders markdown with nested relationship field", async () => {
+      await addTemplate(
+        "nested-template",
+        "# {title}\n\nProject: {project.title}\n",
+      );
+      await check(
+        {
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          template: "nested-template",
+        },
+        `tasks/${mockTask2Node.title}.md`,
+        `# ${mockTask2Node.title}\n\nProject: ${mockProjectNode.title}\n`,
+      );
+    });
+
+    it("renders yaml entity", async () => {
+      await check(
+        {
+          path: "projects/{title}",
+          where: { type: "Project" },
+        },
+        `projects/${mockProjectNode.title}.yaml`,
+        renderYamlEntity(omit(mockProjectNode, ["id", "type"])),
+      );
+    });
+
+    it("renders yaml query", async () => {
+      await check(
+        {
+          path: "all-tasks",
+          query: { filters: { type: "Task" } },
+        },
+        "all-tasks.yaml",
+        renderYamlList([
+          omit(mockTask1Node, ["id", "type"]),
+          omit({ ...mockTask2Node, project: mockProjectKey }, ["id", "type"]),
+        ]),
+      );
+    });
+
+    it("renders yaml query with nested relationship field", async () => {
+      await check(
+        {
+          path: "tasks-with-project",
+          query: {
+            filters: { type: "Task", project: mockProjectNode.uid },
+            includes: { project: true },
+          },
+        },
+        "tasks-with-project.yaml",
+        renderYamlList([{ project: mockProjectKey }]),
+      );
+    });
+
+    it("renders markdown with includes in navigation item and nested field in template", async () => {
+      await addTemplate(
+        "task-with-project",
+        "# {title}\n\nProject: {project.title}\n",
+      );
+      await check(
+        {
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          includes: { project: true },
+          template: "task-with-project",
+        },
+        `tasks/${mockTask2Node.title}.md`,
+        `# ${mockTask2Node.title}\n\nProject: ${mockProjectNode.title}\n`,
+      );
+    });
+
+    it("renders markdown with ancestral field in path", async () => {
+      await addTemplate("task-detail", "# {title}\n");
+      await check(
+        {
+          path: "tasks/{title}",
+          where: { type: "Task", project: "{parent.uid}" },
+          template: "task-detail",
+        },
+        `projects/${mockProjectNode.title}/tasks/${mockTask2Node.title}.md`,
+        `# ${mockTask2Node.title}\n`,
+        {
+          parentPath: `projects/${mockProjectNode.title}/`,
+          parentEntities: [mockProjectNode],
+        },
+      );
     });
   });
 

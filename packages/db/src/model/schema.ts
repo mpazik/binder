@@ -8,7 +8,12 @@ import {
   type PlaintextFormat,
   type RichtextFormat,
 } from "./data-type.ts";
-import type { FieldKey, FieldPath } from "./field.ts";
+import {
+  isFieldsetNested,
+  type FieldKey,
+  type FieldPath,
+  type FieldsetNested,
+} from "./field.ts";
 import type { Filters } from "./query.ts";
 
 export type EntityTypeBuilder<
@@ -175,11 +180,6 @@ export const coreFieldKeys = Object.keys(coreFields) as CoreFieldKey[];
 export const fieldSystemType = "Field" as EntityType;
 export const typeSystemType = "Type" as EntityType;
 
-export const isFieldInSchema = (
-  fieldKey: string,
-  schema: EntitySchema,
-): boolean => fieldKey in coreFields || fieldKey in schema.fields;
-
 export const getAllFieldsForType = (
   type: EntityType,
   schema: EntitySchema,
@@ -198,42 +198,23 @@ export const getFieldDefNested = <D extends string = CoreDataType>(
   schema: EntitySchema<D>,
   path: FieldPath,
 ): FieldDef<D> | undefined => {
-  const firstKey = path[0]!;
+  if (path.length === 0) return;
 
-  if (path.length === 1) {
-    if (firstKey in coreFields) {
-      return coreFields[firstKey as keyof typeof coreFields] as FieldDef<D>;
-    }
-    return schema.fields[firstKey];
-  }
+  const firstKey = path[0];
+  if (path.length === 1) return schema.fields[firstKey];
 
   let currentField = schema.fields[firstKey];
   if (!currentField) return;
 
   for (let i = 1; i < path.length; i++) {
     if (currentField.dataType !== "relation") return;
-    if (!currentField.range || currentField.range.length === 0) return;
 
     const nextFieldKey = path[i]!;
-    const rangeType = currentField.range[0]!;
-    const allFields = getAllFieldsForType(rangeType, schema);
-
-    if (isCoreIdentityFieldKey(nextFieldKey)) {
-      currentField = coreFields[nextFieldKey] as FieldDef<D>;
-      continue;
-    }
-
-    if (!allFields.includes(nextFieldKey)) return;
-
-    const nextFieldDef =
-      nextFieldKey in coreFields
-        ? (coreFields[nextFieldKey as keyof typeof coreFields] as FieldDef<D>)
-        : schema.fields[nextFieldKey];
+    const nextFieldDef = schema.fields[nextFieldKey];
     if (!nextFieldDef) return;
 
     currentField = nextFieldDef;
   }
-
   return currentField;
 };
 

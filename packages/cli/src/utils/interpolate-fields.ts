@@ -1,10 +1,14 @@
 import { fail, ok, type Result } from "@binder/utils";
 import {
-  type Fieldset,
-  type FieldValueProvider,
-  formatFieldValue,
   type AncestralFieldsetChain,
   type AncestralFieldValueProvider,
+  type Fieldset,
+  type FieldsetNested,
+  type FieldValueProvider,
+  formatFieldValue,
+  getNestedValue,
+  type NestedFieldValueProvider,
+  parseFieldPath,
 } from "@binder/db";
 
 export const interpolateFields = (
@@ -61,6 +65,21 @@ export const interpolateFields = (
   }
 
   return ok(result);
+};
+
+export const interpolateNestedFields = (
+  template: string,
+  provider: FieldsetNested | NestedFieldValueProvider,
+): Result<string> => {
+  const getFieldValue: NestedFieldValueProvider =
+    typeof provider === "function"
+      ? provider
+      : (path) => getNestedValue(provider, path) ?? null;
+
+  return interpolateFields(template, (placeholder) => {
+    const path = parseFieldPath(placeholder);
+    return getFieldValue(path);
+  });
 };
 
 export const parseAncestralPlaceholder = (

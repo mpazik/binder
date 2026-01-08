@@ -23,19 +23,24 @@ import { mockDocumentTransactionInput } from "./document.mock.ts";
 import { mockNavigationConfigInput } from "./navigation.mock.ts";
 import { synchronizeFile, synchronizeModifiedFiles } from "./synchronizer.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
-import { type NavigationItem, type Templates } from "./navigation.ts";
+import {
+  createTemplateEntity,
+  type NavigationItem,
+  type Templates,
+} from "./navigation.ts";
 
-const taskView = `# {title}
+const templates: Templates = [
+  createTemplateEntity(
+    "task-template",
+    `# {title}
 
 **Status:** {status}
 
 ## Description
 
 {description}
-`;
-
-const templates: Templates = [
-  { key: "task-template", templateContent: taskView },
+`,
+  ),
 ];
 
 const navigationItems: NavigationItem[] = [

@@ -6,7 +6,8 @@ import { types } from "../cli/types.ts";
 
 export const undoHandler: CommandHandlerWithDb<{
   steps: number;
-}> = async ({ db, ui, log, config, fs, args }) => {
+}> = async (ctx) => {
+  const { ui, log, args } = ctx;
   if (args.steps < 1)
     return err(
       createError(
@@ -15,10 +16,7 @@ export const undoHandler: CommandHandlerWithDb<{
       ),
     );
 
-  const undoResult = await undoTransactions(
-    { db, fs, log, config },
-    args.steps,
-  );
+  const undoResult = await undoTransactions(ctx, args.steps);
   if (isErr(undoResult)) return undoResult;
 
   const transactionsToUndo = undoResult.data;

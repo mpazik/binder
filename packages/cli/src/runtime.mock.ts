@@ -7,7 +7,10 @@ import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { BINDER_DIR } from "./config.ts";
 import type { AppConfig } from "./config.ts";
 import type { RuntimeContextWithDb, RuntimeContext } from "./runtime.ts";
-import { createNavigationCache } from "./document/navigation.ts";
+import {
+  createNavigationCache,
+  createTemplateCache,
+} from "./document/navigation.ts";
 
 export const mockConfig: AppConfig = {
   author: "test-user",
@@ -69,12 +72,17 @@ export const createMockRuntimeContextWithDb =
   async (): Promise<RuntimeContextWithDb> => {
     const context = await createMockCommandContext();
     const db = getTestDatabaseCli();
-    const kg = setupKnowledgeGraph({ ...context, db }, {});
+    const kg = setupKnowledgeGraph(
+      { ...context, db, templates: () => templateCache.load() },
+      {},
+    );
     const navigationCache = createNavigationCache(kg);
+    const templateCache = createTemplateCache(kg);
     return {
       ...context,
       db,
       kg,
       nav: navigationCache.load,
+      templates: templateCache.load,
     };
   };

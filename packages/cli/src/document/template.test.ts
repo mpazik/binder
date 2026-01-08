@@ -1,16 +1,21 @@
 import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError, pick } from "@binder/utils";
-import type { FieldsetNested } from "@binder/db";
+import type { FieldsetNested, Includes } from "@binder/db";
 import {
   mockNodeSchema,
   mockTask1Node,
   mockProjectNode,
 } from "@binder/db/mocks";
-import { renderTemplate, extractFields, parseTemplate } from "./template.ts";
+import {
+  renderTemplate,
+  extractFields,
+  parseTemplate,
+  extractFieldSlotsFromAst,
+} from "./template.ts";
 import { parseMarkdown } from "./markdown.ts";
 
-describe("view", () => {
+describe("template", () => {
   describe("renderTemplate", () => {
     const check = (
       view: string,
@@ -356,6 +361,33 @@ describe("view", () => {
         renderTemplate(mockNodeSchema, viewAst, extracted),
       );
       expect(rendered).toBe(docContent);
+    });
+  });
+
+  describe("extractFieldSlotsFromAst", () => {
+    const check = (template: string, expected: string[]) => {
+      const ast = parseTemplate(template);
+      expect(extractFieldSlotsFromAst(ast)).toEqual(expected);
+    };
+
+    it("extracts single field slot", () => {
+      check("# {title}\n", ["title"]);
+    });
+
+    it("extracts multiple field slots", () => {
+      check("# {title}\n\n{description}\n", ["title", "description"]);
+    });
+
+    it("extracts nested field paths", () => {
+      check("{project.title}\n", ["project.title"]);
+    });
+
+    it("returns empty array for template without slots", () => {
+      check("# Static Title\n\nNo fields here\n", []);
+    });
+
+    it("ignores escaped braces", () => {
+      check("\\{notASlot\\} {title}\n", ["title"]);
     });
   });
 });

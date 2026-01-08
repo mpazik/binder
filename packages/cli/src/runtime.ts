@@ -35,7 +35,9 @@ import { createLogger, type Logger, type LogLevel } from "./log.ts";
 import { isDevMode } from "./build-time.ts";
 import {
   createNavigationCache,
+  createTemplateCache,
   type NavigationLoader,
+  type TemplateLoader,
 } from "./document/navigation.ts";
 
 type RuntimeOptions = {
@@ -67,6 +69,7 @@ export type RuntimeContextWithDb = RuntimeContext & {
   db: DatabaseCli;
   kg: KnowledgeGraph;
   nav: NavigationLoader;
+  templates: TemplateLoader;
 };
 
 export type RuntimeDbCallbacks = {
@@ -208,18 +211,26 @@ export const initializeDbRuntime = async (
     afterCommit: async (transaction) => {
       if (isEmptyObject(transaction.configurations)) return;
       navigationCache.invalidate();
+      templateCache.invalidate();
     },
     onFilesUpdated: callbacks?.onFilesUpdated,
   };
 
   const kg = setupKnowledgeGraph(
-    { fs, log, config, db },
+    { fs, log, config, db, templates: () => templateCache.load() },
     orchestratorCallbacks,
   );
   const navigationCache = createNavigationCache(kg);
+  const templateCache = createTemplateCache(kg);
 
   return ok({
-    runtime: { ...context, kg, db, nav: navigationCache.load },
+    runtime: {
+      ...context,
+      kg,
+      db,
+      nav: navigationCache.load,
+      templates: templateCache.load,
+    },
     close: closeDb,
   });
 };

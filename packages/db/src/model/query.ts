@@ -114,3 +114,48 @@ export const includesWithUid = (includes: Includes): Includes => ({
   uid: true,
   ...mapObjectValues(includes, addUidToIncludesRecursively),
 });
+
+export const mergeIncludes = (
+  a: Includes | undefined,
+  b: Includes | undefined,
+): Includes | undefined => {
+  if (!a && !b) return undefined;
+  if (!a) return b;
+  if (!b) return a;
+
+  const result: Includes = { ...a };
+  for (const [key, value] of Object.entries(b)) {
+    const existing = result[key];
+    if (typeof existing === "object" && typeof value === "object") {
+      result[key] = mergeIncludes(existing as Includes, value as Includes)!;
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+};
+
+export const buildIncludes = (
+  fieldPaths: readonly (readonly string[])[],
+): Includes | undefined => {
+  if (fieldPaths.length === 0) return undefined;
+
+  const includes: Includes = {};
+
+  for (const path of fieldPaths) {
+    if (path.length === 0) continue;
+
+    let current = includes;
+    for (let i = 0; i < path.length; i++) {
+      const key = path[i]!;
+      if (i === path.length - 1) {
+        current[key] = true;
+      } else {
+        if (typeof current[key] !== "object") current[key] = {};
+        current = current[key] as Includes;
+      }
+    }
+  }
+
+  return Object.keys(includes).length > 0 ? includes : undefined;
+};

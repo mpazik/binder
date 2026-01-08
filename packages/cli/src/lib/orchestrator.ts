@@ -21,15 +21,10 @@ import {
   type ResultAsync,
 } from "@binder/utils";
 import { documentProviderSchema } from "../document/document-schema.ts";
-import {
-  type AppConfig,
-  TRANSACTION_LOG_FILE,
-  UNDO_LOG_FILE,
-} from "../config.ts";
+import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
 import { renderDocs } from "../document/repository.ts";
-import type { Logger } from "../log.ts";
-import type { DatabaseCli } from "../db";
 import { cliConfigSchema } from "../cli-config-schema.ts";
+import type { RuntimeContextWithDb } from "../runtime.ts";
 import {
   clearLog,
   logTransaction,
@@ -297,12 +292,10 @@ export const redoTransactions = async (
   });
 };
 
-type Services = {
-  db: DatabaseCli;
-  fs: FileSystem;
-  log: Logger;
-  config: AppConfig;
-};
+type Services = Pick<
+  RuntimeContextWithDb,
+  "db" | "fs" | "log" | "config" | "templates"
+>;
 
 const withLockedKg = async <T>(
   services: Services,
@@ -376,9 +369,12 @@ export const setupKnowledgeGraph = (
         if (isErr(clearResult)) return clearResult;
         return okVoid;
       },
-      afterCommit: async () => {
+      afterCommit: async (transaction) => {
         await releaseLock(fs, paths.binder);
         log.debug("Lock released after commit");
+
+        // Invalidate caches before rendering (e.g., template cache)
+        await callbacks.afterCommit?.(transaction);
 
         const renderResult = await renderDocs({
           ...services,
@@ -395,13 +391,16 @@ export const setupKnowledgeGraph = (
           await callbacks.onFilesUpdated(renderResult.data);
         }
       },
-      afterRollback: async () => {
+      afterRollback: async (transactions, count) => {
+        // Invalidate caches before rendering
+        await callbacks.afterRollback?.(transactions, count);
+
         const renderResult = await renderDocs({
           ...services,
           kg: knowledgeGraph,
         });
         if (isErr(renderResult)) {
-          log.error("Failed to re-render docs after transaction", {
+          log.error("Failed to re-render docs after rollback", {
             error: renderResult.error,
           });
           return;

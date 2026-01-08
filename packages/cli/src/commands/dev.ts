@@ -9,7 +9,6 @@ import {
   ok,
   tryCatch,
 } from "@binder/utils";
-import { openDb } from "@binder/db";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import {
   DB_FILE,
@@ -110,14 +109,10 @@ export const backupHandler: CommandHandlerWithDb = async ({
   return ok(undefined);
 };
 
-export const resetHandler: CommandHandlerWithDb<{ yes?: boolean }> = async ({
-  ui,
-  kg,
-  fs,
-  config,
-  log,
-  args,
-}) => {
+export const resetHandler: CommandHandlerWithDb<{ yes?: boolean }> = async (
+  ctx,
+) => {
+  const { ui, kg, fs, config, log, args } = ctx;
   const binderPath = config.paths.binder;
   const backupPath = join(binderPath, `${TRANSACTION_LOG_FILE}.bac`);
   const transactionLogPath = join(binderPath, TRANSACTION_LOG_FILE);
@@ -211,19 +206,7 @@ export const resetHandler: CommandHandlerWithDb<{ yes?: boolean }> = async ({
     }
   }
 
-  const dbResult = openDb({ path: join(binderPath, DB_FILE), migrate: true });
-  if (isErr(dbResult))
-    return err(
-      createError("db-open-failed", "Failed to open database after reset", {
-        error: dbResult.error,
-      }),
-    );
-  const repairResult = await repairDbFromLog({
-    db: dbResult.data as any,
-    fs,
-    log,
-    config,
-  });
+  const repairResult = await repairDbFromLog(ctx);
   if (isErr(repairResult))
     return err(
       createError(

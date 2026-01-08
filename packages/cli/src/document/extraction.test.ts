@@ -2,16 +2,20 @@ import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import { mockNodeSchema, mockTask1Node, mockTask2Node } from "@binder/db/mocks";
-import type { NavigationItem, Templates } from "./navigation.ts";
+import {
+  createTemplateEntity,
+  type NavigationItem,
+  type Templates,
+} from "./navigation.ts";
 import { extract, type ExtractedFileData } from "./extraction.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 
 describe("extract", () => {
   const emptyTemplates: Templates = [];
   const templates: Templates = [
-    {
-      key: "task-template",
-      templateContent: `# {title}
+    createTemplateEntity(
+      "task-template",
+      `# {title}
 
 **Status:** {status}
 
@@ -19,7 +23,7 @@ describe("extract", () => {
 
 {description}
 `,
-    },
+    ),
   ];
 
   const check = (

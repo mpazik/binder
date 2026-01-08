@@ -19,15 +19,14 @@ import {
   getAllFieldsForType,
   getTypeFieldAttrs,
   getTypeFieldKey,
-  isFieldInSchema,
 } from "@binder/db";
 import { isErr } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedDocument } from "../document/document.ts";
 import {
-  type NavigationItem,
   findNavigationItemByPath,
+  type NavigationItem,
 } from "../document/navigation.ts";
 import {
   getRelativeSnapshotPath,
@@ -249,7 +248,7 @@ export const getFieldDefForType = (
       attrs?: FieldAttrDef;
     }
   | undefined => {
-  if (!isFieldInSchema(fieldKey, schema)) return undefined;
+  if (!(fieldKey in schema.fields)) return undefined;
 
   const def = schema.fields[fieldKey];
   if (!def) return undefined;

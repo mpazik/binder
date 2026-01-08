@@ -1,14 +1,20 @@
 import { describe, it, expect } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import type { Fieldset, AncestralFieldValueProvider } from "@binder/db";
+import type {
+  AncestralFieldValueProvider,
+  Fieldset,
+  FieldsetNested,
+  NestedFieldValueProvider,
+} from "@binder/db";
 import { mockProjectNode, mockUserNode } from "@binder/db/mocks";
 import { DEFAULT_TEMPLATE_KEY, resolvePath } from "../document/navigation.ts";
 import {
   extractFieldNames,
   extractFieldValues,
-  interpolateFields,
   interpolateAncestralFields,
+  interpolateFields,
+  interpolateNestedFields,
   parseAncestralPlaceholder,
 } from "./interpolate-fields.ts";
 
@@ -169,6 +175,58 @@ describe("interpolateFields", () => {
         "projects/binder/tasks/task-123.md",
       );
     });
+  });
+});
+
+describe("interpolateNestedFields", () => {
+  const check = (
+    template: string,
+    fieldset: FieldsetNested,
+    expected: string,
+  ) => {
+    const result = throwIfError(interpolateNestedFields(template, fieldset));
+    expect(result).toBe(expected);
+  };
+
+  it("replaces flat field", () => {
+    check("Hello {name}", { name: "World" }, "Hello World");
+  });
+
+  it("replaces nested field with dot notation", () => {
+    check(
+      "Project: {project.title}",
+      { project: { title: "Binder" } },
+      "Project: Binder",
+    );
+  });
+
+  it("replaces deeply nested fields", () => {
+    check(
+      "{project.owner.name}",
+      { project: { owner: { name: "Alice" } } },
+      "Alice",
+    );
+  });
+
+  it("handles missing nested field", () => {
+    check("{project.missing}", { project: { title: "Binder" } }, "");
+  });
+
+  it("handles missing intermediate object", () => {
+    check("{project.owner.name}", { project: { title: "Binder" } }, "");
+  });
+
+  it("works with provider function", () => {
+    const provider: NestedFieldValueProvider = (path) => {
+      if (path.length === 1 && path[0] === "id") return 42;
+      if (path.length === 2 && path[0] === "project" && path[1] === "name")
+        return "Binder";
+      return null;
+    };
+    const result = throwIfError(
+      interpolateNestedFields("{id} - {project.name}", provider),
+    );
+    expect(result).toBe("42 - Binder");
   });
 });
 

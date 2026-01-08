@@ -9,6 +9,8 @@ import {
   CONFIG_NAVIGATION_ITEMS,
   loadNavigation,
   renderNavigation,
+  type TemplateLoader,
+  type Templates,
 } from "./navigation.ts";
 
 export const renderDocs = async (services: {
@@ -17,17 +19,21 @@ export const renderDocs = async (services: {
   fs: FileSystem;
   log: Logger;
   config: AppConfig;
+  templates: TemplateLoader;
 }): ResultAsync<string[]> => {
   const {
     db,
     kg,
     fs,
     log,
+    templates: loadTemplates,
     config: { paths },
   } = services;
 
   const navigationResult = await loadNavigation(kg);
   if (isErr(navigationResult)) return navigationResult;
+  const templatesResult = await loadTemplates();
+  if (isErr(templatesResult)) return templatesResult;
 
   const renderNodeResult = await renderNavigation(
     db,
@@ -35,6 +41,7 @@ export const renderDocs = async (services: {
     fs,
     paths,
     navigationResult.data,
+    templatesResult.data,
     "node",
   );
   if (isErr(renderNodeResult)) return renderNodeResult;
@@ -54,6 +61,7 @@ export const renderDocs = async (services: {
     fs,
     paths,
     CONFIG_NAVIGATION_ITEMS,
+    templatesResult.data,
     "config",
   );
   if (isErr(renderConfigResult)) return renderConfigResult;

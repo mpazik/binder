@@ -1,6 +1,7 @@
 import { extname, join } from "path";
 import {
   type AncestralFieldsetChain,
+  buildIncludes,
   emptyFieldset,
   type EntitySchema,
   type Fieldset,
@@ -12,11 +13,12 @@ import {
   type Includes,
   type KnowledgeGraph,
   matchesFilters,
+  mergeIncludes,
   type NamespaceEditable,
+  parseFieldPath,
   type QueryParams,
 } from "@binder/db";
 import {
-  assertDefined,
   assertDefinedPass,
   isErr,
   ok,
@@ -34,7 +36,12 @@ import { interpolateQueryParams } from "../utils/query.ts";
 import { saveSnapshot } from "../lib/snapshot.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import { BINDER_DIR, type ConfigPaths } from "../config.ts";
-import { parseTemplate, renderTemplate } from "./template.ts";
+import {
+  extractFieldSlotsFromAst,
+  parseTemplate,
+  renderTemplate,
+  type TemplateAST,
+} from "./template.ts";
 import {
   findEntityInYamlList,
   renderYamlEntity,
@@ -215,11 +222,28 @@ export const resolvePath = (
   );
 };
 
+export const createTemplateEntity = (
+  key: string,
+  templateContent: string,
+  options?: Partial<TemplateEntity>,
+): TemplateEntity => {
+  const templateAst = parseTemplate(templateContent);
+  return {
+    key,
+    templateContent,
+    templateAst,
+    templateIncludes: buildIncludes(
+      extractFieldSlotsFromAst(templateAst).map(parseFieldPath),
+    ),
+    ...options,
+  };
+};
+
 const BUILTIN_TEMPLATES: Templates = [
-  { key: SYSTEM_TEMPLATE_KEY, templateContent: `{templateContent}` },
-  {
-    key: DEFAULT_TEMPLATE_KEY,
-    templateContent: `# {title}
+  createTemplateEntity(SYSTEM_TEMPLATE_KEY, `{templateContent}`),
+  createTemplateEntity(
+    DEFAULT_TEMPLATE_KEY,
+    `# {title}
 
 **Type:** {type}
 **Key:** {key}
@@ -227,7 +251,7 @@ const BUILTIN_TEMPLATES: Templates = [
 ## Description
 
 {description}`,
-  },
+  ),
 ];
 
 const getParentDir = (filePath: string, fileType: FileType): string => {
@@ -265,40 +289,26 @@ export const findTemplate = (
   );
 };
 
-const resolveTemplateContent = (
-  item: NavigationItem,
-  templates: Templates,
-): string | undefined => {
-  if (!item.template) return undefined;
-  return findTemplate(templates, item.template).templateContent;
-};
-
 const renderContent = async (
   kg: KnowledgeGraph,
   schema: EntitySchema,
   item: NavigationItem,
   entity: FieldsetNested,
-  parentEntities: Fieldset[],
+  parentEntities: AncestralFieldsetChain,
   fileType: FileType,
   namespace: NamespaceEditable,
   templates: Templates,
 ): ResultAsync<string | null> => {
   if (fileType === "markdown") {
-    const templateContent = resolveTemplateContent(item, templates);
-    assertDefined(templateContent, "templateContent");
-    const templateAst = parseTemplate(templateContent);
-    const templateResult = renderTemplate(
-      schema,
-      templateAst,
-      entity as Fieldset,
-    );
+    const template = findTemplate(templates, item.template);
+    const templateResult = renderTemplate(schema, template.templateAst, entity);
     if (isErr(templateResult)) return templateResult;
     return ok(templateResult.data);
   }
   if (fileType === "yaml") {
     if (item.query) {
       const interpolatedQuery = interpolateQueryParams(item.query, [
-        entity as Fieldset,
+        entity,
         ...parentEntities,
       ]);
       if (isErr(interpolatedQuery)) return interpolatedQuery;
@@ -331,7 +341,7 @@ const renderContent = async (
   return ok(null);
 };
 
-const renderNavigationItem = async (
+export const renderNavigationItem = async (
   db: DatabaseCli,
   kg: KnowledgeGraph,
   fs: FileSystem,
@@ -351,15 +361,22 @@ const renderNavigationItem = async (
   let shouldUpdateParentContext = false;
 
   if (item.where) {
-    const queryParams: QueryParams = {
-      filters: item.where,
-      includes: item.includes,
-    };
     const interpolatedQuery = interpolateQueryParams(
-      queryParams,
-      parentEntities,
+      {
+        filters: item.where,
+        includes: item.includes,
+      },
+      [emptyFieldset, ...parentEntities],
     );
     if (isErr(interpolatedQuery)) return interpolatedQuery;
+
+    if (item.template) {
+      const template = findTemplate(templates, item.template);
+      interpolatedQuery.data.includes = mergeIncludes(
+        interpolatedQuery.data.includes,
+        template.templateIncludes,
+      );
+    }
 
     const searchResult = await kg.search(interpolatedQuery.data, namespace);
     if (isErr(searchResult)) return searchResult;
@@ -445,6 +462,7 @@ export const renderNavigation = async (
   fs: FileSystem,
   paths: ConfigPaths,
   navigationItems: NavigationItem[],
+  templates: Templates,
   namespace: NamespaceEditable = "node",
 ): ResultAsync<RenderResult> => {
   const schemaResult = await kg.getSchema(namespace);
@@ -453,8 +471,6 @@ export const renderNavigation = async (
 
   const versionResult = await kg.version();
   if (isErr(versionResult)) return versionResult;
-  const templatesResult = await loadTemplates(kg);
-  if (isErr(templatesResult)) return templatesResult;
 
   const results: RenderResult[] = [];
 
@@ -470,7 +486,7 @@ export const renderNavigation = async (
       "",
       [],
       namespace,
-      templatesResult.data,
+      templates,
     );
     if (isErr(result)) return result;
     results.push(result.data);
@@ -479,7 +495,7 @@ export const renderNavigation = async (
   return ok(mergeRenderResults(results));
 };
 
-export type DefinitionLocation = {
+export type LocationInFile = {
   filePath: string;
   line: number;
 };
@@ -546,7 +562,7 @@ export const findEntityLocation = async (
   paths: ConfigPaths,
   entity: Fieldset,
   navigation: NavigationItem[],
-): ResultAsync<DefinitionLocation | undefined> => {
+): ResultAsync<LocationInFile | undefined> => {
   const navItem = findMatchingNavItem(navigation, entity);
   if (!navItem) return ok(undefined);
 
@@ -610,6 +626,8 @@ export type TemplateEntity = {
   description?: string;
   preamble?: string[];
   templateContent: string;
+  templateAst: TemplateAST;
+  templateIncludes: Includes | undefined;
 };
 
 export type Templates = TemplateEntity[];
@@ -623,13 +641,13 @@ export const loadTemplates = async (
   );
   if (isErr(searchResult)) return searchResult;
 
-  const templates: Templates = searchResult.data.items.map((item) => ({
-    key: item.key as string,
-    name: item.name as string | undefined,
-    description: item.description as string | undefined,
-    preamble: item.preamble as string[] | undefined,
-    templateContent: item.templateContent as string,
-  }));
+  const templates: Templates = searchResult.data.items.map((item) =>
+    createTemplateEntity(item.key as string, item.templateContent as string, {
+      name: item.name as string | undefined,
+      description: item.description as string | undefined,
+      preamble: item.preamble as string[] | undefined,
+    }),
+  );
 
   return ok([...BUILTIN_TEMPLATES, ...templates]);
 };

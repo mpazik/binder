@@ -5,8 +5,12 @@ import type { FieldDef } from "./schema.ts";
 export type FieldKey = string;
 export type FieldPath = readonly FieldKey[];
 export type FieldValue = JsonValue;
+
+export const parseFieldPath = (path: string): FieldPath => path.split(".");
+
 export type Fieldset = Record<FieldKey, FieldValue>;
 export type FieldValueProvider = (key: FieldKey) => FieldValue;
+export type NestedFieldValueProvider = (path: FieldPath) => FieldValue;
 export type FieldNestedValue = FieldValue | FieldsetNested;
 export type FieldsetNested = {
   [key: FieldKey]: FieldNestedValue;

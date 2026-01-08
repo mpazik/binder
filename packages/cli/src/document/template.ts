@@ -8,6 +8,7 @@ import {
   type Result,
 } from "@binder/utils";
 import {
+  buildIncludes,
   type EntitySchema,
   type FieldDef,
   type FieldKey,
@@ -16,6 +17,8 @@ import {
   formatFieldValue,
   getFieldDefNested,
   getNestedValue,
+  type Includes,
+  parseFieldPath,
   parseFieldValue,
   setNestedValue,
 } from "@binder/db";
@@ -24,7 +27,7 @@ import { visit } from "unist-util-visit";
 import type { Data, Node } from "unist";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
-import { remarkFieldSlot, type FieldSlot } from "./remark-field-slot.ts";
+import { type FieldSlot, remarkFieldSlot } from "./remark-field-slot.ts";
 import {
   type BlockAST,
   parseAst,
@@ -138,6 +141,14 @@ type MatchState = {
   viewIndex: number;
   snapIndex: number;
   snapTextOffset: number;
+};
+
+export const extractFieldSlotsFromAst = (ast: TemplateAST): string[] => {
+  const fieldSlots: string[] = [];
+  visit(ast, "fieldSlot", (node: FieldSlot) => {
+    fieldSlots.push(node.value);
+  });
+  return fieldSlots;
 };
 
 export const extractFields = (

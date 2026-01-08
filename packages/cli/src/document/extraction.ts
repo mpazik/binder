@@ -11,7 +11,7 @@ import {
   type Templates,
 } from "./navigation.ts";
 import { parseMarkdown } from "./markdown.ts";
-import { extractFields, parseTemplate } from "./template.ts";
+import { extractFields } from "./template.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 import { getDocumentFileType } from "./document.ts";
 
@@ -102,21 +102,19 @@ const extractFromYamlList = (
   });
 };
 
-const resolveTemplateContent = (
-  navItem: NavigationItem,
-  templates: Templates,
-): string => findTemplate(templates, navItem.template).templateContent;
-
 const extractFromMarkdown = (
   schema: EntitySchema,
   navItem: NavigationItem,
   markdown: string,
   templates: Templates,
 ): Result<ExtractedFileData> => {
-  const templateString = resolveTemplateContent(navItem, templates);
-  const templateAst = parseTemplate(templateString);
+  const template = findTemplate(templates, navItem.template);
   const markdownAst = parseMarkdown(markdown);
-  const fileFieldsResult = extractFields(schema, templateAst, markdownAst);
+  const fileFieldsResult = extractFields(
+    schema,
+    template.templateAst,
+    markdownAst,
+  );
   if (isErr(fileFieldsResult)) return fileFieldsResult;
 
   const entity = fileFieldsResult.data;

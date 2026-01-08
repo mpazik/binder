@@ -34,7 +34,6 @@ import {
   findNavigationItemByPath,
   getNavigationFilePatterns,
   getPathTemplate,
-  loadTemplates,
   type NavigationItem,
   type Templates,
 } from "./navigation.ts";
@@ -379,7 +378,7 @@ export const synchronizeModifiedFiles = async (
 
   if (configFiles.length === 0 && nodeFiles.length === 0) return ok(null);
 
-  const templatesResult = await loadTemplates(kg);
+  const templatesResult = await runtime.templates();
   if (isErr(templatesResult)) return templatesResult;
   const templates = templatesResult.data;
 

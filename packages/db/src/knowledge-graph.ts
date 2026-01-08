@@ -20,7 +20,6 @@ import {
   type Filters,
   type GraphVersion,
   type Includes,
-  isFieldInSchema,
   mergeSchema,
   type NamespaceEditable,
   type NamespaceSchema,
@@ -249,7 +248,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         const schema = schemaResult.data;
 
         for (const fieldKey of Object.keys(filters)) {
-          if (isFieldInSchema(fieldKey, schema)) continue;
+          if (fieldKey in schema.fields) continue;
           return err(
             createError(
               "invalid_filter_field",

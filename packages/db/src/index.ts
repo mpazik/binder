@@ -14,9 +14,11 @@ export {
   formatFieldValue,
   getNestedValue,
   isFieldsetNested,
+  parseFieldPath,
   parseFieldValue,
   setNestedValue,
 } from "./model/field.ts";
+export { buildIncludes } from "./model/query.ts";
 export {
   isComplexFilter,
   matchesFilter,

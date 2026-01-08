@@ -321,7 +321,8 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
   dryRun?: boolean;
   yes?: boolean;
   rehash?: boolean;
-}> = async ({ kg, db, config, ui, log, fs, args }) => {
+}> = async (ctx) => {
+  const { kg, config, ui, log, fs, args } = ctx;
   const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
 
   if (args.rehash) {
@@ -373,7 +374,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
 
     ui.info("Syncing database with rehashed log...");
 
-    const repairResult = await repairDbFromLog({ db, fs, log, config });
+    const repairResult = await repairDbFromLog(ctx);
     if (isErr(repairResult)) {
       log.error("Failed to sync database with rehashed log", {
         error: repairResult.error,
@@ -457,7 +458,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     }
   }
 
-  const repairResult = await repairDbFromLog({ db, fs, log, config });
+  const repairResult = await repairDbFromLog(ctx);
   if (isErr(repairResult)) {
     log.error("Failed to repair sync", { error: repairResult.error });
     return repairResult;

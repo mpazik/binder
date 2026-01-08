@@ -14,7 +14,6 @@ import {
   type Fieldset,
   getAllFieldsForType,
   type Includes,
-  isFieldInSchema,
   isIncludesQuery,
   matchesFilters,
   type Namespace,
@@ -130,7 +129,7 @@ const visitEntityNode = <N extends Namespace>(
 
     const fieldKey = String(item.key.value);
 
-    if (!isFieldInSchema(fieldKey, schema)) {
+    if (!(fieldKey in schema.fields)) {
       errors.push(
         createValidationError(
           "invalid-field",
