@@ -156,7 +156,8 @@ const createValueCompletions = async (
 export const handleCompletion: LspHandler<
   CompletionParams,
   CompletionItem[]
-> = async (params, { document, context, runtime, log }) => {
+> = async (params, { document, context, runtime }) => {
+  const { log } = runtime;
   log.debug("COMPLETION");
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {

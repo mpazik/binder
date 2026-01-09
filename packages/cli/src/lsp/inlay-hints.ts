@@ -95,7 +95,8 @@ const resolveEntityTitle = async (
 export const handleInlayHints: LspHandler<
   InlayHintParams,
   InlayHint[]
-> = async (_params, { context, runtime, log }) => {
+> = async (_params, { context, runtime }) => {
+  const { log } = runtime;
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
     log.debug("Not a YAML document");

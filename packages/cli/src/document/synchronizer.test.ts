@@ -23,25 +23,8 @@ import { mockDocumentTransactionInput } from "./document.mock.ts";
 import { mockNavigationConfigInput } from "./navigation.mock.ts";
 import { synchronizeFile, synchronizeModifiedFiles } from "./synchronizer.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
-import {
-  createTemplateEntity,
-  type NavigationItem,
-  type Templates,
-} from "./navigation.ts";
-
-const templates: Templates = [
-  createTemplateEntity(
-    "task-template",
-    `# {title}
-
-**Status:** {status}
-
-## Description
-
-{description}
-`,
-  ),
-];
+import { type NavigationItem } from "./navigation.ts";
+import { mockTemplates } from "./template.mock.ts";
 
 const navigationItems: NavigationItem[] = [
   {
@@ -109,7 +92,7 @@ describe("synchronizeFile", () => {
         mockNodeSchema,
         filePath,
         "node",
-        templates,
+        mockTemplates,
       ),
     );
     expect(result).toEqual(expectedNodes);

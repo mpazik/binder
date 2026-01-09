@@ -102,17 +102,17 @@ export const getMutationInputRef = (value: ListMutationInputValue): string =>
 
 export const normalizeInputValue = (value: FieldValue): FieldValue =>
   Array.isArray(value)
-    ? value.map(normalizeListInputValue)
-    : normalizeListInputValue(value);
+    ? value.map(normalizeItemInputValue)
+    : normalizeItemInputValue(value);
 
-const normalizeListInputValue = (value: ListMutationInputValue): FieldValue =>
+const normalizeItemInputValue = (value: ListMutationInputValue): FieldValue =>
   isObjTuple(value) ? objTupleToTuple(value) : value;
 
 const normalizeInsertMutation = (
   input: ListMutationInputInsert,
 ): ListMutationInsert => [
   "insert",
-  normalizeListInputValue(input[1]),
+  normalizeItemInputValue(input[1]),
   input[2],
 ];
 
@@ -120,7 +120,7 @@ const normalizeRemoveMutation = (
   input: ListMutationInputRemove,
 ): ListMutationRemove => [
   "remove",
-  normalizeListInputValue(input[1]),
+  normalizeItemInputValue(input[1]),
   input[2],
 ];
 

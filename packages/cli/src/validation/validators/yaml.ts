@@ -17,6 +17,7 @@ import {
   isIncludesQuery,
   matchesFilters,
   type Namespace,
+  normalizeInputValue,
   validateDataType,
 } from "@binder/db";
 import type { ParsedYaml } from "../../document/yaml-cst.ts";
@@ -204,8 +205,12 @@ const visitEntityNode = <N extends Namespace>(
         ...visit(valueNode, relatedType, context, lc, nestedIncludes),
       );
     } else {
-      const jsonValue = yamlNodeToJson(valueNode as ParsedNode);
+      let jsonValue = yamlNodeToJson(valueNode as ParsedNode);
       if (jsonValue === undefined || jsonValue === null) continue;
+
+      if (fieldDef.dataType === "relation") {
+        jsonValue = normalizeInputValue(jsonValue);
+      }
 
       const validationResult = validateDataType(
         context.namespace,

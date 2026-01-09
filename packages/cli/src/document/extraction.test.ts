@@ -2,29 +2,13 @@ import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import { mockNodeSchema, mockTask1Node, mockTask2Node } from "@binder/db/mocks";
-import {
-  createTemplateEntity,
-  type NavigationItem,
-  type Templates,
-} from "./navigation.ts";
+import { type NavigationItem, type Templates } from "./navigation.ts";
+import { mockTemplates } from "./template.mock.ts";
 import { extract, type ExtractedFileData } from "./extraction.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 
 describe("extract", () => {
   const emptyTemplates: Templates = [];
-  const templates: Templates = [
-    createTemplateEntity(
-      "task-template",
-      `# {title}
-
-**Status:** {status}
-
-## Description
-
-{description}
-`,
-    ),
-  ];
 
   const check = (
     navItem: NavigationItem,
@@ -77,7 +61,7 @@ ${mockTask1Node.description}
           },
           projections: [],
         },
-        templates,
+        mockTemplates,
       );
     });
   });
@@ -182,7 +166,7 @@ ${mockTask1Node.description}
         markdownNavItem,
         "content",
         "file.txt",
-        templates,
+        mockTemplates,
       );
 
       expect(result).toBeErrWithKey("unsupported_file_type");

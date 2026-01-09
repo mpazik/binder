@@ -9,10 +9,15 @@ import {
 import { BINDER_DIR, resolveRelativePath } from "../config.ts";
 import type { Logger } from "../log.ts";
 import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
+import {
+  createEntityContextCache,
+  type EntityContextCache,
+} from "./entity-context-cache.ts";
 
 export type WorkspaceEntry = {
   runtime: RuntimeContextWithDb;
   documentCache: DocumentCache;
+  entityContextCache: EntityContextCache;
   close: () => void;
 };
 
@@ -62,6 +67,7 @@ export const createWorkspaceManager = (
         rootPath,
         {
           onFilesUpdated: async (relativePaths: string[]) => {
+            entityContextCache.invalidateAll();
             await onFilesUpdated(
               relativePaths.map((path) =>
                 resolveRelativePath(path, runtime.config.paths),
@@ -81,8 +87,17 @@ export const createWorkspaceManager = (
 
       const { runtime, close } = runtimeResult.data;
       const documentCache = createDocumentCache(runtime.log);
+      const entityContextCache = createEntityContextCache(
+        runtime.log,
+        runtime.kg,
+      );
 
-      const entry: WorkspaceEntry = { runtime, documentCache, close };
+      const entry: WorkspaceEntry = {
+        runtime,
+        documentCache,
+        entityContextCache,
+        close,
+      };
       workspaces.set(rootPath, entry);
 
       log.info("Workspace initialized", {

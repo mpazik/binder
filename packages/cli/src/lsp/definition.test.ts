@@ -5,7 +5,7 @@ import { throwIfError } from "@binder/utils";
 import { mockProjectNode, mockTransactionInit } from "@binder/db/mocks";
 import type { EntitySchema, NodeDataType } from "@binder/db";
 import type { RuntimeContextWithDb } from "../runtime.ts";
-import { createMockRuntimeContextWithDb, mockLog } from "../runtime.mock.ts";
+import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import { mockNavigationConfigInput } from "../document/navigation.mock.ts";
 import { parseYamlDocument } from "../document/yaml-cst.ts";
 import { handleDefinition } from "./definition.ts";
@@ -35,6 +35,7 @@ describe("definition", () => {
           query: { filters: { type: "Task" } },
         },
         typeDef: schema.types.Task,
+        entityMappings: { kind: "single", mapping: { status: "new" } },
       },
     };
   };
@@ -56,7 +57,7 @@ describe("definition", () => {
         textDocument: { uri: document.uri },
         position: { line: 1, character: 3 },
       },
-      { document, context, runtime, log: mockLog },
+      { document, context, runtime },
     );
 
     expect(result).toBeNull();
@@ -73,7 +74,7 @@ describe("definition", () => {
         textDocument: { uri: document.uri },
         position: { line: 2, character: 15 },
       },
-      { document, context, runtime, log: mockLog },
+      { document, context, runtime },
     );
 
     expect(result).toBeNull();
@@ -97,7 +98,7 @@ describe("definition", () => {
         textDocument: { uri: document.uri },
         position: { line: 2, character: 12 },
       },
-      { document, context, runtime, log: mockLog },
+      { document, context, runtime },
     );
 
     expect(result).toEqual({
@@ -120,7 +121,7 @@ describe("definition", () => {
         textDocument: { uri: document.uri },
         position: { line: 2, character: 12 },
       },
-      { document, context, runtime, log: mockLog },
+      { document, context, runtime },
     );
 
     expect(result).toBeNull();

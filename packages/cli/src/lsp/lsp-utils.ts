@@ -20,7 +20,7 @@ import {
   getTypeFieldAttrs,
   getTypeFieldKey,
 } from "@binder/db";
-import { isErr } from "@binder/utils";
+import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedDocument } from "../document/document.ts";
@@ -34,16 +34,25 @@ import {
 } from "../lib/snapshot.ts";
 import { getTypeFromFilters } from "../utils/query.ts";
 import { type Position as YamlPosition } from "../document/yaml-cst.ts";
+import { extract } from "../document/extraction.ts";
+import {
+  computeEntityMappings,
+  type EntityMappings,
+} from "../document/entity-mapping.ts";
 import type { DocumentCache } from "./document-cache.ts";
+import type { EntityContextCache } from "./entity-context-cache.ts";
 import type { WorkspaceManager } from "./workspace-manager.ts";
 
 type LspParams = { textDocument: TextDocumentIdentifier };
+
+const expectedContextErrors = new Set(["navigation-not-found", "parse-failed"]);
+const getContextErrorLevel = (key: string) =>
+  expectedContextErrors.has(key) ? "debug" : "error";
 
 type LspHandlerDeps = {
   document: TextDocument;
   context: DocumentContext;
   runtime: RuntimeContextWithDb;
-  log: Logger;
 };
 
 export type LspHandler<TParams extends LspParams, TResult> = (
@@ -77,7 +86,7 @@ export const withDocumentContext =
       return null;
     }
 
-    const { runtime, documentCache } = workspace;
+    const { runtime, documentCache, entityContextCache } = workspace;
 
     const document = lspDocuments.get(uri);
     if (!document) {
@@ -85,13 +94,25 @@ export const withDocumentContext =
       return null;
     }
 
-    const context = await getDocumentContext(document, documentCache, runtime);
-    if (!context) {
-      log.debug("No document context", { uri });
+    const contextResult = await getDocumentContext(
+      document,
+      documentCache,
+      entityContextCache,
+      runtime,
+    );
+    if (isErr(contextResult)) {
+      const { error } = contextResult;
+      log[getContextErrorLevel(error.key)](`${requestName}: ${error.message}`, {
+        error,
+      });
       return null;
     }
 
-    return handler(params, { document, context, runtime, log });
+    return handler(params, {
+      document,
+      context: contextResult.data,
+      runtime,
+    });
   };
 
 export type DocumentContext = {
@@ -102,6 +123,7 @@ export type DocumentContext = {
   schema: EntitySchema;
   navigationItem: NavigationItem;
   typeDef?: TypeDef;
+  entityMappings: EntityMappings;
 };
 
 export const yamlRangeToLspRange = (
@@ -178,41 +200,82 @@ const extractTypeFromNavigation = (
 export const getDocumentContext = async (
   document: TextDocument,
   documentCache: DocumentCache,
+  entityContextCache: EntityContextCache,
   runtime: RuntimeContextWithDb,
-): Promise<DocumentContext | undefined> => {
+): ResultAsync<DocumentContext> => {
+  const uri = document.uri;
   const parsed = documentCache.getParsed(document);
-  if (!parsed) return undefined;
+  if (!parsed) return fail("parse-failed", "Failed to parse document", { uri });
 
-  const filePath = document.uri.replace(/^file:\/\//, "");
+  const filePath = uri.replace(/^file:\/\//, "");
   const namespace = namespaceFromSnapshotPath(filePath, runtime.config.paths);
-  if (!namespace) return undefined;
+  if (!namespace)
+    return fail("namespace-not-found", "Could not determine namespace", {
+      uri,
+    });
 
   const schemaResult = await runtime.kg.getSchema(namespace);
-  if (isErr(schemaResult)) return undefined;
+  if (isErr(schemaResult)) return schemaResult;
 
   const schema = schemaResult.data;
 
   const navigationResult = await runtime.nav(namespace);
-  if (isErr(navigationResult)) return undefined;
+  if (isErr(navigationResult)) return navigationResult;
 
   const relativePath = getRelativeSnapshotPath(filePath, runtime.config.paths);
   const navigationItem = findNavigationItemByPath(
     navigationResult.data,
     relativePath,
   );
-  if (navigationItem === undefined) return undefined;
+  if (navigationItem === undefined)
+    return fail("navigation-not-found", "No navigation item for path", {
+      uri,
+      relativePath,
+    });
 
   const typeDef = extractTypeFromNavigation(navigationItem, schema);
 
-  return {
+  const entityContextResult = await entityContextCache.get(
+    schema,
+    uri,
+    navigationItem,
+  );
+  if (isErr(entityContextResult)) return entityContextResult;
+
+  const templatesResult = await runtime.templates();
+  if (isErr(templatesResult)) return templatesResult;
+
+  const extractResult = extract(
+    schema,
+    navigationItem,
+    document.getText(),
+    relativePath,
+    templatesResult.data,
+  );
+  if (isErr(extractResult))
+    return fail("extract-failed", "Failed to extract document data", {
+      uri,
+      error: extractResult.error,
+    });
+
+  const entityMappings = entityContextResult
+    ? computeEntityMappings(
+        schema,
+        extractResult.data,
+        entityContextResult.data,
+      )
+    : { kind: "single" as const, mapping: { status: "new" as const } };
+
+  return ok({
     document,
     parsed,
-    uri: document.uri,
+    uri,
     namespace,
     schema,
     navigationItem,
     typeDef,
-  };
+    entityMappings,
+  });
 };
 
 export const getAllowedFields = (

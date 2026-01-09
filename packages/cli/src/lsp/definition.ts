@@ -2,7 +2,6 @@ import type { DefinitionParams, Location } from "vscode-languageserver/node";
 import { isScalar } from "yaml";
 import { isErr } from "@binder/utils";
 import type { Fieldset } from "@binder/db";
-import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedYaml } from "../document/yaml-cst.ts";
 import { getPositionContext } from "../document/yaml-cst.ts";
@@ -40,7 +39,9 @@ const extractReferenceValue = (
 export const handleDefinition: LspHandler<
   DefinitionParams,
   Location | null
-> = async (params, { document, context, runtime, log }) => {
+> = async (params, { document, context, runtime }) => {
+  const { log, kg } = runtime;
+  const namespace = context.namespace;
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
     log.debug("Not a YAML document");
@@ -74,14 +75,14 @@ export const handleDefinition: LspHandler<
 
   log.debug("Looking up reference", { fieldKey, referenceValue });
 
-  const searchResult = await runtime.kg.search({
+  const searchResult = await kg.search({
     filters: {
       key: referenceValue,
     },
   });
 
   if (isErr(searchResult) || searchResult.data.items.length === 0) {
-    const uidSearchResult = await runtime.kg.search({
+    const uidSearchResult = await kg.search({
       filters: {
         uid: referenceValue,
       },
@@ -92,24 +93,20 @@ export const handleDefinition: LspHandler<
       return null;
     }
 
-    return buildLocation(
-      uidSearchResult.data.items[0] as Fieldset,
-      runtime,
-      log,
-    );
+    return buildLocation(runtime, uidSearchResult.data.items[0] as Fieldset);
   }
 
-  return buildLocation(searchResult.data.items[0] as Fieldset, runtime, log);
+  return buildLocation(runtime, searchResult.data.items[0] as Fieldset);
 };
 
 const buildLocation = async (
-  entity: Fieldset,
   runtime: RuntimeContextWithDb,
-  log: Logger,
+  entity: Fieldset,
 ): Promise<Location | null> => {
-  const navigationResult = await loadNavigation(runtime.kg);
+  const { kg, log } = runtime;
+  const navigationResult = await loadNavigation(kg);
   if (isErr(navigationResult)) {
-    log.debug("Failed to load navigation", { error: navigationResult.error });
+    log.error("Failed to load navigation", { error: navigationResult.error });
     return null;
   }
 

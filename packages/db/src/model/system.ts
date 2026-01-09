@@ -155,6 +155,15 @@ export const configFieldsDefs = {
     name: "Fields",
     dataType: "relation",
     allowMultiple: true,
+    range: [fieldSystemType],
+    attributes: [
+      "required",
+      "description",
+      "default",
+      "value",
+      "exclude",
+      "only",
+    ],
   },
   immutable: {
     id: configSchemaIds.immutable,

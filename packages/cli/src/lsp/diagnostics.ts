@@ -35,17 +35,18 @@ const validationErrorToDiagnostic = (error: ValidationError): Diagnostic => ({
 export const handleDiagnostics: LspHandler<
   DocumentDiagnosticParams,
   DocumentDiagnosticReport
-> = async (params, { context, runtime, log }) => {
+> = async (params, { context, runtime }) => {
+  const { kg, log, config } = runtime;
   const filePath = fileURLToPath(params.textDocument.uri);
-  const ruleConfig = runtime.config.validation?.rules ?? {};
+  const ruleConfig = config.validation?.rules ?? {};
 
   const validationResult = await validateDocument(context.parsed, {
+    kg,
     filePath,
     navigationItem: context.navigationItem,
     namespace: context.namespace,
     schema: context.schema as NamespaceSchema<typeof context.namespace>,
     ruleConfig,
-    kg: runtime.kg,
   });
 
   const diagnostics = [

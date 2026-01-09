@@ -160,7 +160,7 @@ const createAddFieldAction = (
 
 export const handleCodeAction: LspHandler<CodeActionParams, CodeAction[]> = (
   params,
-  { document, context, log },
+  { document, context, runtime: { log } },
 ) => {
   const actions: CodeAction[] = [];
   const diagnostics = params.context.diagnostics;

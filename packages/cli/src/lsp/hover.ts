@@ -85,7 +85,7 @@ const buildFieldHover = (
 
 export const handleHover: LspHandler<HoverParams, Hover | null> = (
   params,
-  { document, context, log },
+  { document, context, runtime: { log } },
 ) => {
   const parsed = context.parsed as ParsedYaml;
   if (!parsed.doc || !parsed.lineCounter) {
