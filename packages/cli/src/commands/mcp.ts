@@ -12,7 +12,7 @@ import {
 } from "@binder/utils";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
-import { processRequest } from "../mcp";
+import { processMcpRequest } from "../mcp";
 import { types } from "../cli/types.ts";
 
 const respond = (response: JsonRpcResponse) => {
@@ -65,7 +65,7 @@ const mcpHandler: CommandHandlerWithDb = async ({ kg, log, config, fs }) => {
       return;
     }
 
-    const response = await processRequest({ kg, log, config, fs }, request);
+    const response = await processMcpRequest({ kg, log, config, fs }, request);
     respond(response);
   });
 

@@ -46,7 +46,7 @@ const methodHandlers: Record<string, McpHandler<any, any>> = {
   ...toolHandlers,
 };
 
-export const processRequest = async (
+export const processMcpRequest = async (
   context: McpContext,
   request: JsonRpcRequest,
 ): Promise<JsonRpcResponse> => {

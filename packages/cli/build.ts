@@ -22,6 +22,7 @@ const result = await Bun.build({
   entrypoints: ["./src/index.ts"],
   outdir: "./dist",
   target: "bun",
+  packages: "bundle",
   define: {
     __BINDER_VERSION__: JSON.stringify(version),
   },
