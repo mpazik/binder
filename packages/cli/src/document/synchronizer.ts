@@ -86,7 +86,7 @@ const synchronizeList = async (
   pathFields: Fieldset,
   log?: Logger,
 ): ResultAsync<ChangesetsInput> => {
-  const interpolatedQuery = interpolateQueryParams(query, [pathFields]);
+  const interpolatedQuery = interpolateQueryParams(schema, query, [pathFields]);
   if (isErr(interpolatedQuery)) return interpolatedQuery;
 
   const kgResult = await kg.search(interpolatedQuery.data, namespace);
@@ -126,7 +126,7 @@ const synchronizeProjection = async (
   projection: ExtractedProjection,
   pathFields: Fieldset,
 ): ResultAsync<ChangesetsInput> => {
-  const interpolatedQuery = interpolateQueryParams(projection.query, [
+  const interpolatedQuery = interpolateQueryParams(schema, projection.query, [
     pathFields,
   ]);
   if (isErr(interpolatedQuery)) return interpolatedQuery;

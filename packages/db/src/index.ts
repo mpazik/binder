@@ -11,12 +11,16 @@ export { entityTables } from "./schema";
 export { validateDataType } from "./data-type-validators";
 export {
   extractUid,
-  formatFieldValue,
+  getDelimiterString,
+  getMultiValueDelimiter,
   getNestedValue,
   isFieldsetNested,
+  isMultilineFormat,
+  type MultiValueDelimiter,
   parseFieldPath,
   parseFieldValue,
   setNestedValue,
+  stringifyFieldValue,
 } from "./model/field.ts";
 export { buildIncludes } from "./model/query.ts";
 export {

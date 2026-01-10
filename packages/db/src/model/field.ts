@@ -1,5 +1,6 @@
 import { fail, type JsonValue, ok, type Result } from "@binder/utils";
 import type { EntityUid } from "./entity.ts";
+import { getPlaintextFormat, getRichtextFormat } from "./data-type.ts";
 import type { FieldDef } from "./schema.ts";
 
 export type FieldKey = string;
@@ -75,14 +76,16 @@ export const setNestedValue = (
   current[path[path.length - 1]!] = value;
 };
 
-type MultiValueDelimiter =
+export type MultiValueDelimiter =
   | "comma"
   | "newline"
   | "blankline"
   | "header"
   | "hrule";
 
-const getMultiValueDelimiter = (fieldDef: FieldDef): MultiValueDelimiter => {
+export const getMultiValueDelimiter = (
+  fieldDef: FieldDef,
+): MultiValueDelimiter => {
   if (fieldDef.dataType === "plaintext") {
     const format = fieldDef.plaintextFormat;
     if (format === "line") return "newline";
@@ -125,6 +128,25 @@ const splitByHeader = (value: string): string[] => {
 
 const splitByHorizontalRule = (value: string): string[] =>
   value.split(/^-{3,}\s*$/m).map((item) => item.trim());
+
+export const isMultilineFormat = (fieldDef: FieldDef): boolean => {
+  if (fieldDef.dataType === "plaintext") {
+    return getPlaintextFormat(fieldDef.plaintextFormat).isMultiline ?? false;
+  }
+  if (fieldDef.dataType === "richtext") {
+    return getRichtextFormat(fieldDef.richtextFormat).isMultiline ?? false;
+  }
+  return false;
+};
+
+export const getDelimiterString = (delimiter: MultiValueDelimiter): string => {
+  if (delimiter === "comma") return ", ";
+  if (delimiter === "newline") return "\n";
+  if (delimiter === "blankline") return "\n\n";
+  if (delimiter === "header") return "\n\n";
+  if (delimiter === "hrule") return "\n\n---\n\n";
+  return ", ";
+};
 
 const splitByDelimiter = (
   value: string,
@@ -188,16 +210,23 @@ export const parseFieldValue = (
   return ok(trimmed);
 };
 
-export const formatFieldValue = (
-  value: FieldValue | undefined,
-  _fieldDef?: FieldDef,
-): string => {
-  if (value === null || value === undefined) return "";
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "";
-    return value.join(", ");
-  }
+const stringifySingleValue = (value: FieldValue): string => {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+};
+
+export const stringifyFieldValue = (
+  value: FieldValue | undefined,
+  fieldDef: FieldDef,
+): string => {
+  if (value === null || value === undefined) return "";
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "";
+    const delimiter = getDelimiterString(getMultiValueDelimiter(fieldDef));
+    return value.map(stringifySingleValue).join(delimiter);
+  }
+
+  return stringifySingleValue(value);
 };

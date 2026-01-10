@@ -87,9 +87,14 @@ describe("template", () => {
 
     it("renders boolean fields as true/false", () => {
       check(
-        "**Active:** {active}\n**Done:** {done}\n",
-        { active: true, done: false },
-        "**Active:** true\n**Done:** false\n",
+        "**Favorite:** {favorite}\n",
+        { favorite: true },
+        "**Favorite:** true\n",
+      );
+      check(
+        "**Favorite:** {favorite}\n",
+        { favorite: false },
+        "**Favorite:** false\n",
       );
     });
 
@@ -130,11 +135,7 @@ describe("template", () => {
     });
 
     it("renders empty string value", () => {
-      check(
-        "**Description:** {description}\n",
-        { description: "" },
-        "**Description:** \n",
-      );
+      check("**Title:** {title}\n", { title: "" }, "**Title:** \n");
     });
 
     it("renders null number field as empty string", () => {

@@ -34,6 +34,7 @@ export type TextFormatValidator = (
 
 export type TextFormatDef = DataTypeDef & {
   validate: TextFormatValidator;
+  isMultiline?: boolean;
 };
 export type TextFormatDefs = Record<string, TextFormatDef>;
 
@@ -42,7 +43,7 @@ const createPatternValidator =
   (value, _context) =>
     pattern.test(value) ? undefined : errorMessage;
 
-export const plaintextFormats = {
+export const plaintextFormats: TextFormatDefs = {
   token: {
     name: "Token",
     description: "Contains only letters and digits (e.g., abc123)",
@@ -85,8 +86,9 @@ export const plaintextFormats = {
       /^(?!.*\n\n).*$/s,
       "Value must not contain blank lines",
     ),
+    isMultiline: true,
   },
-} as const satisfies TextFormatDefs;
+};
 
 const containsMarkdownHeader = (value: string): boolean =>
   /^#{1,6}\s/m.test(value);
@@ -94,7 +96,7 @@ const containsMarkdownHeader = (value: string): boolean =>
 const containsHorizontalRule = (value: string): boolean =>
   /^-{3,}\s*$/m.test(value);
 
-export const richtextFormats = {
+export const richtextFormats: TextFormatDefs = {
   word: {
     name: "Word",
     description: "Single styled word without spaces",
@@ -111,6 +113,7 @@ export const richtextFormats = {
       /^[^\n]*$/,
       "Value must be a single line without line breaks",
     ),
+    isMultiline: true,
   },
   block: {
     name: "Block",
@@ -121,6 +124,7 @@ export const richtextFormats = {
       if (containsMarkdownHeader(value)) return "Block cannot contain headers";
       return undefined;
     },
+    isMultiline: true,
   },
   section: {
     name: "Section",
@@ -131,6 +135,7 @@ export const richtextFormats = {
         return "Section cannot contain headers";
       return undefined;
     },
+    isMultiline: true,
   },
   document: {
     name: "Document",
@@ -141,10 +146,11 @@ export const richtextFormats = {
         return "Document cannot contain horizontal rules (---)";
       return undefined;
     },
+    isMultiline: true,
   },
-} as const satisfies TextFormatDefs;
+};
 
-export const periodFormats = {
+export const periodFormats: TextFormatDefs = {
   year: {
     name: "Year",
     description: "YYYY (e.g. 2024)",
@@ -182,11 +188,22 @@ export const periodFormats = {
       "Invalid day format",
     ),
   },
-} as const satisfies TextFormatDefs;
+};
 
 export type PlaintextFormat = keyof typeof plaintextFormats;
 export type RichtextFormat = keyof typeof richtextFormats;
 export type PeriodFormat = keyof typeof periodFormats;
+
+export const DEFAULT_PLAINTEXT_FORMAT: PlaintextFormat = "line";
+export const DEFAULT_RICHTEXT_FORMAT: RichtextFormat = "block";
+
+export const getPlaintextFormat = (
+  format: PlaintextFormat | undefined,
+): TextFormatDef => plaintextFormats[format ?? DEFAULT_PLAINTEXT_FORMAT];
+
+export const getRichtextFormat = (
+  format: RichtextFormat | undefined,
+): TextFormatDef => richtextFormats[format ?? DEFAULT_RICHTEXT_FORMAT];
 
 export const dataTypeDefsToOptions = (
   dataTypeDefs: DataTypeDefs,

@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { type JsonValue, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import {
-  formatFieldValue,
   getNestedValue,
   parseFieldValue,
   setNestedValue,
+  stringifyFieldValue,
 } from "./field.ts";
 import type { FieldDef, FieldsetNested } from "./index.ts";
 import {
@@ -21,7 +21,91 @@ import {
 } from "./config.mock.ts";
 import { coreFields } from "./schema.ts";
 
-describe("field-value", () => {
+describe("field", () => {
+  describe("getNestedValue", () => {
+    const check = (
+      fieldset: FieldsetNested,
+      path: string[],
+      expected: JsonValue | undefined,
+    ) => {
+      expect(getNestedValue(fieldset, path)).toEqual(expected);
+    };
+
+    it("gets top-level value", () => {
+      check({ name: "John" }, ["name"], "John");
+    });
+
+    it("gets nested value", () => {
+      check({ user: { name: "John", age: 30 } }, ["user", "name"], "John");
+    });
+
+    it("gets deeply nested value", () => {
+      check({ a: { b: { c: { d: "deep" } } } }, ["a", "b", "c", "d"], "deep");
+    });
+
+    it("returns undefined for missing key", () => {
+      check({ name: "John" }, ["missing"], undefined);
+    });
+
+    it("returns undefined for missing nested key", () => {
+      check({ user: { name: "John" } }, ["user", "missing"], undefined);
+    });
+
+    it("returns undefined when path goes through non-object", () => {
+      check({ name: "John" }, ["name", "nested"], undefined);
+    });
+
+    it("returns undefined when path goes through null", () => {
+      check({ user: null }, ["user", "name"], undefined);
+    });
+
+    it("returns undefined when path goes through array", () => {
+      check({ items: ["a", "b"] }, ["items", "0"], undefined);
+    });
+
+    it("returns the fieldset itself for empty path", () => {
+      check({ name: "John" }, [], { name: "John" });
+    });
+  });
+
+  describe("setNestedValue", () => {
+    const check = (
+      initial: FieldsetNested,
+      path: string[],
+      value: JsonValue,
+      expected: FieldsetNested,
+    ) => {
+      setNestedValue(initial, path, value);
+      expect(initial).toEqual(expected);
+    };
+
+    it("sets top-level value", () => {
+      check({}, ["name"], "John", { name: "John" });
+    });
+
+    it("sets nested value", () => {
+      check({}, ["user", "name"], "John", { user: { name: "John" } });
+    });
+
+    it("sets deeply nested value", () => {
+      check({}, ["a", "b", "c"], "deep", { a: { b: { c: "deep" } } });
+    });
+
+    it("overwrites existing value", () => {
+      check({ name: "John" }, ["name"], "Jane", { name: "Jane" });
+    });
+
+    it("preserves existing siblings", () => {
+      check({ user: { name: "John", age: 30 } }, ["user", "name"], "Jane", {
+        user: { name: "Jane", age: 30 },
+      });
+    });
+
+    it("does nothing for empty path", () => {
+      check({ name: "John" }, [], "ignored", { name: "John" });
+    });
+  });
+
   describe("parseFieldValue", () => {
     const check = (raw: string, fieldDef: FieldDef, expected: JsonValue) => {
       const result = throwIfError(parseFieldValue(raw, fieldDef));
@@ -278,122 +362,75 @@ describe("field-value", () => {
     });
   });
 
-  describe("formatFieldValue", () => {
+  describe("stringifyFieldValue", () => {
+    const check = (
+      value: JsonValue | undefined,
+      fieldDef: FieldDef,
+      expected: string,
+    ) => {
+      expect(stringifyFieldValue(value, fieldDef)).toBe(expected);
+    };
+
     it("formats null as empty string", () => {
-      expect(formatFieldValue(null)).toBe("");
+      check(null, mockTagsField, "");
     });
 
     it("formats undefined as empty string", () => {
-      expect(formatFieldValue(undefined)).toBe("");
+      check(undefined, mockTagsField, "");
     });
 
     it("formats string values", () => {
-      expect(formatFieldValue("hello")).toBe("hello");
+      check("hello", mockTagsField, "hello");
     });
 
     it("formats number values", () => {
-      expect(formatFieldValue(123)).toBe("123");
-      expect(formatFieldValue(3.14)).toBe("3.14");
+      check(123, coreFields.id, "123");
+      check(
+        3.14,
+        { ...coreFields.id, dataType: "decimal" } as FieldDef,
+        "3.14",
+      );
     });
 
     it("formats boolean values", () => {
-      expect(formatFieldValue(true)).toBe("true");
-      expect(formatFieldValue(false)).toBe("false");
+      check(true, mockFavoriteField, "true");
+      check(false, mockFavoriteField, "false");
     });
 
     it("formats empty array as empty string", () => {
-      expect(formatFieldValue([])).toBe("");
+      check([], mockTagsField, "");
     });
 
-    it("formats array as comma-separated string", () => {
-      expect(formatFieldValue(["a", "b", "c"])).toBe("a, b, c");
+    it("formats array with comma delimiter", () => {
+      check(["a", "b", "c"], mockTagsField, "a, b, c");
+    });
+
+    it("formats array with newline delimiter", () => {
+      check(["a", "b"], mockAliasesField, "a\nb");
+    });
+
+    it("formats array with blankline delimiter", () => {
+      check(["para1", "para2"], mockNotesField, "para1\n\npara2");
     });
 
     it("formats single-element array", () => {
-      expect(formatFieldValue(["single"])).toBe("single");
-    });
-  });
-
-  describe("getNestedValue", () => {
-    it("gets top-level value", () => {
-      expect(getNestedValue({ name: "John" }, ["name"])).toBe("John");
+      check(["single"], mockTagsField, "single");
     });
 
-    it("gets nested value", () => {
-      const fieldset = { user: { name: "John", age: 30 } };
-      expect(getNestedValue(fieldset, ["user", "name"])).toBe("John");
-    });
+    describe("parse/stringify round-trip", () => {
+      const checkRoundtrip = (values: string[], fieldDef: FieldDef) => {
+        const stringified = stringifyFieldValue(values, fieldDef);
+        const parsed = throwIfError(parseFieldValue(stringified, fieldDef));
+        expect(parsed).toEqual(values);
+      };
 
-    it("gets deeply nested value", () => {
-      const fieldset = { a: { b: { c: { d: "deep" } } } };
-      expect(getNestedValue(fieldset, ["a", "b", "c", "d"])).toBe("deep");
-    });
+      it("round-trips comma-separated values", () => {
+        checkRoundtrip(["a", "b", "c"], mockTagsField);
+      });
 
-    it("returns undefined for missing key", () => {
-      expect(getNestedValue({ name: "John" }, ["missing"])).toBeUndefined();
-    });
-
-    it("returns undefined for missing nested key", () => {
-      const fieldset = { user: { name: "John" } };
-      expect(getNestedValue(fieldset, ["user", "missing"])).toBeUndefined();
-    });
-
-    it("returns undefined when path goes through non-object", () => {
-      const fieldset = { name: "John" };
-      expect(getNestedValue(fieldset, ["name", "nested"])).toBeUndefined();
-    });
-
-    it("returns undefined when path goes through null", () => {
-      const fieldset: FieldsetNested = { user: null };
-      expect(getNestedValue(fieldset, ["user", "name"])).toBeUndefined();
-    });
-
-    it("returns undefined when path goes through array", () => {
-      const fieldset: FieldsetNested = { items: ["a", "b"] };
-      expect(getNestedValue(fieldset, ["items", "0"])).toBeUndefined();
-    });
-
-    it("returns the fieldset itself for empty path", () => {
-      const fieldset = { name: "John" };
-      expect(getNestedValue(fieldset, [])).toEqual({ name: "John" });
-    });
-  });
-
-  describe("setNestedValue", () => {
-    it("sets top-level value", () => {
-      const fieldset: FieldsetNested = {};
-      setNestedValue(fieldset, ["name"], "John");
-      expect(fieldset).toEqual({ name: "John" });
-    });
-
-    it("sets nested value", () => {
-      const fieldset: FieldsetNested = {};
-      setNestedValue(fieldset, ["user", "name"], "John");
-      expect(fieldset).toEqual({ user: { name: "John" } });
-    });
-
-    it("sets deeply nested value", () => {
-      const fieldset: FieldsetNested = {};
-      setNestedValue(fieldset, ["a", "b", "c"], "deep");
-      expect(fieldset).toEqual({ a: { b: { c: "deep" } } });
-    });
-
-    it("overwrites existing value", () => {
-      const fieldset: FieldsetNested = { name: "John" };
-      setNestedValue(fieldset, ["name"], "Jane");
-      expect(fieldset).toEqual({ name: "Jane" });
-    });
-
-    it("preserves existing siblings", () => {
-      const fieldset: FieldsetNested = { user: { name: "John", age: 30 } };
-      setNestedValue(fieldset, ["user", "name"], "Jane");
-      expect(fieldset).toEqual({ user: { name: "Jane", age: 30 } });
-    });
-
-    it("does nothing for empty path", () => {
-      const fieldset: FieldsetNested = { name: "John" };
-      setNestedValue(fieldset, [], "ignored");
-      expect(fieldset).toEqual({ name: "John" });
+      it("round-trips newline-separated values", () => {
+        checkRoundtrip(["first", "second"], mockAliasesField);
+      });
     });
   });
 });

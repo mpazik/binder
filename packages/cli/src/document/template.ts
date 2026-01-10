@@ -9,16 +9,14 @@ import {
 } from "@binder/utils";
 import {
   type EntitySchema,
-  type FieldDef,
   type FieldKey,
   type FieldsetNested,
-  formatFieldValue,
   getFieldDefNested,
   getNestedValue,
   parseFieldValue,
   setNestedValue,
 } from "@binder/db";
-import type { Nodes, Parent, PhrasingContent, Root, Text } from "mdast";
+import type { Nodes, Parent, Root, Text } from "mdast";
 import { visit } from "unist-util-visit";
 import type { Data, Node } from "unist";
 import { unified } from "unified";
@@ -26,10 +24,10 @@ import remarkParse from "remark-parse";
 import { type FieldSlot, remarkFieldSlot } from "./remark-field-slot.ts";
 import {
   type BlockAST,
-  parseAst,
   renderAstToMarkdown,
   simplifyViewAst,
 } from "./markdown.ts";
+import { isBlockLevelField, renderFieldValue } from "./field-render.ts";
 
 type SimplifiedViewNode = FieldSlot | Text;
 
@@ -45,23 +43,6 @@ export const parseTemplate = (content: string): TemplateAST => {
   const processor = unified().use(remarkParse).use(remarkFieldSlot);
   return processor.parse(content) as TemplateAST;
 };
-
-const parseRichtextToInlineNodes = (text: string): PhrasingContent[] => {
-  const ast = parseAst(text);
-  const firstChild = ast.children[0];
-  if (firstChild?.type === "paragraph" && "children" in firstChild) {
-    return firstChild.children;
-  }
-  return [{ type: "text", value: text }];
-};
-
-const isRichtextField = (fieldDef: FieldDef | undefined): boolean =>
-  fieldDef?.dataType === "richtext";
-
-const isBlockLevelRichtext = (fieldDef: FieldDef | undefined): boolean =>
-  fieldDef?.dataType === "richtext" &&
-  (fieldDef.richtextFormat === "section" ||
-    fieldDef.richtextFormat === "document");
 
 const isSoleChildOfParagraph = (
   parent: Parent | undefined,
@@ -92,31 +73,30 @@ export const renderTemplate = (
       const fieldPath = node.path;
       const value = getNestedValue(fieldset, fieldPath);
       const fieldDef = getFieldDefNested(schema, fieldPath);
-      const text = formatFieldValue(value ?? "");
 
-      // Block-level richtext as sole paragraph child: schedule paragraph replacement
+      if (!fieldDef) {
+        parent.children[index] = { type: "text", value: "" };
+        return;
+      }
+
+      const renderedNodes = renderFieldValue(value, fieldDef);
+
       if (
-        isBlockLevelRichtext(fieldDef) &&
+        isBlockLevelField(fieldDef) &&
         isSoleChildOfParagraph(parent, index)
       ) {
-        const parsed = parseAst(text);
-        blockReplacements.set(parent, parsed.children as Nodes[]);
+        blockReplacements.set(parent, renderedNodes);
         return;
       }
 
-      // Inline richtext: splice parsed inline nodes
-      if (isRichtextField(fieldDef)) {
-        const inlineNodes = parseRichtextToInlineNodes(text);
-        parent.children.splice(index, 1, ...inlineNodes);
-        return;
-      }
-
-      // Plaintext: replace with escaped text node
-      parent.children[index] = { type: "text", value: text };
+      parent.children.splice(
+        index,
+        1,
+        ...(renderedNodes as typeof parent.children),
+      );
     },
   );
 
-  // Apply block replacements: replace marked paragraphs with their block content
   if (blockReplacements.size > 0 && "children" in ast) {
     const newChildren: typeof ast.children = [];
     for (const child of ast.children) {

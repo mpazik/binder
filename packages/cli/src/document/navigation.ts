@@ -8,7 +8,6 @@ import {
   type FieldsetNested,
   type Filter,
   type Filters,
-  formatFieldValue,
   type GraphVersion,
   type Includes,
   type KnowledgeGraph,
@@ -17,6 +16,7 @@ import {
   type NamespaceEditable,
   parseFieldPath,
   type QueryParams,
+  stringifyFieldValue,
 } from "@binder/db";
 import {
   assertDefinedPass,
@@ -30,6 +30,7 @@ import { sanitizeFilename } from "../utils/file.ts";
 import {
   extractFieldValues,
   interpolateAncestralFields,
+  interpolatePlain,
 } from "../utils/interpolate-fields.ts";
 import type { DatabaseCli } from "../db";
 import { interpolateQueryParams } from "../utils/query.ts";
@@ -121,7 +122,7 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
 export const getNavigationFilePatterns = (items: NavigationItem[]): string[] =>
   items.map((item) => {
     const template = getPathTemplate(item);
-    const result = interpolateAncestralFields(template, () => "*");
+    const result = interpolatePlain(template, () => ok("*"));
     return isErr(result) ? template : result.data;
   });
 
@@ -208,6 +209,7 @@ export const findNavigationItemByPath = (
 };
 
 export const resolvePath = (
+  schema: EntitySchema,
   navItem: NavigationItem,
   entity: Fieldset,
   parentEntities: AncestralFieldsetChain = [],
@@ -217,8 +219,13 @@ export const resolvePath = (
   const pathTemplate = navItem.path + extension;
   const context = [entity, ...parentEntities];
 
-  return interpolateAncestralFields(pathTemplate, (fieldName, depth) =>
-    sanitizeFilename(formatFieldValue(context[depth]?.[fieldName])),
+  return interpolateAncestralFields(schema, pathTemplate, (fieldName, depth) =>
+    sanitizeFilename(
+      stringifyFieldValue(
+        context[depth]?.[fieldName],
+        schema.fields[fieldName],
+      ),
+    ),
   );
 };
 
@@ -307,7 +314,7 @@ const renderContent = async (
   }
   if (fileType === "yaml") {
     if (item.query) {
-      const interpolatedQuery = interpolateQueryParams(item.query, [
+      const interpolatedQuery = interpolateQueryParams(schema, item.query, [
         entity,
         ...parentEntities,
       ]);
@@ -362,6 +369,7 @@ export const renderNavigationItem = async (
 
   if (item.where) {
     const interpolatedQuery = interpolateQueryParams(
+      schema,
       {
         filters: item.where,
         includes: item.includes,
@@ -392,7 +400,12 @@ export const renderNavigationItem = async (
   }
 
   for (const entity of entities) {
-    const resolvedPath = resolvePath(item, entity as Fieldset, parentEntities);
+    const resolvedPath = resolvePath(
+      schema,
+      item,
+      entity as Fieldset,
+      parentEntities,
+    );
     if (isErr(resolvedPath)) return resolvedPath;
     const filePath = join(parentPath, resolvedPath.data);
 
@@ -560,13 +573,14 @@ const findMatchingNavItem = (
 export const findEntityLocation = async (
   fs: FileSystem,
   paths: ConfigPaths,
+  schema: EntitySchema,
   entity: Fieldset,
   navigation: NavigationItem[],
 ): ResultAsync<LocationInFile | undefined> => {
   const navItem = findMatchingNavItem(navigation, entity);
   if (!navItem) return ok(undefined);
 
-  const resolvedPathResult = resolvePath(navItem, entity, []);
+  const resolvedPathResult = resolvePath(schema, navItem, entity, []);
   if (isErr(resolvedPathResult)) return resolvedPathResult;
 
   const relativePath = resolvedPathResult.data;

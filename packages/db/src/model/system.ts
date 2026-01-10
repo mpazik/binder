@@ -16,6 +16,8 @@ import {
   coreDataTypes,
   type DataTypeDefs,
   dataTypeDefsToOptions,
+  DEFAULT_PLAINTEXT_FORMAT,
+  DEFAULT_RICHTEXT_FORMAT,
   periodFormatOptions,
   plaintextFormatOptions,
   richtextFormatOptions,
@@ -289,7 +291,7 @@ export const configFieldsDefs = {
     description: "Character constraints for plaintext fields",
     options: plaintextFormatOptions,
     when: { dataType: "plaintext" },
-    default: "line",
+    default: DEFAULT_PLAINTEXT_FORMAT,
   },
   richtextFormat: {
     id: configSchemaIds.richtextFormat,
@@ -299,7 +301,7 @@ export const configFieldsDefs = {
     description: "Formatting constraints for richtext fields",
     options: richtextFormatOptions,
     when: { dataType: "richtext" },
-    default: "block",
+    default: DEFAULT_RICHTEXT_FORMAT,
   },
   periodFormat: {
     id: configSchemaIds.periodFormat,

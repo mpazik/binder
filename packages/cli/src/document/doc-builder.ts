@@ -375,7 +375,7 @@ export const deconstructAstDocument = (
         if (directive.name === "dataview") {
           const queryString = directive.attributes?.query;
           if (queryString) {
-            const queryResult = parseStringQuery(queryString);
+            const queryResult = parseStringQuery(schema, queryString);
             if (isErr(queryResult)) {
               return err(
                 createError(

@@ -1,7 +1,7 @@
 import type { DefinitionParams, Location } from "vscode-languageserver/node";
 import { isScalar } from "yaml";
 import { isErr } from "@binder/utils";
-import type { Fieldset } from "@binder/db";
+import type { Fieldset, NamespaceEditable } from "@binder/db";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedYaml } from "../document/yaml-cst.ts";
 import { getPositionContext } from "../document/yaml-cst.ts";
@@ -93,14 +93,23 @@ export const handleDefinition: LspHandler<
       return null;
     }
 
-    return buildLocation(runtime, uidSearchResult.data.items[0] as Fieldset);
+    return buildLocation(
+      runtime,
+      namespace,
+      uidSearchResult.data.items[0] as Fieldset,
+    );
   }
 
-  return buildLocation(runtime, searchResult.data.items[0] as Fieldset);
+  return buildLocation(
+    runtime,
+    namespace,
+    searchResult.data.items[0] as Fieldset,
+  );
 };
 
 const buildLocation = async (
   runtime: RuntimeContextWithDb,
+  namespace: NamespaceEditable,
   entity: Fieldset,
 ): Promise<Location | null> => {
   const { kg, log } = runtime;
@@ -110,9 +119,16 @@ const buildLocation = async (
     return null;
   }
 
+  const schemaResult = await kg.getSchema(namespace);
+  if (isErr(schemaResult)) {
+    log.error("Failed to load schema", { error: schemaResult.error });
+    return null;
+  }
+
   const locationResult = await findEntityLocation(
     runtime.fs,
     runtime.config.paths,
+    schemaResult.data,
     entity,
     navigationResult.data,
   );

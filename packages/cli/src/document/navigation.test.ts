@@ -47,6 +47,8 @@ import {
 import { mockNavigationConfigInput } from "./navigation.mock.ts";
 
 describe("navigation", () => {
+  const schema = mockNodeSchema;
+
   describe("findNavigationItemByPath", () => {
     const check = (
       items: NavigationItem[],
@@ -559,7 +561,7 @@ describe("navigation", () => {
 
     it("returns undefined when no matching nav item found", async () => {
       const result = throwIfError(
-        await findEntityLocation(fs, paths, mockTask1Node, []),
+        await findEntityLocation(fs, paths, schema, mockTask1Node, []),
       );
       expect(result).toBeUndefined();
     });
@@ -574,7 +576,7 @@ describe("navigation", () => {
       ];
 
       const result = throwIfError(
-        await findEntityLocation(fs, paths, mockTask1Node, navigation),
+        await findEntityLocation(fs, paths, schema, mockTask1Node, navigation),
       );
       expect(result).toEqual({
         filePath: `${paths.docs}/tasks/${mockTask1Node.title}.md`,
@@ -602,7 +604,7 @@ describe("navigation", () => {
       const secondEntity: Fieldset = { type: "Task", key: "second-key" };
 
       const result = throwIfError(
-        await findEntityLocation(fs, paths, firstEntity, navigation),
+        await findEntityLocation(fs, paths, schema, firstEntity, navigation),
       );
       expect(result).toEqual({
         filePath: `${paths.docs}/all-tasks.yaml`,
@@ -610,7 +612,7 @@ describe("navigation", () => {
       });
 
       const result2 = throwIfError(
-        await findEntityLocation(fs, paths, secondEntity, navigation),
+        await findEntityLocation(fs, paths, schema, secondEntity, navigation),
       );
       expect(result2).toEqual({
         filePath: `${paths.docs}/all-tasks.yaml`,
@@ -632,7 +634,7 @@ describe("navigation", () => {
       ];
 
       const result = throwIfError(
-        await findEntityLocation(fs, paths, mockTask1Node, navigation),
+        await findEntityLocation(fs, paths, schema, mockTask1Node, navigation),
       );
       expect(result).toEqual({
         filePath: `${paths.docs}/tasks/${mockTask1Node.title}.md`,

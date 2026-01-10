@@ -21,9 +21,13 @@ const locateHandler: CommandHandlerWithDb<{
   const navigationResult = await loadNavigation(kg, args.namespace);
   if (isErr(navigationResult)) return navigationResult;
 
+  const schemaResult = await kg.getSchema(args.namespace);
+  if (isErr(schemaResult)) return schemaResult;
+
   const locationResult = await findEntityLocation(
     fs,
     config.paths,
+    schemaResult.data,
     entity,
     navigationResult.data,
   );

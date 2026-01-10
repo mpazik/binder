@@ -10,10 +10,11 @@ import {
 import { isValidUid } from "./utils/uid.ts";
 import {
   type ConfigDataType,
-  configFieldsDefs,
   type CoreDataType,
   type DataTypeNs,
   type FieldDef,
+  getPlaintextFormat,
+  getRichtextFormat,
   type Namespace,
   type NodeDataType,
   periodFormats,
@@ -98,9 +99,8 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
         undefined,
       );
     if (value === "") return okVoid;
-    const format: keyof typeof plaintextFormats =
-      fieldDef.plaintextFormat ?? configFieldsDefs.plaintextFormat.default;
-    const error = plaintextFormats[format].validate(value, {});
+    const format = getPlaintextFormat(fieldDef.plaintextFormat);
+    const error = format.validate(value, {});
     if (error) return fail("validation-error", error);
     return okVoid;
   },
@@ -113,9 +113,8 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
         undefined,
       );
     if (value === "") return okVoid;
-    const format: keyof typeof richtextFormats =
-      fieldDef.richtextFormat ?? configFieldsDefs.richtextFormat.default;
-    const error = richtextFormats[format].validate(value, {
+    const format = getRichtextFormat(fieldDef.richtextFormat);
+    const error = format.validate(value, {
       allowMultiple: fieldDef.allowMultiple,
     });
     if (error) return fail("validation-error", error);

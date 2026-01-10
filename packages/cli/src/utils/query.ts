@@ -1,4 +1,5 @@
 import {
+  type EntitySchema,
   type EntityType,
   type Fieldset,
   type Filter,
@@ -29,11 +30,12 @@ export const formatWhenCondition = (filters: Filters): string =>
     .join(", ");
 
 const interpolateFilterValue = (
+  schema: EntitySchema,
   filter: Filter,
   context: AncestralFieldsetChain,
 ): Result<Filter> => {
   if (typeof filter === "string") {
-    const result = interpolateAncestralFields(filter, context);
+    const result = interpolateAncestralFields(schema, filter, context);
     if (isErr(result)) return result;
     return ok(result.data);
   }
@@ -45,7 +47,7 @@ const interpolateFilterValue = (
     "op" in filter
   ) {
     if (typeof filter.value === "string") {
-      const result = interpolateAncestralFields(filter.value, context);
+      const result = interpolateAncestralFields(schema, filter.value, context);
       if (isErr(result)) return result;
       return ok({ ...filter, value: result.data });
     }
@@ -55,6 +57,7 @@ const interpolateFilterValue = (
 };
 
 export const interpolateQueryParams = (
+  schema: EntitySchema,
   queryParams: QueryParams,
   context: AncestralFieldsetChain,
 ): Result<QueryParams> => {
@@ -62,7 +65,7 @@ export const interpolateQueryParams = (
 
   const interpolatedFilters: Record<string, Filter> = {};
   for (const [key, filter] of Object.entries(queryParams.filters)) {
-    const result = interpolateFilterValue(filter, context);
+    const result = interpolateFilterValue(schema, filter, context);
     if (isErr(result)) return result;
     interpolatedFilters[key] = result.data;
   }
@@ -71,6 +74,7 @@ export const interpolateQueryParams = (
 };
 
 export const parseStringQuery = (
+  schema: EntitySchema,
   query: string,
   parents: AncestralFieldsetChain = [],
 ): Result<QueryParams> => {
@@ -96,10 +100,7 @@ export const parseStringQuery = (
     }
   }
 
-  const result = interpolateAncestralFields(
-    query,
-    (fieldName, depth) => parents[depth - 1]?.[fieldName],
-  );
+  const result = interpolateAncestralFields(schema, query, [{}, ...parents]);
   if (isErr(result)) return result;
 
   const filters: Record<string, string> = {};

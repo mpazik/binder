@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import "@binder/utils/tests";
-import { mockProjectNode, mockUserNode } from "@binder/db/mocks";
+import {
+  mockNodeSchema,
+  mockProjectNode,
+  mockUserNode,
+} from "@binder/db/mocks";
 import { throwIfError } from "@binder/utils";
 import type { AncestralFieldsetChain } from "@binder/db";
 import { extractFieldsetFromQuery, parseStringQuery } from "./query.ts";
@@ -10,7 +14,7 @@ const check = (
   parents: AncestralFieldsetChain | undefined,
   expected: Record<string, string>,
 ) => {
-  const result = parseStringQuery(text, parents);
+  const result = parseStringQuery(mockNodeSchema, text, parents);
   expect(result).toBeOkWith({ filters: expected });
 };
 
@@ -19,12 +23,12 @@ const checkError = (
   parents: AncestralFieldsetChain | undefined,
   errorKey: string,
 ) => {
-  const result = parseStringQuery(text, parents);
+  const result = parseStringQuery(mockNodeSchema, text, parents);
   expect(result).toBeErrWithKey(errorKey);
 };
 
 const checkLegacy = (query: string, expected: Record<string, string>) => {
-  const queryParams = throwIfError(parseStringQuery(query));
+  const queryParams = throwIfError(parseStringQuery(mockNodeSchema, query));
   const result = extractFieldsetFromQuery(queryParams);
   expect(result).toEqual(expected);
 };

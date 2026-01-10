@@ -1,25 +1,24 @@
-import { fail, ok, type Result } from "@binder/utils";
+import { fail, isErr, ok, type Result } from "@binder/utils";
 import {
   type AncestralFieldsetChain,
   type AncestralFieldValueProvider,
+  type EntitySchema,
   type Fieldset,
   type FieldsetNested,
+  type FieldValue,
   type FieldValueProvider,
-  formatFieldValue,
   getNestedValue,
   type NestedFieldValueProvider,
   parseFieldPath,
+  stringifyFieldValue,
 } from "@binder/db";
 
-export const interpolateFields = (
-  template: string,
-  provider: Fieldset | FieldValueProvider,
-): Result<string> => {
-  const getFieldValue =
-    typeof provider === "function"
-      ? provider
-      : (fieldName: string) => provider[fieldName];
+export type StringifyProvider = (placeholder: string) => Result<string>;
 
+export const interpolatePlain = (
+  template: string,
+  provider: StringifyProvider,
+): Result<string> => {
   let result = "";
   let i = 0;
 
@@ -46,16 +45,17 @@ export const interpolateFields = (
         });
       }
 
-      const fieldName = template.slice(i + 1, closeIndex);
+      const placeholder = template.slice(i + 1, closeIndex);
 
-      if (!/^[\w.-]+$/.test(fieldName)) {
+      if (!/^[\w.-]+$/.test(placeholder)) {
         result += char;
         i++;
         continue;
       }
 
-      const value = formatFieldValue(getFieldValue(fieldName));
-      result += value;
+      const valueResult = provider(placeholder);
+      if (isErr(valueResult)) return valueResult;
+      result += valueResult.data;
       i = closeIndex + 1;
       continue;
     }
@@ -67,7 +67,29 @@ export const interpolateFields = (
   return ok(result);
 };
 
+export const interpolateFields = (
+  schema: EntitySchema,
+  template: string,
+  provider: Fieldset | FieldValueProvider,
+): Result<string> => {
+  const getFieldValue =
+    typeof provider === "function"
+      ? provider
+      : (fieldName: string) => provider[fieldName];
+
+  return interpolatePlain(template, (fieldName) => {
+    const fieldDef = schema.fields[fieldName];
+    if (!fieldDef)
+      return fail(
+        "field-not-found",
+        `Field "${fieldName}" not found in schema`,
+      );
+    return ok(stringifyFieldValue(getFieldValue(fieldName), fieldDef));
+  });
+};
+
 export const interpolateNestedFields = (
+  schema: EntitySchema,
   template: string,
   provider: FieldsetNested | NestedFieldValueProvider,
 ): Result<string> => {
@@ -76,9 +98,12 @@ export const interpolateNestedFields = (
       ? provider
       : (path) => getNestedValue(provider, path) ?? null;
 
-  return interpolateFields(template, (placeholder) => {
+  return interpolatePlain(template, (placeholder) => {
     const path = parseFieldPath(placeholder);
-    return getFieldValue(path);
+    const fieldDef = schema.fields[path[0]!];
+    if (!fieldDef)
+      return fail("field-not-found", `Field "${path[0]}" not found in schema`);
+    return ok(stringifyFieldValue(getFieldValue(path), fieldDef));
   });
 };
 
@@ -97,7 +122,16 @@ export const parseAncestralPlaceholder = (
   return { fieldName: fieldName!, depth };
 };
 
+const stringifySimpleValue = (value: FieldValue | undefined): string => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (Array.isArray(value)) return value.map(stringifySimpleValue).join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
 export const interpolateAncestralFields = (
+  _schema: EntitySchema,
   template: string,
   provider: AncestralFieldsetChain | AncestralFieldValueProvider,
 ): Result<string> => {
@@ -106,9 +140,9 @@ export const interpolateAncestralFields = (
       ? provider
       : (fieldName, depth) => provider[depth]?.[fieldName];
 
-  return interpolateFields(template, (placeholder) => {
+  return interpolatePlain(template, (placeholder) => {
     const { fieldName, depth } = parseAncestralPlaceholder(placeholder);
-    return getFieldValue(fieldName, depth);
+    return ok(stringifySimpleValue(getFieldValue(fieldName, depth)));
   });
 };
 

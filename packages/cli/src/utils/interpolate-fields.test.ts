@@ -7,7 +7,11 @@ import type {
   FieldsetNested,
   NestedFieldValueProvider,
 } from "@binder/db";
-import { mockProjectNode, mockUserNode } from "@binder/db/mocks";
+import {
+  mockNodeSchema,
+  mockProjectNode,
+  mockUserNode,
+} from "@binder/db/mocks";
 import { DEFAULT_TEMPLATE_KEY, resolvePath } from "../document/navigation.ts";
 import {
   extractFieldNames,
@@ -20,7 +24,9 @@ import {
 
 describe("interpolateFields", () => {
   const check = (template: string, fieldset: Fieldset, expected: string) => {
-    const result = throwIfError(interpolateFields(template, fieldset));
+    const result = throwIfError(
+      interpolateFields(mockNodeSchema, template, fieldset),
+    );
     expect(result).toBe(expected);
   };
 
@@ -29,7 +35,7 @@ describe("interpolateFields", () => {
     fieldset: Fieldset,
     errorKey: string,
   ) => {
-    const result = interpolateFields(template, fieldset);
+    const result = interpolateFields(mockNodeSchema, template, fieldset);
     expect(result).toBeErrWithKey(errorKey);
   };
 
@@ -39,23 +45,7 @@ describe("interpolateFields", () => {
     });
 
     it("replaces multiple fields", () => {
-      check("{greeting} {name}", { greeting: "Hi", name: "Bob" }, "Hi Bob");
-    });
-
-    it("handles field names with underscores", () => {
-      check("Value: {field_name}", { field_name: "test" }, "Value: test");
-    });
-
-    it("handles field names with hyphens", () => {
-      check("Value: {field-name}", { "field-name": "test" }, "Value: test");
-    });
-
-    it("handles field names with dots", () => {
-      check(
-        "Value: {parent.child}",
-        { "parent.child": "nested" },
-        "Value: nested",
-      );
+      check("{title} {name}", { title: "Hi", name: "Bob" }, "Hi Bob");
     });
 
     it("handles missing fields as empty string", () => {
@@ -73,7 +63,7 @@ describe("interpolateFields", () => {
 
   describe("value formatting", () => {
     it("formats string values", () => {
-      check("{value}", { value: "text" }, "text");
+      check("{title}", { title: "text" }, "text");
     });
 
     it("formats number values", () => {
@@ -81,15 +71,15 @@ describe("interpolateFields", () => {
     });
 
     it("formats boolean true", () => {
-      check("{active}", { active: true }, "true");
+      check("{favorite}", { favorite: true }, "true");
     });
 
     it("formats boolean false", () => {
-      check("{active}", { active: false }, "false");
+      check("{favorite}", { favorite: false }, "false");
     });
 
     it("formats null as empty string", () => {
-      check("{value}", { value: null }, "");
+      check("{title}", { title: null }, "");
     });
 
     it("formats array with comma-space separator", () => {
@@ -102,14 +92,6 @@ describe("interpolateFields", () => {
 
     it("formats empty array as empty string", () => {
       check("{tags}", { tags: [] }, "");
-    });
-
-    it("formats array with numbers", () => {
-      check("{ids}", { ids: [1, 2, 3] }, "1, 2, 3");
-    });
-
-    it("formats object as JSON", () => {
-      check("{data}", { data: { key: "value" } }, '{"key":"value"}');
     });
   });
 
@@ -150,12 +132,8 @@ describe("interpolateFields", () => {
       checkError("{name", { name: "World" }, "unclosed-bracket");
     });
 
-    it("returns error for unclosed bracket with multiple fields", () => {
-      checkError(
-        "{greeting} {name",
-        { greeting: "Hi", name: "Bob" },
-        "unclosed-bracket",
-      );
+    it("returns error for field not in schema", () => {
+      checkError("{unknown}", { unknown: "value" }, "field-not-found");
     });
   });
 
@@ -184,7 +162,9 @@ describe("interpolateNestedFields", () => {
     fieldset: FieldsetNested,
     expected: string,
   ) => {
-    const result = throwIfError(interpolateNestedFields(template, fieldset));
+    const result = throwIfError(
+      interpolateNestedFields(mockNodeSchema, template, fieldset),
+    );
     expect(result).toBe(expected);
   };
 
@@ -202,18 +182,18 @@ describe("interpolateNestedFields", () => {
 
   it("replaces deeply nested fields", () => {
     check(
-      "{project.owner.name}",
-      { project: { owner: { name: "Alice" } } },
+      "{project.assignedTo.name}",
+      { project: { assignedTo: { name: "Alice" } } },
       "Alice",
     );
   });
 
-  it("handles missing nested field", () => {
-    check("{project.missing}", { project: { title: "Binder" } }, "");
+  it("handles missing nested field as empty string", () => {
+    check("{project.title}", { project: {} }, "");
   });
 
-  it("handles missing intermediate object", () => {
-    check("{project.owner.name}", { project: { title: "Binder" } }, "");
+  it("handles missing intermediate object as empty string", () => {
+    check("{project.assignedTo.name}", { project: { title: "Binder" } }, "");
   });
 
   it("works with provider function", () => {
@@ -224,7 +204,11 @@ describe("interpolateNestedFields", () => {
       return null;
     };
     const result = throwIfError(
-      interpolateNestedFields("{id} - {project.name}", provider),
+      interpolateNestedFields(
+        mockNodeSchema,
+        "{id} - {project.name}",
+        provider,
+      ),
     );
     expect(result).toBe("42 - Binder");
   });
@@ -375,7 +359,9 @@ describe("parseAncestralPlaceholder", () => {
 
 describe("interpolateAncestralFields", () => {
   const check = (template: string, chain: Fieldset[], expected: string) => {
-    const result = throwIfError(interpolateAncestralFields(template, chain));
+    const result = throwIfError(
+      interpolateAncestralFields(mockNodeSchema, template, chain),
+    );
     expect(result).toBe(expected);
   };
 
@@ -407,8 +393,8 @@ describe("interpolateAncestralFields", () => {
     );
   });
 
-  it("returns empty string for missing field", () => {
-    check("{nonexistent}", [{ title: "Current" }], "");
+  it("returns empty string for missing field value", () => {
+    check("{title}", [{}], "");
   });
 
   it("returns empty string for out-of-bounds depth", () => {
@@ -422,7 +408,11 @@ describe("interpolateAncestralFields", () => {
       return null;
     };
     const result = throwIfError(
-      interpolateAncestralFields("{id} - {parent.name}", provider),
+      interpolateAncestralFields(
+        mockNodeSchema,
+        "{id} - {parent.name}",
+        provider,
+      ),
     );
     expect(result).toBe("42 - Parent Name");
   });
@@ -442,7 +432,7 @@ it("round-trips with resolvePath", () => {
     path: "projects/{project}/{title}",
     template: DEFAULT_TEMPLATE_KEY,
   };
-  const path = throwIfError(resolvePath(navItem, item));
+  const path = throwIfError(resolvePath(mockNodeSchema, navItem, item));
   expect(path).toBe("projects/binder-cli/My Task.md");
   const result = throwIfError(extractFieldValues(navItem.path + ".md", path));
   expect(result).toEqual({ project: "binder-cli", title: "My Task" });

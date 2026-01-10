@@ -53,7 +53,7 @@ export const fetchEntityContext = async (
   }
 
   if (navItem.query) {
-    const interpolatedQuery = interpolateQueryParams(navItem.query, [
+    const interpolatedQuery = interpolateQueryParams(schema, navItem.query, [
       pathFields,
     ]);
     const query = isErr(interpolatedQuery)
