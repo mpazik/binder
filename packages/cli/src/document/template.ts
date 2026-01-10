@@ -8,17 +8,13 @@ import {
   type Result,
 } from "@binder/utils";
 import {
-  buildIncludes,
   type EntitySchema,
   type FieldDef,
   type FieldKey,
-  type FieldPath,
   type FieldsetNested,
   formatFieldValue,
   getFieldDefNested,
   getNestedValue,
-  type Includes,
-  parseFieldPath,
   parseFieldValue,
   setNestedValue,
 } from "@binder/db";
@@ -93,7 +89,7 @@ export const renderTemplate = (
     ) => {
       if (!parent || typeof index !== "number") return;
 
-      const fieldPath = node.value.split(".") as FieldPath;
+      const fieldPath = node.path;
       const value = getNestedValue(fieldset, fieldPath);
       const fieldDef = getFieldDefNested(schema, fieldPath);
       const text = formatFieldValue(value ?? "");
@@ -172,7 +168,7 @@ export const extractFields = (
     state: MatchState,
     viewChildren: SimplifiedViewNode[],
   ): boolean => {
-    const fieldPath = viewChild.value.split(".") as FieldKey[];
+    const fieldPath = viewChild.path as FieldKey[];
     const fieldDef = getFieldDefNested(schema, fieldPath);
 
     if (fieldDef === undefined) {

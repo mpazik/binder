@@ -8,12 +8,7 @@
         {
           "type": "fieldSlot",
           "value": "title",
-          "data": {
-            "hName": "span",
-            "hProperties": {
-              "className": "field-slot"
-            }
-          }
+          "path": ["title"]
         }
       ]
     },
@@ -36,12 +31,7 @@
         {
           "type": "fieldSlot",
           "value": "status",
-          "data": {
-            "hName": "span",
-            "hProperties": {
-              "className": "field-slot"
-            }
-          }
+          "path": ["status"]
         },
         {
           "type": "text",
@@ -63,12 +53,7 @@
         {
           "type": "fieldSlot",
           "value": "tags",
-          "data": {
-            "hName": "span",
-            "hProperties": {
-              "className": "field-slot"
-            }
-          }
+          "path": ["tags"]
         }
       ]
     },
@@ -88,12 +73,7 @@
         {
           "type": "fieldSlot",
           "value": "description",
-          "data": {
-            "hName": "span",
-            "hProperties": {
-              "className": "field-slot"
-            }
-          }
+          "path": ["description"]
         }
       ]
     }
