@@ -3,19 +3,19 @@ import type {
   CompletionParams,
 } from "vscode-languageserver/node";
 import { CompletionItemKind } from "vscode-languageserver/node";
-import { isMap } from "yaml";
+import { isMap, isPair, isScalar, isSeq } from "yaml";
 import type {
   EntitySchema,
   FieldAttrDef,
   FieldDef,
+  NamespaceEditable,
   NodeFieldDef,
   NodeType,
   TypeDef,
 } from "@binder/db";
 import { isErr } from "@binder/utils";
-import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
-import type { ParsedYaml } from "../document/yaml-cst.ts";
+import type { ParsedYaml, YamlPath } from "../document/yaml-cst.ts";
 import {
   getFieldKeys,
   getParentMap,
@@ -72,8 +72,8 @@ const createBooleanCompletions = (): CompletionItem[] => {
 };
 
 const createRelationCompletions = async (
-  runtime: RuntimeContextWithDb,
-  log: Logger,
+  { kg, log }: RuntimeContextWithDb,
+  namespace: NamespaceEditable,
   fieldDef: FieldDef,
   attrs: FieldAttrDef | undefined,
 ): Promise<CompletionItem[]> => {
@@ -96,10 +96,13 @@ const createRelationCompletions = async (
   const completions: CompletionItem[] = [];
 
   for (const targetType of range) {
-    const searchResult = await runtime.kg.search({
-      filters: { type: targetType as NodeType },
-      pagination: { limit: 50 },
-    });
+    const searchResult = await kg.search(
+      {
+        filters: { type: targetType as NodeType },
+        pagination: { limit: 50 },
+      },
+      namespace,
+    );
 
     if (isErr(searchResult)) {
       log.debug("Failed to search entities for completion", {
@@ -126,12 +129,58 @@ const createRelationCompletions = async (
   return completions;
 };
 
+const getParentFieldKey = (path: YamlPath): string | undefined => {
+  for (let i = path.length - 1; i >= 0; i--) {
+    const node = path[i];
+    if (isPair(node) && isScalar(node.key)) {
+      return String(node.key.value);
+    }
+  }
+  return undefined;
+};
+
+const getExistingSeqItemKeys = (seqNode: unknown): string[] => {
+  if (!seqNode || isPair(seqNode) || !isSeq(seqNode)) return [];
+
+  const keys: string[] = [];
+  for (const item of seqNode.items) {
+    if (isScalar(item)) {
+      keys.push(String(item.value));
+    } else if (isMap(item) && item.items.length > 0) {
+      const firstPair = item.items[0];
+      if (isPair(firstPair) && isScalar(firstPair.key)) {
+        keys.push(String(firstPair.key.value));
+      }
+    }
+  }
+  return keys;
+};
+
+const createSeqItemRelationCompletions = async (
+  runtime: RuntimeContextWithDb,
+  namespace: NamespaceEditable,
+  fieldDef: FieldDef,
+  attrs: FieldAttrDef | undefined,
+  existingKeys: string[],
+): Promise<CompletionItem[]> => {
+  const completions = await createRelationCompletions(
+    runtime,
+    namespace,
+    fieldDef,
+    attrs,
+  );
+
+  return completions.filter(
+    (item) => !existingKeys.includes(item.insertText ?? item.label),
+  );
+};
+
 const createValueCompletions = async (
   fieldKey: string,
   schema: EntitySchema,
   typeDef: TypeDef | undefined,
+  namespace: NamespaceEditable,
   runtime: RuntimeContextWithDb,
-  log: Logger,
 ): Promise<CompletionItem[]> => {
   const fieldInfo = getFieldDefForType(fieldKey, typeDef, schema);
   if (!fieldInfo) return [];
@@ -147,7 +196,7 @@ const createValueCompletions = async (
   }
 
   if (fieldDef.dataType === "relation") {
-    return createRelationCompletions(runtime, log, fieldDef, attrs);
+    return createRelationCompletions(runtime, namespace, fieldDef, attrs);
   }
 
   return [];
@@ -196,8 +245,30 @@ export const handleCompletion: LspHandler<
       yamlContext.fieldKey,
       context.schema,
       context.typeDef,
+      context.namespace,
       runtime,
-      log,
+    );
+  }
+
+  if (yamlContext.type === "seq-item") {
+    const parentFieldKey = getParentFieldKey(yamlContext.path);
+    if (!parentFieldKey) return [];
+
+    const fieldInfo = getFieldDefForType(
+      parentFieldKey,
+      context.typeDef,
+      context.schema,
+    );
+    if (!fieldInfo || fieldInfo.def.dataType !== "relation") return [];
+
+    const existingKeys = getExistingSeqItemKeys(yamlContext.parent);
+
+    return createSeqItemRelationCompletions(
+      runtime,
+      context.namespace,
+      fieldInfo.def,
+      fieldInfo.attrs,
+      existingKeys,
     );
   }
 

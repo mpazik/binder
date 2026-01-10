@@ -37,8 +37,19 @@ export const mockNav3Entity = {
   query: { filters: { type: "Task" } },
 } as const satisfies Fieldset;
 
+export const mockNav4Entity = {
+  id: newUserConfigId(3),
+  uid: "navRoot0003" as ConfigUid,
+  key: "nav-tasks" as ConfigKey,
+  type: typeNavigationKey,
+  path: "tasks/{key}",
+  where: { type: "Task" },
+  includes: { title: true, status: true, project: true },
+} as const satisfies Fieldset;
+
 export const mockNavigationConfigInput = [
   changesetInputForNewEntity<"config">(mockNav1Entity),
   changesetInputForNewEntity<"config">(mockNav2Entity),
   changesetInputForNewEntity<"config">(mockNav3Entity),
+  changesetInputForNewEntity<"config">(mockNav4Entity),
 ];

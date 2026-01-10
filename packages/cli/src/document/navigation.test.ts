@@ -544,6 +544,11 @@ describe("navigation", () => {
           path: "all-tasks",
           query: { filters: { type: "Task" } },
         },
+        {
+          path: "tasks/{key}",
+          where: { type: "Task" },
+          includes: { title: true, status: true, project: true },
+        },
       ]);
     });
   });
