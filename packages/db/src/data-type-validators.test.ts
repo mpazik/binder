@@ -180,60 +180,39 @@ describe("data-type-validators", () => {
       checkErr("plaintext", true);
     });
 
-    it("uses line alphabet by default - rejects line breaks", () => {
+    it("uses line format by default - rejects line breaks", () => {
       checkErr("plaintext", "hello\nworld", {
         message: "single line without line breaks",
       });
     });
 
-    it("accepts single line with default alphabet", () => {
+    it("accepts single line with default format", () => {
       checkOk("plaintext", "hello world with spaces");
     });
 
-    describe("alphabet: token", () => {
-      const fieldDef = { plaintextFormat: "token" as const };
+    describe("format: identifier", () => {
+      const fieldDef = { plaintextFormat: "identifier" as const };
 
-      it("accepts letters and digits", () => {
-        checkOk("plaintext", "abc123", { fieldDef });
-        checkOk("plaintext", "", { fieldDef });
-      });
-
-      it("rejects spaces", () => {
-        checkErr("plaintext", "abc 123", {
-          fieldDef,
-          message: "only letters and digits",
-        });
-      });
-
-      it("rejects special characters", () => {
-        checkErr("plaintext", "abc-123", { fieldDef });
-        checkErr("plaintext", "abc_123", { fieldDef });
-      });
-    });
-
-    describe("alphabet: code", () => {
-      const fieldDef = { plaintextFormat: "code" as const };
-
-      it("accepts valid code identifiers", () => {
+      it("accepts valid identifiers", () => {
         checkOk("plaintext", "myItem", { fieldDef });
         checkOk("plaintext", "my-item_v2", { fieldDef });
         checkOk("plaintext", "", { fieldDef });
       });
 
-      it("rejects codes starting with digit", () => {
+      it("rejects identifiers starting with digit", () => {
         checkErr("plaintext", "123abc", {
           fieldDef,
           message: "start with a letter",
         });
       });
 
-      it("rejects codes starting with special char", () => {
+      it("rejects identifiers starting with special char", () => {
         checkErr("plaintext", "-item", { fieldDef });
         checkErr("plaintext", "_item", { fieldDef });
       });
     });
 
-    describe("alphabet: word", () => {
+    describe("format: word", () => {
       const fieldDef = { plaintextFormat: "word" as const };
 
       it("accepts words without whitespace", () => {
@@ -254,7 +233,53 @@ describe("data-type-validators", () => {
       });
     });
 
-    describe("alphabet: paragraph", () => {
+    describe("format: phrase", () => {
+      const fieldDef = { plaintextFormat: "phrase" as const };
+
+      it("accepts text without delimiter punctuation", () => {
+        checkOk("plaintext", "hello world", { fieldDef });
+        checkOk("plaintext", "John Smith", { fieldDef });
+        checkOk("plaintext", "", { fieldDef });
+      });
+
+      it("rejects commas", () => {
+        checkErr("plaintext", "Smith, John", {
+          fieldDef,
+          message: "must not contain commas",
+        });
+      });
+
+      it("rejects semicolons", () => {
+        checkErr("plaintext", "one; two", { fieldDef });
+      });
+
+      it("rejects pipes", () => {
+        checkErr("plaintext", "a | b", { fieldDef });
+      });
+
+      it("rejects line breaks", () => {
+        checkErr("plaintext", "line1\nline2", { fieldDef });
+      });
+    });
+
+    describe("format: line", () => {
+      const fieldDef = { plaintextFormat: "line" as const };
+
+      it("accepts single lines with any punctuation", () => {
+        checkOk("plaintext", "Hello, world!", { fieldDef });
+        checkOk("plaintext", "Smith; John: Manager", { fieldDef });
+        checkOk("plaintext", "", { fieldDef });
+      });
+
+      it("rejects line breaks", () => {
+        checkErr("plaintext", "line1\nline2", {
+          fieldDef,
+          message: "single line without line breaks",
+        });
+      });
+    });
+
+    describe("format: paragraph", () => {
       const fieldDef = { plaintextFormat: "paragraph" as const };
 
       it("accepts multiple lines without blank lines", () => {
@@ -282,13 +307,13 @@ describe("data-type-validators", () => {
       checkErr("richtext", null);
     });
 
-    it("uses block alphabet by default - rejects blank lines", () => {
+    it("uses block format by default - rejects blank lines", () => {
       checkErr("richtext", "para1\n\npara2", {
         message: "must not contain blank lines",
       });
     });
 
-    describe("alphabet: word", () => {
+    describe("format: word", () => {
       const fieldDef = { richtextFormat: "word" as const };
 
       it("accepts single words", () => {
@@ -304,11 +329,41 @@ describe("data-type-validators", () => {
       });
     });
 
-    describe("alphabet: line", () => {
+    describe("format: phrase", () => {
+      const fieldDef = { richtextFormat: "phrase" as const };
+
+      it("accepts text without delimiter punctuation", () => {
+        checkOk("richtext", "hello **world**", { fieldDef });
+        checkOk("richtext", "John Smith", { fieldDef });
+        checkOk("richtext", "", { fieldDef });
+      });
+
+      it("rejects commas", () => {
+        checkErr("richtext", "Smith, John", {
+          fieldDef,
+          message: "must not contain commas",
+        });
+      });
+
+      it("rejects semicolons", () => {
+        checkErr("richtext", "one; two", { fieldDef });
+      });
+
+      it("rejects pipes", () => {
+        checkErr("richtext", "a | b", { fieldDef });
+      });
+
+      it("rejects line breaks", () => {
+        checkErr("richtext", "line1\nline2", { fieldDef });
+      });
+    });
+
+    describe("format: line", () => {
       const fieldDef = { richtextFormat: "line" as const };
 
       it("accepts single lines with formatting", () => {
         checkOk("richtext", "hello **world**", { fieldDef });
+        checkOk("richtext", "Hello, world!", { fieldDef });
         checkOk("richtext", "", { fieldDef });
       });
 
@@ -320,7 +375,7 @@ describe("data-type-validators", () => {
       });
     });
 
-    describe("alphabet: block", () => {
+    describe("format: block", () => {
       const fieldDef = { richtextFormat: "block" as const };
 
       it("accepts paragraphs and lists", () => {
@@ -353,26 +408,42 @@ describe("data-type-validators", () => {
         checkOk("richtext", "#hashtag", { fieldDef });
         checkOk("richtext", "##not-a-header", { fieldDef });
       });
+
+      it("rejects horizontal rules", () => {
+        checkErr("richtext", "---", {
+          fieldDef,
+          message: "cannot contain horizontal rules",
+        });
+        checkErr("richtext", "content\n---\nmore", { fieldDef });
+      });
     });
 
-    describe("alphabet: section", () => {
+    describe("format: section", () => {
       const fieldDef = { richtextFormat: "section" as const };
 
-      it("accepts content with blank lines", () => {
-        checkOk("richtext", "paragraph\n\nanother paragraph", { fieldDef });
+      it("accepts content starting with header", () => {
+        checkOk("richtext", "# Heading\n\nContent", { fieldDef });
+        checkOk("richtext", "## Sub heading\n\nMore content", { fieldDef });
         checkOk("richtext", "", { fieldDef });
       });
 
-      it("rejects headers", () => {
-        checkErr("richtext", "# Heading\n\nContent", {
+      it("rejects content without header at start", () => {
+        checkErr("richtext", "paragraph\n\nanother paragraph", {
           fieldDef,
-          message: "cannot contain headers",
+          message: "must start with a header",
         });
-        checkErr("richtext", "## Sub heading", { fieldDef });
+        checkErr("richtext", "Some content\n\n## Heading later", { fieldDef });
+      });
+
+      it("rejects horizontal rules", () => {
+        checkErr("richtext", "# Heading\n\n---\n\nMore content", {
+          fieldDef,
+          message: "cannot contain horizontal rules",
+        });
       });
     });
 
-    describe("alphabet: document", () => {
+    describe("format: document", () => {
       const fieldDef = { richtextFormat: "document" as const };
 
       it("accepts content with headers", () => {

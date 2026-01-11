@@ -102,7 +102,7 @@ export const coreFields = {
     key: "key" as EntityKey,
     name: "Key",
     dataType: "plaintext",
-    plaintextFormat: "code",
+    plaintextFormat: "identifier",
     description: "Unique key to identify the configuration record",
     unique: true,
   },
@@ -111,7 +111,7 @@ export const coreFields = {
     key: "type" as EntityKey,
     name: "type",
     dataType: "plaintext",
-    plaintextFormat: "code",
+    plaintextFormat: "identifier",
     immutable: true,
   },
   name: {
@@ -133,7 +133,7 @@ export const coreFields = {
     key: descriptionFieldKey,
     name: "description",
     dataType: "richtext",
-    richtextFormat: "section",
+    richtextFormat: "block",
   },
 } as const satisfies Record<string, FieldDef>;
 

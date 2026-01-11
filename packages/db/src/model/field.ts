@@ -1,6 +1,13 @@
 import { fail, type JsonValue, ok, type Result } from "@binder/utils";
 import type { EntityUid } from "./entity.ts";
-import { getPlaintextFormat, getRichtextFormat } from "./data-type.ts";
+import {
+  DEFAULT_PLAINTEXT_FORMAT,
+  DEFAULT_RICHTEXT_FORMAT,
+  getPlaintextFormat,
+  getRichtextFormat,
+  type PlaintextFormat,
+  type RichtextFormat,
+} from "./data-type.ts";
 import type { FieldDef } from "./schema.ts";
 
 export type FieldKey = string;
@@ -83,22 +90,54 @@ export type MultiValueDelimiter =
   | "header"
   | "hrule";
 
+export const getDelimiterForRichtextFormat = (
+  format: RichtextFormat,
+): MultiValueDelimiter => {
+  switch (format) {
+    case "word":
+    case "phrase":
+      return "comma";
+    case "line":
+      return "newline";
+    case "block":
+      return "blankline";
+    case "section":
+      return "header";
+    case "document":
+      return "hrule";
+  }
+};
+
+export const getDelimiterForPlaintextFormat = (
+  format: PlaintextFormat,
+): MultiValueDelimiter => {
+  switch (format) {
+    case "identifier":
+    case "word":
+    case "phrase":
+    case "semver":
+      return "comma";
+    case "line":
+    case "filepath":
+    case "uri":
+      return "newline";
+    case "paragraph":
+      return "blankline";
+  }
+};
+
 export const getMultiValueDelimiter = (
   fieldDef: FieldDef,
 ): MultiValueDelimiter => {
   if (fieldDef.dataType === "plaintext") {
-    const format = fieldDef.plaintextFormat;
-    if (format === "line") return "newline";
-    if (format === "paragraph") return "blankline";
-    return "comma";
+    return getDelimiterForPlaintextFormat(
+      fieldDef.plaintextFormat ?? DEFAULT_PLAINTEXT_FORMAT,
+    );
   }
   if (fieldDef.dataType === "richtext") {
-    const format = fieldDef.richtextFormat;
-    if (format === "line") return "newline";
-    if (format === "block") return "blankline";
-    if (format === "section") return "header";
-    if (format === "document") return "hrule";
-    return "comma";
+    return getDelimiterForRichtextFormat(
+      fieldDef.richtextFormat ?? DEFAULT_RICHTEXT_FORMAT,
+    );
   }
   return "comma";
 };
@@ -140,31 +179,35 @@ export const isMultilineFormat = (fieldDef: FieldDef): boolean => {
 };
 
 export const getDelimiterString = (delimiter: MultiValueDelimiter): string => {
-  if (delimiter === "comma") return ", ";
-  if (delimiter === "newline") return "\n";
-  if (delimiter === "blankline") return "\n\n";
-  if (delimiter === "header") return "\n\n";
-  if (delimiter === "hrule") return "\n\n---\n\n";
-  return ", ";
+  switch (delimiter) {
+    case "comma":
+      return ", ";
+    case "newline":
+      return "\n";
+    case "blankline":
+    case "header":
+      return "\n\n";
+    case "hrule":
+      return "\n\n---\n\n";
+  }
 };
 
-const splitByDelimiter = (
+export const splitByDelimiter = (
   value: string,
   delimiter: MultiValueDelimiter,
 ): string[] => {
-  if (delimiter === "comma") return value.split(",").map((item) => item.trim());
-
-  if (delimiter === "newline")
-    return value.split("\n").map((item) => item.trim());
-
-  if (delimiter === "blankline")
-    return value.split(/\n\n+/).map((item) => item.trim());
-
-  if (delimiter === "header") return splitByHeader(value);
-
-  if (delimiter === "hrule") return splitByHorizontalRule(value);
-
-  return [value];
+  switch (delimiter) {
+    case "comma":
+      return value.split(",").map((item) => item.trim());
+    case "newline":
+      return value.split("\n").map((item) => item.trim());
+    case "blankline":
+      return value.split(/\n\n+/).map((item) => item.trim());
+    case "header":
+      return splitByHeader(value);
+    case "hrule":
+      return splitByHorizontalRule(value);
+  }
 };
 
 export const parseFieldValue = (

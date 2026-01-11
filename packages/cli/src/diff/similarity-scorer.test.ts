@@ -252,21 +252,21 @@ describe("computeMatchScore", () => {
   });
 
   describe("score baselines", () => {
-    it("exact match", () => checkScore(task, task, 52.0));
+    it("exact match", () => checkScore(task, task, 48.7));
     it("complete mismatch", () => checkScore(task, project, -7.6));
     it("title change", () =>
-      checkScore(task, { ...task, title: "Different task" }, 37.6));
+      checkScore(task, { ...task, title: "Different task" }, 34.3));
     it("status change", () =>
-      checkScore(task, { ...task, status: "active" }, 48.8));
+      checkScore(task, { ...task, status: "active" }, 45.4));
     it("type change", () =>
-      checkScore(task, { ...task, type: "Project" }, 43.8));
+      checkScore(task, { ...task, type: "Project" }, 40.5));
     it("position 0->5", () =>
-      checkScore({ ...task, position: 0 }, { ...task, position: 5 }, 49.9));
+      checkScore({ ...task, position: 0 }, { ...task, position: 5 }, 46.6));
     it("edited and moved", () => {
       checkScore(
         { ...task, position: 0 },
         { ...task, title: "Implement OAuth", status: "active", position: 3 },
-        35.3,
+        32.0,
       );
     });
     // Type match alone is not enough - need partial content similarity to reach the threshold

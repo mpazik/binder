@@ -43,19 +43,11 @@ const createPatternValidator =
   (value, _context) =>
     pattern.test(value) ? undefined : errorMessage;
 
-export const plaintextFormats: TextFormatDefs = {
-  token: {
-    name: "Token",
-    description: "Contains only letters and digits (e.g., abc123)",
-    validate: createPatternValidator(
-      /^[A-Za-z0-9]*$/,
-      "Value must contain only letters and digits",
-    ),
-  },
-  code: {
-    name: "Code",
+export const plaintextFormats = {
+  identifier: {
+    name: "Identifier",
     description:
-      "Programmatic code starting with a letter, containing letters, digits, hyphens, and underscores (e.g., my-item_v2)",
+      "Programmatic identifier starting with a letter, containing letters, digits, hyphens, and underscores (e.g., my-item_v2)",
     validate: createPatternValidator(
       /^[A-Za-z][A-Za-z0-9_-]*$/,
       "Value must start with a letter and contain only letters, digits, hyphens, and underscores",
@@ -69,10 +61,17 @@ export const plaintextFormats: TextFormatDefs = {
       "Value must be a single word without whitespace",
     ),
   },
+  phrase: {
+    name: "Phrase",
+    description: "Short text without delimiter punctuation",
+    validate: createPatternValidator(
+      /^[^,;|\n]*$/,
+      "Value must not contain commas, semicolons, pipes, or line breaks",
+    ),
+  },
   line: {
     name: "Line",
-    description:
-      "Single line of text that may contain spaces but no line breaks",
+    description: "Single line of text that may contain any punctuation",
     validate: createPatternValidator(
       /^[^\n]*$/,
       "Value must be a single line without line breaks",
@@ -88,21 +87,59 @@ export const plaintextFormats: TextFormatDefs = {
     ),
     isMultiline: true,
   },
-};
+  uri: {
+    name: "URI",
+    description:
+      "Uniform Resource Identifier (e.g., https://example.com, file:///path, mailto:user@example.com)",
+    validate: createPatternValidator(
+      /^[a-zA-Z][a-zA-Z0-9+.-]*:.+$/,
+      "Value must be a valid URI with scheme (e.g., https://...)",
+    ),
+  },
+  filepath: {
+    name: "File Path",
+    description:
+      "POSIX file path, absolute or relative (e.g., /home/user/file.txt, ./docs/readme.md)",
+    validate: createPatternValidator(
+      /^[^\0\n]*$/,
+      "Value must be a valid POSIX file path",
+    ),
+  },
+  semver: {
+    name: "Semantic Version",
+    description:
+      "Semantic versioning format (e.g., 1.2.3, 2.0.0-beta.1+build.123)",
+    validate: createPatternValidator(
+      /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([\da-zA-Z-]+(?:\.[\da-zA-Z-]+)*))?(?:\+([\da-zA-Z-]+(?:\.[\da-zA-Z-]+)*))?$/,
+      "Value must follow semantic versioning (MAJOR.MINOR.PATCH)",
+    ),
+  },
+} as const satisfies TextFormatDefs;
 
 const containsMarkdownHeader = (value: string): boolean =>
   /^#{1,6}\s/m.test(value);
 
+const startsWithMarkdownHeader = (value: string): boolean =>
+  /^#{1,6}\s/.test(value);
+
 const containsHorizontalRule = (value: string): boolean =>
   /^-{3,}\s*$/m.test(value);
 
-export const richtextFormats: TextFormatDefs = {
+export const richtextFormats = {
   word: {
     name: "Word",
     description: "Single styled word without spaces",
     validate: createPatternValidator(
       /^\S*$/,
       "Value must be a single word without whitespace",
+    ),
+  },
+  phrase: {
+    name: "Phrase",
+    description: "Short text with formatting but without delimiter punctuation",
+    validate: createPatternValidator(
+      /^[^,;|\n]*$/,
+      "Value must not contain commas, semicolons, pipes, or line breaks",
     ),
   },
   line: {
@@ -113,26 +150,28 @@ export const richtextFormats: TextFormatDefs = {
       /^[^\n]*$/,
       "Value must be a single line without line breaks",
     ),
-    isMultiline: true,
   },
   block: {
     name: "Block",
     description:
-      "Single content block such as a paragraph, list, or code block. No headers or blank lines allowed.",
-    validate: (value, _context) => {
+      "Single content block such as a paragraph, list, or code block. No headers, blank lines, or horizontal rules allowed.",
+    validate: (value) => {
       if (/\n\n/.test(value)) return "Value must not contain blank lines";
       if (containsMarkdownHeader(value)) return "Block cannot contain headers";
+      if (containsHorizontalRule(value))
+        return "Block cannot contain horizontal rules (---)";
       return undefined;
     },
     isMultiline: true,
   },
   section: {
     name: "Section",
-    description:
-      "Content section with multiple blocks. Headers are not allowed (they serve as delimiters for multi-value fields).",
-    validate: (value, _context) => {
-      if (containsMarkdownHeader(value))
-        return "Section cannot contain headers";
+    description: "Content section that must start with a header.",
+    validate: (value) => {
+      if (!startsWithMarkdownHeader(value))
+        return "Section must start with a header (e.g., ## Title)";
+      if (containsHorizontalRule(value))
+        return "Section cannot contain horizontal rules (---)";
       return undefined;
     },
     isMultiline: true,
@@ -141,35 +180,22 @@ export const richtextFormats: TextFormatDefs = {
     name: "Document",
     description:
       "Complete document with full structure including headers. Horizontal rules (---) serve as delimiters for multi-value fields.",
-    validate: (value, _context) => {
+    validate: (value) => {
       if (containsHorizontalRule(value))
         return "Document cannot contain horizontal rules (---)";
       return undefined;
     },
     isMultiline: true,
   },
-};
+} as const satisfies TextFormatDefs;
 
-export const periodFormats: TextFormatDefs = {
-  year: {
-    name: "Year",
-    description: "YYYY (e.g. 2024)",
-    validate: createPatternValidator(/^\d{4}$/, "Invalid year format"),
-  },
-  quarter: {
-    name: "Quarter",
-    description: "YYYY-Q# (e.g. 2024-Q1)",
+export const periodFormats = {
+  day: {
+    name: "Day",
+    description: "YYYY-MM-DD (e.g. 2024-03-25)",
     validate: createPatternValidator(
-      /^\d{4}-Q[1-4]$/,
-      "Invalid quarter format",
-    ),
-  },
-  month: {
-    name: "Month",
-    description: "YYYY-MM (e.g. 2024-03)",
-    validate: createPatternValidator(
-      /^\d{4}-(0[1-9]|1[0-2])$/,
-      "Invalid month format",
+      /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
+      "Invalid day format",
     ),
   },
   week: {
@@ -180,15 +206,28 @@ export const periodFormats: TextFormatDefs = {
       "Invalid week format",
     ),
   },
-  day: {
-    name: "Day",
-    description: "YYYY-MM-DD (e.g. 2024-03-25)",
+  month: {
+    name: "Month",
+    description: "YYYY-MM (e.g. 2024-03)",
     validate: createPatternValidator(
-      /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
-      "Invalid day format",
+      /^\d{4}-(0[1-9]|1[0-2])$/,
+      "Invalid month format",
     ),
   },
-};
+  quarter: {
+    name: "Quarter",
+    description: "YYYY-Q# (e.g. 2024-Q1)",
+    validate: createPatternValidator(
+      /^\d{4}-Q[1-4]$/,
+      "Invalid quarter format",
+    ),
+  },
+  year: {
+    name: "Year",
+    description: "YYYY (e.g. 2024)",
+    validate: createPatternValidator(/^\d{4}$/, "Invalid year format"),
+  },
+} as const satisfies TextFormatDefs;
 
 export type PlaintextFormat = keyof typeof plaintextFormats;
 export type RichtextFormat = keyof typeof richtextFormats;

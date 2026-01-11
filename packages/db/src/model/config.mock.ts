@@ -115,7 +115,7 @@ export const mockTagsField = {
   name: "Tags",
   description: "Category labels",
   dataType: "plaintext",
-  plaintextFormat: "code",
+  plaintextFormat: "identifier",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 
@@ -315,7 +315,7 @@ export const mockChaptersField = {
   name: "Chapters",
   description: "Document chapters",
   dataType: "richtext",
-  richtextFormat: "section",
+  richtextFormat: "document",
   allowMultiple: true,
 } as const satisfies NodeFieldDef;
 

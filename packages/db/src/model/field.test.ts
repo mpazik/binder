@@ -10,7 +10,6 @@ import {
 import type { FieldDef, FieldsetNested } from "./index.ts";
 import {
   mockAliasesField,
-  mockChaptersField,
   mockDueDateField,
   mockFavoriteField,
   mockNotesField,
@@ -20,6 +19,13 @@ import {
   mockTemplatesField,
 } from "./config.mock.ts";
 import { coreFields } from "./schema.ts";
+
+// Test-only field definition for section format parsing tests
+const mockSectionField = {
+  dataType: "richtext",
+  richtextFormat: "section",
+  allowMultiple: true,
+} as FieldDef;
 
 describe("field", () => {
   describe("getNestedValue", () => {
@@ -194,7 +200,7 @@ describe("field", () => {
       check("high", mockPriorityField, "high");
     });
 
-    describe("allowMultiple with code alphabet", () => {
+    describe("allowMultiple with identifier format", () => {
       it("splits by comma", () => {
         check("urgent, important, low-priority", mockTagsField, [
           "urgent",
@@ -217,7 +223,7 @@ describe("field", () => {
       });
     });
 
-    describe("allowMultiple with line alphabet", () => {
+    describe("allowMultiple with inline format", () => {
       it("splits by newline", () => {
         check("first alias\nsecond alias\nthird", mockAliasesField, [
           "first alias",
@@ -240,7 +246,7 @@ describe("field", () => {
       });
     });
 
-    describe("allowMultiple with paragraph alphabet", () => {
+    describe("allowMultiple with paragraph format", () => {
       it("splits by blank line", () => {
         check(
           "first paragraph\nwith two lines\n\nsecond paragraph",
@@ -261,7 +267,7 @@ describe("field", () => {
       });
     });
 
-    describe("allowMultiple with block alphabet", () => {
+    describe("allowMultiple with block format", () => {
       it("splits by blank line", () => {
         check("first block\nwith lines\n\nsecond block", mockStepsField, [
           "first block\nwith lines",
@@ -270,11 +276,11 @@ describe("field", () => {
       });
     });
 
-    describe("allowMultiple with section alphabet", () => {
+    describe("allowMultiple with section format", () => {
       it("splits by headers", () => {
         check(
           "## Chapter One\nContent here\n\n## Chapter Two\nMore content",
-          mockChaptersField,
+          mockSectionField,
           ["## Chapter One\nContent here", "## Chapter Two\nMore content"],
         );
       });
@@ -282,32 +288,32 @@ describe("field", () => {
       it("splits by any header level", () => {
         check(
           "# H1\nContent\n\n### H3\nMore\n\n###### H6\nEnd",
-          mockChaptersField,
+          mockSectionField,
           ["# H1\nContent", "### H3\nMore", "###### H6\nEnd"],
         );
       });
 
       it("includes content before first header as separate section", () => {
-        check("Intro content\n\n## First Chapter\nBody", mockChaptersField, [
+        check("Intro content\n\n## First Chapter\nBody", mockSectionField, [
           "Intro content",
           "## First Chapter\nBody",
         ]);
       });
 
       it("handles content with no headers", () => {
-        check("Just plain content\n\nWith paragraphs", mockChaptersField, [
+        check("Just plain content\n\nWith paragraphs", mockSectionField, [
           "Just plain content\n\nWith paragraphs",
         ]);
       });
 
       it("handles empty content", () => {
-        check("", mockChaptersField, []);
+        check("", mockSectionField, []);
       });
 
       it("trims whitespace from items", () => {
         check(
           "  \n## Chapter One\nContent  \n\n## Chapter Two\nMore  \n  ",
-          mockChaptersField,
+          mockSectionField,
           ["## Chapter One\nContent", "## Chapter Two\nMore"],
         );
       });
@@ -315,13 +321,13 @@ describe("field", () => {
       it("does not split on hash without space (not a header)", () => {
         check(
           "## Chapter\nContent with #hashtag\n\n## Another",
-          mockChaptersField,
+          mockSectionField,
           ["## Chapter\nContent with #hashtag", "## Another"],
         );
       });
     });
 
-    describe("allowMultiple with document alphabet", () => {
+    describe("allowMultiple with document format", () => {
       it("splits by horizontal rule", () => {
         check(
           "# First Doc\nContent here\n---\n# Second Doc\nMore content",

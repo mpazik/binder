@@ -97,7 +97,7 @@ describe("patch-parser", () => {
       );
     });
 
-    it("sets array with comma-separated values for code alphabet", () => {
+    it("sets array with comma-separated values for code format", () => {
       check(
         "tags=urgent,important,low-priority",
         ["urgent", "important", "low-priority"],
@@ -106,7 +106,7 @@ describe("patch-parser", () => {
       check("tags=urgent", ["urgent"], mockTagsField);
     });
 
-    it("sets array with newline-separated values for line alphabet", () => {
+    it("sets array with newline-separated values for line format", () => {
       check(
         "aliases=first\nsecond\nthird",
         ["first", "second", "third"],
@@ -114,7 +114,7 @@ describe("patch-parser", () => {
       );
     });
 
-    it("sets array with blank-line-separated values for paragraph alphabet", () => {
+    it("sets array with blank-line-separated values for paragraph format", () => {
       check(
         "notes=para one\n\npara two",
         ["para one", "para two"],

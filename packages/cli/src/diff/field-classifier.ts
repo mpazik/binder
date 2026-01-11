@@ -30,15 +30,19 @@ export type SchemaContext = {
 };
 
 const PLAINTEXT_U_VALUES: Record<PlaintextFormat, number> = {
-  token: 0.001,
-  code: 0.0001,
+  identifier: 0.0001,
   word: 0.001,
+  phrase: 0.001,
   line: 0.0001,
+  uri: 0.0001,
+  filepath: 0.0001,
+  semver: 0.0001,
   paragraph: 0.00001,
 };
 
 const RICHTEXT_U_VALUES: Record<RichtextFormat, number> = {
   word: 0.001,
+  phrase: 0.001,
   line: 0.0001,
   block: 0.00001,
   section: 0.000001,
