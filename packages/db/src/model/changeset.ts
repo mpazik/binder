@@ -253,9 +253,9 @@ export const rebaseChangeset = (
       : normalizedChange;
   });
 
-type RelationTuple = [ref: string, attrs: Fieldset];
+export type RelationTuple = [ref: string, attrs: Fieldset];
 
-const isRelationTuple = (value: FieldValue): value is RelationTuple =>
+export const isRelationTuple = (value: FieldValue): value is RelationTuple =>
   Array.isArray(value) &&
   value.length === 2 &&
   typeof value[0] === "string" &&
@@ -263,7 +263,7 @@ const isRelationTuple = (value: FieldValue): value is RelationTuple =>
   value[1] !== null &&
   !Array.isArray(value[1]);
 
-const getRelationRef = (value: FieldValue): string | undefined => {
+export const getRelationRef = (value: FieldValue): string | undefined => {
   if (typeof value === "string") return value;
   if (isRelationTuple(value)) return value[0];
   return undefined;

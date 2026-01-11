@@ -89,3 +89,5 @@ if (isErr(result)) {
   console.error("fatal", result.error);
   process.exitCode = 1;
 }
+export { isFormatCompatibleWithPosition } from "./document/field-slot.ts";
+export type { SlotPosition } from "./document/field-slot.ts";

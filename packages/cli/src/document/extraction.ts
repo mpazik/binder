@@ -1,6 +1,7 @@
 import {
   type EntitySchema,
   type FieldsetNested,
+  type Includes,
   isFieldsetNested,
   type QueryParams,
 } from "@binder/db";
@@ -10,7 +11,7 @@ import { parseMarkdown } from "./markdown.ts";
 import { extractFields } from "./template.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 import { getDocumentFileType } from "./document.ts";
-import type { Templates } from "./template-entity.ts";
+import type { TemplateKey, Templates } from "./template-entity.ts";
 
 export type ExtractedProjection = {
   items: FieldsetNested[];
@@ -24,6 +25,7 @@ export type ExtractedFileData =
       kind: "document";
       entity: FieldsetNested;
       projections: ExtractedProjection[];
+      includes: Includes | undefined;
     };
 
 const dedupeByUid = (entities: FieldsetNested[]): FieldsetNested[] => {
@@ -109,7 +111,8 @@ const extractFromMarkdown = (
   const markdownAst = parseMarkdown(markdown);
   const fileFieldsResult = extractFields(
     schema,
-    template.templateAst,
+    templates,
+    template.key as TemplateKey,
     markdownAst,
   );
   if (isErr(fileFieldsResult)) return fileFieldsResult;
@@ -117,7 +120,12 @@ const extractFromMarkdown = (
   const entity = fileFieldsResult.data;
   const projections = extractProjections(entity);
 
-  return ok({ kind: "document", entity, projections });
+  return ok({
+    kind: "document",
+    entity,
+    projections,
+    includes: template.templateIncludes,
+  });
 };
 
 export const extractRaw = (

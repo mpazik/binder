@@ -5,7 +5,7 @@ It brings the power of typed data, queries, and automation into plain Markdown â
  
 ## What it does
 
-- Dynamic Markdown: Documents render live views of your data using {{dataview}} blocks. 
+- Dynamic Markdown: Documents render live views of your data using field slots like `{tasks}` for multi-value relations. 
 - Two-way sync: Edit your docs or update the graph â€” Binder keeps both sides consistent. 
 - Smart ingestion: Ingest notes, transcripts, or files; Binder extracts entities like Task, Decision, or Project
 - Automatic updates: Completing a task or adding a new item instantly updates summaries, changelogs, and roadmaps.

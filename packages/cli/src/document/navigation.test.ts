@@ -28,7 +28,7 @@ import { createMockRuntimeContextWithDb, mockConfig } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { BINDER_DIR } from "../config.ts";
 import { cliConfigSchema, typeTemplateKey } from "../cli-config-schema.ts";
-import { parseTemplate, renderTemplate } from "./template.ts";
+import { parseTemplate, renderTemplateAst } from "./template.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
@@ -43,10 +43,11 @@ import {
 } from "./navigation.ts";
 import { mockNavigationConfigInput } from "./navigation.mock.ts";
 import {
-  DEFAULT_TEMPLATE_KEY,
+  DOCUMENT_TEMPLATE_KEY,
   loadTemplates,
   type Templates,
 } from "./template-entity.ts";
+import { mockTemplates } from "./template.mock.ts";
 
 describe("navigation", () => {
   const schema = mockNodeSchema;
@@ -64,7 +65,7 @@ describe("navigation", () => {
     it("matches markdown file by path template", () => {
       const item: NavigationItem = {
         path: "tasks/{title}",
-        template: DEFAULT_TEMPLATE_KEY,
+        template: DOCUMENT_TEMPLATE_KEY,
       };
       check([item], "tasks/my-task.md", item);
     });
@@ -80,7 +81,7 @@ describe("navigation", () => {
     it("returns undefined when no match found", () => {
       const item: NavigationItem = {
         path: "tasks/{title}",
-        template: DEFAULT_TEMPLATE_KEY,
+        template: DOCUMENT_TEMPLATE_KEY,
       };
       check([item], "projects/my-project.md", undefined);
     });
@@ -88,10 +89,10 @@ describe("navigation", () => {
     it("returns first matching item", () => {
       const first: NavigationItem = {
         path: "tasks/{title}",
-        template: DEFAULT_TEMPLATE_KEY,
+        template: DOCUMENT_TEMPLATE_KEY,
       };
       check(
-        [first, { path: "tasks/{key}", template: DEFAULT_TEMPLATE_KEY }],
+        [first, { path: "tasks/{key}", template: DOCUMENT_TEMPLATE_KEY }],
         "tasks/my-task.md",
         first,
       );
@@ -100,7 +101,7 @@ describe("navigation", () => {
     it("matches nested child item", () => {
       const childItem: NavigationItem = {
         path: "info",
-        template: DEFAULT_TEMPLATE_KEY,
+        template: DOCUMENT_TEMPLATE_KEY,
       };
       check(
         [{ path: "tasks/{title}/", children: [childItem] }],
@@ -155,7 +156,7 @@ describe("navigation", () => {
       const templates = throwIfError(await loadTemplates(kg));
       defaultTemplateContent = findTemplate(
         templates,
-        DEFAULT_TEMPLATE_KEY,
+        DOCUMENT_TEMPLATE_KEY,
       ).templateContent;
 
       throwIfError(
@@ -206,7 +207,12 @@ describe("navigation", () => {
         } else {
           const viewAst = parseTemplate(file.view ?? defaultTemplateContent);
           const snapshot = throwIfError(
-            renderTemplate(mockNodeSchema, viewAst, file.data),
+            renderTemplateAst(
+              mockNodeSchema,
+              mockTemplates,
+              viewAst,
+              file.data,
+            ),
           );
           expect(fileContent).toEqual(snapshot);
         }
@@ -291,7 +297,7 @@ describe("navigation", () => {
             children: [
               {
                 path: "{parent.uid}",
-                template: DEFAULT_TEMPLATE_KEY,
+                template: DOCUMENT_TEMPLATE_KEY,
               },
             ],
           },
@@ -578,7 +584,7 @@ describe("navigation", () => {
         {
           path: "tasks/{title}",
           where: { type: "Task" },
-          template: DEFAULT_TEMPLATE_KEY,
+          template: DOCUMENT_TEMPLATE_KEY,
         },
       ];
 
@@ -636,7 +642,7 @@ describe("navigation", () => {
         {
           path: "tasks/{title}",
           where: { type: "Task" },
-          template: DEFAULT_TEMPLATE_KEY,
+          template: DOCUMENT_TEMPLATE_KEY,
         },
       ];
 
@@ -653,12 +659,12 @@ describe("navigation", () => {
   describe("getNavigationFilePatterns", () => {
     it("converts path templates to glob patterns", () => {
       const items: NavigationItem[] = [
-        { path: "tasks/{title}", template: DEFAULT_TEMPLATE_KEY },
+        { path: "tasks/{title}", template: DOCUMENT_TEMPLATE_KEY },
         {
           path: "projects/{parent.title}/{uid}",
-          template: DEFAULT_TEMPLATE_KEY,
+          template: DOCUMENT_TEMPLATE_KEY,
         },
-        { path: "static/file", template: DEFAULT_TEMPLATE_KEY },
+        { path: "static/file", template: DOCUMENT_TEMPLATE_KEY },
         { path: "dirs/{name}/" },
       ];
       const patterns = getNavigationFilePatterns(items);

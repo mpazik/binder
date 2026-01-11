@@ -108,6 +108,34 @@ describe("diffEntities", () => {
       check(newWithProject, oldWithProject, []);
     });
 
+    it("diffs nested single relation when new has no uid (extracted from markdown)", () => {
+      const oldWithProject = {
+        ...task1,
+        project: { uid: mockProjectUid, type: "Project", title: "Old Title" },
+      };
+      const newWithProject = {
+        ...task1,
+        project: { type: "Project", title: "New Title" },
+      };
+      check(newWithProject, oldWithProject, [
+        { $ref: mockProjectUid, title: "New Title" },
+      ]);
+    });
+
+    it("throws when old is UID string but new is nested (missing includes)", () => {
+      const oldWithProject = {
+        ...task1,
+        project: mockProjectUid, // Just UID string, not expanded object
+      };
+      const newWithProject = {
+        ...task1,
+        project: { type: "Project", title: "New Title" },
+      };
+      expect(() =>
+        diffEntities(schema, newWithProject, oldWithProject),
+      ).toThrow(/relation field 'project'.*oldValue must be a nested fieldset/);
+    });
+
     it("emits update when single relation reference is set", () => {
       const oldTask = omit(task1, ["project"]) as FieldsetNested;
       const newTask = { ...task1, project: mockProjectUid };

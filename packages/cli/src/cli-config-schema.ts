@@ -3,13 +3,24 @@ import {
   type ConfigKey,
   type ConfigUid,
   createSchema,
+  dataTypeDefsToOptions,
   type EntitySchema,
   type FieldDef,
   fieldSystemType,
   newAppSystemId,
+  richtextFormats,
+  type RichtextFormat,
   type TypeDef,
   typeSystemType,
 } from "@binder/db";
+
+export type TemplateFormat = Exclude<RichtextFormat, "word">;
+
+const templateFormats = Object.fromEntries(
+  Object.entries(richtextFormats).filter(([key]) => key !== "word"),
+);
+
+const templateFormatOptions = dataTypeDefsToOptions(templateFormats);
 
 export const typeNavigationKey = "Navigation" as ConfigKey;
 export const typeNavigationUid = "n1Vz4yDeDgH" as ConfigUid;
@@ -28,6 +39,9 @@ export const fieldTemplateContentUid = "c5Zd8bIiJlM" as ConfigUid;
 
 export const fieldTemplateKey = "template" as ConfigKey;
 export const fieldTemplateUid = "r6Ae9cJjKmN" as ConfigUid;
+
+export const fieldTemplateFormatKey = "templateFormat" as ConfigKey;
+export const fieldTemplateFormatUid = "f7Bf0dKkLnO" as ConfigUid;
 
 type CliConfigFieldDef = FieldDef<ConfigDataType>;
 
@@ -75,6 +89,18 @@ const fieldTemplate: CliConfigFieldDef = {
   range: [typeTemplateKey],
 };
 
+const fieldTemplateFormat: CliConfigFieldDef = {
+  id: newAppSystemId(6),
+  uid: fieldTemplateFormatUid,
+  key: fieldTemplateFormatKey,
+  type: fieldSystemType,
+  name: "Template Format",
+  description: "Output format of the template (affects multi-value separators)",
+  dataType: "option",
+  options: templateFormatOptions,
+  default: "block",
+};
+
 const typeNavigation: TypeDef = {
   id: newAppSystemId(0),
   uid: typeNavigationUid,
@@ -105,10 +131,17 @@ const typeTemplate: TypeDef = {
     "description",
     fieldPreambleKey,
     [fieldTemplateContentKey, { required: true }],
+    fieldTemplateFormatKey,
   ],
 };
 
 export const cliConfigSchema: EntitySchema<ConfigDataType> = createSchema(
-  [fieldPath, fieldTemplate, fieldTemplateContent, fieldPreamble],
+  [
+    fieldPath,
+    fieldTemplate,
+    fieldTemplateContent,
+    fieldPreamble,
+    fieldTemplateFormat,
+  ],
   [typeNavigation, typeTemplate],
 );

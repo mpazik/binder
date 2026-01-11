@@ -61,6 +61,7 @@ ${mockTask1Node.description}
             description: mockTask1Node.description,
           },
           projections: [],
+          includes: { title: true, status: true, description: true },
         },
         mockTemplates,
       );

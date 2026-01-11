@@ -14,7 +14,7 @@ import type {
   QueryParams,
 } from "@binder/db";
 import { coreIdentityFieldKeys, createUid, isFieldsetNested } from "@binder/db";
-import { assertDefined, includes, isEqual } from "@binder/utils";
+import { assert, assertDefined, includes, isEqual } from "@binder/utils";
 import { extractFieldsetFromQuery } from "../utils/query.ts";
 import { matchEntities, type MatcherConfig } from "./entity-matcher.ts";
 import { classifyFields } from "./field-classifier.ts";
@@ -105,9 +105,14 @@ const diffSingleRelation = (
 
   const oldUid = getUid(oldValue);
   const newUid = getUid(newValue);
-  if (!oldUid || oldUid !== newUid) return [];
 
-  return diffEntities(schema, newValue, oldValue);
+  // When newUid is undefined but oldUid exists, we're editing the same related
+  // entity (extracted from markdown doesn't include uid). Set uid from old.
+  if (!oldUid) return [];
+  if (newUid !== undefined && oldUid !== newUid) return [];
+
+  const newWithUid = newUid ? newValue : { ...newValue, uid: oldUid };
+  return diffEntities(schema, newWithUid, oldValue);
 };
 
 const diffMultipleValues = (
@@ -176,7 +181,13 @@ const diffField = (
   }
 
   if (fieldDef?.dataType === "relation") {
-    if (isFieldsetNested(newValue) && isFieldsetNested(oldValue)) {
+    if (isFieldsetNested(newValue)) {
+      assert(
+        isFieldsetNested(oldValue),
+        `relation field '${fieldKey}'`,
+        `oldValue must be a nested fieldset when newValue is nested (got ${typeof oldValue}). ` +
+          `Ensure the navigation item or template includes the relation field.`,
+      );
       return { changesets: diffSingleRelation(schema, newValue, oldValue) };
     }
   }

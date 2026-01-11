@@ -158,9 +158,13 @@ const synchronizeDocument = async (
   entity: FieldsetNested,
   projections: ExtractedProjection[],
   pathFields: Fieldset,
+  includes?: Includes,
 ): ResultAsync<ChangesetsInput> => {
   const kgResult = await kg.search(
-    { filters: pathFields as Record<string, string> },
+    {
+      filters: pathFields as Record<string, string>,
+      includes: includes ? includesWithUid(includes) : undefined,
+    },
     namespace,
   );
   if (isErr(kgResult)) return kgResult;
@@ -236,6 +240,7 @@ const synchronizeExtracted = (
     data.entity,
     data.projections,
     pathFields,
+    data.includes,
   );
 };
 

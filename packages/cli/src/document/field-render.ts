@@ -56,26 +56,28 @@ const joinNodesWithDelimiter = (
   if (nodeGroups.length === 1) return nodeGroups[0]!;
 
   const delimiter = getMultiValueDelimiter(fieldDef);
+  if (delimiter === "hrule") {
+    return nodeGroups.flatMap((group, i) =>
+      i < nodeGroups.length - 1 ? [...group, thematicBreak()] : group,
+    );
+  }
+
+  // Block-level content is naturally separated by the serializer
+  if (isMultilineFormat(fieldDef)) return nodeGroups.flat();
+
+  const delimiterStr = getDelimiterString(delimiter);
   const result: Nodes[] = [];
-
-  for (let i = 0; i < nodeGroups.length; i++) {
-    result.push(...nodeGroups[i]!);
-
+  for (const [i, group] of nodeGroups.entries()) {
+    result.push(...group);
     if (i < nodeGroups.length - 1) {
-      if (delimiter === "hrule") {
-        result.push(thematicBreak());
+      const lastNode = result[result.length - 1];
+      if (lastNode?.type === "text") {
+        lastNode.value += delimiterStr;
       } else {
-        const delimiterStr = getDelimiterString(delimiter);
-        const lastNode = result[result.length - 1];
-        if (lastNode?.type === "text") {
-          lastNode.value += delimiterStr;
-        } else {
-          result.push(textNode(delimiterStr));
-        }
+        result.push(textNode(delimiterStr));
       }
     }
   }
-
   return result;
 };
 

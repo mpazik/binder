@@ -13,7 +13,7 @@ import {
   mockUserNode,
 } from "@binder/db/mocks";
 import { resolvePath } from "../document/navigation.ts";
-import { DEFAULT_TEMPLATE_KEY } from "../document/template-entity.ts";
+import { DOCUMENT_TEMPLATE_KEY } from "../document/template-entity.ts";
 import {
   extractFieldNames,
   extractFieldValues,
@@ -431,7 +431,7 @@ it("round-trips with resolvePath", () => {
   const item: Fieldset = { project: "binder-cli", title: "My Task" };
   const navItem = {
     path: "projects/{project}/{title}",
-    template: DEFAULT_TEMPLATE_KEY,
+    template: DOCUMENT_TEMPLATE_KEY,
   };
   const path = throwIfError(resolvePath(mockNodeSchema, navItem, item));
   expect(path).toBe("projects/binder-cli/My Task.md");

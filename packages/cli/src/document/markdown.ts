@@ -9,22 +9,29 @@ import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkParseFrontmatter from "remark-parse-frontmatter";
-import remarkDirective from "remark-directive";
 import { type Options } from "remark-stringify";
 import { toMarkdown } from "mdast-util-to-markdown";
-import { directiveToMarkdown } from "mdast-util-directive";
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { type Brand } from "@binder/utils";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import type { Data, Literal, Node } from "unist";
-import { type FieldSlot } from "./remark-field-slot.ts";
+import { type FieldSlot } from "./field-slot.ts";
 import type { TemplateAST } from "./template.ts";
 
 type ExtendedNode = Nodes | FieldSlot;
 
-interface SimplifiedViewRoot extends Node {
+export type SimplifiedViewInlineChild = FieldSlot | Text;
+
+export type SimplifiedViewBlockChild = Omit<
+  RootContent,
+  "children" | "position"
+> & {
+  children?: SimplifiedViewInlineChild[];
+};
+
+export interface SimplifiedViewRoot extends Node {
   type: "root";
-  children: Array<FieldSlot | Text>;
+  children: SimplifiedViewBlockChild[];
 }
 
 type SimplifiedNode<T> = T extends { children: infer C }
@@ -49,6 +56,15 @@ export type BlockAST = Brand<BlockRoot, "BlockAST">;
 export const defaultRenderOptions: Options = {
   emphasis: "_",
   bullet: "-",
+  rule: "-",
+  join: [
+    (left, right) => {
+      // Prevent blank line between paragraph and list when the paragraph text
+      // naturally flows into the list (e.g., "Focus areas:\n- Item 1")
+      if (left.type === "paragraph" && right.type === "list") return 0;
+      return undefined;
+    },
+  ],
 };
 
 const SLOT_PLACEHOLDER = "\u0000SLOT\u0000";
@@ -92,7 +108,7 @@ const renderInlineToMarkdown = (node: RootContent): string => {
 export const renderAstToMarkdown = (ast: Nodes): string =>
   toMarkdown(ast, {
     ...defaultRenderOptions,
-    extensions: [gfmToMarkdown(), directiveToMarkdown()],
+    extensions: [gfmToMarkdown()],
   });
 
 const inlineTypes = [
@@ -217,7 +233,7 @@ export const simplifyViewAst = (ast: TemplateAST): SimplifiedViewRoot => {
     ...cleaned,
     children: cleaned.children.map((child) =>
       flattenInlinePreservingSlots(child),
-    ) as Array<FieldSlot | Text>,
+    ) as SimplifiedViewBlockChild[],
   } as SimplifiedViewRoot;
 };
 
@@ -225,7 +241,6 @@ export const parseAst = (content: string): FullAST => {
   const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .use(remarkDirective)
     .use(remarkFrontmatter)
     .use(remarkParseFrontmatter);
   return processor.parse(content) as FullAST;

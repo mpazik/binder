@@ -12,32 +12,28 @@ import type {
   Extension as FromMarkdownExtension,
   Handle,
 } from "mdast-util-from-markdown";
-import type { Literal, Parent, Text } from "mdast";
+import type { Literal, Parent, Root, RootContent, Text } from "mdast";
 import type { Plugin, Transformer } from "unified";
 import type { Node } from "unist";
-import { visit } from "unist-util-visit";
-import type { FieldPath } from "@binder/db";
+import { SKIP, visit } from "unist-util-visit";
+import {
+  richtextFormats,
+  type FieldPath,
+  type RichtextFormat,
+} from "@binder/db";
 import type { ErrorObject } from "@binder/utils";
 import { isErr } from "@binder/utils";
 import { parseFieldExpression, type Props } from "./field-expression-parser.ts";
+
+export type SlotPosition = Exclude<RichtextFormat, "word">;
 
 export interface FieldSlot<T extends Props = Props> extends Literal {
   type: "fieldSlot";
   value: string;
   path: FieldPath;
   props?: T;
+  slotPosition?: SlotPosition;
   parseError?: ErrorObject;
-}
-
-export interface CodeFieldSlot {
-  start: number;
-  end: number;
-  path: FieldPath;
-  props?: Props;
-}
-
-export interface CodeBlockData {
-  fieldSlots?: CodeFieldSlot[];
 }
 
 declare module "micromark-util-types" {
@@ -263,63 +259,119 @@ const fieldSlotFromMarkdown = (): FromMarkdownExtension => {
   };
 };
 
-const scanCodeForFieldSlots = (value: string): CodeFieldSlot[] => {
-  const slots: CodeFieldSlot[] = [];
-  const regex = /(?<!\\)\$\{([^}]+)\}/g;
-  let match: RegExpExecArray | null;
+const richtextFormatOrder: readonly RichtextFormat[] = Object.keys(
+  richtextFormats,
+) as RichtextFormat[];
 
-  while ((match = regex.exec(value)) !== null) {
-    const content = match[1]!;
-    const result = parseFieldExpression(content);
+const slotPositionToFormatIndex: Record<SlotPosition, number> = {
+  phrase: richtextFormatOrder.indexOf("phrase"),
+  line: richtextFormatOrder.indexOf("line"),
+  block: richtextFormatOrder.indexOf("block"),
+  section: richtextFormatOrder.indexOf("section"),
+  document: richtextFormatOrder.indexOf("document"),
+};
 
-    if (!isErr(result)) {
-      slots.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        path: result.data.path,
-        ...(result.data.props && { props: result.data.props }),
-      });
-    }
+export const isFormatCompatibleWithPosition = (
+  format: RichtextFormat,
+  position: SlotPosition,
+): boolean =>
+  richtextFormatOrder.indexOf(format) <= slotPositionToFormatIndex[position];
+
+const hasNonWhitespaceContent = (child: RootContent): boolean => {
+  if (child.type === "text") return (child as Text).value.trim().length > 0;
+  return child.type !== "break";
+};
+
+const hasNonWhitespaceSiblings = (parent: Parent, slotIndex: number): boolean =>
+  parent.children.some(
+    (child, i) => i !== slotIndex && hasNonWhitespaceContent(child),
+  );
+
+const hasNonWhitespaceAfter = (parent: Parent, slotIndex: number): boolean =>
+  parent.children.some(
+    (child, i) => i > slotIndex && hasNonWhitespaceContent(child),
+  );
+
+const isAtSectionBoundary = (root: Root, paragraphIndex: number): boolean => {
+  if (paragraphIndex === root.children.length - 1) return true;
+  const next = root.children[paragraphIndex + 1];
+  return next?.type === "heading" || next?.type === "thematicBreak";
+};
+
+const isOnlyContentBlock = (root: Root, paragraphIndex: number): boolean => {
+  const frontmatterTypes = ["yaml", "toml"];
+  const contentBlocks = root.children.filter(
+    (child) => !frontmatterTypes.includes(child.type),
+  );
+  return (
+    contentBlocks.length === 1 &&
+    contentBlocks[0] === root.children[paragraphIndex]
+  );
+};
+
+const getSlotPosition = (
+  slotIndex: number,
+  parent: Parent,
+  grandparent: Parent | undefined,
+  root: Root,
+): SlotPosition => {
+  if (hasNonWhitespaceSiblings(parent, slotIndex)) {
+    return hasNonWhitespaceAfter(parent, slotIndex) ? "phrase" : "line";
   }
+  if (parent.type !== "paragraph") return "line";
+  if (!grandparent || grandparent.type !== "root") return "block";
 
-  return slots;
+  const paragraphIndex = (grandparent as Root).children.indexOf(
+    parent as RootContent,
+  );
+  if (paragraphIndex === -1) return "block";
+
+  if (isOnlyContentBlock(root, paragraphIndex)) return "document";
+  if (isAtSectionBoundary(root, paragraphIndex)) return "section";
+  return "block";
 };
 
 const transformTree = (): Transformer => {
   return (tree: Node) => {
-    visit(tree, (node: Node) => {
-      // Scan code blocks for ${...} patterns
-      if (node.type === "code" || node.type === "inlineCode") {
-        const codeNode = node as Literal & { data?: CodeBlockData };
-        const value = codeNode.value as string;
-        const slots = scanCodeForFieldSlots(value);
+    const root = tree as Root;
 
-        if (slots.length > 0) {
-          codeNode.data = codeNode.data ?? {};
-          codeNode.data.fieldSlots = slots;
-        }
+    visit(tree, (node: Node, index, parent) => {
+      // Detect slot positions
+      if (node.type === "fieldSlot" && typeof index === "number" && parent) {
+        const slot = node as FieldSlot;
+        let grandparent: Parent | undefined;
+
+        visit(root, (n, _, p) => {
+          if (n === parent && p) {
+            grandparent = p as Parent;
+            return SKIP;
+          }
+        });
+
+        slot.slotPosition = getSlotPosition(index, parent, grandparent, root);
       }
 
-      // Merge adjacent text nodes
-      if (!("children" in node)) return;
-      const parent = node as Parent;
-      const newChildren: Node[] = [];
+      // Merge adjacent text nodes (needed for escaped braces: {{ and }})
+      if ("children" in node) {
+        const p = node as Parent;
+        const newChildren: Node[] = [];
 
-      for (const child of parent.children) {
-        const last = newChildren[newChildren.length - 1];
-        if (child.type === "text" && last?.type === "text") {
-          (last as Text).value += (child as Text).value;
-        } else {
-          newChildren.push(child);
+        for (const child of p.children) {
+          const last = newChildren[newChildren.length - 1];
+          if (child.type === "text" && last?.type === "text") {
+            (last as Text).value += (child as Text).value;
+          } else {
+            newChildren.push(child);
+          }
         }
-      }
 
-      parent.children = newChildren as typeof parent.children;
+        p.children = newChildren as typeof p.children;
+      }
     });
   };
 };
 
-export const remarkFieldSlot: Plugin = function (this) {
+export const fieldSlot: Plugin = function (this) {
   const data = this.data();
 
   data.micromarkExtensions = data.micromarkExtensions ?? [];

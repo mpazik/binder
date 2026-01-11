@@ -44,9 +44,10 @@ import {
 import { formatReferences, formatReferencesList } from "./reference.ts";
 import type { FileType } from "./document.ts";
 import {
-  DEFAULT_TEMPLATE_KEY,
-  SYSTEM_TEMPLATE_KEY,
+  DOCUMENT_TEMPLATE_KEY,
+  TEMPLATE_TEMPLATE_KEY,
   type TemplateEntity,
+  type TemplateKey,
   type Templates,
 } from "./template-entity.ts";
 
@@ -111,7 +112,7 @@ export const CONFIG_NAVIGATION_ITEMS: NavigationItem[] = [
   {
     path: `${BINDER_DIR}/templates/{key}`,
     where: { type: "Template" },
-    template: SYSTEM_TEMPLATE_KEY,
+    template: TEMPLATE_TEMPLATE_KEY,
   },
 ];
 
@@ -253,10 +254,12 @@ export const findTemplate = (
 ): TemplateEntity => {
   const found = templates.find((t) => t.key === key);
   if (found) return found;
-  const defaultTemplate = templates.find((t) => t.key === DEFAULT_TEMPLATE_KEY);
+  const defaultTemplate = templates.find(
+    (t) => t.key === DOCUMENT_TEMPLATE_KEY,
+  );
   return assertDefinedPass(
     defaultTemplate,
-    `DEFAULT_TEMPLATE_KEY "${DEFAULT_TEMPLATE_KEY}" in templates`,
+    `DOCUMENT_TEMPLATE_KEY "${DOCUMENT_TEMPLATE_KEY}" in templates`,
   );
 };
 
@@ -272,7 +275,12 @@ const renderContent = async (
 ): ResultAsync<string | null> => {
   if (fileType === "markdown") {
     const template = findTemplate(templates, item.template);
-    const templateResult = renderTemplate(schema, template.templateAst, entity);
+    const templateResult = renderTemplate(
+      schema,
+      templates,
+      template.key as TemplateKey,
+      entity,
+    );
     if (isErr(templateResult)) return templateResult;
     return ok(templateResult.data);
   }
