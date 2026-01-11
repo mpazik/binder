@@ -1,53 +1,72 @@
+import { fileURLToPath } from "node:url";
 import type {
-  Position as LspPosition,
-  Range as LspRange,
   TextDocumentIdentifier,
   TextDocuments,
 } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import { type LineCounter } from "yaml";
 import type {
   EntitySchema,
-  FieldAttrDef,
-  FieldDef,
-  FieldKey,
   NamespaceEditable,
   NodeType,
   TypeDef,
 } from "@binder/db";
-import {
-  getAllFieldsForType,
-  getTypeFieldAttrs,
-  getTypeFieldKey,
-} from "@binder/db";
+import { getAllFieldsForType } from "@binder/db";
 import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
-import type { ParsedDocument } from "../document/document.ts";
+import type { ParsedMarkdown } from "../document/markdown.ts";
+import type { ParsedYaml } from "../document/yaml-cst.ts";
 import {
   findNavigationItemByPath,
+  findTemplate,
   type NavigationItem,
 } from "../document/navigation.ts";
+import {
+  extractFieldMappings,
+  type FieldSlotMapping,
+} from "../document/template.ts";
 import {
   getRelativeSnapshotPath,
   namespaceFromSnapshotPath,
 } from "../lib/snapshot.ts";
 import { getTypeFromFilters } from "../utils/query.ts";
-import { type Position as YamlPosition } from "../document/yaml-cst.ts";
 import { extract } from "../document/extraction.ts";
+import {
+  getDocumentFileType,
+  type ParsedDocument,
+  parseDocument,
+} from "../document/document.ts";
 import {
   computeEntityMappings,
   type EntityMappings,
-} from "../document/entity-mapping.ts";
-import type { DocumentCache } from "./document-cache.ts";
-import type { EntityContextCache } from "./entity-context-cache.ts";
+} from "./entity-mapping.ts";
 import type { WorkspaceManager } from "./workspace-manager.ts";
+import type { EntityContextCache } from "./entity-context.ts";
+
+type BaseDocumentContext = {
+  document: TextDocument;
+  uri: string;
+  namespace: NamespaceEditable;
+  schema: EntitySchema;
+  navigationItem: NavigationItem;
+  typeDef?: TypeDef;
+  entityMappings: EntityMappings;
+};
+
+export type YamlDocumentContext = BaseDocumentContext & {
+  documentType: "yaml";
+  parsed: ParsedYaml;
+};
+
+export type MarkdownDocumentContext = BaseDocumentContext & {
+  documentType: "markdown";
+  parsed: ParsedMarkdown;
+  fieldMappings: FieldSlotMapping[];
+};
+
+export type DocumentContext = YamlDocumentContext | MarkdownDocumentContext;
 
 type LspParams = { textDocument: TextDocumentIdentifier };
-
-const expectedContextErrors = new Set(["navigation-not-found", "parse-failed"]);
-const getContextErrorLevel = (key: string) =>
-  expectedContextErrors.has(key) ? "debug" : "error";
 
 type LspHandlerDeps = {
   document: TextDocument;
@@ -65,6 +84,10 @@ export type WithDocumentContextDeps = {
   workspaceManager: WorkspaceManager;
   log: Logger;
 };
+
+const expectedContextErrors = new Set(["navigation-not-found", "parse-failed"]);
+const getContextErrorLevel = (key: string) =>
+  expectedContextErrors.has(key) ? "debug" : "error";
 
 export const withDocumentContext =
   <TParams extends LspParams, TResult>(
@@ -115,75 +138,6 @@ export const withDocumentContext =
     });
   };
 
-export type DocumentContext = {
-  document: TextDocument;
-  parsed: ParsedDocument;
-  uri: string;
-  namespace: NamespaceEditable;
-  schema: EntitySchema;
-  navigationItem: NavigationItem;
-  typeDef?: TypeDef;
-  entityMappings: EntityMappings;
-};
-
-export const yamlRangeToLspRange = (
-  range: [number, number, number],
-  lineCounter: LineCounter,
-): LspRange => {
-  const startPos = offsetToPosition(range[0], lineCounter);
-  const endPos = offsetToPosition(range[2], lineCounter);
-  return {
-    start: startPos,
-    end: endPos,
-  };
-};
-
-export const offsetToPosition = (
-  offset: number,
-  lineCounter: LineCounter,
-): LspPosition => {
-  let line = 0;
-  let character = 0;
-
-  for (let i = 0; i < lineCounter.lineStarts.length; i++) {
-    const lineStart = lineCounter.lineStarts[i];
-    const nextLineStart = lineCounter.lineStarts[i + 1];
-
-    if (offset < lineStart) break;
-
-    if (nextLineStart === undefined || offset < nextLineStart) {
-      line = i;
-      character = offset - lineStart;
-      break;
-    }
-  }
-
-  return { line, character };
-};
-
-export const positionToOffset = (
-  position: LspPosition,
-  lineCounter: LineCounter,
-): number => {
-  let offset = 0;
-  for (let i = 0; i < position.line; i++) {
-    const nextLineStart = lineCounter.lineStarts[i + 1];
-    if (nextLineStart !== undefined) {
-      offset = nextLineStart;
-    }
-  }
-  return offset + position.character;
-};
-
-export const lspPositionToYamlPosition = (
-  position: LspPosition,
-): YamlPosition => {
-  return {
-    line: position.line,
-    character: position.character,
-  };
-};
-
 const extractTypeFromNavigation = (
   navigationItem: NavigationItem,
   schema: EntitySchema,
@@ -197,6 +151,84 @@ const extractTypeFromNavigation = (
   return schema.types[entityType as never];
 };
 
+export type DocumentCache = {
+  getParsed: (document: TextDocument) => ParsedDocument | undefined;
+  invalidate: (uri: string) => void;
+  getStats: () => { size: number; hits: number; misses: number };
+};
+
+export const createDocumentCache = (log: Logger): DocumentCache => {
+  const cache = new Map<
+    string,
+    {
+      version: number;
+      parsed: ParsedDocument;
+    }
+  >();
+  let hits = 0;
+  let misses = 0;
+
+  const getParsed = (document: TextDocument): ParsedDocument | undefined => {
+    const uri = document.uri;
+    const version = document.version;
+    const key = `${uri}:${version}`;
+
+    const cached = cache.get(key);
+    if (cached) {
+      hits++;
+      return cached.parsed;
+    }
+
+    const filePath = fileURLToPath(uri);
+    const type = getDocumentFileType(filePath);
+
+    if (!type) {
+      log.debug("Document type not supported for caching", { uri, filePath });
+      return undefined;
+    }
+
+    misses++;
+
+    const text = document.getText();
+    const parsed = parseDocument(text, type);
+
+    cache.set(key, { version, parsed });
+    return parsed;
+  };
+
+  const invalidate = (uri: string): void => {
+    const keysToDelete: string[] = [];
+    for (const key of cache.keys()) {
+      if (key.startsWith(`${uri}:`)) {
+        keysToDelete.push(key);
+      }
+    }
+
+    for (const key of keysToDelete) {
+      cache.delete(key);
+    }
+
+    if (keysToDelete.length > 0) {
+      log.debug("Document cache invalidated", {
+        uri,
+        entriesRemoved: keysToDelete.length,
+        cacheSize: cache.size,
+      });
+    }
+  };
+
+  const getStats = () => ({
+    size: cache.size,
+    hits,
+    misses,
+  });
+
+  return {
+    getParsed,
+    invalidate,
+    getStats,
+  };
+};
 export const getDocumentContext = async (
   document: TextDocument,
   documentCache: DocumentCache,
@@ -266,15 +298,41 @@ export const getDocumentContext = async (
       )
     : { kind: "single" as const, mapping: { status: "new" as const } };
 
-  return ok({
+  const documentType = getDocumentFileType(filePath);
+  if (!documentType)
+    return fail("unknown-document-type", "Unknown document type", { uri });
+
+  const base = {
     document,
-    parsed,
     uri,
     namespace,
     schema,
     navigationItem,
     typeDef,
     entityMappings,
+  };
+
+  if (documentType === "markdown") {
+    const fieldMappings = navigationItem.template
+      ? extractFieldMappings(
+          findTemplate(templatesResult.data, navigationItem.template)
+            .templateAst,
+          (parsed as ParsedMarkdown).root,
+        )
+      : [];
+
+    return ok({
+      ...base,
+      documentType: "markdown",
+      parsed: parsed as ParsedMarkdown,
+      fieldMappings,
+    });
+  }
+
+  return ok({
+    ...base,
+    documentType: "yaml",
+    parsed: parsed as ParsedYaml,
   });
 };
 
@@ -284,38 +342,4 @@ export const getAllowedFields = (
 ): string[] => {
   if (!typeDef) return Object.keys(schema.fields);
   return getAllFieldsForType(typeDef.key as NodeType, schema);
-};
-
-const findFieldAttrsInType = (
-  fieldKey: FieldKey,
-  typeDef: TypeDef | undefined,
-): FieldAttrDef | undefined => {
-  if (!typeDef) return undefined;
-
-  for (const fieldRef of typeDef.fields) {
-    if (getTypeFieldKey(fieldRef) === fieldKey) {
-      return getTypeFieldAttrs(fieldRef);
-    }
-  }
-
-  return undefined;
-};
-
-export const getFieldDefForType = (
-  fieldKey: FieldKey,
-  typeDef: TypeDef | undefined,
-  schema: EntitySchema,
-):
-  | {
-      def: FieldDef;
-      attrs?: FieldAttrDef;
-    }
-  | undefined => {
-  if (!(fieldKey in schema.fields)) return undefined;
-
-  const def = schema.fields[fieldKey];
-  if (!def) return undefined;
-
-  const attrs = findFieldAttrsInType(fieldKey, typeDef);
-  return { def, attrs };
 };

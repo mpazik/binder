@@ -10,10 +10,11 @@ import {
 import {
   renderTemplate,
   extractFields,
+  extractFieldMappings,
   parseTemplate,
   extractFieldSlotsFromAst,
 } from "./template.ts";
-import { parseMarkdown } from "./markdown.ts";
+import { parseAst, parseMarkdown } from "./markdown.ts";
 
 describe("template", () => {
   describe("renderTemplate", () => {
@@ -389,6 +390,72 @@ describe("template", () => {
 
     it("ignores escaped braces", () => {
       check("\\{notASlot\\} {title}\n", ["title"]);
+    });
+  });
+
+  describe("extractFieldMappings", () => {
+    it("extracts position for single field in heading", () => {
+      const template = parseTemplate("# {title}\n");
+      const document = parseAst("# My Task Title\n");
+      const mappings = extractFieldMappings(template, document);
+
+      // Text node position: "My Task Title" starts at column 3 (after "# ")
+      expect(mappings).toEqual([
+        {
+          path: ["title"],
+          position: {
+            start: { line: 1, column: 3, offset: 2 },
+            end: { line: 1, column: 16, offset: 15 },
+          },
+        },
+      ]);
+    });
+
+    it("extracts positions for multiple fields in different blocks", () => {
+      const template = parseTemplate("# {title}\n\n{description}\n");
+      const document = parseAst("# My Task\n\nTask description here\n");
+      const mappings = extractFieldMappings(template, document);
+
+      expect(mappings).toEqual([
+        {
+          path: ["title"],
+          position: {
+            start: { line: 1, column: 3, offset: 2 },
+            end: { line: 1, column: 10, offset: 9 },
+          },
+        },
+        {
+          path: ["description"],
+          position: {
+            start: { line: 3, column: 1, offset: 11 },
+            end: { line: 3, column: 22, offset: 32 },
+          },
+        },
+      ]);
+    });
+
+    it("extracts position for nested field path", () => {
+      const template = parseTemplate("{author.name}\n");
+      const document = parseAst("John Doe\n");
+      const mappings = extractFieldMappings(template, document);
+
+      expect(mappings).toEqual([
+        {
+          path: ["author", "name"],
+          position: {
+            start: { line: 1, column: 1, offset: 0 },
+            end: { line: 1, column: 9, offset: 8 },
+          },
+        },
+      ]);
+    });
+
+    it("returns empty array for template without slots", () => {
+      const template = parseTemplate("# Static Title\n");
+      const document = parseAst("# Static Title\n");
+      const mappings = extractFieldMappings(template, document);
+
+      expect(mappings).toEqual([]);
     });
   });
 });

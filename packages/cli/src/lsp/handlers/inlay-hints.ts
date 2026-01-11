@@ -3,9 +3,11 @@ import { InlayHintKind } from "vscode-languageserver/node";
 import { isMap, isPair, isScalar, isSeq, type YAMLMap } from "yaml";
 import type { EntitySchema, NodeRef } from "@binder/db";
 import { isErr } from "@binder/utils";
-import type { RuntimeContextWithDb } from "../runtime.ts";
-import type { ParsedYaml } from "../document/yaml-cst.ts";
-import { type LspHandler, offsetToPosition } from "./lsp-utils.ts";
+import type { RuntimeContextWithDb } from "../../runtime.ts";
+import type { ParsedYaml } from "../../document/yaml-cst.ts";
+import type { LspHandler } from "../document-context.ts";
+
+import { offsetToPosition } from "../cursor-context.ts";
 
 type RelationValue = {
   value: string;

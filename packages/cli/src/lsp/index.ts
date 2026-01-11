@@ -14,14 +14,14 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { isErr, tryCatch } from "@binder/utils";
 import { type RuntimeContextInit } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
-import { handleDocumentSave } from "./sync-handler.ts";
-import { handleHover } from "./hover.ts";
-import { handleCompletion } from "./completion.ts";
-import { handleCodeAction } from "./code-actions.ts";
-import { handleInlayHints } from "./inlay-hints.ts";
-import { handleDefinition } from "./definition.ts";
-import { handleDiagnostics } from "./diagnostics.ts";
-import { withDocumentContext } from "./lsp-utils.ts";
+import { handleDocumentSave } from "./handlers/sync-handler.ts";
+import { handleHover } from "./handlers/hover.ts";
+import { handleCompletion } from "./handlers/completion.ts";
+import { handleCodeAction } from "./handlers/code-actions.ts";
+import { handleInlayHints } from "./handlers/inlay-hints.ts";
+import { handleDefinition } from "./handlers/definition.ts";
+import { handleDiagnostics } from "./handlers/diagnostics.ts";
+import { withDocumentContext } from "./document-context.ts";
 import { createWorkspaceManager } from "./workspace-manager.ts";
 
 export const createLspServer = (

@@ -10,8 +10,8 @@ import {
   validateDocument,
   type ValidationError,
   type ValidationSeverity,
-} from "../validation";
-import type { LspHandler } from "./lsp-utils.ts";
+} from "../../validation";
+import type { LspHandler } from "../document-context.ts";
 
 const severityToDiagnosticSeverity: Record<
   ValidationSeverity,

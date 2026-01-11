@@ -12,9 +12,9 @@ import { findSimilar } from "@binder/utils";
 import {
   type DocumentContext,
   getAllowedFields,
-  getFieldDefForType,
   type LspHandler,
-} from "./lsp-utils.ts";
+} from "../document-context.ts";
+import { getFieldDefForType } from "../cursor-context.ts";
 
 const getDefaultValue = (fieldDef: FieldDef, attrs?: FieldAttrDef): string => {
   if (attrs?.default !== undefined) {

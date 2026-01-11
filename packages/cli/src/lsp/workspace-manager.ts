@@ -8,11 +8,11 @@ import {
 } from "../runtime.ts";
 import { BINDER_DIR, resolveRelativePath } from "../config.ts";
 import type { Logger } from "../log.ts";
-import { createDocumentCache, type DocumentCache } from "./document-cache.ts";
 import {
   createEntityContextCache,
   type EntityContextCache,
-} from "./entity-context-cache.ts";
+} from "./entity-context.ts";
+import { createDocumentCache, type DocumentCache } from "./document-context.ts";
 
 export type WorkspaceEntry = {
   runtime: RuntimeContextWithDb;

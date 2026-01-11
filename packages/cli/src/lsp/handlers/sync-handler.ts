@@ -1,11 +1,11 @@
 import { isErr, ok, type ResultAsync } from "@binder/utils";
-import { synchronizeFile } from "../document/synchronizer.ts";
-import { loadNavigation } from "../document/navigation.ts";
-import type { RuntimeContextWithDb } from "../runtime.ts";
+import { synchronizeFile } from "../../document/synchronizer.ts";
+import { loadNavigation } from "../../document/navigation.ts";
+import type { RuntimeContextWithDb } from "../../runtime.ts";
 import {
   getRelativeSnapshotPath,
   namespaceFromSnapshotPath,
-} from "../lib/snapshot.ts";
+} from "../../lib/snapshot.ts";
 
 export const handleDocumentSave = async (
   context: RuntimeContextWithDb,

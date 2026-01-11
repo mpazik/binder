@@ -1,91 +1,62 @@
 import type { DefinitionParams, Location } from "vscode-languageserver/node";
-import { isScalar } from "yaml";
 import { isErr } from "@binder/utils";
 import type { Fieldset, NamespaceEditable } from "@binder/db";
-import type { RuntimeContextWithDb } from "../runtime.ts";
-import type { ParsedYaml } from "../document/yaml-cst.ts";
-import { getPositionContext } from "../document/yaml-cst.ts";
-import { findEntityLocation, loadNavigation } from "../document/navigation.ts";
+import type { RuntimeContextWithDb } from "../../runtime.ts";
 import {
-  type DocumentContext,
-  lspPositionToYamlPosition,
-  type LspHandler,
-} from "./lsp-utils.ts";
-
-const isRelationField = (
-  fieldKey: string,
-  context: DocumentContext,
-): boolean => {
-  const fieldDef = context.schema.fields[fieldKey];
-  return fieldDef?.dataType === "relation";
-};
-
-const extractReferenceValue = (
-  yamlContext: ReturnType<typeof getPositionContext>,
-): string | undefined => {
-  if (!yamlContext) return undefined;
-
-  if (yamlContext.type === "value" && isScalar(yamlContext.node)) {
-    return String(yamlContext.node.value);
-  }
-
-  if (yamlContext.type === "seq-item" && isScalar(yamlContext.node)) {
-    return String(yamlContext.node.value);
-  }
-
-  return undefined;
-};
+  findEntityLocation,
+  loadNavigation,
+} from "../../document/navigation.ts";
+import { type LspHandler } from "../document-context.ts";
+import { getCursorContext } from "../cursor-context.ts";
 
 export const handleDefinition: LspHandler<
   DefinitionParams,
   Location | null
-> = async (params, { document, context, runtime }) => {
-  const { log, kg } = runtime;
-  const namespace = context.namespace;
-  const parsed = context.parsed as ParsedYaml;
-  if (!parsed.doc || !parsed.lineCounter) {
-    log.debug("Not a YAML document");
+> = async (params, { context, runtime }) => {
+  const { log } = runtime;
+
+  const cursorContext = getCursorContext(context, params.position);
+
+  if (cursorContext.type !== "field-value") {
+    log.debug("Not on a field value");
     return null;
   }
 
-  const yamlPosition = lspPositionToYamlPosition(params.position);
-  const yamlContext = getPositionContext(document.getText(), yamlPosition);
-
-  if (!yamlContext) {
-    log.debug("No YAML context at position");
+  if (cursorContext.fieldDef.dataType !== "relation") {
+    log.debug("Field is not a relation", {
+      fieldPath: cursorContext.fieldPath,
+    });
     return null;
   }
 
-  const fieldKey = yamlContext.fieldKey;
-  if (!fieldKey) {
-    log.debug("No field key in context");
+  if (!cursorContext.currentValue) {
+    log.debug("No current value at cursor position");
     return null;
   }
 
-  if (!isRelationField(fieldKey, context)) {
-    log.debug("Field is not a relation", { fieldKey });
-    return null;
-  }
+  const referenceValue = cursorContext.currentValue;
+  log.debug("Looking up reference", {
+    fieldPath: cursorContext.fieldPath,
+    referenceValue,
+  });
 
-  const referenceValue = extractReferenceValue(yamlContext);
-  if (!referenceValue) {
-    log.debug("Could not extract reference value");
-    return null;
-  }
+  return findReferenceLocation(referenceValue, context.namespace, runtime);
+};
 
-  log.debug("Looking up reference", { fieldKey, referenceValue });
+const findReferenceLocation = async (
+  referenceValue: string,
+  namespace: NamespaceEditable,
+  runtime: RuntimeContextWithDb,
+): Promise<Location | null> => {
+  const { kg, log } = runtime;
 
   const searchResult = await kg.search({
-    filters: {
-      key: referenceValue,
-    },
+    filters: { key: referenceValue },
   });
 
   if (isErr(searchResult) || searchResult.data.items.length === 0) {
     const uidSearchResult = await kg.search({
-      filters: {
-        uid: referenceValue,
-      },
+      filters: { uid: referenceValue },
     });
 
     if (isErr(uidSearchResult) || uidSearchResult.data.items.length === 0) {

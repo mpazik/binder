@@ -10,16 +10,18 @@ import {
   mockStatusFieldKey,
   mockTransactionInit,
 } from "@binder/db/mocks";
-import { BINDER_DIR } from "../config.ts";
-import type { RuntimeContextWithDb } from "../runtime.ts";
-import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
-import { mockNavigationConfigInput } from "../document/navigation.mock.ts";
+import { BINDER_DIR } from "../../config.ts";
+import type { RuntimeContextWithDb } from "../../runtime.ts";
+import { createMockRuntimeContextWithDb } from "../../runtime.mock.ts";
+import { mockNavigationConfigInput } from "../../document/navigation.mock.ts";
+import {
+  createDocumentCache,
+  getDocumentContext,
+} from "../document-context.ts";
+import { createEntityContextCache } from "../entity-context.ts";
 import { handleCompletion } from "./completion.ts";
-import { createDocumentCache } from "./document-cache.ts";
-import { createEntityContextCache } from "./entity-context-cache.ts";
-import { getDocumentContext } from "./lsp-utils.ts";
 
-const CURSOR = "\u2588";
+const CURSOR = "█";
 
 const parseCursor = (
   contentWithCursor: string,
@@ -72,25 +74,21 @@ describe("completion", () => {
     const uri = `file://${filePath}`;
 
     const document = TextDocument.create(uri, "yaml", 1, content);
-    const contextResult = await getDocumentContext(
-      document,
-      documentCache,
-      entityContextCache,
-      runtime,
+    const context = throwIfError(
+      await getDocumentContext(
+        document,
+        documentCache,
+        entityContextCache,
+        runtime,
+      ),
     );
-
-    if (contextResult.error) {
-      assertFailed(
-        `Failed to get document context: ${contextResult.error.message}`,
-      );
-    }
 
     return handleCompletion(
       {
         textDocument: { uri },
         position: { line, character },
       },
-      { document, context: contextResult.data, runtime },
+      { document, context, runtime },
     );
   };
 

@@ -3,52 +3,56 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import { mockProjectNode, mockTransactionInit } from "@binder/db/mocks";
-import type { EntitySchema, NodeDataType } from "@binder/db";
-import type { RuntimeContextWithDb } from "../runtime.ts";
-import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
-import { mockNavigationConfigInput } from "../document/navigation.mock.ts";
-import { parseYamlDocument } from "../document/yaml-cst.ts";
+import type { RuntimeContextWithDb } from "../../runtime.ts";
+import { createMockRuntimeContextWithDb } from "../../runtime.mock.ts";
+import { mockNavigationConfigInput } from "../../document/navigation.mock.ts";
+import {
+  createDocumentCache,
+  type DocumentContext,
+  getDocumentContext,
+} from "../document-context.ts";
+import { createEntityContextCache } from "../entity-context.ts";
 import { handleDefinition } from "./definition.ts";
-import type { DocumentContext } from "./lsp-utils.ts";
 
 describe("definition", () => {
   let runtime: RuntimeContextWithDb;
-  let schema: EntitySchema<NodeDataType>;
+  let documentCache: ReturnType<typeof createDocumentCache>;
+  let entityContextCache: ReturnType<typeof createEntityContextCache>;
 
-  const createDocumentContext = (
-    uri: string,
+  const createContext = async (
+    relativePath: string,
     content: string,
-  ): { document: TextDocument; context: DocumentContext } => {
-    const document = TextDocument.create(uri, "yaml", 1, content);
-    const parsed = parseYamlDocument(content);
-
+  ): Promise<{ document: TextDocument; context: DocumentContext }> => {
+    const uri = `file://${runtime.config.paths.docs}/${relativePath}`;
     return {
-      document,
-      context: {
-        document,
-        parsed,
-        uri,
-        namespace: "node",
-        schema,
-        navigationItem: {
-          path: "tasks/",
-          query: { filters: { type: "Task" } },
-        },
-        typeDef: schema.types.Task,
-        entityMappings: { kind: "single", mapping: { status: "new" } },
-      },
+      document: TextDocument.create(uri, "yaml", 1, content),
+      context: throwIfError(
+        await getDocumentContext(
+          TextDocument.create(uri, "yaml", 1, content),
+          documentCache,
+          entityContextCache,
+          runtime,
+        ),
+      ),
     };
   };
 
   beforeEach(async () => {
     runtime = await createMockRuntimeContextWithDb();
     throwIfError(await runtime.kg.apply(mockTransactionInit));
-    schema = throwIfError(await runtime.kg.getSchema("node"));
+    throwIfError(
+      await runtime.kg.update({
+        author: "test",
+        configurations: mockNavigationConfigInput,
+      }),
+    );
+    documentCache = createDocumentCache(runtime.log);
+    entityContextCache = createEntityContextCache(runtime.log, runtime.kg);
   });
 
   it("returns null when cursor is not on a relation field value", async () => {
-    const { document, context } = createDocumentContext(
-      `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
+    const { document, context } = await createContext(
+      "tasks/my-task.yaml",
       "type: Task\ntitle: My Task",
     );
 
@@ -64,8 +68,8 @@ describe("definition", () => {
   });
 
   it("returns null when field is not a relation type", async () => {
-    const { document, context } = createDocumentContext(
-      `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
+    const { document, context } = await createContext(
+      "tasks/my-task.yaml",
       "type: Task\ntitle: My Task\ndescription: Some description",
     );
 
@@ -81,15 +85,8 @@ describe("definition", () => {
   });
 
   it("returns location for relation field with key reference", async () => {
-    throwIfError(
-      await runtime.kg.update({
-        author: "test",
-        configurations: mockNavigationConfigInput,
-      }),
-    );
-
-    const { document, context } = createDocumentContext(
-      `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
+    const { document, context } = await createContext(
+      "tasks/my-task.yaml",
       `type: Task\ntitle: My Task\nproject: ${mockProjectNode.key}`,
     );
 
@@ -111,8 +108,8 @@ describe("definition", () => {
   });
 
   it("returns null when referenced entity does not exist", async () => {
-    const { document, context } = createDocumentContext(
-      `file://${runtime.config.paths.docs}/tasks/my-task.yaml`,
+    const { document, context } = await createContext(
+      "tasks/my-task.yaml",
       "type: Task\ntitle: My Task\nproject: non-existent-project",
     );
 

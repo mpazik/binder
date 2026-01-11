@@ -10,6 +10,7 @@ import {
 import {
   type EntitySchema,
   type FieldKey,
+  type FieldPath,
   type FieldsetNested,
   getFieldDefNested,
   getNestedValue,
@@ -18,12 +19,13 @@ import {
 } from "@binder/db";
 import type { Nodes, Parent, Root, Text } from "mdast";
 import { visit } from "unist-util-visit";
-import type { Data, Node } from "unist";
+import type { Data, Node, Position as UnistPosition } from "unist";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import { type FieldSlot, remarkFieldSlot } from "./remark-field-slot.ts";
 import {
   type BlockAST,
+  type FullAST,
   renderAstToMarkdown,
   simplifyViewAst,
 } from "./markdown.ts";
@@ -340,4 +342,90 @@ export const extractFields = (
   if (error) return err(error);
 
   return ok(fieldset);
+};
+
+export type FieldSlotMapping = {
+  path: FieldPath;
+  position: UnistPosition;
+};
+
+export const extractFieldMappings = (
+  view: TemplateAST,
+  snapshot: FullAST,
+): FieldSlotMapping[] => {
+  const mappings: FieldSlotMapping[] = [];
+  const simplifiedView = simplifyViewAst(view);
+
+  type SimplifiedNode =
+    | FieldSlot
+    | Text
+    | { type: string; children?: unknown[] };
+
+  const matchNodes = (viewNode: SimplifiedNode, snapNode: Nodes): void => {
+    // Field slot: capture the position from the corresponding snapshot node
+    if (viewNode.type === "fieldSlot") {
+      const fieldSlot = viewNode as FieldSlot;
+      if (snapNode.position) {
+        mappings.push({ path: fieldSlot.path, position: snapNode.position });
+      }
+      return;
+    }
+
+    // Text nodes: skip (they're literals in template)
+    if (viewNode.type === "text") return;
+
+    // Other nodes: recurse into children
+    if (
+      "children" in viewNode &&
+      Array.isArray(viewNode.children) &&
+      "children" in snapNode &&
+      Array.isArray(snapNode.children)
+    ) {
+      matchChildren(
+        viewNode.children as SimplifiedNode[],
+        snapNode.children as Nodes[],
+      );
+    }
+  };
+
+  const matchChildren = (
+    viewChildren: SimplifiedNode[],
+    snapChildren: Nodes[],
+  ): void => {
+    let viewIdx = 0;
+    let snapIdx = 0;
+
+    while (viewIdx < viewChildren.length && snapIdx < snapChildren.length) {
+      const viewChild = viewChildren[viewIdx]!;
+      const snapChild = snapChildren[snapIdx]!;
+
+      if (viewChild.type === "fieldSlot") {
+        // Field slot consumes text node(s) from snapshot
+        if (snapChild.type === "text" && snapChild.position) {
+          mappings.push({
+            path: (viewChild as FieldSlot).path,
+            position: snapChild.position,
+          });
+        }
+        viewIdx++;
+        snapIdx++;
+      } else if (viewChild.type === "text") {
+        // Text literal in template - skip corresponding snapshot text
+        if (snapChild.type === "text") {
+          snapIdx++;
+        }
+        viewIdx++;
+      } else {
+        // Block-level node - match types and recurse
+        if (viewChild.type === snapChild.type) {
+          matchNodes(viewChild, snapChild);
+        }
+        viewIdx++;
+        snapIdx++;
+      }
+    }
+  };
+
+  matchChildren(simplifiedView.children as SimplifiedNode[], snapshot.children);
+  return mappings;
 };

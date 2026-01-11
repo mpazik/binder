@@ -15,16 +15,16 @@ import {
 } from "@binder/db/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
-import { mockDocumentTransactionInput } from "./document.mock.ts";
-import { type NavigationItem } from "./navigation.ts";
-import { mockTemplates } from "./template.mock.ts";
-import { renderYamlEntity, renderYamlList } from "./yaml.ts";
-import { extract } from "./extraction.ts";
-import { fetchEntityContext } from "./entity-context.ts";
+import { mockDocumentTransactionInput } from "../document/document.mock.ts";
+import { type NavigationItem } from "../document/navigation.ts";
+import { mockTemplates } from "../document/template.mock.ts";
+import { renderYamlEntity, renderYamlList } from "../document/yaml.ts";
+import { extract } from "../document/extraction.ts";
 import {
   computeEntityMappings,
   type EntityMappings,
 } from "./entity-mapping.ts";
+import { fetchEntityContext } from "./entity-context.ts";
 
 describe("entity-context", () => {
   const schema = mockNodeSchema;

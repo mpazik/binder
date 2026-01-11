@@ -8,7 +8,7 @@ import type {
 } from "@binder/db";
 import { classifyFields } from "../diff/field-classifier.ts";
 import { matchEntities } from "../diff/entity-matcher.ts";
-import type { ExtractedFileData } from "./extraction.ts";
+import type { ExtractedFileData } from "../document/extraction.ts";
 import type { DocumentEntityContext } from "./entity-context.ts";
 
 export type EntityMapping =
