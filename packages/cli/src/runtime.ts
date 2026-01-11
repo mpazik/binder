@@ -35,10 +35,12 @@ import { createLogger, type Logger, type LogLevel } from "./log.ts";
 import { isDevMode } from "./build-time.ts";
 import {
   createNavigationCache,
-  createTemplateCache,
   type NavigationLoader,
-  type TemplateLoader,
 } from "./document/navigation.ts";
+import {
+  createTemplateCache,
+  type TemplateLoader,
+} from "./document/template-entity.ts";
 
 type RuntimeOptions = {
   logLevel?: LogLevel;

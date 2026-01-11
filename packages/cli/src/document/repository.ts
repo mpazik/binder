@@ -9,9 +9,8 @@ import {
   CONFIG_NAVIGATION_ITEMS,
   loadNavigation,
   renderNavigation,
-  type TemplateLoader,
-  type Templates,
 } from "./navigation.ts";
+import { type TemplateLoader, type Templates } from "./template-entity.ts";
 
 export const renderDocs = async (services: {
   db: DatabaseCli;

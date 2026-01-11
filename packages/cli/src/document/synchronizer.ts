@@ -35,7 +35,6 @@ import {
   getNavigationFilePatterns,
   getPathTemplate,
   type NavigationItem,
-  type Templates,
 } from "./navigation.ts";
 import {
   extract,
@@ -43,6 +42,7 @@ import {
   type ExtractedProjection,
 } from "./extraction.ts";
 import { normalizeReferences, normalizeReferencesList } from "./reference.ts";
+import { type Templates } from "./template-entity.ts";
 
 const synchronizeSingle = async (
   kg: KnowledgeGraph,

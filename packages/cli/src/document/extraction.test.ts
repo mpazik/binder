@@ -2,10 +2,11 @@ import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import { mockNodeSchema, mockTask1Node, mockTask2Node } from "@binder/db/mocks";
-import { type NavigationItem, type Templates } from "./navigation.ts";
+import { type NavigationItem } from "./navigation.ts";
 import { mockTemplates } from "./template.mock.ts";
 import { extract, type ExtractedFileData } from "./extraction.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
+import type { Templates } from "./template-entity.ts";
 
 describe("extract", () => {
   const emptyTemplates: Templates = [];

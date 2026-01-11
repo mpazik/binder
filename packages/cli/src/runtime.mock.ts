@@ -7,10 +7,8 @@ import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { BINDER_DIR } from "./config.ts";
 import type { AppConfig } from "./config.ts";
 import type { RuntimeContextWithDb, RuntimeContext } from "./runtime.ts";
-import {
-  createNavigationCache,
-  createTemplateCache,
-} from "./document/navigation.ts";
+import { createNavigationCache } from "./document/navigation.ts";
+import { createTemplateCache } from "./document/template-entity.ts";
 
 export const mockConfig: AppConfig = {
   author: "test-user",

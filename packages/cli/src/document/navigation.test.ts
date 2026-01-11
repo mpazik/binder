@@ -32,19 +32,21 @@ import { parseTemplate, renderTemplate } from "./template.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import {
   CONFIG_NAVIGATION_ITEMS,
-  DEFAULT_TEMPLATE_KEY,
   findEntityLocation,
   findNavigationItemByPath,
   findTemplate,
   getNavigationFilePatterns,
   loadNavigation,
-  loadTemplates,
   type NavigationItem,
   renderNavigation,
   renderNavigationItem,
-  type Templates,
 } from "./navigation.ts";
 import { mockNavigationConfigInput } from "./navigation.mock.ts";
+import {
+  DEFAULT_TEMPLATE_KEY,
+  loadTemplates,
+  type Templates,
+} from "./template-entity.ts";
 
 describe("navigation", () => {
   const schema = mockNodeSchema;

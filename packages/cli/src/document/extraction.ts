@@ -5,15 +5,12 @@ import {
   type QueryParams,
 } from "@binder/db";
 import { createError, err, isErr, ok, type Result } from "@binder/utils";
-import {
-  findTemplate,
-  type NavigationItem,
-  type Templates,
-} from "./navigation.ts";
+import { findTemplate, type NavigationItem } from "./navigation.ts";
 import { parseMarkdown } from "./markdown.ts";
 import { extractFields } from "./template.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 import { getDocumentFileType } from "./document.ts";
+import type { Templates } from "./template-entity.ts";
 
 export type ExtractedProjection = {
   items: FieldsetNested[];

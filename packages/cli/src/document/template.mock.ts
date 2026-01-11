@@ -1,4 +1,4 @@
-import { createTemplateEntity, type Templates } from "./navigation.ts";
+import { createTemplateEntity, type Templates } from "./template-entity.ts";
 
 export const mockTaskTemplateKey = "task-template";
 

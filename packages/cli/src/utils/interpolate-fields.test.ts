@@ -12,7 +12,8 @@ import {
   mockProjectNode,
   mockUserNode,
 } from "@binder/db/mocks";
-import { DEFAULT_TEMPLATE_KEY, resolvePath } from "../document/navigation.ts";
+import { resolvePath } from "../document/navigation.ts";
+import { DEFAULT_TEMPLATE_KEY } from "../document/template-entity.ts";
 import {
   extractFieldNames,
   extractFieldValues,
