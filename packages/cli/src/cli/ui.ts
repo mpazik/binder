@@ -166,9 +166,10 @@ const printError = (err: ErrorObject) => {
     if (Array.isArray(errors) && errors.length > 0) {
       println(Style.TEXT_DANGER + "Validation errors:" + Style.TEXT_NORMAL);
       for (const validationError of errors) {
+        const fieldName = validationError.field ?? validationError.fieldKey;
         const message =
-          validationError.fieldKey && validationError.message
-            ? `Field '${Style.TEXT_INFO}${validationError.fieldKey}${Style.TEXT_NORMAL}': ${validationError.message}`
+          fieldName && validationError.message
+            ? `Field '${Style.TEXT_INFO}${fieldName}${Style.TEXT_NORMAL}': ${validationError.message}`
             : formatValue(validationError, "    ");
         println(`  - ${message}`);
       }

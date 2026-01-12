@@ -1,126 +1,96 @@
-import { beforeEach, describe, expect, it } from "bun:test";
-import { TextDocument } from "vscode-languageserver-textdocument";
-import "@binder/utils/tests";
-import { throwIfError } from "@binder/utils";
-import { mockProjectNode, mockTransactionInit } from "@binder/db/mocks";
-import type { RuntimeContextWithDb } from "../../runtime.ts";
-import { createMockRuntimeContextWithDb } from "../../runtime.mock.ts";
-import { mockNavigationConfigInput } from "../../document/navigation.mock.ts";
+import { describe, expect, it } from "bun:test";
+import type { EntityKey, EntityUid } from "@binder/db";
 import {
-  createDocumentCache,
-  type DocumentContext,
-  getDocumentContext,
-} from "../document-context.ts";
-import { createEntityContextCache } from "../entity-context.ts";
-import { handleDefinition } from "./definition.ts";
+  mockEmailField,
+  mockProjectField,
+  mockTaskTypeKey,
+} from "@binder/db/mocks";
+import type { CursorContext, CursorEntityContext } from "../cursor-context.ts";
+import { getEntityRef, type EntityStringRef } from "./definition.ts";
 
-describe("definition", () => {
-  let runtime: RuntimeContextWithDb;
-  let documentCache: ReturnType<typeof createDocumentCache>;
-  let entityContextCache: ReturnType<typeof createEntityContextCache>;
-
-  const createContext = async (
-    relativePath: string,
-    content: string,
-  ): Promise<{ document: TextDocument; context: DocumentContext }> => {
-    const uri = `file://${runtime.config.paths.docs}/${relativePath}`;
-    return {
-      document: TextDocument.create(uri, "yaml", 1, content),
-      context: throwIfError(
-        await getDocumentContext(
-          TextDocument.create(uri, "yaml", 1, content),
-          documentCache,
-          entityContextCache,
-          runtime,
-        ),
-      ),
-    };
+describe("getEntityRef", () => {
+  const mockEntity: CursorEntityContext = {
+    mapping: { status: "new", type: mockTaskTypeKey },
+    entityIndex: 0,
   };
 
-  beforeEach(async () => {
-    runtime = await createMockRuntimeContextWithDb();
-    throwIfError(await runtime.kg.apply(mockTransactionInit));
-    throwIfError(
-      await runtime.kg.update({
-        author: "test",
-        configurations: mockNavigationConfigInput,
-      }),
+  const check = (
+    cursorContext: Partial<CursorContext>,
+    expected: EntityStringRef | undefined,
+  ) => {
+    const context = {
+      documentType: "yaml",
+      position: { line: 0, character: 0 },
+      entity: mockEntity,
+      ...cursorContext,
+    } as CursorContext;
+    expect(getEntityRef(context)).toEqual(expected);
+  };
+
+  it("returns undefined for field-key context", () => {
+    check(
+      {
+        type: "field-key",
+        fieldPath: ["email"],
+        fieldDef: mockEmailField,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+        },
+      },
+      undefined,
     );
-    documentCache = createDocumentCache(runtime.log);
-    entityContextCache = createEntityContextCache(runtime.log, runtime.kg);
   });
 
-  it("returns null when cursor is not on a relation field value", async () => {
-    const { document, context } = await createContext(
-      "tasks/my-task.yaml",
-      "type: Task\ntitle: My Task",
-    );
-
-    const result = await handleDefinition(
-      {
-        textDocument: { uri: document.uri },
-        position: { line: 1, character: 3 },
-      },
-      { document, context, runtime },
-    );
-
-    expect(result).toBeNull();
+  it("returns undefined for none context", () => {
+    check({ type: "none" }, undefined);
   });
 
-  it("returns null when field is not a relation type", async () => {
-    const { document, context } = await createContext(
-      "tasks/my-task.yaml",
-      "type: Task\ntitle: My Task\ndescription: Some description",
-    );
-
-    const result = await handleDefinition(
+  it("returns undefined for non-relation field", () => {
+    check(
       {
-        textDocument: { uri: document.uri },
-        position: { line: 2, character: 15 },
+        type: "field-value",
+        fieldPath: ["email"],
+        fieldDef: mockEmailField,
+        currentValue: "test@example.com",
       },
-      { document, context, runtime },
+      undefined,
     );
-
-    expect(result).toBeNull();
   });
 
-  it("returns location for relation field with key reference", async () => {
-    const { document, context } = await createContext(
-      "tasks/my-task.yaml",
-      `type: Task\ntitle: My Task\nproject: ${mockProjectNode.key}`,
-    );
-
-    const result = await handleDefinition(
+  it("returns undefined for relation field without value", () => {
+    check(
       {
-        textDocument: { uri: document.uri },
-        position: { line: 2, character: 12 },
+        type: "field-value",
+        fieldPath: ["project"],
+        fieldDef: mockProjectField,
+        currentValue: undefined,
       },
-      { document, context, runtime },
+      undefined,
     );
-
-    expect(result).toEqual({
-      uri: `file://${runtime.config.paths.docs}/projects/${mockProjectNode.title}/`,
-      range: {
-        start: { line: 0, character: 0 },
-        end: { line: 0, character: 0 },
-      },
-    });
   });
 
-  it("returns null when referenced entity does not exist", async () => {
-    const { document, context } = await createContext(
-      "tasks/my-task.yaml",
-      "type: Task\ntitle: My Task\nproject: non-existent-project",
-    );
-
-    const result = await handleDefinition(
+  it("returns entity key for relation field", () => {
+    check(
       {
-        textDocument: { uri: document.uri },
-        position: { line: 2, character: 12 },
+        type: "field-value",
+        fieldPath: ["project"],
+        fieldDef: mockProjectField,
+        currentValue: "my-project",
       },
-      { document, context, runtime },
+      "my-project" as EntityKey,
     );
+  });
 
-    expect(result).toBeNull();
+  it("returns entity uid for relation field", () => {
+    check(
+      {
+        type: "field-value",
+        fieldPath: ["project"],
+        fieldDef: mockProjectField,
+        currentValue: "p_abc123",
+      },
+      "p_abc123" as EntityUid,
+    );
   });
 });

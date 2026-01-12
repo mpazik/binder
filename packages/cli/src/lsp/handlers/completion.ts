@@ -5,16 +5,14 @@ import type {
 import { CompletionItemKind } from "vscode-languageserver/node";
 import { isMap } from "yaml";
 import type {
-  EntitySchema,
   FieldAttrDef,
   FieldDef,
+  KnowledgeGraph,
   NamespaceEditable,
   NodeFieldDef,
   NodeType,
-  TypeDef,
 } from "@binder/db";
 import { isErr } from "@binder/utils";
-import type { RuntimeContextWithDb } from "../../runtime.ts";
 import { getFieldKeys, getParentMap } from "../../document/yaml-cst.ts";
 import {
   getAllowedFields,
@@ -26,33 +24,25 @@ import {
   getSchemaFieldPath,
   getSiblingValues,
   type CursorContext,
+  type MarkdownFieldValueContext,
+  type YamlFieldValueContext,
 } from "../cursor-context.ts";
 
-const createFieldNameCompletions = (
-  allowedFields: string[],
-  existingFields: string[],
-  schema: EntitySchema,
-  typeDef: TypeDef | undefined,
-): CompletionItem[] => {
-  const availableFields = allowedFields.filter(
-    (field) => !existingFields.includes(field),
-  );
-
-  const typeSpecificFields = new Set(typeDef?.fields ?? []);
-
-  return availableFields.map((fieldKey) => {
-    const fieldDef = schema.fields[fieldKey as never];
-    const isTypeSpecific = typeSpecificFields.has(fieldKey);
-
-    return {
-      label: fieldKey,
-      kind: CompletionItemKind.Property,
-      detail: fieldDef?.dataType,
-      documentation: fieldDef?.description,
-      sortText: isTypeSpecific ? `0_${fieldKey}` : `1_${fieldKey}`,
-    };
-  });
+export type FieldKeyCompletionInput = {
+  kind: "field-key";
+  context: DocumentContext;
 };
+
+export type FieldValueCompletionInput = {
+  kind: "field-value";
+  cursorContext: YamlFieldValueContext | MarkdownFieldValueContext;
+  context: DocumentContext;
+  excludeValues: string[];
+};
+
+export type CompletionInput =
+  | FieldKeyCompletionInput
+  | FieldValueCompletionInput;
 
 const createOptionCompletions = (fieldDef: NodeFieldDef): CompletionItem[] => {
   if (fieldDef.dataType !== "option" || !fieldDef.options) return [];
@@ -70,11 +60,11 @@ const createBooleanCompletions = (): CompletionItem[] => [
 ];
 
 const createRelationCompletions = async (
-  { kg, log }: RuntimeContextWithDb,
+  kg: KnowledgeGraph,
   namespace: NamespaceEditable,
   fieldDef: FieldDef,
   attrs: FieldAttrDef | undefined,
-  excludeValues: string[] = [],
+  excludeValues: string[],
 ): Promise<CompletionItem[]> => {
   if (fieldDef.dataType !== "relation") return [];
 
@@ -103,12 +93,7 @@ const createRelationCompletions = async (
       namespace,
     );
 
-    if (isErr(searchResult)) {
-      log.debug("Failed to search entities for completion", {
-        error: searchResult.error,
-      });
-      continue;
-    }
+    if (isErr(searchResult)) continue;
 
     for (const entity of searchResult.data.items) {
       const label = (entity.title ||
@@ -131,13 +116,43 @@ const createRelationCompletions = async (
   return completions;
 };
 
-const createValueCompletions = async (
-  fieldDef: FieldDef,
-  attrs: FieldAttrDef | undefined,
-  namespace: NamespaceEditable,
-  runtime: RuntimeContextWithDb,
-  excludeValues: string[] = [],
+export const getCompletionItems = async (
+  input: CompletionInput,
+  kg: KnowledgeGraph,
 ): Promise<CompletionItem[]> => {
+  if (input.kind === "field-key") {
+    const { context } = input;
+    const { parsed } = context as { parsed: { doc: { contents: unknown } } };
+    if (!parsed.doc.contents) return [];
+
+    const parentMap = getParentMap([parsed.doc.contents as never]);
+    if (!parentMap || !isMap(parentMap)) return [];
+
+    const existingFields = getFieldKeys(parentMap);
+    const allowedFields = getAllowedFields(context.typeDef, context.schema);
+    const availableFields = allowedFields.filter(
+      (field) => !existingFields.includes(field),
+    );
+
+    const typeSpecificFields = new Set(context.typeDef?.fields ?? []);
+
+    return availableFields.map((fieldKey) => {
+      const fieldDef = context.schema.fields[fieldKey as never];
+      const isTypeSpecific = typeSpecificFields.has(fieldKey);
+
+      return {
+        label: fieldKey,
+        kind: CompletionItemKind.Property,
+        detail: fieldDef?.dataType,
+        documentation: fieldDef?.description,
+        sortText: isTypeSpecific ? `0_${fieldKey}` : `1_${fieldKey}`,
+      };
+    });
+  }
+
+  const { cursorContext, context, excludeValues } = input;
+  const { fieldDef, fieldAttrs } = cursorContext;
+
   if (fieldDef.dataType === "option") {
     return createOptionCompletions(fieldDef as FieldDef<"option">);
   }
@@ -148,10 +163,10 @@ const createValueCompletions = async (
 
   if (fieldDef.dataType === "relation") {
     return createRelationCompletions(
-      runtime,
-      namespace,
+      kg,
+      context.namespace,
       fieldDef,
-      attrs,
+      fieldAttrs,
       excludeValues,
     );
   }
@@ -159,65 +174,39 @@ const createValueCompletions = async (
   return [];
 };
 
-const handleYamlFieldKeyCompletion = (
-  context: DocumentContext,
+const buildCompletionInput = (
   cursorContext: CursorContext,
-): CompletionItem[] => {
+  context: DocumentContext,
+): CompletionInput | undefined => {
   if (
-    cursorContext.documentType !== "yaml" ||
-    cursorContext.type !== "field-key"
-  )
-    return [];
+    cursorContext.documentType === "yaml" &&
+    cursorContext.type === "field-key"
+  ) {
+    return { kind: "field-key", context };
+  }
 
-  const { parsed } = context as { parsed: { doc: { contents: unknown } } };
-  if (!parsed.doc.contents) return [];
+  if (cursorContext.type === "field-value") {
+    const { fieldPath, itemIndex, entity } = cursorContext;
+    const excludeValues =
+      itemIndex !== undefined
+        ? getSiblingValues(
+            context,
+            getSchemaFieldPath(fieldPath),
+            entity.entityIndex,
+          )
+        : [];
 
-  const parentMap = getParentMap([parsed.doc.contents as never]);
-  if (!parentMap || !isMap(parentMap)) return [];
+    return { kind: "field-value", cursorContext, context, excludeValues };
+  }
 
-  const existingFields = getFieldKeys(parentMap);
-  const allowedFields = getAllowedFields(context.typeDef, context.schema);
-
-  return createFieldNameCompletions(
-    allowedFields,
-    existingFields,
-    context.schema,
-    context.typeDef,
-  );
-};
-
-const handleFieldValueCompletion = async (
-  context: DocumentContext,
-  cursorContext: CursorContext,
-  runtime: RuntimeContextWithDb,
-): Promise<CompletionItem[]> => {
-  if (cursorContext.type !== "field-value") return [];
-
-  const { fieldDef, fieldAttrs, fieldPath, itemIndex, entity } = cursorContext;
-
-  const excludeValues =
-    itemIndex !== undefined
-      ? getSiblingValues(
-          context,
-          getSchemaFieldPath(fieldPath),
-          entity.entityIndex,
-        )
-      : [];
-
-  return createValueCompletions(
-    fieldDef,
-    fieldAttrs,
-    context.namespace,
-    runtime,
-    excludeValues,
-  );
+  return undefined;
 };
 
 export const handleCompletion: LspHandler<
   CompletionParams,
   CompletionItem[]
 > = async (params, { context, runtime }) => {
-  const { log } = runtime;
+  const { log, kg } = runtime;
   log.debug("COMPLETION");
 
   const cursorContext = getCursorContext(context, params.position);
@@ -227,20 +216,14 @@ export const handleCompletion: LspHandler<
     return [];
   }
 
-  if (
-    cursorContext.documentType === "yaml" &&
-    cursorContext.type === "field-key"
-  ) {
-    return handleYamlFieldKeyCompletion(context, cursorContext);
+  const input = buildCompletionInput(cursorContext, context);
+  if (!input) {
+    log.debug("Unsupported completion context", {
+      documentType: cursorContext.documentType,
+      type: cursorContext.type,
+    });
+    return [];
   }
 
-  if (cursorContext.type === "field-value") {
-    return handleFieldValueCompletion(context, cursorContext, runtime);
-  }
-
-  log.debug("Unsupported completion context", {
-    documentType: cursorContext.documentType,
-    type: cursorContext.type,
-  });
-  return [];
+  return getCompletionItems(input, kg);
 };

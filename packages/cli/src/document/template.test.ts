@@ -878,6 +878,65 @@ describe("template", () => {
         "extra-content",
       );
     });
+
+    it("extracts empty richtext field after multi-value relation block", () => {
+      check(
+        "# {title}\n\n## Children Summary\n\n{tasks}\n\n## Summary\n\n{description}\n",
+        "# Month Title\n\n## Children Summary\n\n### Task 1\n\nDescription 1\n\n## Summary\n\n",
+        {
+          title: "Month Title",
+          tasks: [{ title: "Task 1", description: "Description 1" }],
+          description: null,
+        },
+      );
+    });
+
+    it("extracts children using section template with trailing empty field", () => {
+      const weekSummaryTemplate = createTemplateEntity(
+        "week-summary",
+        "### {title}\n\n{description}\n",
+        { templateFormat: "section" },
+      );
+      check(
+        "# {title}\n\n## Plan\n\n{notes}\n\n## Weeks Summary\n\n{tasks|template:week-summary}\n\n## Summary\n\n{description}\n",
+        `# 2025-01
+
+## Plan
+
+Focus areas:
+- Ship journaling schema to production
+
+## Weeks Summary
+
+### 2025-W01
+
+Excellent first week. Schema is minimal and consistent.
+
+## Summary
+
+`,
+        {
+          title: "2025-01",
+          notes: ["Focus areas:\n- Ship journaling schema to production"],
+          tasks: [
+            {
+              title: "2025-W01",
+              description:
+                "Excellent first week. Schema is minimal and consistent.",
+            },
+          ],
+          description: null,
+        },
+        [...mockDefaultTemplates, weekSummaryTemplate],
+      );
+    });
+
+    it("parses markdown with trailing empty section", () => {
+      const ast = parseMarkdown("## Summary\n\n");
+      expect(ast.children).toEqual([
+        expect.objectContaining({ type: "heading", depth: 2 }),
+      ]);
+    });
   });
 
   describe("round-trip", () => {
@@ -1022,6 +1081,59 @@ Add login and registration functionality with JWT tokens
 
     it("returns empty array for template without slots", () => {
       check("# Static Title\n", "# Static Title\n", []);
+    });
+
+    it("extracts position for field with surrounding text in paragraph", () => {
+      // Note: position includes leading space from " active" text node
+      check("**Status:** {status}\n", "**Status:** active\n", [
+        {
+          path: ["status"],
+          position: {
+            start: { line: 1, column: 12, offset: 11 },
+            end: { line: 1, column: 19, offset: 18 },
+          },
+        },
+      ]);
+    });
+
+    it("extracts position for field rendered as list", () => {
+      check("{description}\n", "- Item 1\n- Item 2\n", [
+        {
+          path: ["description"],
+          position: {
+            start: { line: 1, column: 1, offset: 0 },
+            end: { line: 2, column: 9, offset: 17 },
+          },
+        },
+      ]);
+    });
+
+    it("extracts position for field rendered as multiple paragraphs", () => {
+      check("{description}\n", "First paragraph.\n\nSecond paragraph.\n", [
+        {
+          path: ["description"],
+          position: {
+            start: { line: 1, column: 1, offset: 0 },
+            end: { line: 3, column: 18, offset: 35 },
+          },
+        },
+      ]);
+    });
+
+    it("extracts position spanning multiple blocks until next static content", () => {
+      check(
+        "## Items\n\n{children}\n\n## End\n",
+        "## Items\n\n### Child 1\n\nContent 1\n\n### Child 2\n\nContent 2\n\n## End\n",
+        [
+          {
+            path: ["children"],
+            position: {
+              start: { line: 3, column: 1, offset: 10 },
+              end: { line: 9, column: 10, offset: 56 },
+            },
+          },
+        ],
+      );
     });
   });
 });

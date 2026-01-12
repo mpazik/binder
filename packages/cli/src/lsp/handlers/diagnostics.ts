@@ -5,13 +5,35 @@ import type {
   DocumentDiagnosticReport,
 } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
-import type { NamespaceSchema } from "@binder/db";
+import type { Position as UnistPosition } from "unist";
+import {
+  type DataTypeNs,
+  type EntitySchema,
+  type FieldDef,
+  type FieldPath,
+  type FieldsetNested,
+  type FieldValue,
+  getFieldDefNested,
+  getRelationRef,
+  isFieldsetNested,
+  type NamespaceEditable,
+  type NamespaceSchema,
+  validateDataType,
+} from "@binder/db";
+import { isErr } from "@binder/utils";
 import {
   validateDocument,
   type ValidationError,
+  type ValidationRange,
   type ValidationSeverity,
+  zeroRange,
 } from "../../validation";
-import type { LspHandler } from "../document-context.ts";
+import { extract } from "../../document/extraction.ts";
+import type { FieldSlotMapping } from "../../document/template.ts";
+import type {
+  LspHandler,
+  MarkdownDocumentContext,
+} from "../document-context.ts";
 
 const severityToDiagnosticSeverity: Record<
   ValidationSeverity,
@@ -31,6 +53,195 @@ const validationErrorToDiagnostic = (error: ValidationError): Diagnostic => ({
   code: error.code,
   data: error.data,
 });
+
+export type FieldValidationError = {
+  fieldPath: FieldPath;
+  code: "invalid-value";
+  message: string;
+};
+
+export type FieldValueValidationInput = {
+  fieldPath: FieldPath;
+  fieldDef: FieldDef;
+  value: FieldValue;
+  namespace: NamespaceEditable;
+};
+
+export const validateFieldValue = (
+  input: FieldValueValidationInput,
+): FieldValidationError | undefined => {
+  const { fieldPath, fieldDef, value, namespace } = input;
+
+  // Null values represent empty/unset fields and are always valid
+  if (value === null) return undefined;
+
+  const result = validateDataType(
+    namespace,
+    fieldDef as FieldDef<DataTypeNs[typeof namespace]>,
+    value,
+  );
+  if (isErr(result)) {
+    return {
+      fieldPath,
+      code: "invalid-value",
+      message: `Invalid value for field '${fieldPath.join(".")}': ${result.error.message}`,
+    };
+  }
+  return undefined;
+};
+
+export type RelationRef = {
+  fieldPath: FieldPath;
+  ref: string;
+};
+
+export type ExtractRelationRefsInput = {
+  fieldPath: FieldPath;
+  fieldDef: FieldDef;
+  value: FieldValue;
+};
+
+export const extractRelationRefs = (
+  input: ExtractRelationRefsInput,
+): RelationRef[] => {
+  const { fieldPath, fieldDef, value } = input;
+
+  if (fieldDef.dataType !== "relation") return [];
+  if (value === null || value === undefined) return [];
+
+  if (fieldDef.allowMultiple && Array.isArray(value)) {
+    const refs: RelationRef[] = [];
+    for (const item of value) {
+      const ref = getRelationRef(item as FieldValue);
+      if (ref && !isFieldsetNested(item)) {
+        refs.push({ fieldPath, ref });
+      }
+    }
+    return refs;
+  }
+
+  if (isFieldsetNested(value)) return [];
+
+  const ref = getRelationRef(value);
+  if (!ref) return [];
+
+  return [{ fieldPath, ref }];
+};
+
+export const unistPositionToRange = (
+  position: UnistPosition,
+): ValidationRange => ({
+  start: {
+    line: position.start.line - 1,
+    character: position.start.column - 1,
+  },
+  end: {
+    line: position.end.line - 1,
+    character: position.end.column - 1,
+  },
+});
+
+export const mapFieldPathToRange = (
+  fieldPath: FieldPath,
+  fieldMappings: FieldSlotMapping[],
+): ValidationRange | undefined => {
+  const mapping = fieldMappings.find(
+    (m) =>
+      m.path.length === fieldPath.length &&
+      m.path.every((segment, i) => segment === fieldPath[i]),
+  );
+  if (!mapping?.position) return undefined;
+  return unistPositionToRange(mapping.position);
+};
+
+export type ValidateMarkdownFieldsInput = {
+  fieldset: FieldsetNested;
+  schema: EntitySchema;
+  namespace: NamespaceEditable;
+};
+
+export const validateMarkdownFields = (
+  input: ValidateMarkdownFieldsInput,
+): FieldValidationError[] => {
+  const { fieldset, schema, namespace } = input;
+  const errors: FieldValidationError[] = [];
+
+  const validateField = (path: FieldPath, value: FieldValue) => {
+    const fieldDef = getFieldDefNested(schema, path);
+    if (!fieldDef) return;
+
+    if (fieldDef.dataType === "relation") {
+      if (fieldDef.allowMultiple && Array.isArray(value)) {
+        for (const item of value) {
+          if (isFieldsetNested(item)) {
+            validateFieldset(item, path);
+          }
+        }
+      } else if (isFieldsetNested(value)) {
+        validateFieldset(value, path);
+      }
+      return;
+    }
+
+    const error = validateFieldValue({
+      fieldPath: path,
+      fieldDef,
+      value,
+      namespace,
+    });
+    if (error) errors.push(error);
+  };
+
+  const validateFieldset = (fs: FieldsetNested, parentPath: FieldPath = []) => {
+    for (const [key, value] of Object.entries(fs)) {
+      const path = [...parentPath, key];
+      validateField(path, value as FieldValue);
+    }
+  };
+
+  validateFieldset(fieldset);
+  return errors;
+};
+
+export const collectRelationRefs = (
+  fieldset: FieldsetNested,
+  schema: EntitySchema,
+): RelationRef[] => {
+  const refs: RelationRef[] = [];
+
+  const collectFromFieldset = (
+    fs: FieldsetNested,
+    parentPath: FieldPath = [],
+  ) => {
+    for (const [key, value] of Object.entries(fs)) {
+      const path = [...parentPath, key];
+      const fieldDef = getFieldDefNested(schema, path);
+      if (!fieldDef) continue;
+
+      if (fieldDef.dataType === "relation") {
+        const fieldRefs = extractRelationRefs({
+          fieldPath: path,
+          fieldDef,
+          value: value as FieldValue,
+        });
+        refs.push(...fieldRefs);
+
+        if (fieldDef.allowMultiple && Array.isArray(value)) {
+          for (const item of value) {
+            if (isFieldsetNested(item)) {
+              collectFromFieldset(item, path);
+            }
+          }
+        } else if (isFieldsetNested(value)) {
+          collectFromFieldset(value, path);
+        }
+      }
+    }
+  };
+
+  collectFromFieldset(fieldset);
+  return refs;
+};
 
 export const handleDiagnostics: LspHandler<
   DocumentDiagnosticParams,
@@ -54,6 +265,15 @@ export const handleDiagnostics: LspHandler<
     ...validationResult.warnings,
   ].map(validationErrorToDiagnostic);
 
+  if (context.documentType === "markdown") {
+    const markdownDiagnostics = await getMarkdownDiagnostics(
+      context,
+      runtime,
+      filePath,
+    );
+    diagnostics.push(...markdownDiagnostics);
+  }
+
   log.info("Returning diagnostics", {
     filePath,
     errorCount: validationResult.errors.length,
@@ -64,4 +284,78 @@ export const handleDiagnostics: LspHandler<
     kind: "full",
     items: diagnostics,
   };
+};
+
+const getMarkdownDiagnostics = async (
+  context: MarkdownDocumentContext,
+  runtime: Parameters<typeof handleDiagnostics>[1]["runtime"],
+  filePath: string,
+): Promise<Diagnostic[]> => {
+  const { kg, log } = runtime;
+  const diagnostics: Diagnostic[] = [];
+
+  const templatesResult = await runtime.templates();
+  if (isErr(templatesResult)) return diagnostics;
+
+  const content = context.document.getText();
+  const relativePath = filePath.replace(runtime.config.paths.docs + "/", "");
+  const extractResult = extract(
+    context.schema,
+    context.navigationItem,
+    content,
+    relativePath,
+    templatesResult.data,
+  );
+
+  if (isErr(extractResult)) {
+    log.debug("Markdown extraction failed for validation", {
+      error: extractResult.error,
+    });
+    return diagnostics;
+  }
+
+  const extracted = extractResult.data;
+  if (extracted.kind !== "document") return diagnostics;
+
+  const fieldErrors = validateMarkdownFields({
+    fieldset: extracted.entity,
+    schema: context.schema,
+    namespace: context.namespace,
+  });
+
+  for (const error of fieldErrors) {
+    const range =
+      mapFieldPathToRange(error.fieldPath, context.fieldMappings) ?? zeroRange;
+    diagnostics.push({
+      range,
+      severity: DiagnosticSeverity.Error,
+      message: error.message,
+      source: "binder",
+      code: error.code,
+      data: { fieldPath: error.fieldPath },
+    });
+  }
+
+  const relationRefs = collectRelationRefs(extracted.entity, context.schema);
+  for (const { fieldPath, ref } of relationRefs) {
+    const entityResult = await kg.fetchEntity(
+      ref as never,
+      undefined,
+      context.namespace,
+    );
+    if (isErr(entityResult)) {
+      const range =
+        mapFieldPathToRange(fieldPath, context.fieldMappings) ?? zeroRange;
+      diagnostics.push({
+        range,
+        severity: DiagnosticSeverity.Error,
+        message: `Referenced entity '${ref}' not found`,
+        source: "binder",
+        code: "invalid-relation-reference",
+        data: { fieldPath, ref },
+      });
+    }
+  }
+
+  return diagnostics;
 };

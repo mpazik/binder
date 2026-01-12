@@ -7,7 +7,7 @@ import type {
 } from "vscode-languageserver/node";
 import { CodeActionKind, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { FieldAttrDef, FieldDef } from "@binder/db";
+import type { FieldAttrDef, FieldDef, FieldPath } from "@binder/db";
 import { findSimilar } from "@binder/utils";
 import {
   type DocumentContext,
@@ -15,6 +15,12 @@ import {
   type LspHandler,
 } from "../document-context.ts";
 import { getFieldDefForType } from "../cursor-context.ts";
+
+type InvalidValueData = {
+  fieldKey?: string;
+  fieldPath?: FieldPath;
+  value?: unknown;
+};
 
 const getDefaultValue = (fieldDef: FieldDef, attrs?: FieldAttrDef): string => {
   if (attrs?.default !== undefined) {
@@ -158,6 +164,74 @@ const createAddFieldAction = (
   };
 };
 
+const getFieldKeyFromData = (
+  data: InvalidValueData | undefined,
+): string | undefined => {
+  if (data?.fieldKey) return data.fieldKey;
+  if (data?.fieldPath && data.fieldPath.length > 0) return data.fieldPath[0];
+  return undefined;
+};
+
+const createReplaceValueAction = (
+  diagnostic: Diagnostic,
+  document: TextDocument,
+  suggestedValue: string,
+  isTopMatch: boolean,
+): CodeAction => {
+  const title = isTopMatch
+    ? `Change spelling to '${suggestedValue}'`
+    : `Replace with '${suggestedValue}'`;
+
+  return {
+    title,
+    kind: CodeActionKind.QuickFix,
+    diagnostics: [diagnostic],
+    edit: {
+      changes: {
+        [document.uri]: [TextEdit.replace(diagnostic.range, suggestedValue)],
+      },
+    },
+  };
+};
+
+const getInvalidValueActions = (
+  diagnostic: Diagnostic,
+  document: TextDocument,
+  context: DocumentContext,
+): CodeAction[] => {
+  const data = diagnostic.data as InvalidValueData | undefined;
+  const fieldKey = getFieldKeyFromData(data);
+  if (!fieldKey) return [];
+
+  const fieldInfo = getFieldDefForType(
+    fieldKey,
+    context.typeDef,
+    context.schema,
+  );
+  if (!fieldInfo || fieldInfo.def.dataType !== "option") return [];
+
+  const options = fieldInfo.def.options;
+  if (!options || options.length === 0) return [];
+
+  const currentValue = document.getText(diagnostic.range);
+  const optionKeys = options.map((o) => o.key);
+  const suggestions = findSimilar(optionKeys, currentValue, { max: 3 });
+
+  const actions: CodeAction[] = [];
+  for (let i = 0; i < suggestions.length; i++) {
+    actions.push(
+      createReplaceValueAction(
+        diagnostic,
+        document,
+        suggestions[i]!.value,
+        i === 0,
+      ),
+    );
+  }
+
+  return actions;
+};
+
 export const handleCodeAction: LspHandler<CodeActionParams, CodeAction[]> = (
   params,
   { document, context, runtime: { log } },
@@ -206,6 +280,10 @@ export const handleCodeAction: LspHandler<CodeActionParams, CodeAction[]> = (
     if (code === "missing-required-field") {
       const action = createAddFieldAction(diagnostic, document, context);
       if (action) actions.push(action);
+    }
+
+    if (code === "invalid-value") {
+      actions.push(...getInvalidValueActions(diagnostic, document, context));
     }
   }
 

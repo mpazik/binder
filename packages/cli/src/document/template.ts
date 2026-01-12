@@ -1097,77 +1097,139 @@ export type FieldSlotMapping = {
   position: UnistPosition;
 };
 
+const isSoleFieldSlotParagraph = (
+  node: SimplifiedViewBlockChild,
+): node is SimplifiedViewBlockChild & { children: [FieldSlot] } =>
+  node.type === "paragraph" &&
+  Array.isArray(node.children) &&
+  node.children.length === 1 &&
+  node.children[0]?.type === "fieldSlot";
+
+const combinePositions = (
+  start: UnistPosition,
+  end: UnistPosition,
+): UnistPosition => ({
+  start: start.start,
+  end: end.end,
+});
+
+const getNodePosition = (node: Nodes): UnistPosition | undefined =>
+  node.position;
+
+const getBlockText = (node: Nodes | SimplifiedViewBlockChild): string => {
+  if ("children" in node && Array.isArray(node.children)) {
+    return node.children
+      .map((child) => {
+        if ("value" in child && typeof child.value === "string")
+          return child.value;
+        if ("children" in child) return getBlockText(child as Nodes);
+        return "";
+      })
+      .join("");
+  }
+  if ("value" in node && typeof node.value === "string") return node.value;
+  return "";
+};
+
+const blocksMatch = (
+  viewBlock: SimplifiedViewBlockChild,
+  snapBlock: Nodes,
+): boolean => {
+  if (viewBlock.type !== snapBlock.type) return false;
+  if (viewBlock.type === "paragraph") return false;
+  return getBlockText(viewBlock) === getBlockText(snapBlock);
+};
+
+const collectTextNodes = (node: Nodes): Nodes[] => {
+  if (node.type === "text") return [node];
+  if (!("children" in node) || !Array.isArray(node.children)) return [];
+  return (node.children as Nodes[]).flatMap(collectTextNodes);
+};
+
+const findInlineFieldPosition = (
+  snapNode: Nodes,
+  viewChildren: SimplifiedViewInlineChild[],
+): UnistPosition | undefined => {
+  if (!("children" in snapNode) || !Array.isArray(snapNode.children))
+    return undefined;
+
+  const fieldSlotIndex = viewChildren.findIndex((c) => c.type === "fieldSlot");
+  if (fieldSlotIndex === -1) return undefined;
+
+  const hasPrecedingContent = fieldSlotIndex > 0;
+  const allSnapTextNodes = collectTextNodes(snapNode);
+
+  if (allSnapTextNodes.length === 0) return undefined;
+
+  if (hasPrecedingContent) {
+    const lastTextNode = allSnapTextNodes[allSnapTextNodes.length - 1]!;
+    return lastTextNode.position;
+  }
+
+  const firstTextNode = allSnapTextNodes[0]!;
+  return firstTextNode.position;
+};
+
 export const extractFieldMappings = (
   view: TemplateAST,
   snapshot: FullAST,
 ): FieldSlotMapping[] => {
   const mappings: FieldSlotMapping[] = [];
   const simplifiedView = simplifyViewAst(view);
+  const viewBlocks = simplifiedView.children;
+  const snapBlocks = snapshot.children as Nodes[];
 
-  type SimplifiedNode =
-    | FieldSlot
-    | Text
-    | { type: string; children?: unknown[] };
+  let viewIdx = 0;
+  let snapIdx = 0;
 
-  const matchNodes = (viewNode: SimplifiedNode, snapNode: Nodes): void => {
-    if (viewNode.type === "fieldSlot") {
-      const fieldSlot = viewNode as FieldSlot;
-      if (snapNode.position) {
-        mappings.push({ path: fieldSlot.path, position: snapNode.position });
-      }
-      return;
-    }
+  while (viewIdx < viewBlocks.length && snapIdx < snapBlocks.length) {
+    const viewBlock = viewBlocks[viewIdx]!;
+    const snapBlock = snapBlocks[snapIdx]!;
 
-    if (viewNode.type === "text") return;
+    if (isSoleFieldSlotParagraph(viewBlock)) {
+      const fieldSlot = viewBlock.children[0];
+      const nextViewBlock = viewBlocks[viewIdx + 1];
 
-    if (
-      "children" in viewNode &&
-      Array.isArray(viewNode.children) &&
-      "children" in snapNode &&
-      Array.isArray(snapNode.children)
-    ) {
-      matchChildren(
-        viewNode.children as SimplifiedNode[],
-        snapNode.children as Nodes[],
-      );
-    }
-  };
-
-  const matchChildren = (
-    viewChildren: SimplifiedNode[],
-    snapChildren: Nodes[],
-  ): void => {
-    let viewIdx = 0;
-    let snapIdx = 0;
-
-    while (viewIdx < viewChildren.length && snapIdx < snapChildren.length) {
-      const viewChild = viewChildren[viewIdx]!;
-      const snapChild = snapChildren[snapIdx]!;
-
-      if (viewChild.type === "fieldSlot") {
-        if (snapChild.type === "text" && snapChild.position) {
-          mappings.push({
-            path: (viewChild as FieldSlot).path,
-            position: snapChild.position,
-          });
+      let endSnapIdx = snapIdx + 1;
+      if (nextViewBlock) {
+        while (endSnapIdx < snapBlocks.length) {
+          if (blocksMatch(nextViewBlock, snapBlocks[endSnapIdx]!)) break;
+          endSnapIdx++;
         }
-        viewIdx++;
-        snapIdx++;
-      } else if (viewChild.type === "text") {
-        if (snapChild.type === "text") {
-          snapIdx++;
-        }
-        viewIdx++;
       } else {
-        if (viewChild.type === snapChild.type) {
-          matchNodes(viewChild, snapChild);
-        }
-        viewIdx++;
-        snapIdx++;
+        endSnapIdx = snapBlocks.length;
       }
-    }
-  };
 
-  matchChildren(simplifiedView.children as SimplifiedNode[], snapshot.children);
+      const startPos = getNodePosition(snapBlocks[snapIdx]!);
+      const endPos = getNodePosition(snapBlocks[endSnapIdx - 1]!);
+      if (startPos && endPos) {
+        mappings.push({
+          path: fieldSlot.path,
+          position: combinePositions(startPos, endPos),
+        });
+      }
+      snapIdx = endSnapIdx;
+      viewIdx++;
+    } else if (viewBlock.type === snapBlock.type) {
+      if (
+        "children" in viewBlock &&
+        Array.isArray(viewBlock.children) &&
+        viewBlock.children.some((c) => c.type === "fieldSlot")
+      ) {
+        const fieldSlot = viewBlock.children.find(
+          (c) => c.type === "fieldSlot",
+        ) as FieldSlot;
+        const position = findInlineFieldPosition(snapBlock, viewBlock.children);
+        if (position) {
+          mappings.push({ path: fieldSlot.path, position });
+        }
+      }
+      viewIdx++;
+      snapIdx++;
+    } else {
+      snapIdx++;
+    }
+  }
+
   return mappings;
 };

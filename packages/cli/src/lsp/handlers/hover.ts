@@ -4,12 +4,35 @@ import type {
   Range as LspRange,
 } from "vscode-languageserver/node";
 import { MarkupKind } from "vscode-languageserver/node";
+import { isErr } from "@binder/utils";
 import type { FieldAttrDef, FieldDef } from "@binder/db";
-import { formatWhenCondition } from "../../utils/query.ts";
 import { type LspHandler } from "../document-context.ts";
 import { getCursorContext } from "../cursor-context.ts";
+import { findTemplate } from "../../document/navigation.ts";
+import { formatWhenCondition } from "../../utils/query.ts";
+import type { TemplateFormat } from "../../cli-config-schema.ts";
 
-const buildConstraintsSection = (
+const buildHover = (content: string, range?: LspRange): Hover => ({
+  contents: { kind: MarkupKind.Markdown, value: content },
+  ...(range && { range }),
+});
+
+export type FieldHoverInput = {
+  kind: "field";
+  fieldDef: FieldDef;
+  fieldAttrs?: FieldAttrDef;
+  relationFieldDef?: FieldDef;
+};
+export type TemplateHoverInput = {
+  kind: "template";
+  templateKey: string;
+  templateName?: string;
+  templateDescription?: string;
+  templateFormat?: TemplateFormat;
+};
+export type HoverInput = FieldHoverInput | TemplateHoverInput;
+
+const renderConstraints = (
   fieldDef: FieldDef,
   attrs: FieldAttrDef | undefined,
 ): string => {
@@ -28,12 +51,12 @@ const buildConstraintsSection = (
   return `\n\n---\n\n**Constraints:**\n${constraints.map((c) => `- ${c}`).join("\n")}`;
 };
 
-const buildRangeSection = (fieldDef: FieldDef): string => {
+const renderRange = (fieldDef: FieldDef): string => {
   if (fieldDef.dataType !== "relation" || !fieldDef.range) return "";
   return `\n\n**Range:** ${fieldDef.range.join(", ")}`;
 };
 
-const buildOptionsSection = (fieldDef: FieldDef): string => {
+const renderOptions = (fieldDef: FieldDef): string => {
   if (fieldDef.dataType !== "option" || !fieldDef.options) return "";
 
   const optionsList = fieldDef.options
@@ -43,37 +66,83 @@ const buildOptionsSection = (fieldDef: FieldDef): string => {
   return `\n\n**Options:**\n${optionsList}`;
 };
 
-const buildHoverContent = (
-  fieldDef: FieldDef,
-  attrs: FieldAttrDef | undefined,
+const renderRelationSource = (
+  relationFieldDef: FieldDef | undefined,
 ): string => {
-  const title = `**${fieldDef.name}** (${fieldDef.dataType})`;
-  const description = fieldDef.description ? `\n\n${fieldDef.description}` : "";
-  const constraints = buildConstraintsSection(fieldDef, attrs);
-  const range = buildRangeSection(fieldDef);
-  const options = buildOptionsSection(fieldDef);
-
-  return `${title}${description}${constraints}${range}${options}`;
+  if (!relationFieldDef) return "";
+  return `\n\n**From:** ${relationFieldDef.name} (relation)`;
 };
 
-const buildHover = (content: string, range?: LspRange): Hover => ({
-  contents: { kind: MarkupKind.Markdown, value: content },
-  ...(range && { range }),
-});
+const renderFieldHover = (input: FieldHoverInput): string => {
+  const { fieldDef, fieldAttrs, relationFieldDef } = input;
 
-export const handleHover: LspHandler<HoverParams, Hover | null> = (
+  const title = `**${fieldDef.name}** (${fieldDef.dataType})`;
+  const description = fieldDef.description ? `\n\n${fieldDef.description}` : "";
+  const relationSource = renderRelationSource(relationFieldDef);
+  const constraints = renderConstraints(fieldDef, fieldAttrs);
+  const range = renderRange(fieldDef);
+  const options = renderOptions(fieldDef);
+
+  return `${title}${description}${relationSource}${constraints}${range}${options}`;
+};
+
+const renderTemplateHover = (input: TemplateHoverInput): string => {
+  const name = input.templateName ?? input.templateKey;
+  const title = `**${name}** (template)`;
+  const description = input.templateDescription
+    ? `\n\n${input.templateDescription}`
+    : "";
+
+  return `${title}${description}`;
+};
+
+export const renderHoverContent = (input: HoverInput): string => {
+  if (input.kind === "field") return renderFieldHover(input);
+  return renderTemplateHover(input);
+};
+
+export const handleHover: LspHandler<HoverParams, Hover | null> = async (
   params,
-  { context },
+  { context, runtime },
 ) => {
   const cursorContext = getCursorContext(context, params.position);
 
-  if (cursorContext.type === "none" || cursorContext.type === "template")
-    return null;
+  if (cursorContext.type === "none") return null;
 
-  const content = buildHoverContent(
-    cursorContext.fieldDef,
-    cursorContext.fieldAttrs,
-  );
+  if (
+    cursorContext.type === "field-key" ||
+    cursorContext.type === "field-value"
+  ) {
+    const relationFieldDef =
+      cursorContext.fieldPath.length > 1
+        ? context.schema.fields[cursorContext.fieldPath[0]!]
+        : undefined;
+    const content = renderHoverContent({
+      kind: "field",
+      fieldDef: cursorContext.fieldDef,
+      fieldAttrs: cursorContext.fieldAttrs,
+      relationFieldDef,
+    });
+    return buildHover(content, cursorContext.range);
+  }
 
-  return buildHover(content, cursorContext.range);
+  if (cursorContext.type === "template") {
+    const templatesResult = await runtime.templates();
+    if (isErr(templatesResult)) return null;
+
+    const template = findTemplate(
+      templatesResult.data,
+      cursorContext.templateKey,
+    );
+    const content = renderHoverContent({
+      kind: "template",
+      templateKey: cursorContext.templateKey,
+      templateName: template.name,
+      templateDescription: template.description,
+      templateFormat: template.templateFormat,
+    });
+    return buildHover(content);
+  }
+
+  return null;
 };

@@ -14,7 +14,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { isErr, tryCatch } from "@binder/utils";
 import { type RuntimeContextInit } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
-import { handleDocumentSave } from "./handlers/sync-handler.ts";
+import { handleDocumentSave } from "./handlers/save-handler.ts";
 import { handleHover } from "./handlers/hover.ts";
 import { handleCompletion } from "./handlers/completion.ts";
 import { handleCodeAction } from "./handlers/code-actions.ts";
@@ -51,6 +51,12 @@ export const createLspServer = (
             path: absolutePath,
             error: contentResult.error,
           });
+          continue;
+        }
+
+        // Skip if content is already identical to avoid triggering editor conflicts
+        if (openDoc.getText() === contentResult.data) {
+          log.debug("Document content unchanged, skipping refresh", { uri });
           continue;
         }
 
@@ -201,7 +207,7 @@ export const createLspServer = (
     const uri = event.document.uri;
     log.info("Document closed", { uri });
 
-    const workspace = await workspaceManager.findWorkspaceForDocument(uri);
+    const workspace = workspaceManager.findWorkspaceForDocument(uri);
     if (workspace) {
       workspace.documentCache.invalidate(uri);
     }
@@ -211,7 +217,7 @@ export const createLspServer = (
     const uri = change.document.uri;
     log.info("Document saved", { uri });
 
-    const workspace = await workspaceManager.findWorkspaceForDocument(uri);
+    const workspace = workspaceManager.findWorkspaceForDocument(uri);
     if (!workspace) {
       log.debug("Document not in any Binder workspace, skipping sync", { uri });
       return;

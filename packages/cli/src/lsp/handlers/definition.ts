@@ -1,13 +1,30 @@
 import type { DefinitionParams, Location } from "vscode-languageserver/node";
 import { isErr } from "@binder/utils";
-import type { Fieldset, NamespaceEditable } from "@binder/db";
+import type {
+  EntityKey,
+  EntityUid,
+  Fieldset,
+  NamespaceEditable,
+} from "@binder/db";
 import type { RuntimeContextWithDb } from "../../runtime.ts";
 import {
   findEntityLocation,
   loadNavigation,
 } from "../../document/navigation.ts";
 import { type LspHandler } from "../document-context.ts";
-import { getCursorContext } from "../cursor-context.ts";
+import { getCursorContext, type CursorContext } from "../cursor-context.ts";
+
+export type EntityStringRef = EntityKey | EntityUid;
+
+export const getEntityRef = (
+  cursorContext: CursorContext,
+): EntityStringRef | undefined => {
+  if (cursorContext.type !== "field-value") return undefined;
+  if (cursorContext.fieldDef.dataType !== "relation") return undefined;
+  if (!cursorContext.currentValue) return undefined;
+
+  return cursorContext.currentValue as EntityStringRef;
+};
 
 export const handleDefinition: LspHandler<
   DefinitionParams,
@@ -16,51 +33,36 @@ export const handleDefinition: LspHandler<
   const { log } = runtime;
 
   const cursorContext = getCursorContext(context, params.position);
+  const entityRef = getEntityRef(cursorContext);
 
-  if (cursorContext.type !== "field-value") {
-    log.debug("Not on a field value");
+  if (!entityRef) {
+    log.debug("No entity reference at cursor position");
     return null;
   }
 
-  if (cursorContext.fieldDef.dataType !== "relation") {
-    log.debug("Field is not a relation", {
-      fieldPath: cursorContext.fieldPath,
-    });
-    return null;
-  }
+  log.debug("Looking up reference", { entityRef });
 
-  if (!cursorContext.currentValue) {
-    log.debug("No current value at cursor position");
-    return null;
-  }
-
-  const referenceValue = cursorContext.currentValue;
-  log.debug("Looking up reference", {
-    fieldPath: cursorContext.fieldPath,
-    referenceValue,
-  });
-
-  return findReferenceLocation(referenceValue, context.namespace, runtime);
+  return findReferenceLocation(entityRef, context.namespace, runtime);
 };
 
 const findReferenceLocation = async (
-  referenceValue: string,
+  entityRef: EntityStringRef,
   namespace: NamespaceEditable,
   runtime: RuntimeContextWithDb,
 ): Promise<Location | null> => {
   const { kg, log } = runtime;
 
   const searchResult = await kg.search({
-    filters: { key: referenceValue },
+    filters: { key: entityRef },
   });
 
   if (isErr(searchResult) || searchResult.data.items.length === 0) {
     const uidSearchResult = await kg.search({
-      filters: { uid: referenceValue },
+      filters: { uid: entityRef },
     });
 
     if (isErr(uidSearchResult) || uidSearchResult.data.items.length === 0) {
-      log.debug("Referenced entity not found", { referenceValue });
+      log.debug("Referenced entity not found", { entityRef });
       return null;
     }
 

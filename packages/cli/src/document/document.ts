@@ -1,5 +1,5 @@
 import { extname } from "path";
-import { assertFailed, includes } from "@binder/utils";
+import { includes } from "@binder/utils";
 import { type ParsedYaml, parseYamlDocument } from "./yaml-cst.ts";
 import { type ParsedMarkdown, parseMarkdownDocument } from "./markdown.ts";
 
@@ -17,9 +17,12 @@ export const parseDocument = (
   text: string,
   type: DocumentType,
 ): ParsedDocument => {
-  if (type === "markdown") return parseMarkdownDocument(text);
-  if (type === "yaml") return parseYamlDocument(text);
-  assertFailed(`Unknown document type: ${type}`);
+  switch (type) {
+    case "markdown":
+      return parseMarkdownDocument(text);
+    case "yaml":
+      return parseYamlDocument(text);
+  }
 };
 
 export const getDocumentFileType = (path: string): DocumentType | undefined => {
