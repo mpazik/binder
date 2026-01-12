@@ -89,8 +89,6 @@ export const configSchemaIds = {
   only: newMetaSystemId(22),
   when: newMetaSystemId(23),
   query: newMetaSystemId(24),
-  children: newMetaSystemId(25),
-  parent: newMetaSystemId(26),
   where: newMetaSystemId(27),
   includes: newMetaSystemId(28),
   plaintextFormat: newMetaSystemId(29),
@@ -253,22 +251,7 @@ export const configFieldsDefs = {
     dataType: "query",
     description: "Query parameters for data retrieval",
   },
-  children: {
-    id: configSchemaIds.children,
-    key: "children" as SystemKey,
-    name: "Children",
-    dataType: "relation",
-    description: "Child entities in hierarchical structure",
-    allowMultiple: true,
-  },
-  parent: {
-    id: configSchemaIds.parent,
-    key: "parent" as SystemKey,
-    name: "Parent",
-    dataType: "relation",
-    description: "Parent entity in hierarchical structure",
-    inverseOf: "children" as SystemKey,
-  },
+
   where: {
     id: configSchemaIds.where,
     key: "where" as SystemKey,

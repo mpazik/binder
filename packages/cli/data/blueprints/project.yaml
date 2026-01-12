@@ -22,19 +22,6 @@
       name: Due Date
       dataType: date
 
-    - key: parent
-      type: Field
-      name: Parent
-      dataType: relation
-      inverseOf: children
-
-    - key: children
-      type: Field
-      name: Children
-      dataType: relation
-      allowMultiple: true
-      inverseOf: parent
-
     - key: milestone
       type: Field
       name: Milestone

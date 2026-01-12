@@ -39,19 +39,6 @@
       name: URL
       dataType: plaintext
 
-    - key: parent
-      type: Field
-      name: Parent
-      dataType: relation
-      inverseOf: children
-
-    - key: children
-      type: Field
-      name: Children
-      dataType: relation
-      allowMultiple: true
-      inverseOf: parent
-
     - key: linksTo
       type: Field
       name: Links To
