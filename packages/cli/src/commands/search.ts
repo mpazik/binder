@@ -3,8 +3,13 @@ import { isErr, ok } from "@binder/utils";
 import { type Filters, type NamespaceEditable } from "@binder/db";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { types } from "../cli/types.ts";
-import { listFormatOption, namespaceOption } from "../cli/options.ts";
+import {
+  limitOption,
+  listFormatOption,
+  namespaceOption,
+} from "../cli/options.ts";
 import type { SerializeFormat } from "../utils/serialize.ts";
+import { applySelection } from "../utils/selection.ts";
 
 const parseQuery = (queryParts: string[]): Filters => {
   const filters: Filters = {};
@@ -44,13 +49,15 @@ const searchHandler: CommandHandlerWithDb<{
   query: string[];
   namespace: NamespaceEditable;
   format?: SerializeFormat;
+  limit?: number;
 }> = async ({ kg, ui, args }) => {
   const filters = parseQuery(args.query);
 
   const result = await kg.search({ filters }, args.namespace);
   if (isErr(result)) return result;
 
-  const data = args.format === "jsonl" ? result.data.items : result.data;
+  const items = applySelection(result.data.items, { limit: args.limit });
+  const data = args.format === "jsonl" ? items : { ...result.data, items };
   ui.printData(data, args.format);
   return ok(undefined);
 };
@@ -66,6 +73,6 @@ export const SearchCommand = types({
         array: true,
         default: [],
       })
-      .options({ ...namespaceOption, ...listFormatOption }),
+      .options({ ...namespaceOption, ...listFormatOption, ...limitOption }),
   handler: runtimeWithDb(searchHandler),
 });

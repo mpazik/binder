@@ -1,6 +1,6 @@
 import { join } from "path";
 import type { Argv } from "yargs";
-import { createError, err, fail, isErr, ok } from "@binder/utils";
+import { createError, err, fail, isErr, ok, wrapError } from "@binder/utils";
 import {
   normalizeEntityRef,
   normalizeTransactionInput,
@@ -30,15 +30,23 @@ import {
 } from "../utils/parse.ts";
 import { isStdinPiped, parseStdinAs } from "../cli/stdin.ts";
 import { types } from "../cli/types.ts";
-import { dryRunOption, itemFormatOption, yesOption } from "../cli/options.ts";
+import {
+  dryRunOption,
+  itemFormatOption,
+  selectionOptions,
+  yesOption,
+} from "../cli/options.ts";
 import { serialize, type SerializeItemFormat } from "../utils/serialize.ts";
+import { applySelection, type SelectionArgs } from "../utils/selection.ts";
 
-export const transactionImportHandler: CommandHandlerWithDb<{
-  files?: string[];
-  dryRun?: boolean;
-  yes?: boolean;
-}> = async ({ kg, config, ui, log, fs, args }) => {
-  const allInputs: TransactionInput[] = [];
+export const transactionImportHandler: CommandHandlerWithDb<
+  {
+    files?: string[];
+    dryRun?: boolean;
+    yes?: boolean;
+  } & SelectionArgs
+> = async ({ kg, config, ui, log, fs, args }) => {
+  let allInputs: TransactionInput[] = [];
   const files = args.files ?? [];
 
   if (files.length > 0 && isStdinPiped())
@@ -81,6 +89,14 @@ export const transactionImportHandler: CommandHandlerWithDb<{
       "No transactions found in the provided files",
     );
 
+  allInputs = applySelection(allInputs, args);
+
+  if (allInputs.length === 0)
+    return fail(
+      "no-transactions-after-selection",
+      "No transactions remaining after applying selection",
+    );
+
   ui.heading(`Importing ${allInputs.length} transaction(s)`);
   for (const input of allInputs) {
     const nodeCount = input.nodes?.length ?? 0;
@@ -107,9 +123,26 @@ export const transactionImportHandler: CommandHandlerWithDb<{
   }
 
   const results: Transaction[] = [];
-  for (const input of allInputs) {
+  for (let i = 0; i < allInputs.length; i++) {
+    const input = allInputs[i]!;
     const result = await kg.update(input);
-    if (isErr(result)) return result;
+    if (isErr(result)) {
+      const nodeCount = input.nodes?.length ?? 0;
+      const configCount = input.configurations?.length ?? 0;
+      const parts = [
+        nodeCount > 0 && `${nodeCount} nodes`,
+        configCount > 0 && `${configCount} configs`,
+      ].filter(Boolean);
+      const summary = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+      return wrapError(
+        result,
+        `Failed to import transaction ${i + 1}${summary}`,
+        {
+          transactionIndex: i + 1,
+          author: input.author,
+        },
+      );
+    }
     results.push(result.data);
   }
 
@@ -488,7 +521,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
 };
 
 export const transactionLogHandler: CommandHandlerWithDb<{
-  count: number;
+  limit: number;
   format: string;
   oneline?: boolean;
   author?: string;
@@ -499,7 +532,7 @@ export const transactionLogHandler: CommandHandlerWithDb<{
   const logResult = await readTransactions(
     fs,
     transactionLogPath,
-    args.count,
+    args.limit,
     { author: args.author },
     args.chronological ? "asc" : "desc",
   );
@@ -587,7 +620,7 @@ export const TransactionCommand = types({
                 type: "string",
                 array: true,
               })
-              .options({ ...dryRunOption, ...yesOption });
+              .options({ ...dryRunOption, ...yesOption, ...selectionOptions });
           },
           handler: runtimeWithDb(transactionImportHandler),
         }),
@@ -702,7 +735,7 @@ export const TransactionCommand = types({
           describe: "show recent transactions from the log",
           builder: (yargs: Argv) => {
             return yargs
-              .option("count", {
+              .option("limit", {
                 alias: "n",
                 describe: "number of transactions to show",
                 type: "number",

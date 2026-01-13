@@ -43,3 +43,36 @@ export const yesOption = {
     default: false,
   },
 } as const;
+
+export const limitOption = {
+  limit: {
+    describe: "maximum number of items",
+    type: "number",
+  },
+} as const;
+
+export const lastOption = {
+  last: {
+    describe: "take last N items",
+    type: "number",
+  },
+} as const;
+
+export const skipOption = {
+  skip: {
+    describe: "skip first N items",
+    type: "number",
+  },
+} as const;
+
+export const selectionOptions = {
+  ...limitOption,
+  ...lastOption,
+  ...skipOption,
+} as const;
+
+export type SelectionArgs = {
+  limit?: number;
+  last?: number;
+  skip?: number;
+};
