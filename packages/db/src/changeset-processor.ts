@@ -249,6 +249,77 @@ const validateFieldDefaultValue = (
   return errors;
 };
 
+const validateInverseOfField = (
+  input: EntityChangesetInput<"config">,
+  schema: EntitySchema,
+  batchInputs: EntityChangesetInput<"config">[],
+): ValidationError[] => {
+  const inverseOfValue = input["inverseOf"] as string | undefined;
+  if (!inverseOfValue) return [];
+
+  const allowMultiple = input["allowMultiple"] as boolean | undefined;
+  if (!allowMultiple) {
+    return [
+      {
+        field: "inverseOf",
+        message:
+          "inverseOf can only be used on allowMultiple relation fields (the 'many' side of a one-to-many relationship)",
+      },
+    ];
+  }
+
+  const inverseFieldDef = schema.fields[inverseOfValue as FieldKey];
+  const batchFieldInput = batchInputs.find(
+    (i) => i["key"] === inverseOfValue && includes(fieldTypes, i["type"]),
+  );
+
+  if (!inverseFieldDef && !batchFieldInput) {
+    return [
+      {
+        field: "inverseOf",
+        message: `inverseOf references non-existent field "${inverseOfValue}"`,
+      },
+    ];
+  }
+
+  const dataType =
+    inverseFieldDef?.dataType ?? (batchFieldInput?.["dataType"] as string);
+  if (dataType !== "relation") {
+    return [
+      {
+        field: "inverseOf",
+        message: `inverseOf must reference a relation field, but "${inverseOfValue}" has dataType "${dataType}"`,
+      },
+    ];
+  }
+
+  const targetAllowMultiple =
+    inverseFieldDef?.allowMultiple ??
+    (batchFieldInput?.["allowMultiple"] as boolean | undefined);
+  if (targetAllowMultiple) {
+    return [
+      {
+        field: "inverseOf",
+        message: `inverseOf must reference a single-value relation field, but "${inverseOfValue}" has allowMultiple`,
+      },
+    ];
+  }
+
+  const targetInverseOf =
+    inverseFieldDef?.inverseOf ??
+    (batchFieldInput?.["inverseOf"] as string | undefined);
+  if (targetInverseOf) {
+    return [
+      {
+        field: "inverseOf",
+        message: `inverseOf cannot reference a field that also has inverseOf (field "${inverseOfValue}" already has inverseOf)`,
+      },
+    ];
+  }
+
+  return [];
+};
+
 const validateTypeFieldDefaults = (
   input: EntityChangesetInput<"config">,
   schema: EntitySchema,
@@ -949,6 +1020,7 @@ const buildChangeset = async <N extends NamespaceEditable>(
   input: EntityChangesetInput<N>,
   tx: DbTransaction,
   generateEntityId: () => EntityId,
+  batchInputs: EntityChangesetInput<N>[],
 ): ResultAsync<[EntityChangesetRef<N>, FieldChangeset], ValidationError[]> => {
   const updatedSystemField = systemGeneratedFields.find(
     (field) => field in input,
@@ -1072,6 +1144,13 @@ const buildChangeset = async <N extends NamespaceEditable>(
         undefined,
       );
       if (defaultErrors.length > 0) return err(defaultErrors);
+
+      const inverseOfErrors = validateInverseOfField(
+        input as EntityChangesetInput<"config">,
+        schema,
+        batchInputs as EntityChangesetInput<"config">[],
+      );
+      if (inverseOfErrors.length > 0) return err(inverseOfErrors);
     }
 
     if (typeKey === typeSystemType) {
@@ -1137,6 +1216,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
         resolvedInput,
         tx,
         generateEntityId,
+        normalizedInputs,
       );
       if (isErr(result))
         return err(result.error.map((it) => ({ ...it, index, namespace })));

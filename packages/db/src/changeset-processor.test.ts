@@ -901,6 +901,113 @@ describe("processChangesetInput", () => {
         );
       });
     });
+
+    describe("inverseOf", () => {
+      it("rejects inverseOf on single-value relation field", () =>
+        checkErrors(
+          [
+            {
+              type: fieldSystemType,
+              key: "badInverseField" as ConfigKey,
+              dataType: "relation",
+              inverseOf: "parent",
+            },
+          ],
+          [
+            {
+              index: 0,
+              namespace: "config",
+              field: "inverseOf",
+              message:
+                "inverseOf can only be used on allowMultiple relation fields (the 'many' side of a one-to-many relationship)",
+            },
+          ],
+          "config",
+        ));
+
+      it("rejects inverseOf referencing non-existent field", () =>
+        checkErrors(
+          [
+            {
+              type: fieldSystemType,
+              key: "badInverseField" as ConfigKey,
+              dataType: "relation",
+              allowMultiple: true,
+              inverseOf: "nonExistentField",
+            },
+          ],
+          [
+            {
+              index: 0,
+              namespace: "config",
+              field: "inverseOf",
+              message:
+                'inverseOf references non-existent field "nonExistentField"',
+            },
+          ],
+          "config",
+        ));
+
+      it("rejects inverseOf referencing non-relation field", () =>
+        checkErrors(
+          [
+            {
+              type: fieldSystemType,
+              key: "badInverseField" as ConfigKey,
+              dataType: "relation",
+              allowMultiple: true,
+              inverseOf: "title",
+            },
+          ],
+          [
+            {
+              index: 0,
+              namespace: "config",
+              field: "inverseOf",
+              message:
+                'inverseOf must reference a relation field, but "title" has dataType "plaintext"',
+            },
+          ],
+          "config",
+        ));
+
+      it("rejects inverseOf referencing allowMultiple relation field", () =>
+        checkErrors(
+          [
+            {
+              type: fieldSystemType,
+              key: "badInverseField" as ConfigKey,
+              dataType: "relation",
+              allowMultiple: true,
+              inverseOf: "children",
+            },
+          ],
+          [
+            {
+              index: 0,
+              namespace: "config",
+              field: "inverseOf",
+              message:
+                'inverseOf must reference a single-value relation field, but "children" has allowMultiple',
+            },
+          ],
+          "config",
+        ));
+
+      it("accepts valid inverseOf on allowMultiple relation field referencing single-value relation", () =>
+        checkSuccess(
+          [
+            {
+              type: fieldSystemType,
+              key: "validInverseField" as ConfigKey,
+              dataType: "relation",
+              allowMultiple: true,
+              inverseOf: "parent",
+            },
+          ],
+          "config",
+        ));
+    });
   });
 
   describe("relation key resolution", () => {
