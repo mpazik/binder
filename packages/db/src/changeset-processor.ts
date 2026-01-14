@@ -839,6 +839,9 @@ const normalizeFieldValue = (
   if (fieldDef?.dataType === "relation") {
     return normalizeInputValue(value);
   }
+  if (fieldDef?.allowMultiple && !Array.isArray(value)) {
+    return [value];
+  }
   return value;
 };
 

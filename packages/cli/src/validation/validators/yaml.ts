@@ -212,6 +212,11 @@ const visitEntityNode = <N extends Namespace>(
         jsonValue = normalizeInputValue(jsonValue);
       }
 
+      // Normalize single values to arrays for allowMultiple fields
+      if (fieldDef.allowMultiple && !Array.isArray(jsonValue)) {
+        jsonValue = [jsonValue];
+      }
+
       const validationResult = validateDataType(
         context.namespace,
         fieldDef,

@@ -86,13 +86,8 @@ describe("diagnostics", () => {
       check(mockOwnersField, ["user-1", "user-2"], undefined);
     });
 
-    it("returns error when array expected but got single value", () => {
-      check(mockOwnersField, "user-1", {
-        fieldPath: ["owners"],
-        code: "invalid-value",
-        message:
-          "Invalid value for field 'owners': Expected array when allowMultiple is true, got: string",
-      });
+    it("accepts single value for allowMultiple field (normalized to array)", () => {
+      check(mockOwnersField, "user-1", undefined);
     });
   });
 

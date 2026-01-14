@@ -645,24 +645,19 @@ describe("processChangesetInput", () => {
       );
     });
 
-    it("validates allowMultiple fields", async () => {
-      await checkErrors(
-        [
+    it("normalizes single value to array for allowMultiple fields", async () => {
+      const result = throwIfError(
+        await process([
           {
             type: mockTaskTypeKey,
             title: "Test Task",
             tags: "single-tag" as unknown as string[],
           },
-        ],
-        [
-          {
-            index: 0,
-            namespace: "node",
-            field: "tags",
-            message: "Expected array when allowMultiple is true, got: string",
-          },
-        ],
+        ]),
       );
+      expect(Object.values(result)[0]).toMatchObject({
+        tags: ["single-tag"],
+      });
     });
 
     it("validates option values against allowed options", async () => {
