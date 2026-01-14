@@ -75,10 +75,14 @@ export const validateFieldValue = (
   // Null values represent empty/unset fields and are always valid
   if (value === null) return undefined;
 
+  // Normalize single values to arrays for allowMultiple fields
+  const normalizedValue =
+    fieldDef.allowMultiple && !Array.isArray(value) ? [value] : value;
+
   const result = validateDataType(
     namespace,
     fieldDef as FieldDef<DataTypeNs[typeof namespace]>,
-    value,
+    normalizedValue,
   );
   if (isErr(result)) {
     return {

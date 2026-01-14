@@ -21,6 +21,7 @@ import { handleCodeAction } from "./handlers/code-actions.ts";
 import { handleInlayHints } from "./handlers/inlay-hints.ts";
 import { handleDefinition } from "./handlers/definition.ts";
 import { handleDiagnostics } from "./handlers/diagnostics.ts";
+import { handleSemanticTokens } from "./handlers/semantic-tokens.ts";
 import { withDocumentContext } from "./document-context.ts";
 import { createWorkspaceManager } from "./workspace-manager.ts";
 
@@ -98,12 +99,18 @@ export const createLspServer = (
   let hasWorkspaceFolderCapability = false;
 
   connection.onInitialize(async (params: InitializeParams) => {
+    const caps = params.capabilities.textDocument;
+
     log.info("LSP client initialized", {
       clientName: params.clientInfo?.name,
       clientVersion: params.clientInfo?.version,
-    });
-
-    log.info("Workspace folders received", {
+      semanticTokens: !!caps?.semanticTokens,
+      hover: !!caps?.hover,
+      completion: !!caps?.completion,
+      definition: !!caps?.definition,
+      diagnostics: !!caps?.diagnostic,
+      inlayHint: !!caps?.inlayHint,
+      codeAction: !!caps?.codeAction,
       workspaces: params.workspaceFolders,
     });
 
@@ -146,6 +153,14 @@ export const createLspServer = (
           codeActionKinds: [CodeActionKind.QuickFix],
         },
         inlayHintProvider: true,
+        // disabled until exact tokens are figured out
+        // semanticTokensProvider: {
+        //   legend: {
+        //     tokenTypes: [...TOKEN_TYPES],
+        //     tokenModifiers: [...TOKEN_MODIFIERS],
+        //   },
+        //   full: true,
+        // },
         workspace: {
           workspaceFolders: {
             supported: true,
@@ -255,6 +270,15 @@ export const createLspServer = (
       handleDiagnostics,
     )(params);
     return result ?? { kind: "full", items: [] };
+  });
+
+  connection.languages.semanticTokens.on(async (params) => {
+    const result = await withDocumentContext(
+      "Semantic tokens",
+      deps,
+      handleSemanticTokens,
+    )(params);
+    return result ?? { data: [] };
   });
 
   lspDocuments.listen(connection);

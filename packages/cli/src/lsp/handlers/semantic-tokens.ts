@@ -3,7 +3,7 @@ import {
   type SemanticTokens,
   type SemanticTokensParams,
 } from "vscode-languageserver/node";
-import type { FieldDef } from "@binder/db";
+import { type FieldDef, getFieldDefNested } from "@binder/db";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   LspHandler,
@@ -12,39 +12,31 @@ import type {
 import { unistPositionToLspRange } from "../cursor-context.ts";
 import type { FieldSlotMapping } from "../../document/template.ts";
 
+// Token types must match client's supported types (from initialization)
 export const TOKEN_TYPES = [
   "property",
   "type",
   "number",
   "string",
   "enumMember",
+  "variable",
 ] as const;
 export const TOKEN_MODIFIERS = ["readonly"] as const;
 
-type TokenType = (typeof TOKEN_TYPES)[number];
-
-const tokenTypeIndex: Record<TokenType, number> = {
-  property: 0,
-  type: 1,
-  number: 2,
-  string: 3,
-  enumMember: 4,
-};
-
-const getTokenType = (fieldDef: FieldDef): TokenType => {
+const getTokenTypeIndex = (fieldDef: FieldDef): number => {
   switch (fieldDef.dataType) {
     case "relation":
-      return "type";
+      return 1; // type
     case "boolean":
     case "integer":
     case "decimal":
-      return "number";
+      return 2; // number
     case "date":
     case "datetime":
     case "period":
-      return "string";
+      return 3; // string
     default:
-      return "property";
+      return 0; // property
   }
 };
 
@@ -105,7 +97,7 @@ const pushFieldToken = (
   fieldDef: FieldDef,
 ): void => {
   const range = unistPositionToLspRange(mapping.position);
-  const tokenType = tokenTypeIndex[getTokenType(fieldDef)];
+  const tokenType = getTokenTypeIndex(fieldDef);
   const tokenModifiers = 1; // readonly
 
   pushMultiLineToken(
@@ -132,10 +124,7 @@ export const handleSemanticTokens: LspHandler<
   const builder = new SemanticTokensBuilder();
 
   for (const mapping of fieldMappings) {
-    const fieldKey = mapping.path[0];
-    if (!fieldKey) continue;
-
-    const fieldDef = schema.fields[fieldKey];
+    const fieldDef = getFieldDefNested(schema, mapping.path);
     if (!fieldDef) continue;
 
     pushFieldToken(builder, document, mapping, fieldDef);
