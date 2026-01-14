@@ -76,6 +76,7 @@ const fieldTemplateContent: CliConfigFieldDef = {
   description: "Template for rendering documents",
   dataType: "richtext",
   richtextFormat: "document",
+  allowMultiple: true,
 };
 
 const fieldTemplate: CliConfigFieldDef = {

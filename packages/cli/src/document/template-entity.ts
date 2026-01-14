@@ -1,5 +1,7 @@
 import {
   buildIncludes,
+  getDelimiterForRichtextFormat,
+  getDelimiterString,
   type Includes,
   type KnowledgeGraph,
   mergeIncludes,
@@ -134,14 +136,22 @@ export const loadTemplates = async (
     ),
   );
 
-  const templates: Templates = searchResult.data.items.map((item) =>
-    createTemplateEntity(item.key as string, item.templateContent as string, {
+  const delimiter = getDelimiterString(
+    getDelimiterForRichtextFormat("document"),
+  );
+  const templates: Templates = searchResult.data.items.map((item) => {
+    const content = item.templateContent;
+    const templateContent = Array.isArray(content)
+      ? content.join(delimiter)
+      : (content as string);
+
+    return createTemplateEntity(item.key as string, templateContent, {
       name: item.name as string | undefined,
       description: item.description as string | undefined,
       preamble: item.preamble as string[] | undefined,
       templateFormat: item.templateFormat as TemplateFormat | undefined,
-    }),
-  );
+    });
+  });
 
   const allTemplates = [...builtinTemplates, ...templates];
   resolveAllTemplateIncludes(allTemplates);

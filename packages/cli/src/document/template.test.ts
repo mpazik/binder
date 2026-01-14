@@ -52,6 +52,22 @@ describe("template", () => {
       check("# {title}\n", mockTask1Node, `# ${mockTask1Node.title}\n`);
     });
 
+    it("renders field inside blockquote", () => {
+      check("> {title}\n", mockTask1Node, `> ${mockTask1Node.title}\n`);
+    });
+
+    it("renders empty field inside blockquote", () => {
+      check("> {email}\n", { email: null }, ">\n");
+    });
+
+    it("renders richtext field inside blockquote", () => {
+      check("> {description}\n", { description: "Some text" }, "> Some text\n");
+    });
+
+    it("renders empty richtext field inside blockquote", () => {
+      check("> {description}\n", { description: null }, ">\n");
+    });
+
     it("renders view with multiple fields", () => {
       check(
         "# {title}\n\n**Status:** {status}\n",
