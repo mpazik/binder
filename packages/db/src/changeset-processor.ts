@@ -53,22 +53,18 @@ import {
   isInsertMutation,
   isListMutation,
   isListMutationArray,
-  isListMutationInput,
-  isListMutationInputArray,
   isPatchMutation,
   isRemoveMutation,
   isReservedEntityKey,
   isSeqChange,
   isSetChange,
   type ListMutation,
-  type ListMutationInput,
   type NamespaceEditable,
   type NamespaceSchema,
   type NodeFieldDef,
   type NodeKey,
   type NodeSchema,
-  normalizeInputValue,
-  normalizeListMutationInput,
+  normalizeInput,
   normalizeOptionSet,
   normalizeValueChange,
   type OptionDef,
@@ -821,48 +817,6 @@ const buildRefToUidMap = async <N extends NamespaceEditable>(
   }
 
   return ok(refToUid);
-};
-
-const normalizeFieldValue = (
-  fieldDef: FieldDef | undefined,
-  value: FieldValue,
-): FieldValue | ListMutation | ListMutation[] => {
-  if (isListMutationInputArray(value)) {
-    return (value as ListMutationInput[]).map(normalizeListMutationInput);
-  }
-  if (isListMutationInput(value)) {
-    return normalizeListMutationInput(value as ListMutationInput);
-  }
-  if (fieldDef?.dataType === "optionSet" && Array.isArray(value)) {
-    return normalizeOptionSet(value as OptionDefInput[]);
-  }
-  if (fieldDef?.dataType === "relation") {
-    return normalizeInputValue(value);
-  }
-  if (fieldDef?.allowMultiple && !Array.isArray(value)) {
-    return [value];
-  }
-  return value;
-};
-
-const normalizeInput = <N extends NamespaceEditable>(
-  input: EntityChangesetInput<N>,
-  schema: NamespaceSchema<N>,
-): EntityChangesetInput<N> => {
-  const normalized: EntityChangesetInput<N> = { ...input };
-
-  for (const [fieldKey, value] of objEntries(input)) {
-    if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
-      continue;
-
-    const fieldDef = schema.fields[fieldKey];
-    normalized[fieldKey] = normalizeFieldValue(
-      fieldDef,
-      value as FieldValue,
-    ) as typeof value;
-  }
-
-  return normalized;
 };
 
 const resolveRelationRef = (

@@ -36,6 +36,7 @@ import {
 import {
   type ConfigKey,
   type ConfigType,
+  type ConfigUid,
   coreConfigSchema,
   emptySchema,
   type EntitiesChangeset,
@@ -46,6 +47,7 @@ import {
   fieldSystemType,
   GENESIS_ENTITY_ID,
   inverseChangeset,
+  mergeSchema,
   type NamespaceEditable,
   type NodeKey,
   type NodeType,
@@ -645,18 +647,64 @@ describe("processChangesetInput", () => {
       );
     });
 
-    it("normalizes single value to array for allowMultiple fields", async () => {
-      const result = throwIfError(
-        await process([
+    describe("normalization", () => {
+      const checkNormalized = async (
+        input: EntityChangesetInput<"node">,
+        expected: Record<string, unknown>,
+      ) => {
+        const result = throwIfError(await process([input]));
+        expect(Object.values(result)[0]).toMatchObject(expected);
+      };
+
+      it("normalizes single value to array for allowMultiple plaintext identifier field", () =>
+        checkNormalized(
+          { type: mockTaskTypeKey, title: "Test Task", tags: "single-tag" },
+          { tags: ["single-tag"] },
+        ));
+
+      it("normalizes comma-separated string to array for allowMultiple plaintext identifier field", () =>
+        checkNormalized(
           {
             type: mockTaskTypeKey,
             title: "Test Task",
-            tags: "single-tag" as unknown as string[],
+            tags: "tag1, tag2, tag3",
           },
-        ]),
-      );
-      expect(Object.values(result)[0]).toMatchObject({
-        tags: ["single-tag"],
+          { tags: ["tag1", "tag2", "tag3"] },
+        ));
+
+      it("preserves array values for allowMultiple fields", () =>
+        checkNormalized(
+          { type: mockTaskTypeKey, title: "Test Task", tags: ["a", "b"] },
+          { tags: ["a", "b"] },
+        ));
+
+      it("filters empty items when splitting by delimiter", () =>
+        checkNormalized(
+          { type: mockTaskTypeKey, title: "Test Task", tags: "a,,b" },
+          { tags: ["a", "b"] },
+        ));
+
+      it("does not split non-allowMultiple fields", () =>
+        checkNormalized(
+          { type: mockTaskTypeKey, title: "Title, with comma" },
+          { title: "Title, with comma" },
+        ));
+
+      it("handles ObjTuple format in relation array field", async () => {
+        await insertNode(db, mockUserNode);
+
+        const result = throwIfError(
+          await process([
+            {
+              type: mockTeamTypeKey,
+              members: [{ [mockUserUid]: { role: "admin" } }],
+            },
+          ]),
+        );
+
+        expect(Object.values(result)[0]).toMatchObject({
+          members: [[mockUserUid, { role: "admin" }]],
+        });
       });
     });
 
