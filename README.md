@@ -1,23 +1,85 @@
-# Binder — Git-Inspired Knowledge Graph for Markdown
+<div align="center">
 
-Binder is a self-organizing workspace where your documents, tasks, and ideas stay in sync with a structured knowledge graph.
-It brings the power of typed data, queries, and automation into plain Markdown — no proprietary editors required.
- 
-## What it does
+# Binder
+### A Markdown-native knowledge graph for you and your agents
 
-- Dynamic Markdown: Documents render live views of your data using field slots like `{tasks}` for multi-value relations. 
-- Two-way sync: Edit your docs or update the graph — Binder keeps both sides consistent. 
-- Smart ingestion: Ingest notes, transcripts, or files; Binder extracts entities like Task, Decision, or Project
-- Automatic updates: Completing a task or adding a new item instantly updates summaries, changelogs, and roadmaps.
+Combine the flexibility of plain text with the capabilities of a structured database in a local-first knowledge base with bidirectional Markdown sync, editor integration, and rich API.
 
-## Under the hood
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Built with Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=flat&logo=bun&logoColor=white)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Status](https://img.shields.io/badge/Status-Work_in_Progress-orange)]()
 
-Built on an immutable transaction chain — every change is versioned and verifiable.
+[Features](#key-features) • [How you interact](#how-you-interact-with-binder) • [Installation](#installation) • [Usage](#usage)
 
-SQLite-backed graph store with typed schemas and queries.
+</div>
 
-Dynamic directories: auto-generated entity files following configurable templates.
+---
 
-LSP integration for Markdown/YAML validation and real-time feedback.
+> [!WARNING]  
+> **This project is currently in early development.**  
+> Internal data structures, configuration formats, and APIs are subject to breaking changes.  
+> **Data loss is possible.** Do not use for critical data without independent backups.
 
-Designed for local-first workflows, Git-like diffs, and multi-tool compatibility (Neovim, VS Code, etc.).
+## Key Features
+
+- **Bidirectional Markdown sync**: Markdown files are a first-class view of the graph. Edit in any editor or update via the CLI or API and Binder keeps both consistent.
+- **Transaction log**: Every change is recorded as an append-only entry in `.binder/transactions.jsonl`, so state can be rebuilt, audited, and replayed reliably.
+- **Template system**: Render structured data into Markdown using templates and extract updated field values back from the edited document, enabling reliable round-trip editing.
+- **Editor integration**: Binder runs as a language server that provides link completion, schema validation, diagnostics, and hover previews while you edit.
+- **Local-first and private**: Your data stays on your machine, and syncing or backups can be simple because the log is the source of truth.
+
+## How you interact with Binder
+
+Binder separates data from representation, allowing humans, agents, and automation to collaborate on the same knowledge graph.
+
+- **Editors**: Use plain Markdown in VS Code, Vim, or Obsidian, with Binder providing inline intelligence and validation as you type.
+- **AI agents**: Agents can read Markdown for broad context, then use MCP to query the structured graph and to apply updates programmatically.
+- **Automation**: Use the CLI and API to import data, run batch updates, generate reports, and build pipelines that read and rewrite your workspace safely.
+
+## Getting Started
+
+### Prerequisites
+
+- [Bun](https://bun.sh/) (v1.2+ recommended)
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone <repo-url>
+   cd binder
+   ```
+
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+
+### Usage
+
+Binder is a monorepo containing the core database logic, CLI, and integrations.
+
+To run the development CLI:
+```bash
+bun run dev
+```
+
+To build the CLI for production:
+```bash
+bun run build
+```
+
+To inspect the Model Context Protocol (MCP) server:
+```bash
+bun run mcp:inspect
+```
+
+## Configuration
+
+Binder manages your knowledge graph configuration in the `.binder/` directory:
+
+- `templates/`: Define markdown templates for rendering and extraction.
+- `types.yaml`: Define entity types (e.g., Task, Person, Project).
+- `fields.yaml`: Define reusable fields and their validation rules.
+- `config.yaml`: General workspace settings.
