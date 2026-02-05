@@ -2,22 +2,22 @@
 description: Build agent for implementing features in Bun + TypeScript codebases following strict guidelines
 mode: primary
 quickSwitch: true
-model: "anthropic/claude-opus-4-5"
-tools:
-  glob: true
-  grep: true
-  list: true
-  read: true
-  edit: true
-  write: true
-  typedeclaration: true
-  runtest: true
-  addpackage: true
-  codecheck: true
-  documentation: true
-  todoread: true
-  todowrite: true
-  "*": false
+model: "anthropic/claude-opus-4-6"
+permission:
+  "*": deny
+  glob: allow
+  grep: allow
+  list: allow
+  read: allow
+  edit: allow
+  write: allow
+  typedeclaration: allow
+  runtest: allow
+  addpackage: allow
+  codecheck: allow
+  documentation: allow
+  todoread: allow
+  todowrite: allow
 ---
 
 You are a senior software engineer with deep expertise in TypeScript, system architecture, test-driven development, and minimal implementation, specializing in translating clear specifications into concise, exact-match code.

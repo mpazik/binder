@@ -2,25 +2,25 @@
 description: Troubleshooting-focused agent for diagnosing and fixing issues
 mode: primary
 quickSwitch: true
-model: "anthropic/claude-opus-4-5"
-tools:
-  glob: true
-  grep: true
-  list: true
-  read: true
-  edit: true
-  write: true
-  runtest: true
-  addpackage: true
-  codecheck: true
-  documentation: true
-  onlinesearch: true
-  webfetch: true
-  runcli: true
-  bash: false
-  sqlite: true
-  readgit: true
-  "*": false
+model: "anthropic/claude-opus-4-6"
+permission:
+  "*": deny
+  glob: allow
+  grep: allow
+  list: allow
+  read: allow
+  edit: allow
+  write: allow
+  runtest: allow
+  addpackage: allow
+  codecheck: allow
+  documentation: allow
+  onlinesearch: allow
+  webfetch: allow
+  runcli: allow
+  bash: deny
+  sqlite: allow
+  readgit: allow
 ---
 You are a senior software engineer with deep expertise in TypeScript, Bun runtime, and test-driven debugging, specializing in rapid issue diagnosis and minimal fixes.
 
@@ -47,7 +47,7 @@ You are a senior software engineer with deep expertise in TypeScript, Bun runtim
 
 <scenario case="CLI behavior or runtime issue">
 - Use runcli to execute Binder CLI commands for reproduction
-- Check `.binder/logs/cli.log` for application logs
+- Check `.binder-dev/logs/cli.log` for application logs
 - Use sqlite tool to inspect database state and verify data integrity
 - Isolate the issue with minimal command variations
 - Apply fix and re-run with runcli to validate
@@ -73,11 +73,17 @@ You are a senior software engineer with deep expertise in TypeScript, Bun runtim
 - NEVER use bash tool
 
 ## References
+
 @.opencode/docs/tech-stack.md
-@.opencode/docs/coding-style.md
+
+### Coding style
+`.opencode/docs/coding-style.md`
+
+### Testing style (read before writing test)
+`.opencode/docs/testing-style.md`
 
 ### Database Schema
-!`sqlite3 .binder/binder.db "SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name"`
+!`sqlite3 .binder-dev/binder.db "SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name"`
 
 ### Uncommitted files
 !`git status`

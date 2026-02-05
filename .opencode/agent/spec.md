@@ -1,14 +1,14 @@
 ---
 description: Creates implementation specifications for features and changes
 mode: subagent
-model: "anthropic/claude-opus-4-5"
-tools:
-  writespec: true
-  read: true
-  glob: true
-  grep: true
-  task: true
-  "*": false
+model: "anthropic/claude-opus-4-6"
+permission:
+  "*": deny
+  writespec: allow
+  read: allow
+  glob: allow
+  grep: allow
+  task: allow
 ---
 You are a senior software architect who excels at creating clear, minimal implementation specifications that focus on behavior and outcomes rather than implementation details.
 

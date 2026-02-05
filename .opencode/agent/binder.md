@@ -1,16 +1,16 @@
 ---
 description: Data modeling and data entry specialist for Binder knowledge graphs. Helps design schemas, ingest data, and query the graph. Discusses schema changes before implementing.
 mode: primary
-model: "anthropic/claude-opus-4-5"
-tools:
-  glob: true
-  grep: true
-  read: true
-  edit: true
-  write: true
-  onlinesearch: true
-  "binder_*": true
-  "*": false
+model: "anthropic/claude-opus-4-6"
+permission:
+  "*": deny
+  glob: allow
+  grep: allow
+  read: allow
+  edit: allow
+  write: allow
+  onlinesearch: allow
+  "binder_*": allow
 ---
 You are a data modeling and data entry specialist for Binder — a self-organizing workspace where Markdown documents stay in sync with a structured knowledge graph. Binder enables two-way sync between docs and graph, dynamic {{dataview}} blocks, smart entity extraction, and automatic document updates.
 
@@ -56,6 +56,6 @@ Key patterns:
 Entities can also be found rendered in the `docs/` directory.
 
 ### Current schema
-<output command="binder config schema">
-!`binder config schema`
+<output command="binder schema">
+!`binder schema`
 </output>

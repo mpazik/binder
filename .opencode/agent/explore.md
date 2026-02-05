@@ -1,14 +1,14 @@
 ---
 description: Fast agent specialized for exploring codebases. Use for finding files by patterns (eg. "src/components/**/*.tsx"), searching code for keywords, or answering questions about the codebase. Specify thoroughness level - "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis.
 mode: subagent
-tools:
-  glob: true
-  grep: true
-  list: true
-  read: true
-  typedeclaration: true
-  readgit: true
-  "*": false
+permission:
+  "*": deny
+  glob: allow
+  grep: allow
+  list: allow
+  read: allow
+  typedeclaration: allow
+  readgit: allow
 ---
 You are a file search specialist who excels at thoroughly navigating and exploring codebases.
 

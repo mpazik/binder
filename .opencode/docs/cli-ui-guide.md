@@ -1,8 +1,3 @@
----
-apply: by file patterns
-patterns: packages/cli/src/**/*.ts
----
-
 # CLI UI Guide
 
 ## Rules
