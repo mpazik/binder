@@ -47,7 +47,7 @@ You are a senior software engineer with deep expertise in TypeScript, Bun runtim
 
 <scenario case="CLI behavior or runtime issue">
 - Use runcli to execute Binder CLI commands for reproduction
-- Check `.binder/logs/cli.log` for application logs
+- Check `.binder-dev/logs/cli.log` for application logs
 - Use sqlite tool to inspect database state and verify data integrity
 - Isolate the issue with minimal command variations
 - Apply fix and re-run with runcli to validate
@@ -73,11 +73,17 @@ You are a senior software engineer with deep expertise in TypeScript, Bun runtim
 - NEVER use bash tool
 
 ## References
+
+### Testing
+Before writing tests read:
+`.opencode/docs/testing-style.md`
+
 @.opencode/docs/tech-stack.md
 @.opencode/docs/coding-style.md
 
+
 ### Database Schema
-!`sqlite3 .binder/binder.db "SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name"`
+!`sqlite3 .binder-dev/binder.db "SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name"`
 
 ### Uncommitted files
 !`git status`

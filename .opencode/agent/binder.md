@@ -56,6 +56,6 @@ Key patterns:
 Entities can also be found rendered in the `docs/` directory.
 
 ### Current schema
-<output command="binder config schema">
-!`binder config schema`
+<output command="binder schema">
+!`binder schema`
 </output>

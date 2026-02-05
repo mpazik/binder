@@ -1,8 +1,3 @@
----
-apply: by file patterns
-patterns: *.ts
----
-
 # Binder Coding Style
 
 ## Code Structure
