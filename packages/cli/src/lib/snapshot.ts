@@ -260,7 +260,8 @@ export const saveSnapshot = async (
     .get();
 
   if (existingMetadata && existingMetadata.hash === newHash) {
-    return ok(false);
+    const exists = await fs.exists(absolutePath);
+    if (exists) return ok(false);
   }
 
   const mkdirResult = await fs.mkdir(dirname(absolutePath), {
