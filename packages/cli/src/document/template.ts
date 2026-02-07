@@ -444,17 +444,21 @@ function renderTemplateAstInternal(
 
   if (renderError) return err(renderError);
 
-  if (blockReplacements.size > 0 && "children" in ast) {
-    const newChildren: typeof ast.children = [];
-    for (const child of ast.children) {
-      const replacement = blockReplacements.get(child as Parent);
-      if (replacement) {
-        newChildren.push(...(replacement as typeof ast.children));
-      } else {
-        newChildren.push(child);
+  if (blockReplacements.size > 0) {
+    const applyBlockReplacements = (parent: Parent) => {
+      const newChildren: Nodes[] = [];
+      for (const child of parent.children) {
+        const replacement = blockReplacements.get(child as Parent);
+        if (replacement) {
+          newChildren.push(...replacement);
+        } else {
+          if ("children" in child) applyBlockReplacements(child as Parent);
+          newChildren.push(child);
+        }
       }
-    }
-    ast.children = newChildren;
+      parent.children = newChildren as typeof parent.children;
+    };
+    applyBlockReplacements(ast);
   }
 
   return ok(renderAstToMarkdown(ast));

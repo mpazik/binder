@@ -353,8 +353,11 @@ export const renderNavigationItem = async (
     if (item.template) {
       const template = findTemplate(templates, item.template);
       interpolatedQuery.data.includes = mergeIncludes(
-        interpolatedQuery.data.includes,
-        template.templateIncludes,
+        mergeIncludes(
+          interpolatedQuery.data.includes,
+          template.templateIncludes,
+        ),
+        { key: true },
       );
     }
 
