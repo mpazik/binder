@@ -1,6 +1,14 @@
 import { join } from "path";
 import type { Argv } from "yargs";
-import { createError, err, fail, isErr, ok, wrapError } from "@binder/utils";
+import {
+  createError,
+  err,
+  fail,
+  includes,
+  isErr,
+  ok,
+  wrapError,
+} from "@binder/utils";
 import {
   normalizeEntityRef,
   normalizeTransactionInput,
@@ -36,7 +44,11 @@ import {
   selectionOptions,
   yesOption,
 } from "../cli/options.ts";
-import { serialize, type SerializeItemFormat } from "../utils/serialize.ts";
+import {
+  serialize,
+  serializeFormats,
+  type SerializeItemFormat,
+} from "../utils/serialize.ts";
 import { applySelection, type SelectionArgs } from "../utils/selection.ts";
 
 export const transactionImportHandler: CommandHandlerWithDb<
@@ -540,20 +552,8 @@ export const transactionLogHandler: CommandHandlerWithDb<{
 
   const transactions = logResult.data;
 
-  if (args.format === "json") {
-    ui.println(JSON.stringify(transactions, null, 2));
-    return ok(undefined);
-  }
-
-  if (args.format === "jsonl") {
-    for (const tx of transactions) {
-      ui.println(JSON.stringify(tx));
-    }
-    return ok(undefined);
-  }
-
-  if (args.format === "yaml") {
-    ui.printData(transactions);
+  if (includes(serializeFormats, args.format)) {
+    ui.printData(transactions, args.format);
     return ok(undefined);
   }
 

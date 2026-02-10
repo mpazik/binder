@@ -5,6 +5,7 @@ import {
   type Err,
   err,
   type ErrorObject,
+  includes,
   isEmptyObject,
   isErr,
   normalizeError,
@@ -37,6 +38,7 @@ import {
   createNavigationCache,
   type NavigationLoader,
 } from "./document/navigation.ts";
+import { serializeFormats } from "./utils/serialize.ts";
 import {
   createTemplateCache,
   type TemplateLoader,
@@ -322,7 +324,8 @@ export const bootstrapMinimal = <TArgs extends object = object>(
 
 const isQuiet = (args: GlobalOptions & { format?: string }): boolean => {
   if (args.quiet) return true;
-  return args.format !== undefined && args.format !== "pretty";
+  if (!args.format) return false;
+  return includes(serializeFormats, args.format);
 };
 
 export const runtime = <TArgs extends object = object>(
