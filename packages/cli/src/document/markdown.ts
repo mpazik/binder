@@ -12,6 +12,7 @@ import remarkParseFrontmatter from "remark-parse-frontmatter";
 import { type Options } from "remark-stringify";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { gfmToMarkdown } from "mdast-util-gfm";
+import { frontmatterToMarkdown } from "mdast-util-frontmatter";
 import { type Brand } from "@binder/utils";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import type { Data, Literal, Node } from "unist";
@@ -108,7 +109,7 @@ const renderInlineToMarkdown = (node: RootContent): string => {
 export const renderAstToMarkdown = (ast: Nodes): string =>
   toMarkdown(ast, {
     ...defaultRenderOptions,
-    extensions: [gfmToMarkdown()],
+    extensions: [gfmToMarkdown(), frontmatterToMarkdown("yaml")],
   });
 
 const inlineTypes = [

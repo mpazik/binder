@@ -24,7 +24,6 @@ import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
 import {
   type ConfigUid,
   coreFieldKeys,
-  coreFields,
   GENESIS_VERSION,
   type Transaction,
   versionFromTransaction,

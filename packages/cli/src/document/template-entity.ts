@@ -6,7 +6,7 @@ import {
   type KnowledgeGraph,
   mergeIncludes,
 } from "@binder/db";
-import { type Brand, isErr, ok, type ResultAsync } from "@binder/utils";
+import { isErr, ok, type ResultAsync } from "@binder/utils";
 import { visit } from "unist-util-visit";
 import { type TemplateFormat } from "../cli-config-schema.ts";
 import {
@@ -15,14 +15,24 @@ import {
   type TemplateAST,
   type TemplateFieldSlot,
 } from "./template.ts";
-
-export type TemplateKey = Brand<string, "TemplateKey">;
-export const TEMPLATE_TEMPLATE_KEY = "__template__" as TemplateKey;
-export const PHRASE_TEMPLATE_KEY = "__inline__" as TemplateKey;
-export const LINE_TEMPLATE_KEY = "__line__" as TemplateKey;
-export const BLOCK_TEMPLATE_KEY = "__block__" as TemplateKey;
-export const SECTION_TEMPLATE_KEY = "__section__" as TemplateKey;
-export const DOCUMENT_TEMPLATE_KEY = "__document__" as TemplateKey;
+export {
+  type TemplateKey,
+  TEMPLATE_TEMPLATE_KEY,
+  PHRASE_TEMPLATE_KEY,
+  LINE_TEMPLATE_KEY,
+  BLOCK_TEMPLATE_KEY,
+  SECTION_TEMPLATE_KEY,
+  DOCUMENT_TEMPLATE_KEY,
+} from "./template.const.ts";
+import {
+  type TemplateKey,
+  TEMPLATE_TEMPLATE_KEY,
+  PHRASE_TEMPLATE_KEY,
+  LINE_TEMPLATE_KEY,
+  BLOCK_TEMPLATE_KEY,
+  SECTION_TEMPLATE_KEY,
+  DOCUMENT_TEMPLATE_KEY,
+} from "./template.const.ts";
 
 export type TemplateEntity = {
   key: TemplateKey;
@@ -35,31 +45,68 @@ export type TemplateEntity = {
   templateIncludes: Includes | undefined;
 };
 
+const buildPreambleIncludes = (
+  preamble: string[] | undefined,
+): Includes | undefined => {
+  if (!preamble || preamble.length === 0) return undefined;
+  return buildIncludes(preamble.map((key) => [key]));
+};
+
 export const createTemplateEntity = (
   key: string,
   templateContent: string,
   options?: Partial<TemplateEntity>,
 ): TemplateEntity => {
   const templateAst = parseTemplate(templateContent);
+  const astIncludes = buildIncludes(extractFieldPathsFromAst(templateAst));
+  const preambleIncludes = buildPreambleIncludes(options?.preamble);
   return {
     key: key as TemplateKey,
     templateContent,
     templateAst,
-    templateIncludes: buildIncludes(extractFieldPathsFromAst(templateAst)),
+    templateIncludes: mergeIncludes(astIncludes, preambleIncludes),
     ...options,
   };
 };
 
 export type Templates = TemplateEntity[];
 
-type BuiltinTemplate = readonly [string, string, TemplateFormat?];
+type BuiltinTemplate = readonly [
+  string,
+  string,
+  Partial<Pick<TemplateEntity, "templateFormat" | "preamble">>?,
+];
+
+const TEMPLATE_PREAMBLE_KEYS = [
+  "key",
+  "name",
+  "description",
+  "templateFormat",
+  "preamble",
+];
 
 const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
-  [TEMPLATE_TEMPLATE_KEY, `{templateContent}`],
-  [PHRASE_TEMPLATE_KEY, `{title}`, "phrase"],
-  [LINE_TEMPLATE_KEY, `- **{title}**: {description}`, "line"],
-  [BLOCK_TEMPLATE_KEY, `**{title}**\n\n{description}`, "block"],
-  [SECTION_TEMPLATE_KEY, `### {title}\n\n{description}`, "section"],
+  [
+    TEMPLATE_TEMPLATE_KEY,
+    `{templateContent}`,
+    { preamble: TEMPLATE_PREAMBLE_KEYS },
+  ],
+  [PHRASE_TEMPLATE_KEY, `{title}`, { templateFormat: "phrase" }],
+  [
+    LINE_TEMPLATE_KEY,
+    `- **{title}**: {description}`,
+    { templateFormat: "line" },
+  ],
+  [
+    BLOCK_TEMPLATE_KEY,
+    `**{title}**\n\n{description}`,
+    { templateFormat: "block" },
+  ],
+  [
+    SECTION_TEMPLATE_KEY,
+    `### {title}\n\n{description}`,
+    { templateFormat: "section" },
+  ],
   [
     DOCUMENT_TEMPLATE_KEY,
     `# {title}
@@ -70,7 +117,7 @@ const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
 ## Description
 
 {description}`,
-    "document",
+    { templateFormat: "document" },
   ],
 ];
 
@@ -128,12 +175,8 @@ export const loadTemplates = async (
   );
   if (isErr(searchResult)) return searchResult;
 
-  const builtinTemplates = BUILTIN_TEMPLATES.map(([key, content, format]) =>
-    createTemplateEntity(
-      key,
-      content,
-      format ? { templateFormat: format } : {},
-    ),
+  const builtinTemplates = BUILTIN_TEMPLATES.map(([key, content, options]) =>
+    createTemplateEntity(key, content, options ?? {}),
   );
 
   const delimiter = getDelimiterString(

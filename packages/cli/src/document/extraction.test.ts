@@ -3,7 +3,11 @@ import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import { mockNodeSchema, mockTask1Node, mockTask2Node } from "@binder/db/mocks";
 import { type NavigationItem } from "./navigation.ts";
-import { mockTemplates } from "./template.mock.ts";
+import {
+  mockTemplates,
+  mockPreambleTemplate,
+  mockPreambleStatusInBodyTemplate,
+} from "./template.mock.ts";
 import { extract, type ExtractedFileData } from "./extraction.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import type { Templates } from "./template-entity.ts";
@@ -143,6 +147,120 @@ ${mockTask1Node.description}
           query: { filters: { type: "Task" } },
         },
       );
+    });
+  });
+
+  describe("markdown with frontmatter", () => {
+    const preambleTemplates: Templates = [
+      mockPreambleTemplate,
+      mockPreambleStatusInBodyTemplate,
+      ...mockTemplates,
+    ];
+
+    const preambleNavItem: NavigationItem = {
+      path: "tasks/{key}",
+      template: "task-preamble",
+    };
+
+    it("extracts frontmatter fields, merges with body, and includes preamble keys", () => {
+      const markdown = `---
+status: ${mockTask1Node.status}
+---
+
+# ${mockTask1Node.title}
+
+## Description
+
+${mockTask1Node.description}
+`;
+      check(
+        preambleNavItem,
+        markdown,
+        "task.md",
+        {
+          kind: "document",
+          entity: {
+            title: mockTask1Node.title,
+            status: mockTask1Node.status,
+            description: mockTask1Node.description,
+          },
+          projections: [],
+          // status is in includes via preamble, not the template body
+          includes: { title: true, status: true, description: true },
+        },
+        preambleTemplates,
+      );
+    });
+
+    it("frontmatter fields take precedence over body fields", () => {
+      const markdown = `---
+status: active
+---
+
+# My Task
+
+**Status:** pending
+`;
+      check(
+        { path: "tasks/{key}", template: "task-status-body" },
+        markdown,
+        "task.md",
+        {
+          kind: "document",
+          entity: {
+            title: "My Task",
+            status: "active",
+          },
+          projections: [],
+          includes: { title: true, status: true },
+        },
+        preambleTemplates,
+      );
+    });
+
+    it("handles missing frontmatter when template has preamble", () => {
+      const markdown = `# ${mockTask1Node.title}
+
+## Description
+
+${mockTask1Node.description}
+`;
+      check(
+        preambleNavItem,
+        markdown,
+        "task.md",
+        {
+          kind: "document",
+          entity: {
+            title: mockTask1Node.title,
+            description: mockTask1Node.description,
+          },
+          projections: [],
+          includes: { title: true, status: true, description: true },
+        },
+        preambleTemplates,
+      );
+    });
+
+    it("propagates error for malformed frontmatter YAML", () => {
+      const markdown = `---
+: invalid: yaml: [
+---
+
+# Title
+
+## Description
+
+Content
+`;
+      const result = extract(
+        mockNodeSchema,
+        preambleNavItem,
+        markdown,
+        "task.md",
+        preambleTemplates,
+      );
+      expect(result).toBeErr();
     });
   });
 

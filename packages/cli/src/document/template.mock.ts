@@ -52,6 +52,26 @@ export const mockDocumentTemplate = createTemplateEntity(
   { templateFormat: "document" },
 );
 
+export const mockPreambleTemplate = createTemplateEntity(
+  "task-preamble",
+  `# {title}
+
+## Description
+
+{description}
+`,
+  { preamble: ["status"] },
+);
+
+export const mockPreambleStatusInBodyTemplate = createTemplateEntity(
+  "task-status-body",
+  `# {title}
+
+**Status:** {status}
+`,
+  { preamble: ["status"] },
+);
+
 export const mockDefaultTemplates: Templates = [
   mockPhraseTemplate,
   mockBlockTemplate,

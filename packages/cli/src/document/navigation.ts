@@ -1,6 +1,7 @@
 import { extname, join } from "path";
 import {
   type AncestralFieldsetChain,
+  buildIncludes,
   emptyFieldset,
   type EntitySchema,
   type Fieldset,
@@ -13,6 +14,7 @@ import {
   matchesFilters,
   mergeIncludes,
   type NamespaceEditable,
+  pickByIncludes,
   type QueryParams,
   stringifyFieldValue,
 } from "@binder/db";
@@ -50,6 +52,7 @@ import {
   type TemplateKey,
   type Templates,
 } from "./template-entity.ts";
+import { prependFrontmatter, renderFrontmatterString } from "./frontmatter.ts";
 
 export type RenderResult = {
   renderedPaths: string[];
@@ -282,7 +285,18 @@ const renderContent = async (
       entity,
     );
     if (isErr(templateResult)) return templateResult;
-    return ok(templateResult.data);
+
+    const preamble = template.preamble;
+    if (!preamble || preamble.length === 0) return ok(templateResult.data);
+
+    const preambleIncludes = buildIncludes(preamble.map((key) => [key]));
+    if (!preambleIncludes) return ok(templateResult.data);
+
+    const pickedEntity = pickByIncludes(entity, preambleIncludes);
+    const frontmatter = renderFrontmatterString(pickedEntity, preamble);
+    if (!frontmatter) return ok(templateResult.data);
+
+    return ok(prependFrontmatter(templateResult.data, frontmatter));
   }
   if (fileType === "yaml") {
     if (item.query) {

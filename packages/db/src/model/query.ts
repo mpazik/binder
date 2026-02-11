@@ -1,5 +1,10 @@
 import { mapObjectValues } from "@binder/utils";
 import { z } from "zod";
+import {
+  isFieldsetNested,
+  type FieldNestedValue,
+  type FieldsetNested,
+} from "./field.ts";
 
 const FilterOperatorSchema = z.enum([
   "eq",
@@ -128,6 +133,12 @@ export const mergeIncludes = (
     const existing = result[key];
     if (typeof existing === "object" && typeof value === "object") {
       result[key] = mergeIncludes(existing as Includes, value as Includes)!;
+    } else if (typeof existing === "object" && value === true) {
+      // true means "reference only" — inject key/uid into the object
+      result[key] = { key: true, uid: true, ...(existing as Includes) };
+    } else if (typeof value === "object" && existing === true) {
+      // true means "reference only" — inject key/uid into the object
+      result[key] = { key: true, uid: true, ...(value as Includes) };
     } else {
       result[key] = value;
     }
@@ -158,4 +169,57 @@ export const buildIncludes = (
   }
 
   return Object.keys(includes).length > 0 ? includes : undefined;
+};
+
+const collapseToReference = (
+  value: FieldsetNested,
+): string | FieldsetNested => {
+  if ("key" in value && typeof value.key === "string") return value.key;
+  if ("uid" in value && typeof value.uid === "string")
+    return value.uid as string;
+  return value;
+};
+
+const pickValue = (
+  value: FieldNestedValue,
+  nested: Includes | undefined,
+): FieldNestedValue => {
+  if (!nested) {
+    if (isFieldsetNested(value)) return collapseToReference(value);
+    if (Array.isArray(value))
+      return value.map((item) =>
+        isFieldsetNested(item) ? collapseToReference(item) : item,
+      );
+    return value;
+  }
+  if (isFieldsetNested(value)) return pickByIncludes(value, nested);
+  if (Array.isArray(value))
+    return value.map((item) =>
+      isFieldsetNested(item) ? pickByIncludes(item, nested) : item,
+    );
+  return value;
+};
+
+export const pickByIncludes = (
+  entity: FieldsetNested,
+  includes: Includes,
+): FieldsetNested => {
+  const result: FieldsetNested = {};
+
+  for (const [key, includeValue] of Object.entries(includes)) {
+    const value = entity[key];
+    if (value === undefined || value === null) continue;
+    if (includeValue === false) continue;
+
+    const nested =
+      includeValue === true
+        ? undefined
+        : isIncludesQuery(includeValue)
+          ? includeValue.includes
+          : includeValue;
+
+    result[key] = pickValue(value, nested);
+  }
+
+  return result;
 };

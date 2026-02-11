@@ -12,6 +12,7 @@ import { extractFields } from "./template.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 import { getDocumentFileType } from "./document.ts";
 import type { TemplateKey, Templates } from "./template-entity.ts";
+import { extractFrontmatterFromAst } from "./frontmatter.ts";
 
 export type ExtractedProjection = {
   items: FieldsetNested[];
@@ -109,15 +110,25 @@ const extractFromMarkdown = (
 ): Result<ExtractedFileData> => {
   const template = findTemplate(templates, navItem.template);
   const markdownAst = parseMarkdown(markdown);
+
+  const hasPreamble =
+    template.preamble !== undefined && template.preamble.length > 0;
+  const fmResult = hasPreamble
+    ? extractFrontmatterFromAst(markdownAst)
+    : ok({ frontmatterFields: {}, bodyAst: markdownAst });
+  if (isErr(fmResult)) return fmResult;
+
+  const { frontmatterFields, bodyAst } = fmResult.data;
+
   const fileFieldsResult = extractFields(
     schema,
     templates,
     template.key as TemplateKey,
-    markdownAst,
+    bodyAst,
   );
   if (isErr(fileFieldsResult)) return fileFieldsResult;
 
-  const entity = fileFieldsResult.data;
+  const entity = { ...fileFieldsResult.data, ...frontmatterFields };
   const projections = extractProjections(entity);
 
   return ok({

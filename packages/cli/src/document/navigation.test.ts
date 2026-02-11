@@ -372,12 +372,21 @@ describe("navigation", () => {
       templates = throwIfError(await loadTemplates(kg));
     });
 
-    const addTemplate = async (key: string, templateContent: string) => {
+    const addTemplate = async (
+      key: string,
+      templateContent: string,
+      options?: Record<string, unknown>,
+    ) => {
       throwIfError(
         await kg.update({
           author: "test",
           configurations: [
-            { type: typeTemplateKey, key: key as ConfigKey, templateContent },
+            {
+              type: typeTemplateKey,
+              key: key as ConfigKey,
+              templateContent,
+              ...options,
+            },
           ],
         }),
       );
@@ -499,6 +508,38 @@ describe("navigation", () => {
         },
         `tasks/${mockTask2Node.title}.md`,
         `# ${mockTask2Node.title}\n\nProject: ${mockProjectNode.title}\n`,
+      );
+    });
+
+    it("renders markdown with frontmatter when template has preamble", async () => {
+      await addTemplate("task-preamble", "# {title}\n\n{description}\n", {
+        preamble: ["status"],
+      });
+
+      await check(
+        {
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          template: "task-preamble",
+        },
+        `tasks/${mockTask1Node.title}.md`,
+        `---\nstatus: ${mockTask1Node.status}\n---\n\n# ${mockTask1Node.title}\n\n${mockTask1Node.description}\n`,
+      );
+    });
+
+    it("renders markdown without frontmatter when preamble fields are all null", async () => {
+      await addTemplate("task-no-fm", "# {title}\n", {
+        preamble: ["nonExistentField"],
+      });
+
+      await check(
+        {
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          template: "task-no-fm",
+        },
+        `tasks/${mockTask1Node.title}.md`,
+        `# ${mockTask1Node.title}\n`,
       );
     });
 

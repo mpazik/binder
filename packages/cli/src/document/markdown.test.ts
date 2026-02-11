@@ -112,6 +112,13 @@ describe("markdown", () => {
       expect(renderAstToMarkdown(ast)).toBe("---\n");
     });
 
+    it("renders frontmatter yaml node", () => {
+      const ast = parseAst("---\ntitle: Hello\n---\n\n# Hello\n");
+      expect(renderAstToMarkdown(ast)).toBe(
+        "---\ntitle: Hello\n---\n\n# Hello\n",
+      );
+    });
+
     it("renders emphasis with underscore", () => {
       const ast = parseAst("*italic*");
       expect(renderAstToMarkdown(ast)).toBe("_italic_\n");

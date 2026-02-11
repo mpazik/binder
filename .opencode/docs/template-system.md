@@ -151,3 +151,38 @@ When rendering related items (e.g., `{tasks}`), you can specify which template t
 ```
 
 If no template is specified, the system picks a default based on the **Slot Position**.
+
+## YAML Front Matter (Preamble)
+
+Templates can specify a `preamble` field — an array of field keys that are rendered as YAML front matter at the top of the document, rather than in the Markdown body.
+
+```yaml
+- key: task-template
+  type: Template
+  templateFormat: document
+  preamble: [status, priority, dueDate, milestone, feature]
+  templateContent: |
+    # {title}
+
+    {description}
+```
+
+This renders as:
+
+```markdown
+---
+status: active
+priority: high
+dueDate: "2025-03-01"
+---
+
+# My Task
+
+Task description here
+```
+
+**Rendering**: Fields listed in `preamble` are pulled from the entity and rendered as YAML front matter. Null/undefined values are omitted. If all preamble fields are null, no front matter block is added.
+
+**Extraction**: When a template has a `preamble`, the front matter block is parsed and its fields are merged into the extracted entity alongside fields from the Markdown body. Front matter fields take precedence over body fields with the same key.
+
+**Includes**: Preamble field keys are automatically added to the template's includes, so they are fetched from the database without needing to reference them in the template content.

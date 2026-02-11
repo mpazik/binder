@@ -24,7 +24,7 @@ export {
   splitByDelimiter,
   stringifyFieldValue,
 } from "./model/field.ts";
-export { buildIncludes } from "./model/query.ts";
+export { buildIncludes, pickByIncludes } from "./model/query.ts";
 export {
   isComplexFilter,
   matchesFilter,

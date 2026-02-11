@@ -55,10 +55,9 @@ import {
   DOCUMENT_TEMPLATE_KEY,
   PHRASE_TEMPLATE_KEY,
   SECTION_TEMPLATE_KEY,
-  type TemplateEntity,
   type TemplateKey,
-  type Templates,
-} from "./template-entity.ts";
+} from "./template.const.ts";
+import { type TemplateEntity, type Templates } from "./template-entity.ts";
 
 // Union of all possible node types in a simplified view (block or inline level)
 type SimplifiedViewChild = SimplifiedViewBlockChild | SimplifiedViewInlineChild;
