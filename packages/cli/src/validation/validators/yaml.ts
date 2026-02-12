@@ -7,12 +7,14 @@ import {
   type Pair,
   type ParsedNode,
 } from "yaml";
-import { assertNotEmpty, includes, isErr, type JsonValue } from "@binder/utils";
+import { includes, isErr, type JsonValue } from "@binder/utils";
 import {
   coreIdentityFieldKeys,
   type EntityType,
   type Fieldset,
   getAllFieldsForType,
+  getTypeFieldAttrs,
+  getTypeFieldKey,
   type Includes,
   isIncludesQuery,
   matchesFilters,
@@ -194,9 +196,18 @@ const visitEntityNode = <N extends Namespace>(
         : undefined;
 
     if (fieldDef.dataType === "relation" && nestedIncludes) {
-      const range = fieldDef.range;
-      assertNotEmpty(range, `${fieldKey}'s range`);
-      const relatedType = range![0] as EntityType;
+      const typeDef = schema.types[entityType];
+      const typeFieldRef = typeDef?.fields.find(
+        (ref) => getTypeFieldKey(ref) === fieldKey,
+      );
+      const fieldAttrs = typeFieldRef
+        ? getTypeFieldAttrs(typeFieldRef)
+        : undefined;
+      const range = fieldAttrs?.only ?? fieldDef.range;
+      if (!range || range.length === 0) continue;
+      // TODO: when range has multiple types, we should validate against all possible types
+      // rather than just the first one — the actual target type depends on the data
+      const relatedType = range[0] as EntityType;
 
       const visit = fieldDef.allowMultiple
         ? visitEntityNodeSeq
