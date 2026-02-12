@@ -93,12 +93,9 @@ const createReplaceFieldAction = (
   document: TextDocument,
   invalidFieldKey: string,
   suggestedFieldKey: string,
-  isTopMatch: boolean,
 ): CodeAction => {
   const range = findFieldKeyRange(document, diagnostic, invalidFieldKey);
-  const title = isTopMatch
-    ? `Change spelling to '${suggestedFieldKey}'`
-    : `Replace with '${suggestedFieldKey}'`;
+  const title = `Replace with '${suggestedFieldKey}'`;
 
   return {
     title,
@@ -172,15 +169,33 @@ const getFieldKeyFromData = (
   return undefined;
 };
 
+const trimTrailingRange = (document: TextDocument, range: Range): Range => {
+  const text = document.getText(range);
+  const trimmed = text.trimEnd();
+  if (trimmed.length === text.length) return range;
+
+  const lines = trimmed.split("\n");
+  const endLine = range.start.line + lines.length - 1;
+  const lastLine = lines[lines.length - 1]!;
+  const endCharacter =
+    lines.length === 1
+      ? range.start.character + lastLine.length
+      : lastLine.length;
+
+  return {
+    start: range.start,
+    end: { line: endLine, character: endCharacter },
+  };
+};
+
 const createReplaceValueAction = (
   diagnostic: Diagnostic,
   document: TextDocument,
   suggestedValue: string,
-  isTopMatch: boolean,
 ): CodeAction => {
-  const title = isTopMatch
-    ? `Change spelling to '${suggestedValue}'`
-    : `Replace with '${suggestedValue}'`;
+  const title = `Replace with '${suggestedValue}'`;
+
+  const range = trimTrailingRange(document, diagnostic.range);
 
   return {
     title,
@@ -188,7 +203,7 @@ const createReplaceValueAction = (
     diagnostics: [diagnostic],
     edit: {
       changes: {
-        [document.uri]: [TextEdit.replace(diagnostic.range, suggestedValue)],
+        [document.uri]: [TextEdit.replace(range, suggestedValue)],
       },
     },
   };
@@ -213,23 +228,13 @@ const getInvalidValueActions = (
   const options = fieldInfo.def.options;
   if (!options || options.length === 0) return [];
 
-  const currentValue = document.getText(diagnostic.range);
+  const currentValue = document.getText(diagnostic.range).trim();
   const optionKeys = options.map((o) => o.key);
   const suggestions = findSimilar(optionKeys, currentValue, { max: 3 });
 
-  const actions: CodeAction[] = [];
-  for (let i = 0; i < suggestions.length; i++) {
-    actions.push(
-      createReplaceValueAction(
-        diagnostic,
-        document,
-        suggestions[i]!.value,
-        i === 0,
-      ),
-    );
-  }
-
-  return actions;
+  return suggestions.map((s) =>
+    createReplaceValueAction(diagnostic, document, s.value),
+  );
 };
 
 export const handleCodeAction: LspHandler<CodeActionParams, CodeAction[]> = (
@@ -251,14 +256,13 @@ export const handleCodeAction: LspHandler<CodeActionParams, CodeAction[]> = (
         max: 3,
       });
 
-      for (let i = 0; i < suggestions.length; i++) {
+      for (const s of suggestions) {
         actions.push(
           createReplaceFieldAction(
             diagnostic,
             document,
             data.fieldKey,
-            suggestions[i]!.value,
-            i === 0,
+            s.value,
           ),
         );
       }

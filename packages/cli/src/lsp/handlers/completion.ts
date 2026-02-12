@@ -17,6 +17,7 @@ import { getFieldKeys, getParentMap } from "../../document/yaml-cst.ts";
 import {
   getAllowedFields,
   type DocumentContext,
+  type FrontmatterContext,
   type LspHandler,
 } from "../document-context.ts";
 import {
@@ -25,17 +26,22 @@ import {
   getSiblingValues,
   type CursorContext,
   type MarkdownFieldValueContext,
+  type MarkdownFrontmatterFieldValueContext,
   type YamlFieldValueContext,
 } from "../cursor-context.ts";
 
 export type FieldKeyCompletionInput = {
   kind: "field-key";
   context: DocumentContext;
+  frontmatter?: FrontmatterContext;
 };
 
 export type FieldValueCompletionInput = {
   kind: "field-value";
-  cursorContext: YamlFieldValueContext | MarkdownFieldValueContext;
+  cursorContext:
+    | YamlFieldValueContext
+    | MarkdownFieldValueContext
+    | MarkdownFrontmatterFieldValueContext;
   context: DocumentContext;
   excludeValues: string[];
 };
@@ -116,38 +122,55 @@ const createRelationCompletions = async (
   return completions;
 };
 
+const getFieldKeyCompletions = (
+  input: FieldKeyCompletionInput,
+): CompletionItem[] => {
+  const { context, frontmatter } = input;
+
+  if (context.documentType !== "yaml" && !frontmatter) return [];
+
+  const contents = frontmatter
+    ? frontmatter.parsed.doc.contents
+    : context.documentType === "yaml"
+      ? context.parsed.doc.contents
+      : undefined;
+  if (!contents) return [];
+
+  const parentMap = getParentMap([contents as never]);
+  if (!parentMap || !isMap(parentMap)) return [];
+
+  const existingFields = getFieldKeys(parentMap);
+
+  const allowedFields = frontmatter
+    ? frontmatter.preambleKeys.filter((key) => key in context.schema.fields)
+    : getAllowedFields(context.typeDef, context.schema);
+
+  const availableFields = allowedFields.filter(
+    (field) => !existingFields.includes(field),
+  );
+
+  const typeSpecificFields = new Set(context.typeDef?.fields ?? []);
+
+  return availableFields.map((fieldKey) => {
+    const fieldDef = context.schema.fields[fieldKey as never];
+    const isTypeSpecific = typeSpecificFields.has(fieldKey);
+
+    return {
+      label: fieldKey,
+      kind: CompletionItemKind.Property,
+      detail: fieldDef?.dataType,
+      documentation: fieldDef?.description,
+      sortText: isTypeSpecific ? `0_${fieldKey}` : `1_${fieldKey}`,
+    };
+  });
+};
+
 export const getCompletionItems = async (
   input: CompletionInput,
   kg: KnowledgeGraph,
 ): Promise<CompletionItem[]> => {
   if (input.kind === "field-key") {
-    const { context } = input;
-    const { parsed } = context as { parsed: { doc: { contents: unknown } } };
-    if (!parsed.doc.contents) return [];
-
-    const parentMap = getParentMap([parsed.doc.contents as never]);
-    if (!parentMap || !isMap(parentMap)) return [];
-
-    const existingFields = getFieldKeys(parentMap);
-    const allowedFields = getAllowedFields(context.typeDef, context.schema);
-    const availableFields = allowedFields.filter(
-      (field) => !existingFields.includes(field),
-    );
-
-    const typeSpecificFields = new Set(context.typeDef?.fields ?? []);
-
-    return availableFields.map((fieldKey) => {
-      const fieldDef = context.schema.fields[fieldKey as never];
-      const isTypeSpecific = typeSpecificFields.has(fieldKey);
-
-      return {
-        label: fieldKey,
-        kind: CompletionItemKind.Property,
-        detail: fieldDef?.dataType,
-        documentation: fieldDef?.description,
-        sortText: isTypeSpecific ? `0_${fieldKey}` : `1_${fieldKey}`,
-      };
-    });
+    return getFieldKeyCompletions(input);
   }
 
   const { cursorContext, context, excludeValues } = input;
@@ -185,14 +208,30 @@ const buildCompletionInput = (
     return { kind: "field-key", context };
   }
 
-  if (cursorContext.type === "field-value") {
+  if (cursorContext.type === "frontmatter-field-key") {
+    return {
+      kind: "field-key",
+      context,
+      frontmatter: cursorContext.frontmatter,
+    };
+  }
+
+  if (
+    cursorContext.type === "field-value" ||
+    cursorContext.type === "frontmatter-field-value"
+  ) {
     const { fieldPath, itemIndex, entity } = cursorContext;
+    const frontmatter =
+      cursorContext.type === "frontmatter-field-value"
+        ? cursorContext.frontmatter
+        : undefined;
     const excludeValues =
       itemIndex !== undefined
         ? getSiblingValues(
             context,
             getSchemaFieldPath(fieldPath),
             entity.entityIndex,
+            frontmatter,
           )
         : [];
 

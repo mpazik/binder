@@ -30,6 +30,7 @@ import type { FieldSlotMapping } from "../document/template.ts";
 import type { EntityMapping } from "./entity-mapping.ts";
 import {
   type DocumentContext,
+  type FrontmatterContext,
   type MarkdownDocumentContext,
   type YamlDocumentContext,
 } from "./document-context.ts";
@@ -104,8 +105,32 @@ export type MarkdownNoneContext = CursorContextBase & {
   type: "none";
 };
 
+export type MarkdownFrontmatterFieldKeyContext = CursorContextBase & {
+  documentType: "markdown";
+  type: "frontmatter-field-key";
+  fieldPath: FieldPath;
+  fieldDef: FieldDef;
+  fieldAttrs?: FieldAttrDef;
+  range: LspRange;
+  frontmatter: FrontmatterContext;
+};
+
+export type MarkdownFrontmatterFieldValueContext = CursorContextBase & {
+  documentType: "markdown";
+  type: "frontmatter-field-value";
+  fieldPath: FieldPath;
+  fieldDef: FieldDef;
+  fieldAttrs?: FieldAttrDef;
+  currentValue?: string;
+  range?: LspRange;
+  itemIndex?: number;
+  frontmatter: FrontmatterContext;
+};
+
 export type MarkdownCursorContext =
   | MarkdownFieldValueContext
+  | MarkdownFrontmatterFieldKeyContext
+  | MarkdownFrontmatterFieldValueContext
   | MarkdownTemplateContext
   | MarkdownNoneContext;
 
@@ -141,6 +166,7 @@ export const yamlRangeToLspRange = (
     end: endPos,
   };
 };
+
 export const offsetToPosition = (
   offset: number,
   lineCounter: LineCounter,
@@ -163,6 +189,7 @@ export const offsetToPosition = (
 
   return { line, character };
 };
+
 export const positionToOffset = (
   position: LspPosition,
   lineCounter: LineCounter,
@@ -195,6 +222,7 @@ export const isPositionInRange = (
   (position.line < range.end.line ||
     (position.line === range.end.line &&
       position.character <= range.end.character));
+
 const getCursorEntityContext = (
   context: DocumentContext,
   position: LspPosition,
@@ -304,6 +332,7 @@ export type FieldInfo = {
   def: FieldDef;
   attrs?: FieldAttrDef;
 };
+
 export const getFieldDefForType = (
   fieldKey: FieldKey,
   typeDef: TypeDef | undefined,
@@ -317,6 +346,7 @@ export const getFieldDefForType = (
   const attrs = findFieldAttrsInType(fieldKey, typeDef);
   return { def, attrs };
 };
+
 export type FieldMappingMatch = {
   mapping: FieldSlotMapping;
   range: LspRange;
@@ -444,12 +474,137 @@ const getFieldInfoFromPath = (
   return { def, attrs };
 };
 
+const offsetLspRange = (range: LspRange, lineOffset: number): LspRange => ({
+  start: {
+    line: range.start.line + lineOffset,
+    character: range.start.character,
+  },
+  end: { line: range.end.line + lineOffset, character: range.end.character },
+});
+
+const getFrontmatterCursorContext = (
+  context: MarkdownDocumentContext,
+  position: LspPosition,
+  entity: CursorEntityContext,
+  fm: FrontmatterContext,
+): MarkdownCursorContext | undefined => {
+  const { parsed, lineOffset, preambleKeys } = fm;
+  const { schema, typeDef } = context;
+
+  if (!parsed.doc.contents) return undefined;
+
+  const localPosition: LspPosition = {
+    line: position.line - lineOffset,
+    character: position.character,
+  };
+  const offset = positionToOffset(localPosition, parsed.lineCounter);
+  const yamlContext = findYamlContext(parsed.doc.contents, offset);
+
+  if (yamlContext.type === "key") {
+    const fieldKey = isScalar(yamlContext.node)
+      ? String(yamlContext.node.value)
+      : undefined;
+    if (!fieldKey) return undefined;
+
+    if (!preambleKeys.includes(fieldKey)) return undefined;
+
+    const fieldInfo = getFieldDefForType(fieldKey, typeDef, schema);
+    if (!fieldInfo) return undefined;
+
+    const localRange =
+      yamlContext.node && "range" in yamlContext.node
+        ? yamlRangeToLspRange(
+            yamlContext.node.range as [number, number, number],
+            parsed.lineCounter,
+          )
+        : { start: localPosition, end: localPosition };
+
+    return {
+      documentType: "markdown",
+      type: "frontmatter-field-key",
+      position,
+      entity,
+      fieldPath: [fieldKey],
+      fieldDef: fieldInfo.def,
+      fieldAttrs: fieldInfo.attrs,
+      range: offsetLspRange(localRange, lineOffset),
+      frontmatter: fm,
+    };
+  }
+
+  if (yamlContext.type === "value" || yamlContext.type === "seq-item") {
+    const { fieldPath, itemIndex } = buildFieldPathFromYaml(
+      yamlContext.path,
+      offset,
+      false,
+    );
+
+    const schemaPath = getSchemaFieldPath(fieldPath);
+    const fieldDef = getFieldDefNested(schema, schemaPath);
+    if (!fieldDef || schemaPath.length === 0) return undefined;
+
+    if (!preambleKeys.includes(schemaPath[0]!)) return undefined;
+
+    const fieldInfo = getFieldDefForType(schemaPath[0]!, typeDef, schema);
+
+    const localRange =
+      yamlContext.node && "range" in yamlContext.node
+        ? yamlRangeToLspRange(
+            yamlContext.node.range as [number, number, number],
+            parsed.lineCounter,
+          )
+        : undefined;
+
+    return {
+      documentType: "markdown",
+      type: "frontmatter-field-value",
+      position,
+      entity,
+      fieldPath,
+      fieldDef,
+      fieldAttrs: fieldInfo?.attrs,
+      currentValue: extractCurrentValue(yamlContext.node),
+      range: localRange ? offsetLspRange(localRange, lineOffset) : undefined,
+      itemIndex,
+      frontmatter: fm,
+    };
+  }
+
+  return undefined;
+};
+
+// The unist position for a `yaml` node (from remark-frontmatter) includes the
+// `---` delimiter lines. A cursor on a delimiter will enter
+// getFrontmatterCursorContext, which finds no YAML key/value at those offsets
+// and returns undefined, falling through harmlessly to the body logic.
+const isCursorInFrontmatter = (
+  position: LspPosition,
+  root: MarkdownDocumentContext["parsed"]["root"],
+): boolean => {
+  const yamlNode = root.children.find((child) => child.type === "yaml");
+  if (!yamlNode?.position) return false;
+
+  const range = unistPositionToLspRange(yamlNode.position);
+  return isPositionInRange(position, range);
+};
+
 const getMarkdownCursorContext = (
   context: MarkdownDocumentContext,
   position: LspPosition,
 ): MarkdownCursorContext => {
-  const { fieldMappings, schema, typeDef, navigationItem } = context;
+  const { fieldMappings, schema, typeDef, navigationItem, frontmatter } =
+    context;
   const entity = getCursorEntityContext(context, position);
+
+  if (frontmatter && isCursorInFrontmatter(position, context.parsed.root)) {
+    const fmContext = getFrontmatterCursorContext(
+      context,
+      position,
+      entity,
+      frontmatter,
+    );
+    if (fmContext) return fmContext;
+  }
 
   const match = findFieldMappingAtPosition(fieldMappings, position);
 
@@ -499,58 +654,60 @@ const ITEMS_WRAPPER_KEY = "items";
 export const getSchemaFieldPath = (fieldPath: FieldPath): FieldPath =>
   fieldPath.filter((p) => !/^\d+$/.test(p));
 
+const extractSeqValues = (node: ParsedNode): string[] => {
+  if (!isSeq(node)) return [];
+  const values: string[] = [];
+  for (const item of node.items) {
+    if (isScalar(item)) {
+      values.push(String(item.value));
+    } else if (isMap(item)) {
+      const mapItem = item as YAMLMap.Parsed;
+      const firstPair = mapItem.items[0];
+      if (firstPair && isPair(firstPair) && isScalar(firstPair.key)) {
+        values.push(String(firstPair.key.value));
+      }
+    }
+  }
+  return values;
+};
+
+const findValuesAtPath = (
+  node: ParsedNode | null,
+  remainingPath: string[],
+): string[] => {
+  if (!node || !("items" in node)) return [];
+
+  const [nextKey, ...rest] = remainingPath;
+
+  for (const item of node.items as Pair[]) {
+    if (!isPair(item) || !isScalar(item.key)) continue;
+    if (String(item.key.value) !== nextKey) continue;
+
+    return rest.length === 0
+      ? extractSeqValues(item.value as ParsedNode)
+      : findValuesAtPath(item.value as ParsedNode, rest);
+  }
+
+  return [];
+};
+
 export const getSiblingValues = (
   context: DocumentContext,
   fieldPath: FieldPath,
   entityIndex = 0,
+  frontmatter?: FrontmatterContext,
 ): string[] => {
+  const schemaPath = getSchemaFieldPath(fieldPath);
+  if (schemaPath.length === 0) return [];
+
+  if (frontmatter?.parsed.doc.contents) {
+    return findValuesAtPath(frontmatter.parsed.doc.contents, [...schemaPath]);
+  }
+
   if (context.documentType !== "yaml") return [];
 
   const { parsed, entityMappings } = context;
   if (!parsed.doc.contents) return [];
-
-  const schemaPath = getSchemaFieldPath(fieldPath);
-  if (schemaPath.length === 0) return [];
-
-  const values: string[] = [];
-
-  const extractSeqValues = (node: ParsedNode): void => {
-    if (!isSeq(node)) return;
-    for (const item of node.items) {
-      if (isScalar(item)) {
-        values.push(String(item.value));
-      } else if (isMap(item)) {
-        const mapItem = item as YAMLMap.Parsed;
-        const firstPair = mapItem.items[0];
-        if (firstPair && isPair(firstPair) && isScalar(firstPair.key)) {
-          values.push(String(firstPair.key.value));
-        }
-      }
-    }
-  };
-
-  const findValuesAtPath = (
-    node: ParsedNode | null,
-    remainingPath: string[],
-  ): void => {
-    if (!node || !("items" in node)) return;
-
-    const [nextKey, ...rest] = remainingPath;
-
-    for (const item of node.items as Pair[]) {
-      if (!isPair(item) || !isScalar(item.key)) continue;
-      const key = String(item.key.value);
-
-      if (key === nextKey) {
-        if (rest.length === 0) {
-          extractSeqValues(item.value as ParsedNode);
-        } else {
-          findValuesAtPath(item.value as ParsedNode, rest);
-        }
-        return;
-      }
-    }
-  };
 
   let startNode: ParsedNode | null = parsed.doc.contents;
 
@@ -563,6 +720,5 @@ export const getSiblingValues = (
     }
   }
 
-  findValuesAtPath(startNode, [...schemaPath]);
-  return values;
+  return findValuesAtPath(startNode, [...schemaPath]);
 };

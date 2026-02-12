@@ -99,11 +99,12 @@ describe("completion", () => {
     excluded: string[] = [],
   ) => {
     const result = await complete(relativePath, contentWithCursor);
+    const getKey = (item: CompletionItem) => item.insertText ?? item.label;
     for (const key of included) {
-      expect(result.some((item) => item.insertText === key)).toBe(true);
+      expect(result.some((item) => getKey(item) === key)).toBe(true);
     }
     for (const key of excluded) {
-      expect(result.some((item) => item.insertText === key)).toBe(false);
+      expect(result.some((item) => getKey(item) === key)).toBe(false);
     }
   };
 
@@ -206,6 +207,65 @@ tags:
       );
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("option field completions", () => {
+    it("provides all option completions regardless of partial input", async () => {
+      await check(
+        "tasks/my-task.yaml",
+        `type: Task
+title: My Task
+status: c█`,
+        ["pending", "active", "complete", "cancelled", "archived"],
+      );
+    });
+
+    it("provides all option completions for empty value", async () => {
+      await check(
+        "tasks/my-task.yaml",
+        `type: Task
+title: My Task
+status: █`,
+        ["pending", "active", "complete", "cancelled", "archived"],
+      );
+    });
+  });
+
+  describe("frontmatter completions", () => {
+    it("provides option completions in frontmatter", async () => {
+      await check(
+        "md-tasks/my-task.md",
+        `---
+status: █
+---
+
+# My Task
+
+## Description
+
+Some description
+`,
+        ["pending", "active", "complete", "cancelled", "archived"],
+      );
+    });
+
+    it("provides relation completions for project field in frontmatter", async () => {
+      await check(
+        "md-tasks/my-task.md",
+        `---
+status: active
+project: █
+---
+
+# My Task
+
+## Description
+
+Some description
+`,
+        [mockProjectKey],
+      );
     });
   });
 });

@@ -21,6 +21,7 @@ import {
   validateDataType,
 } from "@binder/db";
 import { isErr } from "@binder/utils";
+import { isMap, isPair, isScalar } from "yaml";
 import {
   validateDocument,
   type ValidationError,
@@ -31,9 +32,11 @@ import {
 import { extract } from "../../document/extraction.ts";
 import type { FieldSlotMapping } from "../../document/template.ts";
 import type {
+  FrontmatterContext,
   LspHandler,
   MarkdownDocumentContext,
 } from "../document-context.ts";
+import { offsetToPosition } from "../cursor-context.ts";
 
 const severityToDiagnosticSeverity: Record<
   ValidationSeverity,
@@ -290,6 +293,56 @@ export const handleDiagnostics: LspHandler<
   };
 };
 
+const mapFrontmatterFieldPathToRange = (
+  fieldPath: FieldPath,
+  fm: FrontmatterContext,
+): ValidationRange | undefined => {
+  if (fieldPath.length === 0) return undefined;
+
+  const { parsed, lineOffset } = fm;
+  if (!parsed.doc.contents || !isMap(parsed.doc.contents)) return undefined;
+
+  const targetKey = fieldPath[0];
+  for (const item of parsed.doc.contents.items) {
+    if (!isPair(item) || !isScalar(item.key)) continue;
+    if (String(item.key.value) !== targetKey) continue;
+
+    const valueNode = item.value;
+    if (!valueNode || !("range" in valueNode)) continue;
+
+    const range = valueNode.range as [number, number, number];
+    const start = offsetToPosition(range[0], parsed.lineCounter);
+    const end = offsetToPosition(range[2], parsed.lineCounter);
+
+    return {
+      start: { line: start.line + lineOffset, character: start.character },
+      end: { line: end.line + lineOffset, character: end.character },
+    };
+  }
+
+  return undefined;
+};
+
+const resolveFieldRange = (
+  fieldPath: FieldPath,
+  fieldMappings: FieldSlotMapping[],
+  frontmatter?: FrontmatterContext,
+): ValidationRange => {
+  const bodyRange = mapFieldPathToRange(fieldPath, fieldMappings);
+  if (bodyRange) return bodyRange;
+
+  if (
+    frontmatter &&
+    fieldPath.length > 0 &&
+    frontmatter.preambleKeys.includes(fieldPath[0]!)
+  ) {
+    const fmRange = mapFrontmatterFieldPathToRange(fieldPath, frontmatter);
+    if (fmRange) return fmRange;
+  }
+
+  return zeroRange;
+};
+
 const getMarkdownDiagnostics = async (
   context: MarkdownDocumentContext,
   runtime: Parameters<typeof handleDiagnostics>[1]["runtime"],
@@ -328,8 +381,11 @@ const getMarkdownDiagnostics = async (
   });
 
   for (const error of fieldErrors) {
-    const range =
-      mapFieldPathToRange(error.fieldPath, context.fieldMappings) ?? zeroRange;
+    const range = resolveFieldRange(
+      error.fieldPath,
+      context.fieldMappings,
+      context.frontmatter,
+    );
     diagnostics.push({
       range,
       severity: DiagnosticSeverity.Error,
@@ -348,8 +404,11 @@ const getMarkdownDiagnostics = async (
       context.namespace,
     );
     if (isErr(entityResult)) {
-      const range =
-        mapFieldPathToRange(fieldPath, context.fieldMappings) ?? zeroRange;
+      const range = resolveFieldRange(
+        fieldPath,
+        context.fieldMappings,
+        context.frontmatter,
+      );
       diagnostics.push({
         range,
         severity: DiagnosticSeverity.Error,

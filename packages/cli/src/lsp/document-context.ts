@@ -6,6 +6,7 @@ import type {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   EntitySchema,
+  FieldKey,
   NamespaceEditable,
   NodeType,
   TypeDef,
@@ -16,6 +17,7 @@ import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedMarkdown } from "../document/markdown.ts";
 import type { ParsedYaml } from "../document/yaml-cst.ts";
+import { parseYamlDocument } from "../document/yaml-cst.ts";
 import {
   findNavigationItemByPath,
   findTemplate,
@@ -58,10 +60,17 @@ export type YamlDocumentContext = BaseDocumentContext & {
   parsed: ParsedYaml;
 };
 
+export type FrontmatterContext = {
+  parsed: ParsedYaml;
+  lineOffset: number;
+  preambleKeys: FieldKey[];
+};
+
 export type MarkdownDocumentContext = BaseDocumentContext & {
   documentType: "markdown";
   parsed: ParsedMarkdown;
   fieldMappings: FieldSlotMapping[];
+  frontmatter?: FrontmatterContext;
 };
 
 export type DocumentContext = YamlDocumentContext | MarkdownDocumentContext;
@@ -229,6 +238,23 @@ export const createDocumentCache = (log: Logger): DocumentCache => {
     getStats,
   };
 };
+const buildFrontmatterContext = (
+  root: ParsedMarkdown["root"],
+  preamble: string[] | undefined,
+): FrontmatterContext | undefined => {
+  if (!preamble || preamble.length === 0) return undefined;
+
+  const yamlNode = root.children.find((child) => child.type === "yaml");
+  if (!yamlNode || !("value" in yamlNode) || typeof yamlNode.value !== "string")
+    return undefined;
+  if (!yamlNode.position) return undefined;
+
+  const parsed = parseYamlDocument(yamlNode.value);
+  const lineOffset = yamlNode.position.start.line;
+
+  return { parsed, lineOffset, preambleKeys: preamble };
+};
+
 export const getDocumentContext = async (
   document: TextDocument,
   documentCache: DocumentCache,
@@ -313,19 +339,28 @@ export const getDocumentContext = async (
   };
 
   if (documentType === "markdown") {
-    const fieldMappings = navigationItem.template
+    const template = navigationItem.template
+      ? findTemplate(templatesResult.data, navigationItem.template)
+      : undefined;
+
+    const fieldMappings = template
       ? extractFieldMappings(
-          findTemplate(templatesResult.data, navigationItem.template)
-            .templateAst,
+          template.templateAst,
           (parsed as ParsedMarkdown).root,
         )
       : [];
+
+    const frontmatter = buildFrontmatterContext(
+      (parsed as ParsedMarkdown).root,
+      template?.preamble,
+    );
 
     return ok({
       ...base,
       documentType: "markdown",
       parsed: parsed as ParsedMarkdown,
       fieldMappings,
+      frontmatter,
     });
   }
 

@@ -113,7 +113,9 @@ export const handleHover: LspHandler<HoverParams, Hover | null> = async (
 
   if (
     cursorContext.type === "field-key" ||
-    cursorContext.type === "field-value"
+    cursorContext.type === "field-value" ||
+    cursorContext.type === "frontmatter-field-key" ||
+    cursorContext.type === "frontmatter-field-value"
   ) {
     const relationFieldDef =
       cursorContext.fieldPath.length > 1

@@ -16,6 +16,7 @@ import type { FieldSlotMapping } from "../document/template.ts";
 import type { NavigationItem } from "../document/navigation.ts";
 import type { EntityMapping, EntityMappings } from "./entity-mapping.ts";
 import type {
+  FrontmatterContext,
   MarkdownDocumentContext,
   YamlDocumentContext,
 } from "./document-context.ts";
@@ -398,16 +399,34 @@ tags:
       mapping: mockMatchedMapping,
     };
 
+    const buildFrontmatter = (
+      parsed: ReturnType<typeof parseMarkdownDocument>,
+      preambleKeys: string[],
+    ): FrontmatterContext | undefined => {
+      const yamlNode = parsed.root.children.find((c) => c.type === "yaml");
+      if (!yamlNode || !("value" in yamlNode) || !yamlNode.position)
+        return undefined;
+      return {
+        parsed: parseYamlDocument(yamlNode.value as string),
+        lineOffset: yamlNode.position.start.line,
+        preambleKeys,
+      };
+    };
+
     const createMarkdownContext = (
       contentWithCursor: string,
       fieldMappings: FieldSlotMapping[],
-      navigationItem: NavigationItem = mockNavigationItemWithTemplate,
+      opts?: {
+        navigationItem?: NavigationItem;
+        preambleKeys?: string[];
+      },
     ): {
       context: MarkdownDocumentContext;
       line: number;
       character: number;
     } => {
       const { content, line, character } = parseCursor(contentWithCursor);
+      const parsed = parseMarkdownDocument(content);
       return {
         context: {
           documentType: "markdown",
@@ -415,11 +434,15 @@ tags:
           uri: "file:///test.md",
           namespace: "node",
           schema: mockNodeSchema,
-          navigationItem,
+          navigationItem:
+            opts?.navigationItem ?? mockNavigationItemWithTemplate,
           typeDef: mockNodeSchema.types[mockTaskTypeKey],
           entityMappings: singleMapping,
-          parsed: parseMarkdownDocument(content),
+          parsed,
           fieldMappings,
+          frontmatter: opts?.preambleKeys
+            ? buildFrontmatter(parsed, opts.preambleKeys)
+            : undefined,
         },
         line,
         character,
@@ -430,12 +453,15 @@ tags:
       contentWithCursor: string,
       fieldMappings: FieldSlotMapping[],
       expected: Partial<MarkdownCursorContext>,
-      navigationItem?: NavigationItem,
+      opts?: {
+        navigationItem?: NavigationItem;
+        preambleKeys?: string[];
+      },
     ) => {
       const { context, line, character } = createMarkdownContext(
         contentWithCursor,
         fieldMappings,
-        navigationItem,
+        opts,
       );
       const result = getCursorContext(context, { line, character });
       expect(result).toMatchObject(expected);
@@ -503,7 +529,7 @@ pend█ing`,
           documentType: "markdown",
           type: "none",
         },
-        mockNavigationItemNoTemplate,
+        { navigationItem: mockNavigationItemNoTemplate },
       );
     });
 
@@ -526,6 +552,71 @@ pend█ing`,
       });
     });
 
+    it("returns frontmatter-field-value for option field in frontmatter", () => {
+      check(
+        `---\nstatus: pend█ing\n---\n\n# My Task`,
+        [],
+        {
+          documentType: "markdown",
+          type: "frontmatter-field-value",
+          fieldPath: [mockStatusFieldKey],
+          currentValue: "pending",
+          fieldDef: expect.objectContaining({
+            key: mockStatusFieldKey,
+            dataType: "option",
+          }),
+        },
+        { preambleKeys: [mockStatusFieldKey] },
+      );
+    });
+
+    it("returns frontmatter-field-value for empty option field in frontmatter", () => {
+      check(
+        `---\nstatus: █\n---\n\n# My Task`,
+        [],
+        {
+          documentType: "markdown",
+          type: "frontmatter-field-value",
+          fieldPath: [mockStatusFieldKey],
+          fieldDef: expect.objectContaining({
+            key: mockStatusFieldKey,
+            dataType: "option",
+          }),
+        },
+        { preambleKeys: [mockStatusFieldKey] },
+      );
+    });
+
+    it("returns frontmatter-field-key for field key in frontmatter", () => {
+      check(
+        `---\nsta█tus: pending\n---\n\n# My Task`,
+        [],
+        {
+          documentType: "markdown",
+          type: "frontmatter-field-key",
+          fieldPath: [mockStatusFieldKey],
+          fieldDef: expect.objectContaining({
+            key: mockStatusFieldKey,
+            dataType: "option",
+          }),
+        },
+        { preambleKeys: [mockStatusFieldKey] },
+      );
+    });
+
+    it("falls through to body context for frontmatter field key not in preambleKeys", () => {
+      check(
+        `---\nproj█ect: my-project\n---\n\n# My Task`,
+        [],
+        {
+          documentType: "markdown",
+          type: "template",
+          templateKey: "task-template",
+        },
+        { preambleKeys: [mockStatusFieldKey] },
+      );
+    });
+
     it("includes slot in field-value context", () => {
       const fieldMappings: FieldSlotMapping[] = [
         {
@@ -537,22 +628,14 @@ pend█ing`,
         },
       ];
 
-      const { context, line, character } = createMarkdownContext(
-        `My█ Task`,
-        fieldMappings,
-      );
-      const result = getCursorContext(context, { line, character });
-
-      expect(result.documentType).toBe("markdown");
-      expect(result.type).toBe("field-value");
-      if (result.type === "field-value" && result.documentType === "markdown") {
-        expect(result.slot).toEqual(fieldMappings[0]);
-      }
+      check(`My█ Task`, fieldMappings, {
+        documentType: "markdown",
+        type: "field-value",
+        slot: fieldMappings[0],
+      });
     });
   });
-});
 
-describe("lsp-utils", () => {
   describe("offsetToPosition", () => {
     const createLineCounter = (text: string): LineCounter => {
       const lc = new LineCounter();

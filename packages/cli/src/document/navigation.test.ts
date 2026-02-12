@@ -598,6 +598,11 @@ describe("navigation", () => {
           where: { type: "Task" },
           includes: { title: true, status: true, project: true },
         },
+        {
+          path: "md-tasks/{key}",
+          where: { type: "Task" },
+          template: "md-task-template",
+        },
       ]);
     });
   });

@@ -5,7 +5,10 @@ import type { EntitySchema, NodeRef } from "@binder/db";
 import { isErr } from "@binder/utils";
 import type { RuntimeContextWithDb } from "../../runtime.ts";
 import type { ParsedYaml } from "../../document/yaml-cst.ts";
-import type { LspHandler } from "../document-context.ts";
+import type {
+  LspHandler,
+  MarkdownDocumentContext,
+} from "../document-context.ts";
 
 import { offsetToPosition } from "../cursor-context.ts";
 
@@ -94,16 +97,62 @@ const resolveEntityTitle = async (
   return (entity.title || entity.name) as string | undefined;
 };
 
+const buildHint = (
+  relation: RelationValue,
+  title: string,
+  lineCounter: ParsedYaml["lineCounter"],
+  lineOffset = 0,
+): InlayHint => {
+  const position = offsetToPosition(relation.endOffset, lineCounter);
+  return {
+    position: {
+      line: position.line + lineOffset,
+      character: position.character,
+    },
+    label: title,
+    kind: InlayHintKind.Type,
+    paddingLeft: true,
+  };
+};
+
+const collectFrontmatterHints = async (
+  context: MarkdownDocumentContext,
+  runtime: RuntimeContextWithDb,
+): Promise<InlayHint[]> => {
+  const { frontmatter } = context;
+  if (!frontmatter) return [];
+
+  const relationValues = collectRelationValues(
+    frontmatter.parsed,
+    context.schema,
+  );
+
+  const hints: InlayHint[] = [];
+  for (const relation of relationValues) {
+    const title = await resolveEntityTitle(relation.value, runtime);
+    if (!title || title === relation.value) continue;
+    hints.push(
+      buildHint(
+        relation,
+        title,
+        frontmatter.parsed.lineCounter,
+        frontmatter.lineOffset,
+      ),
+    );
+  }
+  return hints;
+};
+
 export const handleInlayHints: LspHandler<
   InlayHintParams,
   InlayHint[]
 > = async (_params, { context, runtime }) => {
-  const { log } = runtime;
-  const parsed = context.parsed as ParsedYaml;
-  if (!parsed.doc || !parsed.lineCounter) {
-    log.debug("Not a YAML document");
-    return [];
+  if (context.documentType === "markdown") {
+    return collectFrontmatterHints(context, runtime);
   }
+
+  const parsed = context.parsed as ParsedYaml;
+  if (!parsed.doc || !parsed.lineCounter) return [];
 
   const relationValues = collectRelationValues(parsed, context.schema);
   const hints: InlayHint[] = [];
@@ -111,15 +160,7 @@ export const handleInlayHints: LspHandler<
   for (const relation of relationValues) {
     const title = await resolveEntityTitle(relation.value, runtime);
     if (!title || title === relation.value) continue;
-
-    const position = offsetToPosition(relation.endOffset, parsed.lineCounter);
-
-    hints.push({
-      position,
-      label: title,
-      kind: InlayHintKind.Type,
-      paddingLeft: true,
-    });
+    hints.push(buildHint(relation, title, parsed.lineCounter));
   }
 
   return hints;

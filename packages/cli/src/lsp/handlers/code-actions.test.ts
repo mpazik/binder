@@ -68,19 +68,10 @@ describe("code-actions", () => {
         fieldKey: "status",
       });
 
-      const actions = handleCodeAction(
-        {
-          textDocument: { uri: document.uri },
-          range,
-          context: { diagnostics: [diagnostic] },
-        },
-        { document, context: createMockContext(), runtime: mockRuntime },
-      );
+      const actions = getActions(document, diagnostic, createMockContext());
 
       expect(actions).toEqual([
-        expect.objectContaining({
-          title: "Change spelling to 'pending'",
-        }),
+        expect.objectContaining({ title: "Replace with 'pending'" }),
       ]);
     });
 
@@ -90,19 +81,10 @@ describe("code-actions", () => {
         fieldKey: "status",
       });
 
-      const actions = handleCodeAction(
-        {
-          textDocument: { uri: document.uri },
-          range,
-          context: { diagnostics: [diagnostic] },
-        },
-        { document, context: createMockContext(), runtime: mockRuntime },
-      );
+      const actions = getActions(document, diagnostic, createMockContext());
 
       expect(actions).toEqual([
-        expect.objectContaining({
-          title: "Change spelling to 'active'",
-        }),
+        expect.objectContaining({ title: "Replace with 'active'" }),
       ]);
     });
 
@@ -112,14 +94,7 @@ describe("code-actions", () => {
         fieldKey: "status",
       });
 
-      const actions = handleCodeAction(
-        {
-          textDocument: { uri: document.uri },
-          range,
-          context: { diagnostics: [diagnostic] },
-        },
-        { document, context: createMockContext(), runtime: mockRuntime },
-      );
+      const actions = getActions(document, diagnostic, createMockContext());
 
       expect(actions).toEqual([]);
     });
@@ -130,23 +105,14 @@ describe("code-actions", () => {
         fieldPath: ["status"],
       });
 
-      const actions = handleCodeAction(
-        {
-          textDocument: { uri: document.uri },
-          range,
-          context: { diagnostics: [diagnostic] },
-        },
-        {
-          document,
-          context: createMockContext("markdown"),
-          runtime: mockRuntime,
-        },
+      const actions = getActions(
+        document,
+        diagnostic,
+        createMockContext("markdown"),
       );
 
       expect(actions).toEqual([
-        expect.objectContaining({
-          title: "Change spelling to 'pending'",
-        }),
+        expect.objectContaining({ title: "Replace with 'pending'" }),
       ]);
     });
 
@@ -158,14 +124,7 @@ describe("code-actions", () => {
         { fieldKey: "favorite" },
       );
 
-      const actions = handleCodeAction(
-        {
-          textDocument: { uri: document.uri },
-          range,
-          context: { diagnostics: [diagnostic] },
-        },
-        { document, context: createMockContext(), runtime: mockRuntime },
-      );
+      const actions = getActions(document, diagnostic, createMockContext());
 
       expect(actions).toEqual([]);
     });
@@ -174,14 +133,7 @@ describe("code-actions", () => {
       const document = createMockDocument("status: invalid");
       const diagnostic = createMockDiagnostic("invalid-value", range, {});
 
-      const actions = handleCodeAction(
-        {
-          textDocument: { uri: document.uri },
-          range,
-          context: { diagnostics: [diagnostic] },
-        },
-        { document, context: createMockContext(), runtime: mockRuntime },
-      );
+      const actions = getActions(document, diagnostic, createMockContext());
 
       expect(actions).toEqual([]);
     });
@@ -198,6 +150,31 @@ describe("code-actions", () => {
         {
           range,
           newText: "pending",
+        },
+      ]);
+    });
+
+    it("trims trailing whitespace from diagnostic range to preserve next line", () => {
+      const document = createMockDocument("status: comple\npriority: high\n");
+      const rangeWithTrailing: Range = {
+        start: { line: 0, character: 8 },
+        end: { line: 1, character: 0 },
+      };
+      const diagnostic = createMockDiagnostic(
+        "invalid-value",
+        rangeWithTrailing,
+        { fieldKey: "status" },
+      );
+
+      const actions = getActions(document, diagnostic, createMockContext());
+
+      expect(actions[0]?.edit?.changes?.[document.uri]).toEqual([
+        {
+          range: {
+            start: { line: 0, character: 8 },
+            end: { line: 0, character: 14 },
+          },
+          newText: "complete",
         },
       ]);
     });

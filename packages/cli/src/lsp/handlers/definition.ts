@@ -19,7 +19,11 @@ export type EntityStringRef = EntityKey | EntityUid;
 export const getEntityRef = (
   cursorContext: CursorContext,
 ): EntityStringRef | undefined => {
-  if (cursorContext.type !== "field-value") return undefined;
+  if (
+    cursorContext.type !== "field-value" &&
+    cursorContext.type !== "frontmatter-field-value"
+  )
+    return undefined;
   if (cursorContext.fieldDef.dataType !== "relation") return undefined;
   if (!cursorContext.currentValue) return undefined;
 
