@@ -88,6 +88,34 @@ describe("renderHoverContent", () => {
       );
     });
 
+    it("renders option field with key only when name is absent", () => {
+      const field: FieldDef = {
+        ...mockStatusField,
+        description: undefined,
+        options: [{ key: "alpha" }, { key: "beta" }, { key: "gamma" }],
+      };
+      check(
+        field,
+        "**Status** (option)\n\n**Options:**\n- **alpha**\n- **beta**\n- **gamma**",
+      );
+    });
+
+    it("renders option field with mixed named and unnamed options", () => {
+      const field: FieldDef = {
+        ...mockStatusField,
+        description: undefined,
+        options: [
+          { key: "pending", name: "Pending" },
+          { key: "custom" },
+          { key: "archived", name: "Archived" },
+        ],
+      };
+      check(
+        field,
+        "**Status** (option)\n\n**Options:**\n- **pending**: Pending\n- **custom**\n- **archived**: Archived",
+      );
+    });
+
     it("combines multiple constraints", () => {
       check(
         { ...mockEmailField, allowMultiple: true, when: { status: "active" } },

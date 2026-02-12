@@ -60,7 +60,9 @@ const renderOptions = (fieldDef: FieldDef): string => {
   if (fieldDef.dataType !== "option" || !fieldDef.options) return "";
 
   const optionsList = fieldDef.options
-    .map((opt) => `- **${opt.key}**: ${opt.name}`)
+    .map((opt) =>
+      opt.name ? `- **${opt.key}**: ${opt.name}` : `- **${opt.key}**`,
+    )
     .join("\n");
 
   return `\n\n**Options:**\n${optionsList}`;
