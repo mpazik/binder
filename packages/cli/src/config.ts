@@ -14,9 +14,15 @@ import { LOG_LEVELS, type LogLevel } from "./log.ts";
 import { isDevMode } from "./build-time.ts";
 
 const DEFAULT_AUTHOR = "cli-user";
-export const DEFAULT_DOCS_PATH = isDevMode() ? "docs-dev" : "docs";
+export const DEFAULT_DOCS_PATH = isDevMode() ? "docs-dev" : ".";
 export const CONFIG_FILE = "config.yaml";
 export const BINDER_DIR = isDevMode() ? ".binder-dev" : ".binder";
+
+export const DEFAULT_EXCLUDE_PATTERNS = [
+  "**/node_modules/**",
+  "**/.*/**",
+  "**/.DS_Store",
+];
 export const DB_FILE = "binder.db";
 export const TRANSACTION_LOG_FILE = "transactions.jsonl";
 export const UNDO_LOG_FILE = "undo.jsonl";
@@ -153,6 +159,11 @@ export const loadWorkspaceConfig = async (
   const { docsPath, author, logLevel, include, exclude, validation } =
     loadedConfig.data;
 
+  const mergedExclude = [
+    ...DEFAULT_EXCLUDE_PATTERNS,
+    ...(exclude ?? []),
+  ];
+
   return ok({
     author: author || globalConfig.author || DEFAULT_AUTHOR,
     logLevel: logLevel || globalConfig.logLevel,
@@ -162,7 +173,7 @@ export const loadWorkspaceConfig = async (
       docs: join(root, docsPath),
     },
     include,
-    exclude,
+    exclude: mergedExclude,
     validation,
   });
 };

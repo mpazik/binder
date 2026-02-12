@@ -17,13 +17,7 @@ import {
   type CommandHandlerWithDb,
   runtimeWithDb,
 } from "../runtime.ts";
-import {
-  BINDER_DIR,
-  CONFIG_FILE,
-  DEFAULT_DOCS_PATH,
-  findBinderRoot,
-} from "../config.ts";
-import type { FileSystem } from "../lib/filesystem.ts";
+import { BINDER_DIR, CONFIG_FILE, findBinderRoot } from "../config.ts";
 import {
   type BlueprintInfo,
   listBlueprints,
@@ -46,17 +40,6 @@ const getAuthorNameFromGit = async (): Promise<string | undefined> => {
   });
 
   if (isOk(gitResult)) return gitResult.data ?? undefined;
-};
-
-const isDirectoryEmpty = async (
-  fs: FileSystem,
-  path: string,
-): ResultAsync<boolean> => {
-  const exists = await fs.exists(path);
-  if (!exists) return ok(true);
-  const filesResult = await fs.readdir(path);
-  if (isErr(filesResult)) return filesResult;
-  return ok(filesResult.data.length === 0);
 };
 
 const NONE_BLUEPRINT: BlueprintInfo = {
@@ -114,36 +97,9 @@ const initSetupHandler: CommandHandlerMinimal<{
     author = input.trim() || gitAuthor;
   }
 
-  let docsPath = args.docsPath;
-  if (!docsPath) {
-    while (true) {
-      const input = await ui.input(
-        `Documents directory (default: ${DEFAULT_DOCS_PATH}): `,
-      );
-      docsPath = input.trim() || DEFAULT_DOCS_PATH;
-
-      const fullPath = join(currentDir, docsPath);
-      const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
-      if (isErr(isEmptyResult)) return isEmptyResult;
-      if (isOk(isEmptyResult) && isEmptyResult.data) break;
-
-      ui.error(
-        `Directory '${docsPath}' is not empty. Please choose an empty directory or a new directory.`,
-      );
-    }
-  } else {
-    const fullPath = join(currentDir, docsPath);
-    const isEmptyResult = await isDirectoryEmpty(fs, fullPath);
-    if (isErr(isEmptyResult)) return isEmptyResult;
-    if (isOk(isEmptyResult) && !isEmptyResult.data) {
-      return fail(
-        "directory-not-empty",
-        `Directory '${docsPath}' is not empty`,
-      );
-    }
-  }
-
-  const config = { author, docsPath };
+  const config: Record<string, unknown> = {};
+  if (author) config.author = author;
+  if (args.docsPath) config.docsPath = args.docsPath;
 
   const mkdirResult = await fs.mkdir(binderDirPath, { recursive: true });
   if (isErr(mkdirResult)) return mkdirResult;
@@ -244,7 +200,7 @@ export const InitCommand = types({
         alias: "a",
       })
       .option("docs-path", {
-        describe: "path to documents directory",
+        describe: "path to documents directory (default: current directory)",
         type: "string",
         alias: "d",
       })
