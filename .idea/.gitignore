@@ -8,6 +8,6 @@
 /dataSources.local.xml
 /dataSources.xml
 /data_source_mapping.xml
-binder.iml
+*.iml
 modules.xml
 vcs.xml
