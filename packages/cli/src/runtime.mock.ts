@@ -1,4 +1,4 @@
-import { noop, noopAsync } from "@binder/utils";
+import { isEmptyObject, noop, noopAsync } from "@binder/utils";
 import { type Logger } from "./log.ts";
 import { createUi, type Ui } from "./cli/ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
@@ -72,7 +72,13 @@ export const createMockRuntimeContextWithDb =
     const db = getTestDatabaseCli();
     const kg = setupKnowledgeGraph(
       { ...context, db, templates: () => templateCache.load() },
-      {},
+      {
+        afterCommit: async (transaction) => {
+          if (isEmptyObject(transaction.configurations)) return;
+          navigationCache.invalidate();
+          templateCache.invalidate();
+        },
+      },
     );
     const navigationCache = createNavigationCache(kg);
     const templateCache = createTemplateCache(kg);
