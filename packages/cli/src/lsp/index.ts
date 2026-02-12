@@ -1,17 +1,14 @@
-import { pathToFileURL } from "node:url";
 import {
   CodeActionKind,
   type Connection,
   createConnection,
   type InitializeParams,
   ProposedFeatures,
-  Range,
   TextDocuments,
   TextDocumentSyncKind,
-  TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { isErr, tryCatch } from "@binder/utils";
+import { isErr } from "@binder/utils";
 import { type RuntimeContextInit } from "../runtime.ts";
 import { BINDER_VERSION } from "../build-time.ts";
 import { handleDocumentSave } from "./handlers/save-handler.ts";
@@ -41,53 +38,14 @@ export const createLspServer = (
     minimalContext,
     log,
     async (absolutePaths: string[]) => {
-      for (const absolutePath of absolutePaths) {
-        const uri = pathToFileURL(absolutePath).href;
-        const openDoc = lspDocuments.get(uri);
-        if (!openDoc) continue;
-
-        const contentResult = await fs.readFile(absolutePath);
-        if (isErr(contentResult)) {
-          log.error("Failed to read file for refresh", {
-            path: absolutePath,
-            error: contentResult.error,
-          });
-          continue;
-        }
-
-        // Skip if content is already identical to avoid triggering editor conflicts
-        if (openDoc.getText() === contentResult.data) {
-          log.debug("Document content unchanged, skipping refresh", { uri });
-          continue;
-        }
-
-        const fullRange = Range.create(0, 0, openDoc.lineCount, 0);
-
-        const editResult = await tryCatch(
-          connection.workspace.applyEdit({
-            documentChanges: [
-              {
-                textDocument: { uri, version: openDoc.version },
-                edits: [TextEdit.replace(fullRange, contentResult.data)],
-              },
-            ],
-          }),
-        );
-
-        if (isErr(editResult)) {
-          log.error("Failed to apply edit for document refresh", {
-            uri,
-            error: editResult.error,
-          });
-        } else if (!editResult.data.applied) {
-          log.error("Edit not applied for document refresh", {
-            uri,
-            editResult: editResult.data,
-          });
-        } else {
-          log.debug("Refreshed open document", { uri });
-        }
-      }
+      // Rendered files are already written to disk by saveSnapshot.
+      // We do NOT send applyEdit — let the editor's file watcher detect
+      // the disk change and reload silently. Sending both a disk write
+      // and applyEdit races and causes intermittent conflict dialogs.
+      log.info("Files rendered to disk", {
+        fileCount: absolutePaths.length,
+        paths: absolutePaths,
+      });
     },
   );
   const deps = {
@@ -230,7 +188,6 @@ export const createLspServer = (
 
   lspDocuments.onDidSave(async (change) => {
     const uri = change.document.uri;
-    log.info("Document saved", { uri });
 
     const workspace = workspaceManager.findWorkspaceForDocument(uri);
     if (!workspace) {
@@ -238,7 +195,15 @@ export const createLspServer = (
       return;
     }
 
-    const result = await handleDocumentSave(workspace.runtime, uri);
+    // Use open document content as canonical source (avoids disk races
+    // from editor safe-write / atomic-rename save strategies).
+    const sourceContent = lspDocuments.get(uri)?.getText();
+
+    const result = await handleDocumentSave(
+      workspace.runtime,
+      uri,
+      sourceContent,
+    );
 
     if (isErr(result)) {
       log.error("Sync failed", { error: result.error, uri });

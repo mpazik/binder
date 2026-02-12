@@ -255,6 +255,7 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
   relativePath: string,
   namespace: N,
   templates: Templates,
+  sourceContent?: string,
 ): ResultAsync<ChangesetsInput<N>> => {
   const navItem = findNavigationItemByPath(navigationItems, relativePath);
   if (!navItem) {
@@ -273,13 +274,17 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
   const pathFields = pathFieldsResult.data;
 
   const absolutePath = resolveSnapshotPath(relativePath, config.paths);
-  const contentResult = await fs.readFile(absolutePath);
+
+  const contentResult = sourceContent
+    ? ok(sourceContent)
+    : await fs.readFile(absolutePath);
   if (isErr(contentResult)) return contentResult;
+  const content = contentResult.data;
 
   const extractResult = extract(
     schema,
     navItem,
-    contentResult.data,
+    content,
     absolutePath,
     templates,
   );
@@ -300,7 +305,7 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
     fs,
     config.paths,
     absolutePath,
-    contentResult.data,
+    content,
     version,
   );
   if (isErr(refreshResult)) return refreshResult;

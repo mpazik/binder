@@ -7,9 +7,14 @@ import {
   namespaceFromSnapshotPath,
 } from "../../lib/snapshot.ts";
 
+// Note: this handler doesn't use the withDocumentContext/LspHandler pattern
+// because it runs its own extraction pipeline via synchronizeFile. The
+// DocumentContext built by withDocumentContext (parsed AST, field mappings,
+// entity mappings) would be redundant work discarded by the sync path.
 export const handleDocumentSave = async (
   context: RuntimeContextWithDb,
   uri: string,
+  sourceContent?: string,
 ): ResultAsync<void> => {
   const { log, config, fs, kg, db } = context;
 
@@ -53,6 +58,7 @@ export const handleDocumentSave = async (
     relativePath,
     namespace,
     templatesResult.data,
+    sourceContent,
   );
   if (isErr(syncResult)) return syncResult;
 
