@@ -1,19 +1,19 @@
 import { newIsoTimestamp } from "@binder/utils";
 import type { NodeUid, TransactionInput } from "@binder/db";
 
-export const mockDocumentUid = "BNupvr3JwPl" as NodeUid;
-export const mockSection1Uid = "n1G4RYLpqCy" as NodeUid;
+export const mockDocumentUid = "_Nupvr3JwPl" as NodeUid;
+export const mockSection1Uid = "_1G4RYLpqCy" as NodeUid;
 export const mockParagraph1Uid = "3sbJjrIXR0h" as NodeUid;
 export const mockSection2Uid = "7KNebjPGCil" as NodeUid;
-export const mockParagraph2Uid = "DsftL7GkTQ3" as NodeUid;
-export const mockListUid = "xGXwraeyMHz" as NodeUid;
-export const mockListItem1Uid = "izziT9iRMnm" as NodeUid;
-export const mockListItem2Uid = "ZYMH25QeU45" as NodeUid;
-export const mockListItem3Uid = "B92AgfCR6aH" as NodeUid;
-export const mockDataviewUid = "qVw8YnKpRTz" as NodeUid;
+export const mockParagraph2Uid = "_sftL7GkTQ3" as NodeUid;
+export const mockListUid = "_GXwraeyMHz" as NodeUid;
+export const mockListItem1Uid = "_zziT9iRMnm" as NodeUid;
+export const mockListItem2Uid = "_YMH25QeU45" as NodeUid;
+export const mockListItem3Uid = "_92AgfCR6aH" as NodeUid;
+export const mockDataviewUid = "_Vw8YnKpRTz" as NodeUid;
 export const mockSection3Uid = "5l8giR3SJl0" as NodeUid;
-export const mockParagraph3Uid = "XKQe9TqpFTL" as NodeUid;
-export const mockParagraph4Uid = "dh44jbz45rm" as NodeUid;
+export const mockParagraph3Uid = "_KQe9TqpFTL" as NodeUid;
+export const mockParagraph4Uid = "_h44jbz45rm" as NodeUid;
 
 export const mockDocumentTransactionInput = {
   author: "test",

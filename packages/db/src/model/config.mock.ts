@@ -18,7 +18,7 @@ export const mockNotExistingNodeFieldKey = "notExistingNodeField" as NodeType;
 export const mockStatusFieldKey = "status" as ConfigKey;
 export const mockStatusField = {
   id: newUserConfigId(0),
-  uid: "fldStatus04" as ConfigUid,
+  uid: "_fldStatus0" as ConfigUid,
   key: mockStatusFieldKey,
   type: fieldSystemType,
   name: "Status",
@@ -42,7 +42,7 @@ export const mockProjectTypeKey = "Project" as NodeType;
 export const mockAssignedToFieldKey = "assignedTo" as ConfigKey;
 export const mockAssignedToField = {
   id: newUserConfigId(1),
-  uid: "fldAssign05" as ConfigUid,
+  uid: "_fldAssign0" as ConfigUid,
   key: mockAssignedToFieldKey,
   type: fieldSystemType,
   name: "Assigned To",
@@ -54,7 +54,7 @@ export const mockAssignedToField = {
 export const mockRoleFieldKey = "role" as ConfigKey;
 export const mockRoleField = {
   id: newUserConfigId(10),
-  uid: "fldRole0014" as ConfigUid,
+  uid: "_fldRole001" as ConfigUid,
   key: mockRoleFieldKey,
   type: fieldSystemType,
   name: "Role",
@@ -66,7 +66,7 @@ export const mockRoleField = {
 export const mockOwnersFieldKey = "owners" as ConfigKey;
 export const mockOwnersField = {
   id: newUserConfigId(2),
-  uid: "fldOwners06" as ConfigUid,
+  uid: "_fldOwners0" as ConfigUid,
   key: mockOwnersFieldKey,
   type: fieldSystemType,
   name: "Owners",
@@ -80,7 +80,7 @@ export const mockOwnersField = {
 export const mockMembersFieldKey = "members" as ConfigKey;
 export const mockMembersField = {
   id: newUserConfigId(3),
-  uid: "fldMembrs07" as ConfigUid,
+  uid: "_fldMembrs0" as ConfigUid,
   key: mockMembersFieldKey,
   type: fieldSystemType,
   name: "Members",
@@ -95,7 +95,7 @@ export const mockTaskTypeKey = "Task" as NodeType;
 export const mockTasksFieldKey = "tasks" as ConfigKey;
 export const mockTasksField = {
   id: newUserConfigId(4),
-  uid: "fldTasks008" as ConfigUid,
+  uid: "_fldTasks00" as ConfigUid,
   key: mockTasksFieldKey,
   type: fieldSystemType,
   name: "Tasks",
@@ -109,7 +109,7 @@ export const mockTasksField = {
 export const mockTagsFieldKey = "tags" as ConfigKey;
 export const mockTagsField = {
   id: newUserConfigId(5),
-  uid: "fldTags0009" as ConfigUid,
+  uid: "_fldTags000" as ConfigUid,
   key: mockTagsFieldKey,
   type: fieldSystemType,
   name: "Tags",
@@ -122,7 +122,7 @@ export const mockTagsField = {
 export const mockDueDateFieldKey = "dueDate" as ConfigKey;
 export const mockDueDateField = {
   id: newUserConfigId(6),
-  uid: "fldDueDat10" as ConfigUid,
+  uid: "_fldDueDat1" as ConfigUid,
   key: mockDueDateFieldKey,
   type: fieldSystemType,
   name: "Due Date",
@@ -133,7 +133,7 @@ export const mockDueDateField = {
 export const mockFieldKeyEmail = "email" as ConfigKey;
 export const mockEmailField = {
   id: newUserConfigId(7),
-  uid: "fldEmail011" as ConfigUid,
+  uid: "_fldEmail01" as ConfigUid,
   key: mockFieldKeyEmail,
   type: fieldSystemType,
   name: "Email",
@@ -146,7 +146,7 @@ export const mockEmailField = {
 export const mockProjectFieldKey = "project" as ConfigKey;
 export const mockProjectField = {
   id: newUserConfigId(8),
-  uid: "fldProjct12" as ConfigUid,
+  uid: "_fldProjct1" as ConfigUid,
   key: mockProjectFieldKey,
   type: fieldSystemType,
   name: "Project",
@@ -158,7 +158,7 @@ export const mockProjectField = {
 export const mockFavoriteFieldKey = "favorite" as ConfigKey;
 export const mockFavoriteField = {
   id: newUserConfigId(9),
-  uid: "fldFavort14" as ConfigUid,
+  uid: "_fldFavort1" as ConfigUid,
   key: mockFavoriteFieldKey,
   type: fieldSystemType,
   name: "Favorite",
@@ -169,7 +169,7 @@ export const mockFavoriteField = {
 export const mockCompletedAtFieldKey = "completedAt" as ConfigKey;
 export const mockCompletedAtField = {
   id: newUserConfigId(11),
-  uid: "fldCompAt13" as ConfigUid,
+  uid: "_fldCompAt1" as ConfigUid,
   key: mockCompletedAtFieldKey,
   type: fieldSystemType,
   name: "Completed At",
@@ -182,7 +182,7 @@ export const mockCompletedAtField = {
 export const mockCancelReasonFieldKey = "cancelReason" as ConfigKey;
 export const mockCancelReasonField = {
   id: newUserConfigId(12),
-  uid: "fldCancRe20" as ConfigUid,
+  uid: "_fldCancRe2" as ConfigUid,
   key: mockCancelReasonFieldKey,
   type: fieldSystemType,
   name: "Cancel Reason",
@@ -195,7 +195,7 @@ export const mockCancelReasonField = {
 export const mockPriorityFieldKey = "priority" as ConfigKey;
 export const mockPriorityField = {
   id: newUserConfigId(13),
-  uid: "fldPriort21" as ConfigUid,
+  uid: "_fldPriort2" as ConfigUid,
   key: mockPriorityFieldKey,
   type: fieldSystemType,
   name: "Priority",
@@ -211,7 +211,7 @@ export const mockPriorityField = {
 
 export const mockTaskType = {
   id: newUserConfigId(20),
-  uid: "typTask0012" as ConfigUid,
+  uid: "_typTask001" as ConfigUid,
   key: mockTaskTypeKey,
   type: typeSystemType,
   name: "Task",
@@ -230,7 +230,7 @@ export const mockTaskType = {
 
 export const mockProjectType = {
   id: newUserConfigId(21),
-  uid: "typProjct13" as ConfigUid,
+  uid: "_typProjct1" as ConfigUid,
   key: mockProjectTypeKey,
   type: typeSystemType,
   name: "Project",
@@ -246,7 +246,7 @@ export const mockProjectType = {
 
 export const mockUserType = {
   id: newUserConfigId(22),
-  uid: "typUser0014" as ConfigUid,
+  uid: "_typUser001" as ConfigUid,
   key: mockUserTypeKey,
   type: typeSystemType,
   name: "User",
@@ -259,7 +259,7 @@ export const mockUserType = {
 
 export const mockTeamType = {
   id: newUserConfigId(23),
-  uid: "typTeam0015" as ConfigUid,
+  uid: "_typTeam001" as ConfigUid,
   key: mockTeamTypeKey,
   type: typeSystemType,
   name: "Team",
@@ -270,7 +270,7 @@ export const mockTeamType = {
 export const mockAliasesFieldKey = "aliases" as ConfigKey;
 export const mockAliasesField = {
   id: newUserConfigId(14),
-  uid: "fldAlias022" as ConfigUid,
+  uid: "_fldAlias02" as ConfigUid,
   key: mockAliasesFieldKey,
   type: fieldSystemType,
   name: "Aliases",
@@ -283,7 +283,7 @@ export const mockAliasesField = {
 export const mockNotesFieldKey = "notes" as ConfigKey;
 export const mockNotesField = {
   id: newUserConfigId(15),
-  uid: "fldNotes023" as ConfigUid,
+  uid: "_fldNotes02" as ConfigUid,
   key: mockNotesFieldKey,
   type: fieldSystemType,
   name: "Notes",
@@ -296,7 +296,7 @@ export const mockNotesField = {
 export const mockStepsFieldKey = "steps" as ConfigKey;
 export const mockStepsField = {
   id: newUserConfigId(16),
-  uid: "fldSteps024" as ConfigUid,
+  uid: "_fldSteps02" as ConfigUid,
   key: mockStepsFieldKey,
   type: fieldSystemType,
   name: "Steps",
@@ -309,7 +309,7 @@ export const mockStepsField = {
 export const mockChaptersFieldKey = "chapters" as ConfigKey;
 export const mockChaptersField = {
   id: newUserConfigId(17),
-  uid: "fldChpts025" as ConfigUid,
+  uid: "_fldChpts02" as ConfigUid,
   key: mockChaptersFieldKey,
   type: fieldSystemType,
   name: "Chapters",
@@ -322,7 +322,7 @@ export const mockChaptersField = {
 export const mockTemplatesFieldKey = "templates" as ConfigKey;
 export const mockTemplatesField = {
   id: newUserConfigId(18),
-  uid: "fldTmpls026" as ConfigUid,
+  uid: "_fldTmpls02" as ConfigUid,
   key: mockTemplatesFieldKey,
   type: fieldSystemType,
   name: "Templates",
@@ -335,7 +335,7 @@ export const mockTemplatesField = {
 export const mockPriceFieldKey = "price" as ConfigKey;
 export const mockPriceField = {
   id: newUserConfigId(19),
-  uid: "fldPrice027" as ConfigUid,
+  uid: "_fldPrice02" as ConfigUid,
   key: mockPriceFieldKey,
   type: fieldSystemType,
   name: "Price",

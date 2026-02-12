@@ -23,25 +23,25 @@ const templateFormats = Object.fromEntries(
 const templateFormatOptions = dataTypeDefsToOptions(templateFormats);
 
 export const typeNavigationKey = "Navigation" as ConfigKey;
-export const typeNavigationUid = "n1Vz4yDeDgH" as ConfigUid;
+export const typeNavigationUid = "_1Vz4yDeDgH" as ConfigUid;
 
 export const typeTemplateKey = "Template" as ConfigKey;
-export const typeTemplateUid = "t3Xb6zFgGjK" as ConfigUid;
+export const typeTemplateUid = "_3Xb6zFgGjK" as ConfigUid;
 
 export const fieldPathKey = "path" as ConfigKey;
-export const fieldPathUid = "n2Wa5zEfEhI" as ConfigUid;
+export const fieldPathUid = "_2Wa5zEfEhI" as ConfigUid;
 
 export const fieldPreambleKey = "preamble" as ConfigKey;
-export const fieldPreambleUid = "p4Yc7aHhIkL" as ConfigUid;
+export const fieldPreambleUid = "_4Yc7aHhIkL" as ConfigUid;
 
 export const fieldTemplateContentKey = "templateContent" as ConfigKey;
-export const fieldTemplateContentUid = "c5Zd8bIiJlM" as ConfigUid;
+export const fieldTemplateContentUid = "_5Zd8bIiJlM" as ConfigUid;
 
 export const fieldTemplateKey = "template" as ConfigKey;
-export const fieldTemplateUid = "r6Ae9cJjKmN" as ConfigUid;
+export const fieldTemplateUid = "_6Ae9cJjKmN" as ConfigUid;
 
 export const fieldTemplateFormatKey = "templateFormat" as ConfigKey;
-export const fieldTemplateFormatUid = "f7Bf0dKkLnO" as ConfigUid;
+export const fieldTemplateFormatUid = "_7Bf0dKkLnO" as ConfigUid;
 
 type CliConfigFieldDef = FieldDef<ConfigDataType>;
 

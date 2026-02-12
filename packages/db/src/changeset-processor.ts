@@ -363,11 +363,19 @@ const validateChangesetInput = <N extends NamespaceEditable>(
   const errors: ValidationError[] = [];
 
   const keyValue = input["key"] as string;
-  if (keyValue !== undefined && isReservedEntityKey(keyValue)) {
-    errors.push({
-      field: "key",
-      message: `key "${keyValue}" is reserved and cannot be used`,
-    });
+  if (keyValue !== undefined) {
+    if (isReservedEntityKey(keyValue)) {
+      errors.push({
+        field: "key",
+        message: `key "${keyValue}" is reserved and cannot be used`,
+      });
+    }
+    if (isValidUid(keyValue)) {
+      errors.push({
+        field: "key",
+        message: `key "${keyValue}" is ambiguous because it matches the UID format`,
+      });
+    }
   }
 
   for (const fieldKey of objKeys(input)) {

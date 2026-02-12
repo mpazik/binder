@@ -26,6 +26,14 @@ describe("createUid", () => {
     check(4, 6, "x", /^x_[0-9A-Za-z_-]{6}$/);
   });
 
+  it("generates non-prefixed uid starting with non-letter", () => {
+    for (let i = 0; i < 100; i++) {
+      const uid = createUid() as string;
+      expect(uid).toHaveLength(11);
+      expect(uid).toMatch(/^[^A-Za-z]/);
+    }
+  });
+
   it("generates different values on subsequent calls", () => {
     const uid1 = createUid(8, "test");
     const uid2 = createUid(8, "test");
@@ -81,7 +89,9 @@ describe("isValidUid", () => {
   it("validates uid without prefix parameter", () => {
     const uid = createUid();
     expect(isValidUid(uid)).toBe(true);
-    expect(isValidUid("rand-_Base6")).toBe(true);
+    expect(isValidUid("_rand-Base6")).toBe(true);
+    expect(isValidUid("0rand_Base6")).toBe(true);
+    expect(isValidUid("rand-_Base6")).toBe(false); // starts with letter
     expect(isValidUid("r@ndomB@se6")).toBe(false);
     expect(isValidUid("short")).toBe(false);
   });

@@ -19,9 +19,18 @@ const DEFAULT_UID_LENGTH = 8;
 // 8 bytes = 11 chars random part (2^64, ~18 quintillion IDs, 1% collision at ~5B IDs)
 export type ByteLength = 4 | 6 | 8;
 
-const generateRandomBase64Uri = (byteLength: number): string => {
+const generateRandomBase64Uri = (
+  byteLength: number,
+  nonLetterStart: boolean,
+): string => {
   const buf = new Uint8Array(byteLength);
   crypto.getRandomValues(buf);
+  if (nonLetterStart) {
+    // Constrain byte[0] so the first base64url character is a non-letter ([0-9_-]).
+    // Base64url indices 52–63 map to non-letter chars. byte[0] >> 2 gives the index,
+    // so byte[0] in 208–255 (48 values) maps uniformly to those 12 chars (4 each).
+    buf[0] = 208 + (buf[0] % 48);
+  }
   return binaryToBase64Uri(buf);
 };
 
@@ -37,7 +46,7 @@ export const createUid = <T extends Uid = Uid>(
 ): T => {
   assertGreaterThan(length, 3, "length of uuid");
   if (prefix === undefined) {
-    return generateRandomBase64Uri(length) as T;
+    return generateRandomBase64Uri(length, true) as T;
   }
 
   assertInRange(prefix.length, 1, 5, "length of prefix");
@@ -46,7 +55,7 @@ export const createUid = <T extends Uid = Uid>(
     throw new Error("Prefix must contain only letters");
   }
 
-  const randomPart = generateRandomBase64Uri(length);
+  const randomPart = generateRandomBase64Uri(length, false);
   return `${prefix}_${randomPart}` as T;
 };
 
@@ -83,5 +92,7 @@ export const isValidUid = (
 
   if (length !== undefined && value.length !== byteLengthToCharLength(length))
     return false;
+  // Non-prefixed UIDs must not start with a letter to avoid ambiguity with keys
+  if (/^[A-Za-z]/.test(value)) return false;
   return isBase64UriString(value);
 };

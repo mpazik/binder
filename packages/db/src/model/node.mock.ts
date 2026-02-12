@@ -8,13 +8,13 @@ import {
 } from "./config.mock.ts";
 import type { Fieldset } from "./field.ts";
 
-export const NONEXISTENT_NODE_UID = "nonexistent" as NodeUid;
+export const NONEXISTENT_NODE_UID = "_nonexisten" as NodeUid;
 
-export const mockTask1Uid = "taskAbc1230" as NodeUid;
-export const mockTask2Uid = "taskDef4560" as NodeUid;
-export const mockTask3Uid = "taskGhi7890" as NodeUid;
-export const mockProjectUid = "projJkl0120" as NodeUid;
-export const mockUserUid = "userRick001" as NodeUid;
+export const mockTask1Uid = "_taskAbc123" as NodeUid;
+export const mockTask2Uid = "_taskDef456" as NodeUid;
+export const mockTask3Uid = "_taskGhi789" as NodeUid;
+export const mockProjectUid = "_projJkl012" as NodeUid;
+export const mockUserUid = "_userRick00" as NodeUid;
 
 export const mockTask1Key = "task-implement-user-auth" as NodeKey;
 export const mockTask1Node = {
@@ -29,7 +29,7 @@ export const mockTask1Node = {
   tags: ["urgent", "important"],
 } as const satisfies Fieldset;
 
-export const mockTaskWithOwnersUid = "taskOwners1" as NodeUid;
+export const mockTaskWithOwnersUid = "_taskOwners" as NodeUid;
 export const mockTaskWithOwnersNode = {
   id: 10 as NodeId,
   uid: mockTaskWithOwnersUid,

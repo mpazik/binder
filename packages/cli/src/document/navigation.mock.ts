@@ -11,7 +11,7 @@ export const mockNav1Key = "nav-projects" as ConfigKey;
 
 export const mockNav1Entity = {
   id: newUserConfigId(0),
-  uid: "navRoot0001" as ConfigUid,
+  uid: "_navRoot000" as ConfigUid,
   key: mockNav1Key,
   type: typeNavigationKey,
   path: "projects/{title}/",
@@ -20,7 +20,7 @@ export const mockNav1Entity = {
 
 export const mockNav2Entity = {
   id: newUserConfigId(1),
-  uid: "navChild001" as ConfigUid,
+  uid: "_navChild00" as ConfigUid,
   key: "nav-project-tasks" as ConfigKey,
   type: typeNavigationKey,
   path: "tasks",
@@ -30,7 +30,7 @@ export const mockNav2Entity = {
 
 export const mockNav3Entity = {
   id: newUserConfigId(2),
-  uid: "navRoot0002" as ConfigUid,
+  uid: "_navRoot002" as ConfigUid,
   key: "nav-all-tasks" as ConfigKey,
   type: typeNavigationKey,
   path: "all-tasks",
@@ -39,7 +39,7 @@ export const mockNav3Entity = {
 
 export const mockNav4Entity = {
   id: newUserConfigId(3),
-  uid: "navRoot0003" as ConfigUid,
+  uid: "_navRoot003" as ConfigUid,
   key: "nav-tasks" as ConfigKey,
   type: typeNavigationKey,
   path: "tasks/{key}",
@@ -49,7 +49,7 @@ export const mockNav4Entity = {
 
 export const mockMdTaskTemplateEntity = {
   id: newUserConfigId(4),
-  uid: "tmplMdTask1" as ConfigUid,
+  uid: "_tmplMdTask" as ConfigUid,
   key: "md-task-template" as ConfigKey,
   type: typeTemplateKey,
   templateContent: `# {title}\n\n## Description\n\n{description}\n`,
@@ -58,7 +58,7 @@ export const mockMdTaskTemplateEntity = {
 
 export const mockNav5Entity = {
   id: newUserConfigId(5),
-  uid: "navRoot0004" as ConfigUid,
+  uid: "_navRoot004" as ConfigUid,
   key: "nav-md-tasks" as ConfigKey,
   type: typeNavigationKey,
   path: "md-tasks/{key}",

@@ -626,6 +626,38 @@ describe("processChangesetInput", () => {
       );
     });
 
+    it("rejects keys that match the UID format", async () => {
+      await insertConfig(db, mockPriorityField);
+
+      await checkErrors(
+        [
+          {
+            type: fieldSystemType,
+            key: "_0a1b2c3d4e" as ConfigKey,
+            dataType: "plaintext",
+          },
+          { $ref: mockPriorityFieldKey, key: "0a1b2c3d4e5" as ConfigKey },
+        ],
+        [
+          {
+            index: 0,
+            namespace: "config",
+            field: "key",
+            message:
+              'key "_0a1b2c3d4e" is ambiguous because it matches the UID format',
+          },
+          {
+            index: 1,
+            namespace: "config",
+            field: "key",
+            message:
+              'key "0a1b2c3d4e5" is ambiguous because it matches the UID format',
+          },
+        ],
+        "config",
+      );
+    });
+
     it("validates field data types", async () => {
       await checkErrors(
         [
@@ -1161,7 +1193,7 @@ describe("processChangesetInput", () => {
   describe("inverse relations", () => {
     const task2Unlinked = omit(mockTask2Node, ["project"]);
     const task3Unlinked = omit(mockTask3Node, ["project"]);
-    const otherProjectUid = "projOther01" as NodeUid;
+    const otherProjectUid = "_projOther0" as NodeUid;
     const otherProject = {
       ...mockProjectNode,
       id: 10 as EntityId,
@@ -1305,7 +1337,7 @@ describe("applyConfigChangesetToSchema", () => {
     const changeset: EntitiesChangeset<"config"> = {
       [newFieldKey]: {
         id: 1,
-        uid: "fldPriori01",
+        uid: "_fldPriori0",
         key: newFieldKey,
         type: fieldSystemType,
         dataType: "plaintext",
