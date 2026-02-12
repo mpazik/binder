@@ -23,12 +23,14 @@ export const activate = (context: vscode.ExtensionContext): void => {
 
   const config = vscode.workspace.getConfiguration("binder");
   const cliPath = config.get<string>("path", "binder");
-  const traceLevel = config.get<string>("trace", "off");
   const devMode = config.get<boolean>("devMode", false);
+  const traceConfig = vscode.workspace.getConfiguration("binderLsp");
+  const traceLevel = traceConfig.get<string>("trace.server", "off");
   const command = devMode ? "bun" : cliPath;
+  const logLevel = config.get<string>("logLevel", "info");
   const args = devMode
-    ? ["run", "--conditions=development", "packages/cli/src/index.ts", "lsp"]
-    : ["lsp"];
+    ? ["run", "--conditions=development", "packages/cli/src/index.ts", "lsp", "--log-level", logLevel]
+    : ["lsp", "--log-level", logLevel];
   const outputChannel = vscode.window.createOutputChannel("Binder");
 
   client = new LanguageClient(
@@ -56,12 +58,6 @@ export const activate = (context: vscode.ExtensionContext): void => {
   if (devMode || traceLevel !== "off") {
     outputChannel.appendLine(
       `Binder LSP starting in ${devMode ? "development" : "production"} mode`,
-    );
-  }
-
-  if (traceLevel !== "off") {
-    client.setTrace(
-      traceLevel === "verbose" ? 2 : traceLevel === "messages" ? 1 : 0,
     );
   }
 

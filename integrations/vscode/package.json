@@ -38,7 +38,17 @@
           "description": "Run the language server in development mode (uses bun to run from source)",
           "scope": "machine-overridable"
         },
-        "binder.trace": {
+        "binder.logLevel": {
+          "type": "string",
+          "enum": [
+            "info",
+            "debug"
+          ],
+          "default": "info",
+          "description": "Log level for the Binder language server",
+          "scope": "window"
+        },
+        "binderLsp.trace.server": {
           "type": "string",
           "enum": [
             "off",
