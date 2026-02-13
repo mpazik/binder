@@ -3,14 +3,7 @@ import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { $ } from "bun";
 import { isCancel, select } from "@clack/prompts";
-import {
-  fail,
-  isErr,
-  isOk,
-  ok,
-  type ResultAsync,
-  tryCatch,
-} from "@binder/utils";
+import { fail, isErr, isOk, ok, tryCatch } from "@binder/utils";
 import {
   bootstrapMinimal,
   type CommandHandlerMinimal,
@@ -59,6 +52,7 @@ const initSetupHandler: CommandHandlerMinimal<{
   docsPath?: string;
   author?: string;
   blueprint?: string;
+  quiet?: boolean;
 }> = async ({ fs, args }) => {
   const currentDir = process.cwd();
   const binderDirPath = join(currentDir, BINDER_DIR);
@@ -88,14 +82,16 @@ const initSetupHandler: CommandHandlerMinimal<{
     );
   }
 
-  let author = args.author;
-  if (!author) {
-    const gitAuthor = await getAuthorNameFromGit();
-    const input = await ui.input(
-      `Author name ${gitAuthor ? `(default: ${gitAuthor}): ` : ""}`,
-    );
-    author = input.trim() || gitAuthor;
-  }
+  const gitAuthor = !args.author ? await getAuthorNameFromGit() : undefined;
+  const author =
+    args.author ??
+    (args.quiet
+      ? gitAuthor
+      : (
+          await ui.input(
+            `Author name ${gitAuthor ? `(default: ${gitAuthor}): ` : ""}`,
+          )
+        ).trim() || gitAuthor);
 
   const config: Record<string, unknown> = {};
   if (author) config.author = author;
@@ -123,8 +119,12 @@ const initSetupHandler: CommandHandlerMinimal<{
 
   let selectedBlueprint: BlueprintInfo;
   if (args.blueprint) {
-    selectedBlueprint =
-      findBlueprint(args.blueprint, allBlueprints) ?? NONE_BLUEPRINT;
+    const found = findBlueprint(args.blueprint, allBlueprints);
+    if (!found)
+      return fail("invalid-blueprint", `Unknown blueprint: ${args.blueprint}`);
+    selectedBlueprint = found;
+  } else if (args.quiet) {
+    selectedBlueprint = NONE_BLUEPRINT;
   } else {
     const options = allBlueprints.map((bp) => ({
       value: bp,
