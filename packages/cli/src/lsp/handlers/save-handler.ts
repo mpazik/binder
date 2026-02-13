@@ -34,6 +34,7 @@ export const handleDocumentSave = async (
     return ok(undefined);
   }
   const relativePath = getRelativeSnapshotPath(absolutePath, config.paths);
+  log.info("Syncing file", { relativePath });
 
   const navResult = await loadNavigation(kg, namespace);
   if (isErr(navResult)) return navResult;
@@ -63,7 +64,7 @@ export const handleDocumentSave = async (
   if (isErr(syncResult)) return syncResult;
 
   if (syncResult.data.length === 0) {
-    log.debug("No changes to sync", { relativePath });
+    log.info("No changes detected", { relativePath });
     return ok(undefined);
   }
 

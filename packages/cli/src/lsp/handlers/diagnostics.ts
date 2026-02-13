@@ -281,11 +281,13 @@ export const handleDiagnostics: LspHandler<
     diagnostics.push(...markdownDiagnostics);
   }
 
-  log.info("Returning diagnostics", {
-    filePath,
-    errorCount: validationResult.errors.length,
-    warningCount: validationResult.warnings.length,
-  });
+  const errorCount = validationResult.errors.length;
+  const warningCount = validationResult.warnings.length;
+  if (errorCount > 0 || warningCount > 0) {
+    log.info("Returning diagnostics", { filePath, errorCount, warningCount });
+  } else {
+    log.debug("Returning diagnostics", { filePath, errorCount, warningCount });
+  }
 
   return {
     kind: "full",
