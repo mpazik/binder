@@ -371,9 +371,19 @@ export const synchronizeModifiedFiles = async (
     CONFIG_NAVIGATION_ITEMS,
   );
 
+  const nodeNavigationResult = await runtime.nav("node");
+  if (isErr(nodeNavigationResult)) return nodeNavigationResult;
+  const nodeIncludePatterns = [
+    ...getNavigationFilePatterns(nodeNavigationResult.data),
+    ...(config.include ?? []),
+  ];
+
   const [configResult, nodeResult] = await Promise.all([
     scanNamespace("config", { include: configIncludePatterns }),
-    scanNamespace("node", { include: config.include, exclude: config.exclude }),
+    scanNamespace("node", {
+      include: nodeIncludePatterns,
+      exclude: config.exclude,
+    }),
   ]);
 
   if (isErr(configResult)) return configResult;
