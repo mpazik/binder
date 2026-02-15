@@ -128,7 +128,7 @@ export const namespaceFromSnapshotPath = (
   paths: ConfigPaths,
 ): NamespaceEditable | undefined => {
   const absolutePath = resolveSnapshotPath(path, paths);
-  if (absolutePath.startsWith(paths.docs)) return "node";
+  if (absolutePath.startsWith(paths.docs)) return "record";
   if (absolutePath.startsWith(paths.binder)) return "config";
 };
 

@@ -26,7 +26,7 @@ export type EntityTypeBuilder<
   [K in O]?: GetValueType<D[K]>;
 };
 
-// IMPORTANT: We are using key to store config relations and uid for node relations
+// IMPORTANT: We are using key to store config relations and uid for record relations
 // Ids would be more efficient, but they would require more complex conflict resolution. That eventually might happen, possibly combined with a binary format for storing entities
 export type FieldDef<D extends string = string> = {
   id: EntityId;

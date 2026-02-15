@@ -4,16 +4,16 @@
 This document describes how relationships between entities are modeled and stored in Binder. Relationships use the `relation` data type, with different identifier strategies per namespace.
 
 **Identifier Strategy**: 
-- **Node Namespace**: References use UIDs (stable, conflict-free, no human-readable keys needed)
+- **Record Namespace**: References use UIDs (stable, conflict-free, no human-readable keys needed)
 - **Config Namespace**: References use keys (human-readable for CLI/manual configuration)
 
 ## Reference Types
 
 ### Within Namespace
 
-**Node-to-Node Relations**
+**Record-to-Record Relations**
 - Uses UID references (e.g., `"tsk-abc123"`)
-- Rationale: UIDs are stable across changes; large number of nodes makes human-readable keys impractical
+- Rationale: UIDs are stable across changes; large number of records makes human-readable keys impractical
 - Supports inverse relations via `inverseOf` property
 
 **Config-to-Config Relations**  
@@ -41,7 +41,7 @@ This document describes how relationships between entities are modeled and store
 ## Storage
 
 Fields are stored as JSON in a `fields` BLOB column in SQLite. References are stored as strings:
-- **Node references**: UID strings
+- **Record references**: UID strings
 - **Config references**: Key strings
 
 Internally, references resolve to sequential IDs for efficient joins. UID and key columns are indexed for fast lookups.

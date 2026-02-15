@@ -114,7 +114,7 @@ Add to ~/Library/Application Support/Claude/claude_desktop_config.json:
 
 AVAILABLE TOOLS:
   - search: Search the knowledge graph with filters
-  - get-schema: Retrieve node schema definitions
+  - get-schema: Retrieve record schema definitions
     `);
   },
   handler: runtimeWithDb(mcpHandler, { logFile: "mcp.log", silent: true }),

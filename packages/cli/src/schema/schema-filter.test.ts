@@ -5,8 +5,8 @@ import {
   mockCompletedAtField,
   mockDueDateField,
   mockEmailField,
-  mockNodeSchema,
-  mockNotExistingNodeTypeKey,
+  mockRecordSchema,
+  mockNotExistingRecordTypeKey,
   mockPriorityField,
   mockProjectType,
   mockProjectTypeKey,
@@ -21,7 +21,7 @@ import {
 import {
   coreFields,
   type FieldDef,
-  type NodeType,
+  type RecordType,
   type TypeDef,
 } from "@binder/db";
 import { groupByToObject } from "@binder/utils";
@@ -29,13 +29,13 @@ import { filterSchemaByTypes } from "./schema-filter.ts";
 
 describe("filterSchemaByTypes", () => {
   const check = (
-    types: NodeType[],
+    types: RecordType[],
     expected: {
       types: TypeDef[];
       fields: FieldDef[];
     },
   ) => {
-    const filtered = filterSchemaByTypes(mockNodeSchema, types);
+    const filtered = filterSchemaByTypes(mockRecordSchema, types);
     expect(filtered).toEqual({
       types: groupByToObject(expected.types, (t) => t.key),
       fields: groupByToObject(expected.fields, (t) => t.key),
@@ -90,14 +90,14 @@ describe("filterSchemaByTypes", () => {
   });
 
   it("should return empty schema for non-existent type", () => {
-    check([mockNotExistingNodeTypeKey], {
+    check([mockNotExistingRecordTypeKey], {
       types: [],
       fields: [],
     });
   });
 
   it("should ignore non-existent types", () => {
-    check([mockUserTypeKey, mockNotExistingNodeTypeKey], {
+    check([mockUserTypeKey, mockNotExistingRecordTypeKey], {
       types: [mockUserType],
       fields: [coreFields.name, mockEmailField],
     });

@@ -1,7 +1,7 @@
 /**
  * Markdown parsing functions do not return Result types because the CommonMark spec
  * guarantees that any character sequence is valid markdown. Parsers never throw errors
- * on malformed syntax - they simply parse it as literal text nodes.
+ * on malformed syntax - they simply parse it as literal text records.
  */
 
 import { unified } from "unified";

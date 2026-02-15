@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import {
-  mockTask1Node,
+  mockTask1Record,
   mockTask1Uid,
-  mockTaskNode1Updated,
-} from "./model/node.mock.ts";
+  mockTaskRecord1Updated,
+} from "./model/record.mock.ts";
 import {
   mockTransactionInit,
   mockTransactionUpdate,
@@ -16,7 +16,7 @@ import {
   coreSchema,
   emptySchema,
   fieldSystemType,
-  type NodeType,
+  type RecordType,
   type TransactionId,
   type TransactionInput,
   typeSystemType,
@@ -34,7 +34,7 @@ import {
   getVersion,
   saveTransaction,
 } from "./transaction-store.ts";
-import { mockNodeSchema } from "./model/schema.mock.ts";
+import { mockRecordSchema } from "./model/schema.mock.ts";
 import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
 import {
   mockTransactionInitInput,
@@ -51,7 +51,7 @@ describe("transaction processor", () => {
   describe("processTransaction", () => {
     it("processes transaction input", async () => {
       await db.transaction(async (tx) => {
-        await createEntity(tx, "node", mockTask1Node);
+        await createEntity(tx, "record", mockTask1Record);
         await saveTransaction(tx, mockTransactionInit);
       });
 
@@ -60,7 +60,7 @@ describe("transaction processor", () => {
           await processTransactionInput(
             tx,
             mockTransactionInputUpdate,
-            mockNodeSchema,
+            mockRecordSchema,
             coreConfigSchema,
           ),
         ),
@@ -69,7 +69,7 @@ describe("transaction processor", () => {
       expect(result).toEqual(mockTransactionUpdate);
     });
 
-    it("processes transaction input with nodes and config", async () => {
+    it("processes transaction input with records and config", async () => {
       const result = await db.transaction(async (tx) =>
         throwIfError(
           await processTransactionInput(
@@ -86,7 +86,7 @@ describe("transaction processor", () => {
 
     it("applies transaction and saves to database", async () => {
       await db.transaction(async (tx) => {
-        await createEntity(tx, "node", mockTask1Node);
+        await createEntity(tx, "record", mockTask1Record);
         await saveTransaction(tx, mockTransactionInit);
       });
 
@@ -94,12 +94,12 @@ describe("transaction processor", () => {
         throwIfError(await applyAndSaveTransaction(tx, mockTransactionUpdate)),
       );
 
-      const [updatedNode, transaction] = await db.transaction(async (tx) => [
-        throwIfError(await fetchEntity(tx, "node", mockTask1Uid)),
+      const [updatedrecord, transaction] = await db.transaction(async (tx) => [
+        throwIfError(await fetchEntity(tx, "record", mockTask1Uid)),
         throwIfError(await fetchTransaction(tx, mockTransactionUpdate.id)),
       ]);
 
-      expect(updatedNode).toEqual(mockTaskNode1Updated);
+      expect(updatedrecord).toEqual(mockTaskRecord1Updated);
       expect(transaction).toEqual(mockTransactionUpdate);
     });
 
@@ -108,10 +108,10 @@ describe("transaction processor", () => {
         processTransactionInput(
           tx,
           {
-            configurations: [{ type: fieldSystemType, dataType: "plaintext" }],
+            configs: [{ type: fieldSystemType, dataType: "plaintext" }],
             author: "test",
           },
-          mockNodeSchema,
+          mockRecordSchema,
           coreConfigSchema,
         ),
       );
@@ -120,15 +120,15 @@ describe("transaction processor", () => {
     });
   });
 
-  it("returns errors where there is node issue", async () => {
+  it("returns errors where there is record issue", async () => {
     const result = await db.transaction(async (tx) =>
       processTransactionInput(
         tx,
         {
-          nodes: [{ type: mockTaskTypeKey }],
+          records: [{ type: mockTaskTypeKey }],
           author: "test",
         },
-        mockNodeSchema,
+        mockRecordSchema,
         coreConfigSchema,
       ),
     );
@@ -136,16 +136,16 @@ describe("transaction processor", () => {
     expect(result).toBeErrWithKey("changeset-input-process-failed");
   });
 
-  describe("config and node changes in same transaction", () => {
-    it("validates node against newly added config from same transaction", async () => {
+  describe("config and record changes in same transaction", () => {
+    it("validates record against newly added config from same transaction", async () => {
       const newFieldKey = "priority" as ConfigKey;
-      const newTypeKey = "Bug" as NodeType;
+      const newTypeKey = "Bug" as RecordType;
 
       const result = await db.transaction(async (tx) =>
         processTransactionInput(
           tx,
           {
-            configurations: [
+            configs: [
               {
                 type: fieldSystemType,
                 key: newFieldKey,
@@ -158,7 +158,7 @@ describe("transaction processor", () => {
                 fields: [[newFieldKey, { required: true }]],
               },
             ],
-            nodes: [{ type: newTypeKey }],
+            records: [{ type: newTypeKey }],
             author: "test",
           },
           emptySchema(),
@@ -169,7 +169,7 @@ describe("transaction processor", () => {
       expect(result).toBeErrWithKey("changeset-input-process-failed");
     });
 
-    it("validates node against updated config from same transaction", async () => {
+    it("validates record against updated config from same transaction", async () => {
       const newFieldKey = "severity" as ConfigKey;
       await insertConfig(db, mockTaskType);
 
@@ -177,7 +177,7 @@ describe("transaction processor", () => {
         processTransactionInput(
           tx,
           {
-            configurations: [
+            configs: [
               {
                 type: fieldSystemType,
                 key: newFieldKey,
@@ -188,10 +188,10 @@ describe("transaction processor", () => {
                 fields: [[newFieldKey, { required: true }]],
               },
             ],
-            nodes: [{ type: mockTaskTypeKey, title: "Test Task" }],
+            records: [{ type: mockTaskTypeKey, title: "Test Task" }],
             author: "test",
           },
-          mockNodeSchema,
+          mockRecordSchema,
           coreConfigSchema,
         ),
       );
@@ -201,13 +201,13 @@ describe("transaction processor", () => {
 
     it("normalizes ObjTuple relation values to tuple format in stored changeset", async () => {
       const newFieldKey = "summary" as ConfigKey;
-      const newTypeKey = "Issue" as NodeType;
+      const newTypeKey = "Issue" as RecordType;
 
       const result = await db.transaction(async (tx) =>
         processTransactionInput(
           tx,
           {
-            configurations: [
+            configs: [
               {
                 type: fieldSystemType,
                 key: newFieldKey,
@@ -229,7 +229,7 @@ describe("transaction processor", () => {
 
       expect(result).toBeOk();
       const transaction = throwIfError(result);
-      expect(transaction.configurations[newTypeKey].fields).toEqual([
+      expect(transaction.configs[newTypeKey].fields).toEqual([
         [newFieldKey, { required: true }],
         "description",
       ]);
@@ -237,9 +237,9 @@ describe("transaction processor", () => {
   });
 
   describe("rollbackTransaction", () => {
-    const getNode = async () =>
+    const getrecord = async () =>
       await db.transaction(async (tx) =>
-        throwIfError(await fetchEntity(tx, "node", mockTask1Uid)),
+        throwIfError(await fetchEntity(tx, "record", mockTask1Uid)),
       );
     const getCurrentVersion = async () =>
       await db.transaction(async (tx) => throwIfError(await getVersion(tx)));
@@ -249,7 +249,7 @@ describe("transaction processor", () => {
           await processTransactionInput(
             tx,
             input,
-            mockNodeSchema,
+            mockRecordSchema,
             coreConfigSchema,
           ),
         );
@@ -259,14 +259,14 @@ describe("transaction processor", () => {
     it("rolls back ;", async () => {
       await applyTransactionInput(mockTransactionInitInput);
       await applyTransactionInput(mockTransactionInputUpdate);
-      expect(await getNode()).toEqual(mockTaskNode1Updated);
+      expect(await getrecord()).toEqual(mockTaskRecord1Updated);
 
       await db.transaction(async (tx) => {
         const version = throwIfError(await getVersion(tx));
         return throwIfError(await rollbackTransaction(tx, 1, version.id));
       });
 
-      expect(await getNode()).toEqual(mockTask1Node);
+      expect(await getrecord()).toEqual(mockTask1Record);
       expect((await getCurrentVersion()).id).toBe(1 as TransactionId);
     });
 
@@ -275,11 +275,11 @@ describe("transaction processor", () => {
       await applyTransactionInput(mockTransactionInputUpdate);
       await applyTransactionInput({
         author: "test",
-        nodes: [{ $ref: mockTask1Uid, description: "Updated description" }],
+        records: [{ $ref: mockTask1Uid, description: "Updated description" }],
       });
       await applyTransactionInput({
         author: "test",
-        nodes: [{ $ref: mockTask1Uid, status: "complete" }],
+        records: [{ $ref: mockTask1Uid, status: "complete" }],
       });
 
       await db.transaction(async (tx) => {
@@ -287,7 +287,7 @@ describe("transaction processor", () => {
         return throwIfError(await rollbackTransaction(tx, 3, version.id));
       });
 
-      expect(await getNode()).toEqual(mockTask1Node);
+      expect(await getrecord()).toEqual(mockTask1Record);
       expect((await getCurrentVersion()).id).toBe(1 as TransactionId);
     });
 

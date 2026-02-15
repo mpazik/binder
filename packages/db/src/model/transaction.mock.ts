@@ -5,16 +5,21 @@ import {
   type TransactionHash,
   type TransactionId,
 } from "./transaction.ts";
-import { mockProjectNode, mockTask1Uid, mockTask2Node } from "./node.mock.ts";
+import {
+  mockProjectRecord,
+  mockTask1Uid,
+  mockTask2Record,
+} from "./record.mock.ts";
 import {
   mockChangesetCreateTask1,
   mockChangesetUpdateTask1,
 } from "./changeset.mock.ts";
-import { mockNodeSchemaRaw } from "./schema.mock.ts";
+import { mockRecordSchemaRaw } from "./schema.mock.ts";
+import type { RecordFieldDef } from "./config.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
-  "30_0X51GcpycIgAtdH8RLk1_wf4n70jxJ2TMZlzy_FQ" as TransactionHash;
+  "mIwJgfDlIg88qnDVUBozuJEmlK2524RJK824i-ithdo" as TransactionHash;
 
 export const mockAuthor = "test-user";
 export const mockAuthor2 = "test-user2";
@@ -26,37 +31,37 @@ export const mockTransactionInit: Transaction = {
   previous: GENESIS_VERSION.hash,
   createdAt: mockCreatedTime,
   author: mockAuthor,
-  nodes: {
+  records: {
     [mockTask1Uid]: mockChangesetCreateTask1,
-    [mockProjectNode.uid]: mockProjectNode,
-    [mockTask2Node.uid]: mockTask2Node,
+    [mockProjectRecord.uid]: mockProjectRecord,
+    [mockTask2Record.uid]: mockTask2Record,
   },
-  configurations: {
+  configs: {
     ...Object.fromEntries(
-      Object.values(mockNodeSchemaRaw.fields).map((field) => [
+      Object.values(mockRecordSchemaRaw.fields).map((field) => [
         field.key,
         field,
       ]),
     ),
     ...Object.fromEntries(
-      Object.values(mockNodeSchemaRaw.types).map((type) => [type.key, type]),
+      Object.values(mockRecordSchemaRaw.types).map((type) => [type.key, type]),
     ),
   },
 };
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "UWPVCf3s15oD_XshdVHQXiYzG3ZWKlR8MlzRgL-ZdtA" as TransactionHash;
+  "Pzm9yH3AWnfMoqMx007x1b2nGIz3vfYqt5IOhy5uOPw" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
   hash: mockTransactionUpdateHash,
   previous: mockTransactionInitHash,
   createdAt: mockUpdatedTime,
   author: mockAuthor,
-  nodes: {
+  records: {
     [mockTask1Uid]: mockChangesetUpdateTask1,
   },
-  configurations: {},
+  configs: {},
 };
 
 export const mockTransaction3Id = 3 as TransactionId;
@@ -69,12 +74,12 @@ export const mockTransaction3: Transaction = {
   previous: mockTransactionUpdateHash,
   createdAt: newIsoTimestamp("2024-01-03"),
   author: mockAuthor2,
-  nodes: {
-    [mockTask2Node.uid]: {
+  records: {
+    [mockTask2Record.uid]: {
       status: ["set", "active", "pending"],
     },
   },
-  configurations: {},
+  configs: {},
 };
 
 export const mockTransaction4Id = 4 as TransactionId;
@@ -86,10 +91,10 @@ export const mockTransaction4: Transaction = {
   previous: mockTransaction3Hash,
   createdAt: newIsoTimestamp("2024-01-04"),
   author: mockAuthor2,
-  nodes: {
-    [mockProjectNode.uid]: {
+  records: {
+    [mockProjectRecord.uid]: {
       status: ["set", "complete", "active"],
     },
   },
-  configurations: {},
+  configs: {},
 };

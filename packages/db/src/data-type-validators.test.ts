@@ -3,7 +3,7 @@ import { createError, err, type JsonValue } from "@binder/utils";
 import {
   configDataTypeValidators,
   type DataTypeValidator,
-  nodeDataTypeValidators,
+  recordDataTypeValidators,
   validateDataType,
 } from "./data-type-validators.ts";
 import "@binder/utils/tests";
@@ -11,7 +11,7 @@ import { createUid } from "./utils/uid.ts";
 import type { EntityId, EntityKey, FieldDef, Namespace } from "./model";
 
 const allValidators = {
-  ...nodeDataTypeValidators,
+  ...recordDataTypeValidators,
   ...configDataTypeValidators,
 };
 
@@ -618,7 +618,7 @@ describe("data-type-validators", () => {
       },
     ) => {
       const result = validateDataType(
-        opts?.namespace ?? "node",
+        opts?.namespace ?? "record",
         mockFieldDef(dataType, opts?.fieldDef),
         value,
       );
@@ -635,7 +635,7 @@ describe("data-type-validators", () => {
       },
     ) => {
       const result = validateDataType(
-        opts?.namespace ?? "node",
+        opts?.namespace ?? "record",
         mockFieldDef(dataType, opts?.fieldDef),
         value,
       );

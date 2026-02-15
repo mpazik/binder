@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { FieldDef, FieldValue } from "@binder/db";
 import {
   mockDueDateField,
-  mockNodeSchema,
+  mockRecordSchema,
   mockNotesField,
   mockOwnersField,
   mockProjectField,
@@ -34,7 +34,7 @@ describe("diagnostics", () => {
         fieldPath: [fieldDef.key],
         fieldDef,
         value,
-        namespace: "node",
+        namespace: "record",
       });
       expect(result).toEqual(expected);
     };
@@ -261,8 +261,8 @@ describe("diagnostics", () => {
           favorite: true,
           dueDate: "2024-12-01",
         },
-        schema: mockNodeSchema,
-        namespace: "node",
+        schema: mockRecordSchema,
+        namespace: "record",
       });
       expect(errors).toEqual([]);
     });
@@ -272,8 +272,8 @@ describe("diagnostics", () => {
         fieldset: {
           status: "invalid-option",
         },
-        schema: mockNodeSchema,
-        namespace: "node",
+        schema: mockRecordSchema,
+        namespace: "record",
       });
       expect(errors).toEqual([
         {
@@ -290,8 +290,8 @@ describe("diagnostics", () => {
           unknownField: "some value",
           status: "pending",
         },
-        schema: mockNodeSchema,
-        namespace: "node",
+        schema: mockRecordSchema,
+        namespace: "record",
       });
       expect(errors).toEqual([]);
     });
@@ -301,17 +301,17 @@ describe("diagnostics", () => {
         fieldset: {
           project: "project-ref",
         },
-        schema: mockNodeSchema,
-        namespace: "node",
+        schema: mockRecordSchema,
+        namespace: "record",
       });
       expect(errors).toEqual([]);
     });
 
     it("validates null as valid for richtext field (empty content)", () => {
       const schemaWithRichtext = {
-        ...mockNodeSchema,
+        ...mockRecordSchema,
         fields: {
-          ...mockNodeSchema.fields,
+          ...mockRecordSchema.fields,
           summary: {
             ...mockNotesField,
             key: "summary" as typeof mockNotesField.key,
@@ -326,16 +326,16 @@ describe("diagnostics", () => {
           summary: null,
         },
         schema: schemaWithRichtext,
-        namespace: "node",
+        namespace: "record",
       });
       expect(errors).toEqual([]);
     });
 
     it("validates nested richtext fields inside multi-value relations", () => {
       const schemaWithNestedRichtext = {
-        ...mockNodeSchema,
+        ...mockRecordSchema,
         fields: {
-          ...mockNodeSchema.fields,
+          ...mockRecordSchema.fields,
           children: {
             ...mockTasksField,
             key: "children" as typeof mockTasksField.key,
@@ -354,7 +354,7 @@ describe("diagnostics", () => {
           children: [{ summary: "Valid summary text" }, { summary: "" }],
         },
         schema: schemaWithNestedRichtext,
-        namespace: "node",
+        namespace: "record",
       });
       expect(errors).toEqual([]);
     });
@@ -364,7 +364,7 @@ describe("diagnostics", () => {
     it("returns empty array for fieldset without relations", () => {
       const refs = collectRelationRefs(
         { status: "pending", favorite: true },
-        mockNodeSchema,
+        mockRecordSchema,
       );
       expect(refs).toEqual([]);
     });
@@ -372,7 +372,7 @@ describe("diagnostics", () => {
     it("collects single relation ref", () => {
       const refs = collectRelationRefs(
         { project: "project-123" },
-        mockNodeSchema,
+        mockRecordSchema,
       );
       expect(refs).toEqual([{ fieldPath: ["project"], ref: "project-123" }]);
     });
@@ -380,7 +380,7 @@ describe("diagnostics", () => {
     it("collects multiple relation refs", () => {
       const refs = collectRelationRefs(
         { owners: ["user-1", "user-2"] },
-        mockNodeSchema,
+        mockRecordSchema,
       );
       expect(refs).toEqual([
         { fieldPath: ["owners"], ref: "user-1" },
@@ -391,7 +391,7 @@ describe("diagnostics", () => {
     it("skips expanded nested relations", () => {
       const refs = collectRelationRefs(
         { project: { uid: "p_abc", title: "Expanded Project" } },
-        mockNodeSchema,
+        mockRecordSchema,
       );
       expect(refs).toEqual([]);
     });

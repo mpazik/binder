@@ -9,12 +9,12 @@ import {
   mockTransactionUpdate,
 } from "./transaction.mock.ts";
 import {
-  mockTask1Node,
+  mockTask1Record,
   mockTask1Uid,
-  mockTaskNode1Updated,
-} from "./node.mock.ts";
+  mockTaskRecord1Updated,
+} from "./record.mock.ts";
 import { inverseChangeset } from "./changeset.ts";
-import { mockNodeSchema } from "./schema.mock.ts";
+import { mockRecordSchema } from "./schema.mock.ts";
 
 import { coreConfigSchema } from "./system.ts";
 
@@ -22,7 +22,7 @@ describe("squashTransactions", () => {
   it("squashes two transactions", async () => {
     const result = await squashTransactions(
       [mockTransactionInit, mockTransactionUpdate],
-      mockNodeSchema,
+      mockRecordSchema,
       coreConfigSchema,
     );
 
@@ -31,12 +31,12 @@ describe("squashTransactions", () => {
       author: mockTransactionUpdate.author,
       createdAt: mockTransactionUpdate.createdAt,
       hash: expect.any(String),
-      nodes: {
-        ...mockTransactionInit.nodes,
+      records: {
+        ...mockTransactionInit.records,
         [mockTask1Uid]: {
-          ...mockTask1Node,
-          title: mockTaskNode1Updated.title,
-          tags: mockTaskNode1Updated.tags,
+          ...mockTask1Record,
+          title: mockTaskRecord1Updated.title,
+          tags: mockTaskRecord1Updated.tags,
         },
       },
     });
@@ -49,18 +49,18 @@ describe("squashTransactions", () => {
         {
           ...mockTransactionUpdate,
           previous: mockTransactionUpdate.hash,
-          nodes: {
+          records: {
             [mockTask1Uid]: inverseChangeset(
-              mockTransactionUpdate.nodes[mockTask1Uid],
+              mockTransactionUpdate.records[mockTask1Uid],
             ),
           },
         },
       ],
-      mockNodeSchema,
+      mockRecordSchema,
       coreConfigSchema,
     );
 
-    expect(result.nodes[mockTask1Uid]).toBeUndefined();
+    expect(result.records[mockTask1Uid]).toBeUndefined();
   });
 
   it("squashes multiple transactions", async () => {
@@ -72,14 +72,14 @@ describe("squashTransactions", () => {
           ...mockTransactionUpdate,
           id: 3 as TransactionId,
           previous: mockTransactionUpdate.hash,
-          nodes: {
+          records: {
             [mockTask1Uid]: {
-              title: ["set", "Third", mockTaskNode1Updated.title],
+              title: ["set", "Third", mockTaskRecord1Updated.title],
             },
           },
         },
       ],
-      mockNodeSchema,
+      mockRecordSchema,
       coreConfigSchema,
     );
 
@@ -88,12 +88,12 @@ describe("squashTransactions", () => {
       author: mockTransactionUpdate.author,
       createdAt: mockTransactionUpdate.createdAt,
       hash: expect.any(String),
-      nodes: {
-        ...mockTransactionInit.nodes,
+      records: {
+        ...mockTransactionInit.records,
         [mockTask1Uid]: {
-          ...mockTask1Node,
+          ...mockTask1Record,
           title: "Third",
-          tags: mockTaskNode1Updated.tags,
+          tags: mockTaskRecord1Updated.tags,
         },
       },
     });
@@ -101,13 +101,13 @@ describe("squashTransactions", () => {
 });
 
 describe("transactionInvert", () => {
-  it("inverts transaction nodes and configurations", () => {
+  it("inverts transaction records and configs", () => {
     const result = invertTransaction(mockTransactionUpdate);
 
-    expect(result.nodes[mockTask1Uid]).toEqual(
-      inverseChangeset(mockTransactionUpdate.nodes[mockTask1Uid]),
+    expect(result.records[mockTask1Uid]).toEqual(
+      inverseChangeset(mockTransactionUpdate.records[mockTask1Uid]),
     );
-    expect(result.configurations).toEqual({});
+    expect(result.configs).toEqual({});
   });
 
   it("double inversion returns original changesets", () => {

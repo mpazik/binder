@@ -16,11 +16,11 @@ describe("transactionToInput", () => {
       author: mockTransactionInitInput.author,
       createdAt: mockTransactionInitInput.createdAt,
     });
-    expect(input.nodes).toEqual(
-      expect.arrayContaining(mockTransactionInitInput.nodes!),
+    expect(input.records).toEqual(
+      expect.arrayContaining(mockTransactionInitInput.records!),
     );
-    expect(input.configurations).toEqual(
-      expect.arrayContaining(mockTransactionInitInput.configurations!),
+    expect(input.configs).toEqual(
+      expect.arrayContaining(mockTransactionInitInput.configs!),
     );
   });
 
@@ -28,16 +28,16 @@ describe("transactionToInput", () => {
     expect(transactionToInput(mockTransactionUpdate)).toEqual({
       author: mockTransactionInputUpdate.author,
       createdAt: mockTransactionInputUpdate.createdAt,
-      nodes: mockTransactionInputUpdate.nodes,
+      records: mockTransactionInputUpdate.records,
     });
   });
 
-  it("omits empty nodes and configurations", () => {
+  it("omits empty records and configs", () => {
     expect(
       transactionToInput({
         ...mockTransactionUpdate,
-        nodes: {},
-        configurations: {},
+        records: {},
+        configs: {},
       }),
     ).toEqual({
       author: mockTransactionUpdate.author,

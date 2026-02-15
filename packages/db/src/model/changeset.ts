@@ -12,7 +12,7 @@ import {
   transformEntries,
 } from "@binder/utils";
 import type { NamespaceEditable, NamespaceSchema } from "./namespace.ts";
-import type { NodeUid } from "./node.ts";
+import type { RecordUid } from "./record.ts";
 import type { ConfigKey } from "./config.ts";
 import { type FieldKey, type Fieldset, type FieldValue } from "./field.ts";
 import { type EntitySchema } from "./schema.ts";
@@ -54,13 +54,14 @@ export type ValueChange =
 
 export type FieldChangeset = Record<FieldKey, ValueChange | FieldValue>;
 export const emptyChangeset: FieldChangeset = {};
-export type EntityChangesetRef<N extends NamespaceEditable> = N extends "node"
-  ? NodeUid
+export type EntityChangesetRef<N extends NamespaceEditable> = N extends "record"
+  ? RecordUid
   : ConfigKey;
-export type EntitiesChangeset<N extends NamespaceEditable = "node" | "config"> =
-  Record<EntityChangesetRef<N>, FieldChangeset>; // assumption is that order or entity change application does not matter
-export type NodesChangeset = EntitiesChangeset<"node">;
-export type ConfigurationsChangeset = EntitiesChangeset<"config">;
+export type EntitiesChangeset<
+  N extends NamespaceEditable = "record" | "config",
+> = Record<EntityChangesetRef<N>, FieldChangeset>; // assumption is that order or entity change application does not matter
+export type RecordsChangeset = EntitiesChangeset<"record">;
+export type ConfigChangeset = EntitiesChangeset<"config">;
 
 export const isValueChange = (
   value: ValueChange | FieldValue,

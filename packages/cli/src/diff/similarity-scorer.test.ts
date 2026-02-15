@@ -1,20 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import { type FieldsetNested } from "@binder/db";
 import {
-  mockNodeSchema,
-  mockProjectNode,
-  mockTask1Node,
+  mockRecordSchema,
+  mockProjectRecord,
+  mockTask1Record,
 } from "@binder/db/mocks";
 import { omit, pick } from "@binder/utils";
 import { computeMatchScore, type ScorerConfig } from "./similarity-scorer.ts";
 import { classifyFields } from "./field-classifier.ts";
 
 describe("computeMatchScore", () => {
-  const schema = mockNodeSchema;
+  const schema = mockRecordSchema;
   const classifications = classifyFields(schema);
   const defaultListLength = 10;
 
-  const task = pick(mockTask1Node, [
+  const task = pick(mockTask1Record, [
     "type",
     "title",
     "description",
@@ -22,7 +22,7 @@ describe("computeMatchScore", () => {
     "priority",
     "tags",
   ]);
-  const project = pick(mockProjectNode, [
+  const project = pick(mockProjectRecord, [
     "type",
     "title",
     "description",
@@ -286,8 +286,8 @@ describe("computeMatchScore", () => {
     });
   });
 
-  describe("full node with identity fields", () => {
-    const fullTask = omit(mockTask1Node, ["uid"]);
+  describe("full record with identity fields", () => {
+    const fullTask = omit(mockTask1Record, ["uid"]);
 
     it("exact match with id and key", () => {
       checkSign(fullTask, fullTask, "positive");
@@ -299,9 +299,9 @@ describe("computeMatchScore", () => {
       checkSign(task, task, "positive", 1);
     });
 
-    it("completely different nodes produce negative score with listLength=1", () => {
-      const differentNode = omit(mockProjectNode, ["uid"]);
-      checkSign(task, differentNode, "negative", 1);
+    it("completely different records produce negative score with listLength=1", () => {
+      const differentRecord = omit(mockProjectRecord, ["uid"]);
+      checkSign(task, differentRecord, "negative", 1);
     });
   });
 
@@ -341,7 +341,7 @@ describe("computeMatchScore", () => {
       );
     });
 
-    it("accumulated partial changes beat fresh node", () => {
+    it("accumulated partial changes beat fresh record", () => {
       const evolved = {
         type: "Task",
         title: "Implement user auth system",
@@ -351,7 +351,7 @@ describe("computeMatchScore", () => {
         tags: ["urgent"],
         position: 2,
       };
-      const freshNode = {
+      const freshRecord = {
         type: "Task",
         title: "Setup CI/CD pipeline",
         description: "Configure GitHub Actions for automated testing",
@@ -360,7 +360,7 @@ describe("computeMatchScore", () => {
         tags: ["devops"],
         position: 0,
       };
-      check({ ...task, position: 0 }, evolved, freshNode);
+      check({ ...task, position: 0 }, evolved, freshRecord);
     });
   });
 

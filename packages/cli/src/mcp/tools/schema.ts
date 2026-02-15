@@ -7,15 +7,15 @@ export const schemaToolName = "schema";
 
 export const schemaTool = defineTool({
   name: schemaToolName,
-  description: `Get the complete node schema showing all available types and fields.
+  description: `Get the complete record schema showing all available types and fields.
 
-Use this before searching, creating nodes or configuration entities to understand the available structure.`,
+Use this before searching, creating records or configuration entities to understand the available structure.`,
   parameters: z.object({}),
   annotation: {
     readOnly: true,
   },
   async execute(_args, { kg }) {
-    const schemaResult = await kg.getNodeSchema();
+    const schemaResult = await kg.getRecordSchema();
     if (isErr(schemaResult)) return schemaResult;
     const schema = schemaResult.data;
 

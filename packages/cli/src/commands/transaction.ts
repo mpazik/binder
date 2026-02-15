@@ -111,10 +111,10 @@ export const transactionImportHandler: CommandHandlerWithDb<
 
   ui.heading(`Importing ${allInputs.length} transaction(s)`);
   for (const input of allInputs) {
-    const nodeCount = input.nodes?.length ?? 0;
-    const configCount = input.configurations?.length ?? 0;
+    const recordCount = input.records?.length ?? 0;
+    const configCount = input.configs?.length ?? 0;
     const parts: string[] = [`author "${input.author}"`];
-    if (nodeCount > 0) parts.push(`${nodeCount} node(s)`);
+    if (recordCount > 0) parts.push(`${recordCount} record(s)`);
     if (configCount > 0) parts.push(`${configCount} config(s)`);
     ui.info(`  ${parts.join(", ")}`);
   }
@@ -139,10 +139,10 @@ export const transactionImportHandler: CommandHandlerWithDb<
     const input = allInputs[i]!;
     const result = await kg.update(input);
     if (isErr(result)) {
-      const nodeCount = input.nodes?.length ?? 0;
-      const configCount = input.configurations?.length ?? 0;
+      const recordCount = input.records?.length ?? 0;
+      const configCount = input.configs?.length ?? 0;
       const parts = [
-        nodeCount > 0 && `${nodeCount} nodes`,
+        recordCount > 0 && `${recordCount} records`,
         configCount > 0 && `${configCount} configs`,
       ].filter(Boolean);
       const summary = parts.length > 0 ? ` (${parts.join(", ")})` : "";
@@ -288,13 +288,13 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
 }) => {
   const transactionLogPath = join(config.paths.binder, "transactions.jsonl");
   const configSchema = kg.getConfigSchema();
-  const nodeSchemaResult = await kg.getNodeSchema();
-  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+  const recordSchemaResult = await kg.getRecordSchema();
+  if (isErr(recordSchemaResult)) return recordSchemaResult;
 
   const logIntegrityResult = await verifyLog(
     fs,
     configSchema,
-    nodeSchemaResult.data,
+    recordSchemaResult.data,
     transactionLogPath,
     {
       verifyIntegrity: true,
@@ -401,13 +401,13 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     ui.info("Reading transaction log...");
 
     const configSchema = kg.getConfigSchema();
-    const nodeSchemaResult = await kg.getNodeSchema();
-    if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+    const recordSchemaResult = await kg.getRecordSchema();
+    if (isErr(recordSchemaResult)) return recordSchemaResult;
 
     const rehashResult = await rehashLog(
       fs,
       configSchema,
-      nodeSchemaResult.data,
+      recordSchemaResult.data,
       transactionLogPath,
     );
     if (isErr(rehashResult)) {

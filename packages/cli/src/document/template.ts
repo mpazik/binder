@@ -251,8 +251,8 @@ const renderNestedFieldValues = (
   if (renderedValues.length === 1) return renderedValues[0]!;
 
   const result: Nodes[] = [];
-  for (const [i, nodes] of renderedValues.entries()) {
-    result.push(...nodes);
+  for (const [i, records] of renderedValues.entries()) {
+    result.push(...records);
     if (i < renderedValues.length - 1) {
       const lastNode = result[result.length - 1];
       if (lastNode?.type === "text") {
@@ -822,7 +822,7 @@ export const extractFieldsAst = (
       return false;
     }
 
-    // Collect block nodes until next view element or end
+    // Collect block records until next view element or end
     const blockNodes: Nodes[] = [];
     const startIndex = state.snapIndex;
 

@@ -2,7 +2,7 @@
 # Provides: Task, Milestone types
 
 - author: system
-  configurations:
+  configs:
     # Fields
     - key: status
       type: Field
@@ -61,7 +61,7 @@
 
 # Navigation & Templates
 - author: system
-  configurations:
+  configs:
     # --- Case 1: Frontmatter + body overlap ---
     # Template has {status} in body AND status in preamble (frontmatter).
     # If user edits body status but not frontmatter, the body edit should win.
@@ -146,7 +146,7 @@
 
 # Sample data
 - author: system
-  nodes:
+  records:
     - type: Milestone
       key: mvp-release
       title: MVP Release

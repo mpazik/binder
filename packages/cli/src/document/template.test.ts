@@ -3,11 +3,11 @@ import "@binder/utils/tests";
 import { pick, throwIfError } from "@binder/utils";
 import type { FieldsetNested } from "@binder/db";
 import {
-  mockNodeSchema,
-  mockProjectNode,
-  mockTask1Node,
-  mockTask2Node,
-  mockTask3Node,
+  mockRecordSchema,
+  mockProjectRecord,
+  mockTask1Record,
+  mockTask2Record,
+  mockTask3Record,
 } from "@binder/db/mocks";
 import {
   extractFieldMappings,
@@ -32,7 +32,7 @@ describe("template", () => {
     ) => {
       const ast = parseTemplate(view);
       const result = throwIfError(
-        renderTemplateAst(mockNodeSchema, templates, ast, data),
+        renderTemplateAst(mockRecordSchema, templates, ast, data),
       );
       expect(result).toBe(expected);
     };
@@ -44,67 +44,67 @@ describe("template", () => {
       templates: Templates = mockDefaultTemplates,
     ) => {
       const ast = parseTemplate(view);
-      const result = renderTemplateAst(mockNodeSchema, templates, ast, data);
+      const result = renderTemplateAst(mockRecordSchema, templates, ast, data);
       expect(result).toBeErrWithKey(expectedKey);
     };
 
     describe("scalar fields", () => {
       it("single field in heading", () => {
-        check("# {title}\n", mockTask1Node, `# ${mockTask1Node.title}\n`);
+        check("# {title}\n", mockTask1Record, `# ${mockTask1Record.title}\n`);
       });
 
       it("multiple fields", () => {
         check(
           "# {title}\n\n**Status:** {status}\n",
-          mockTask1Node,
-          `# ${mockTask1Node.title}\n\n**Status:** ${mockTask1Node.status}\n`,
+          mockTask1Record,
+          `# ${mockTask1Record.title}\n\n**Status:** ${mockTask1Record.status}\n`,
         );
       });
 
       it("multiple slots in same paragraph", () => {
         check(
           "{title} ({status})\n",
-          mockTask1Node,
-          `${mockTask1Node.title} (${mockTask1Node.status})\n`,
+          mockTask1Record,
+          `${mockTask1Record.title} (${mockTask1Record.status})\n`,
         );
       });
 
       it("adjacent slots without separator", () => {
         check(
           "{title}{status}\n",
-          mockTask1Node,
-          `${mockTask1Node.title}${mockTask1Node.status}\n`,
+          mockTask1Record,
+          `${mockTask1Record.title}${mockTask1Record.status}\n`,
         );
       });
 
       it("escaped braces", () => {
         check(
           "\\{title\\} {title}\n",
-          mockTask1Node,
-          `{title} ${mockTask1Node.title}\n`,
+          mockTask1Record,
+          `{title} ${mockTask1Record.title}\n`,
         );
       });
 
       it("strong formatting around slot", () => {
         check(
           "**{title}**\n",
-          pick(mockTask1Node, ["title"]),
-          `**${mockTask1Node.title}**\n`,
+          pick(mockTask1Record, ["title"]),
+          `**${mockTask1Record.title}**\n`,
         );
       });
 
       it("nested field value", () => {
         check(
           "**Project:** {project.title}\n",
-          { project: mockProjectNode },
-          `**Project:** ${mockProjectNode.title}\n`,
+          { project: mockProjectRecord },
+          `**Project:** ${mockProjectRecord.title}\n`,
         );
       });
     });
 
     describe("scalar field types", () => {
       it("number as string", () => {
-        check("**ID:** {id}\n", mockTask1Node, "**ID:** 1\n");
+        check("**ID:** {id}\n", mockTask1Record, "**ID:** 1\n");
       });
 
       it("boolean true/false", () => {
@@ -199,7 +199,7 @@ describe("template", () => {
 
     describe("blockquote", () => {
       it("plaintext field", () => {
-        check("> {title}\n", mockTask1Node, `> ${mockTask1Node.title}\n`);
+        check("> {title}\n", mockTask1Record, `> ${mockTask1Record.title}\n`);
       });
 
       it("empty plaintext field", () => {
@@ -291,40 +291,40 @@ describe("template", () => {
       it("multi-value nested plaintext in phrase position", () => {
         check(
           "{tasks.title}, and more\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `${mockTask2Node.title}, ${mockTask3Node.title}, and more\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `${mockTask2Record.title}, ${mockTask3Record.title}, and more\n`,
         );
       });
 
       it("multi-value nested plaintext in line position", () => {
         check(
           "**Tasks:** {tasks.title}\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `**Tasks:** ${mockTask2Node.title}\n${mockTask3Node.title}\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `**Tasks:** ${mockTask2Record.title}\n${mockTask3Record.title}\n`,
         );
       });
 
       it("multi-value nested plaintext in block position", () => {
         check(
           "{tasks.title}\n\nMore content.\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `${mockTask2Node.title}\n\n${mockTask3Node.title}\n\nMore content.\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `${mockTask2Record.title}\n\n${mockTask3Record.title}\n\nMore content.\n`,
         );
       });
 
       it("multi-value nested richtext in line position", () => {
         check(
           "**Descriptions:** {tasks.description}\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `**Descriptions:** ${mockTask2Node.description}\n${mockTask3Node.description}\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `**Descriptions:** ${mockTask2Record.description}\n${mockTask3Record.description}\n`,
         );
       });
 
       it("multi-value nested richtext in block position", () => {
         check(
           "{tasks.description}\n\nMore content.\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `${mockTask2Node.description}\n\n${mockTask3Node.description}\n\nMore content.\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `${mockTask2Record.description}\n\n${mockTask3Record.description}\n\nMore content.\n`,
         );
       });
 
@@ -335,7 +335,7 @@ describe("template", () => {
       it("single relation with nested multi-value in inline position", () => {
         check(
           "**Tags:** {project.tags}\n",
-          { project: { ...mockProjectNode, tags: ["urgent", "backend"] } },
+          { project: { ...mockProjectRecord, tags: ["urgent", "backend"] } },
           "**Tags:** urgent, backend\n",
         );
       });
@@ -343,7 +343,7 @@ describe("template", () => {
       it("single relation with nested multi-value in block position", () => {
         check(
           "{project.tags}\n\nMore content.\n",
-          { project: { ...mockProjectNode, tags: ["urgent", "backend"] } },
+          { project: { ...mockProjectRecord, tags: ["urgent", "backend"] } },
           "urgent, backend\n\nMore content.\n",
         );
       });
@@ -353,32 +353,32 @@ describe("template", () => {
       it("inline position", () => {
         check(
           "**Project:** {project}\n",
-          { project: mockProjectNode },
-          `**Project:** ${mockProjectNode.title}\n`,
+          { project: mockProjectRecord },
+          `**Project:** ${mockProjectRecord.title}\n`,
         );
       });
 
       it("block position", () => {
         check(
           "{project}\n\nMore content below.\n",
-          { project: mockProjectNode },
-          `**${mockProjectNode.title}**\n\n${mockProjectNode.description}\n\nMore content below.\n`,
+          { project: mockProjectRecord },
+          `**${mockProjectRecord.title}**\n\n${mockProjectRecord.description}\n\nMore content below.\n`,
         );
       });
 
       it("section position", () => {
         check(
           "## Project\n\n{project}\n\n## Next\n",
-          { project: mockProjectNode },
-          `## Project\n\n### ${mockProjectNode.title}\n\n${mockProjectNode.description}\n\n## Next\n`,
+          { project: mockProjectRecord },
+          `## Project\n\n### ${mockProjectRecord.title}\n\n${mockProjectRecord.description}\n\n## Next\n`,
         );
       });
 
       it("document position", () => {
         check(
           "{project}\n",
-          { project: mockProjectNode },
-          `# ${mockProjectNode.title}\n\n**Type:** ${mockProjectNode.type}\n**Key:** ${mockProjectNode.key}\n\n## Description\n\n${mockProjectNode.description}\n`,
+          { project: mockProjectRecord },
+          `# ${mockProjectRecord.title}\n\n**Type:** ${mockProjectRecord.type}\n**Key:** ${mockProjectRecord.key}\n\n## Description\n\n${mockProjectRecord.description}\n`,
         );
       });
 
@@ -390,8 +390,8 @@ describe("template", () => {
         );
         check(
           "**Project:** {project|template:project-item}\n",
-          { project: mockProjectNode },
-          `**Project:** **${mockProjectNode.title}** (${mockProjectNode.status})\n`,
+          { project: mockProjectRecord },
+          `**Project:** **${mockProjectRecord.title}** (${mockProjectRecord.status})\n`,
           [template],
         );
       });
@@ -406,9 +406,9 @@ describe("template", () => {
         check(
           "## Tasks\n\n{tasks}\n",
           {
-            tasks: [mockTask2Node, mockTask3Node],
+            tasks: [mockTask2Record, mockTask3Record],
           },
-          `## Tasks\n\n### ${mockTask2Node.title}\n\n${mockTask2Node.description}\n\n### ${mockTask3Node.title}\n\n${mockTask3Node.description}\n`,
+          `## Tasks\n\n### ${mockTask2Record.title}\n\n${mockTask2Record.description}\n\n### ${mockTask3Record.title}\n\n${mockTask3Record.description}\n`,
         );
       });
 
@@ -422,8 +422,8 @@ describe("template", () => {
         );
         check(
           "## Tasks\n\n{tasks|template:task-status}\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `## Tasks\n\n- ${mockTask2Node.title}: ${mockTask2Node.status}\n- ${mockTask3Node.title}: ${mockTask3Node.status}\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `## Tasks\n\n- ${mockTask2Record.title}: ${mockTask2Record.status}\n- ${mockTask3Record.title}: ${mockTask3Record.status}\n`,
           [template],
         );
       });
@@ -435,8 +435,8 @@ describe("template", () => {
 
         check(
           "{tasks|template:task-item}\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `- **${mockTask2Node.title}**\n- **${mockTask3Node.title}**\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `- **${mockTask2Record.title}**\n- **${mockTask3Record.title}**\n`,
           [template],
         );
       });
@@ -448,32 +448,32 @@ describe("template", () => {
       it("inline position", () => {
         check(
           "**Tasks:** {tasks}\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `**Tasks:** ${mockTask2Node.title}, ${mockTask3Node.title}\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `**Tasks:** ${mockTask2Record.title}, ${mockTask3Record.title}\n`,
         );
       });
 
       it("block position", () => {
         check(
           "{tasks}\n\nMore content below.\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `**${mockTask2Node.title}**\n\n${mockTask2Node.description}\n\n**${mockTask3Node.title}**\n\n${mockTask3Node.description}\n\nMore content below.\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `**${mockTask2Record.title}**\n\n${mockTask2Record.description}\n\n**${mockTask3Record.title}**\n\n${mockTask3Record.description}\n\nMore content below.\n`,
         );
       });
 
       it("section position", () => {
         check(
           "## Tasks\n\n{tasks}\n\n## Next\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `## Tasks\n\n### ${mockTask2Node.title}\n\n${mockTask2Node.description}\n\n### ${mockTask3Node.title}\n\n${mockTask3Node.description}\n\n## Next\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `## Tasks\n\n### ${mockTask2Record.title}\n\n${mockTask2Record.description}\n\n### ${mockTask3Record.title}\n\n${mockTask3Record.description}\n\n## Next\n`,
         );
       });
 
       it("document position", () => {
         check(
           "{tasks}\n",
-          { tasks: [mockTask2Node, mockTask3Node] },
-          `# ${mockTask2Node.title}\n\n**Type:** ${mockTask2Node.type}\n**Key:** ${mockTask2Node.key}\n\n## Description\n\n${mockTask2Node.description}\n\n---\n\n# ${mockTask3Node.title}\n\n**Type:** ${mockTask3Node.type}\n**Key:** ${mockTask3Node.key}\n\n## Description\n\n${mockTask3Node.description}\n`,
+          { tasks: [mockTask2Record, mockTask3Record] },
+          `# ${mockTask2Record.title}\n\n**Type:** ${mockTask2Record.type}\n**Key:** ${mockTask2Record.key}\n\n## Description\n\n${mockTask2Record.description}\n\n---\n\n# ${mockTask3Record.title}\n\n**Type:** ${mockTask3Record.type}\n**Key:** ${mockTask3Record.key}\n\n## Description\n\n${mockTask3Record.description}\n`,
         );
       });
     });
@@ -486,7 +486,7 @@ describe("template", () => {
       it("non-existent nested field in schema", () => {
         checkError(
           "**Project:** {project.nonExistentField}\n",
-          { project: mockProjectNode },
+          { project: mockProjectRecord },
           "field-not-found",
         );
       });
@@ -539,7 +539,7 @@ describe("template", () => {
         );
         checkError(
           "**Project:** {project|template:section-tpl}\n",
-          { project: mockProjectNode },
+          { project: mockProjectRecord },
           "format-position-incompatible",
           [template],
         );
@@ -553,7 +553,7 @@ describe("template", () => {
         );
         checkError(
           "{project|template:doc-tpl}\n\nMore content.\n",
-          { project: mockProjectNode },
+          { project: mockProjectRecord },
           "format-position-incompatible",
           [template],
         );
@@ -593,7 +593,7 @@ describe("template", () => {
       const viewAst = parseTemplate(view);
       const snapAst = parseMarkdown(output);
       const result = throwIfError(
-        extractFieldsAst(mockNodeSchema, templates, viewAst, snapAst, base),
+        extractFieldsAst(mockRecordSchema, templates, viewAst, snapAst, base),
       );
       expect(result).toEqual(expected);
     };
@@ -607,7 +607,7 @@ describe("template", () => {
       const ast = parseTemplate(view);
       const snapAst = parseMarkdown(output);
       const result = extractFieldsAst(
-        mockNodeSchema,
+        mockRecordSchema,
         mockDefaultTemplates,
         ast,
         snapAst,
@@ -620,16 +620,16 @@ describe("template", () => {
       it("single field", () => {
         check(
           "# {title}\n",
-          `# ${mockTask1Node.title}\n`,
-          pick(mockTask1Node, ["title"]),
+          `# ${mockTask1Record.title}\n`,
+          pick(mockTask1Record, ["title"]),
         );
       });
 
       it("multiple fields", () => {
         check(
           "# {title}\n\n**Status:** {status}\n",
-          `# ${mockTask1Node.title}\n\n**Status:** ${mockTask1Node.status}\n`,
-          pick(mockTask1Node, ["title", "status"]),
+          `# ${mockTask1Record.title}\n\n**Status:** ${mockTask1Record.status}\n`,
+          pick(mockTask1Record, ["title", "status"]),
         );
       });
 
@@ -643,8 +643,8 @@ describe("template", () => {
       it("escaped braces in view", () => {
         check(
           "\\{title\\} {title}\n",
-          `{title} ${mockTask1Node.title}\n`,
-          pick(mockTask1Node, ["title"]),
+          `{title} ${mockTask1Record.title}\n`,
+          pick(mockTask1Record, ["title"]),
         );
       });
 
@@ -662,16 +662,16 @@ describe("template", () => {
       it("trims whitespace from values", () => {
         check(
           "# {title}\n",
-          `#   ${mockTask1Node.title}  \n`,
-          pick(mockTask1Node, ["title"]),
+          `#   ${mockTask1Record.title}  \n`,
+          pick(mockTask1Record, ["title"]),
         );
       });
 
       it("nested field value", () => {
         check(
           "**Project:** {project.title}\n",
-          `**Project:** ${mockProjectNode.title}\n`,
-          { project: pick(mockProjectNode, ["title"]) },
+          `**Project:** ${mockProjectRecord.title}\n`,
+          { project: pick(mockProjectRecord, ["title"]) },
         );
       });
     });
@@ -971,7 +971,7 @@ Excellent first week. Schema is minimal and consistent.
       it("non-existent nested field in schema", () => {
         checkErr(
           "**Project:** {project.nonExistentField}\n",
-          `**Project:** ${mockProjectNode.title}\n`,
+          `**Project:** ${mockProjectRecord.title}\n`,
           "field-not-found",
         );
       });
@@ -1065,10 +1065,10 @@ Add login and registration functionality with JWT tokens
       const viewAst = parseTemplate(mockTaskTemplate.templateContent);
       const snapAst = parseMarkdown(snapshot);
       const extracted = throwIfError(
-        extractFieldsAst(mockNodeSchema, [], viewAst, snapAst, {}),
+        extractFieldsAst(mockRecordSchema, [], viewAst, snapAst, {}),
       );
       const rendered = throwIfError(
-        renderTemplateAst(mockNodeSchema, [], viewAst, extracted),
+        renderTemplateAst(mockRecordSchema, [], viewAst, extracted),
       );
       expect(rendered).toBe(snapshot);
     });

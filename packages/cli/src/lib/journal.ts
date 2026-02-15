@@ -6,7 +6,7 @@ import {
   type ConfigSchema,
   GENESIS_VERSION,
   hashTransaction,
-  type NodeSchema,
+  type RecordSchema,
   type Transaction,
   type TransactionHash,
   transactionToCanonical,
@@ -291,7 +291,7 @@ export const clearLog = async (
 export const verifyLog = async (
   fs: FileSystem,
   configSchema: ConfigSchema,
-  nodeSchema: NodeSchema,
+  recordSchema: RecordSchema,
   path: string,
   options?: { verifyIntegrity?: boolean },
 ): ResultAsync<{ count: number }> => {
@@ -333,7 +333,7 @@ export const verifyLog = async (
     if (options?.verifyIntegrity) {
       const canonical = transactionToCanonical(
         configSchema,
-        nodeSchema,
+        recordSchema,
         transaction,
       );
       const expectedHash = await hashTransaction(canonical);
@@ -362,7 +362,7 @@ export const verifyLog = async (
 export const rehashLog = async (
   fs: FileSystem,
   configSchema: ConfigSchema,
-  nodeSchema: NodeSchema,
+  recordSchema: RecordSchema,
   path: string,
 ): ResultAsync<{ transactionsRehashed: number; backupPath: string }> => {
   if (!(await fs.exists(path)))
@@ -390,7 +390,7 @@ export const rehashLog = async (
     const tx = { ...result.data, previous: previousHash };
     const rehashedTx = await withHashTransaction(
       configSchema,
-      nodeSchema,
+      recordSchema,
       tx,
       tx.id,
     );

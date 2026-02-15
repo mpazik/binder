@@ -6,16 +6,16 @@ import openKnowledgeGraph from "./knowledge-graph.ts";
 import type { Database } from "./db.ts";
 import { createEntity, fetchEntity, updateEntity } from "./entity-store.ts";
 import {
-  mockProjectNode,
+  mockProjectRecord,
   mockTask1Key,
-  mockTask1Node,
+  mockTask1Record,
   mockTask1Uid,
-  mockTask2Node,
-  mockTask3Node,
-  mockTaskNode1Updated,
-  mockUserNode,
+  mockTask2Record,
+  mockTask3Record,
+  mockTaskRecord1Updated,
+  mockUserRecord,
   NONEXISTENT_NODE_UID,
-} from "./model/node.mock.ts";
+} from "./model/record.mock.ts";
 import {
   mockTransactionInit,
   mockTransactionUpdate,
@@ -29,7 +29,7 @@ import {
   versionFromTransaction,
 } from "./model";
 import { applyAndSaveTransaction } from "./transaction-processor.ts";
-import { mockNodeSchemaRaw } from "./model/schema.mock.ts";
+import { mockRecordSchemaRaw } from "./model/schema.mock.ts";
 import {
   mockTransactionInitInput,
   mockTransactionInputUpdate,
@@ -45,25 +45,25 @@ describe("knowledge graph", () => {
   });
 
   describe("setup", () => {
-    it("processes transaction input and fetches task nodes", async () => {
+    it("processes transaction input and fetches task records", async () => {
       const transaction = throwIfError(
         await kg.update(mockTransactionInitInput),
       );
 
-      expect(Object.keys(transaction.nodes)).toEqual([
-        mockProjectNode.uid,
-        mockTask1Node.uid,
-        mockTask2Node.uid,
+      expect(Object.keys(transaction.records)).toEqual([
+        mockProjectRecord.uid,
+        mockTask1Record.uid,
+        mockTask2Record.uid,
       ]);
 
       const taskResults = throwIfError(
         await kg.search({ filters: { type: "Task" } }),
       );
-      expect(taskResults.items).toEqual([mockTask1Node, mockTask2Node]);
+      expect(taskResults.items).toEqual([mockTask1Record, mockTask2Record]);
     });
 
-    it("includes core fields in node schema", async () => {
-      const schema = throwIfError(await kg.getNodeSchema());
+    it("includes core fields in record schema", async () => {
+      const schema = throwIfError(await kg.getRecordSchema());
 
       expect(Object.keys(schema.fields)).toEqual(coreFieldKeys);
     });
@@ -79,74 +79,77 @@ describe("knowledge graph", () => {
     describe("fetchEntity", () => {
       beforeEach(async () => {
         await db.transaction(async (tx) => {
-          await createEntity(tx, "node", mockProjectNode);
-          await createEntity(tx, "node", mockTask2Node);
-          await createEntity(tx, "node", mockTask3Node);
+          await createEntity(tx, "record", mockProjectRecord);
+          await createEntity(tx, "record", mockTask2Record);
+          await createEntity(tx, "record", mockTask3Record);
         });
       });
 
-      it("fetches node by id", async () => {
-        const result = throwIfError(await kg.fetchEntity(mockTask1Node.id));
+      it("fetches record by id", async () => {
+        const result = throwIfError(await kg.fetchEntity(mockTask1Record.id));
 
-        expect(result).toEqual(mockTask1Node);
+        expect(result).toEqual(mockTask1Record);
       });
 
-      it("fetches node by uid", async () => {
+      it("fetches record by uid", async () => {
         const result = throwIfError(await kg.fetchEntity(mockTask1Uid));
 
-        expect(result).toEqual(mockTask1Node);
+        expect(result).toEqual(mockTask1Record);
       });
 
-      it("fetches node by key", async () => {
+      it("fetches record by key", async () => {
         const result = throwIfError(await kg.fetchEntity(mockTask1Key));
 
-        expect(result).toEqual(mockTask1Node);
+        expect(result).toEqual(mockTask1Record);
       });
 
-      it("returns error when node doesn't exist", async () => {
+      it("returns error when record doesn't exist", async () => {
         const result = await kg.fetchEntity(NONEXISTENT_NODE_UID);
 
         expect(result).toBeErr();
       });
 
-      it("fetches node with relationship includes - returns uid without expansion", async () => {
+      it("fetches record with relationship includes - returns uid without expansion", async () => {
         const result = throwIfError(
-          await kg.fetchEntity(mockTask2Node.uid, { uid: true, project: true }),
+          await kg.fetchEntity(mockTask2Record.uid, {
+            uid: true,
+            project: true,
+          }),
         );
 
         expect(result).toEqual({
-          uid: mockTask2Node.uid,
-          project: mockProjectNode.uid,
+          uid: mockTask2Record.uid,
+          project: mockProjectRecord.uid,
         });
       });
 
       it("applies field selection with includes", async () => {
         const result = throwIfError(
-          await kg.fetchEntity(mockTask2Node.uid, {
+          await kg.fetchEntity(mockTask2Record.uid, {
             title: true,
             project: { includes: { title: true } },
           }),
         );
 
         expect(result).toEqual({
-          title: mockTask2Node.title,
-          project: { title: mockProjectNode.title },
+          title: mockTask2Record.title,
+          project: { title: mockProjectRecord.title },
         });
       });
 
       it("applies field selection with two levels of nested includes", async () => {
         await db.transaction(async (tx) => {
-          await createEntity(tx, "node", mockUserNode);
-          await updateEntity(tx, "node", mockTask2Node.uid, {
-            assignedTo: mockUserNode.uid,
+          await createEntity(tx, "record", mockUserRecord);
+          await updateEntity(tx, "record", mockTask2Record.uid, {
+            assignedTo: mockUserRecord.uid,
           });
         });
 
         const result = throwIfError(
-          await kg.fetchEntity(mockProjectNode.uid, {
+          await kg.fetchEntity(mockProjectRecord.uid, {
             title: true,
             tasks: {
-              filters: { uid: mockTask2Node.uid },
+              filters: { uid: mockTask2Record.uid },
               includes: {
                 title: true,
                 assignedTo: { uid: true, name: true },
@@ -156,11 +159,14 @@ describe("knowledge graph", () => {
         );
 
         expect(result).toEqual({
-          title: mockProjectNode.title,
+          title: mockProjectRecord.title,
           tasks: [
             {
-              title: mockTask2Node.title,
-              assignedTo: { uid: mockUserNode.uid, name: mockUserNode.name },
+              title: mockTask2Record.title,
+              assignedTo: {
+                uid: mockUserRecord.uid,
+                name: mockUserRecord.name,
+              },
             },
           ],
         });
@@ -210,11 +216,11 @@ describe("knowledge graph", () => {
         );
         expect(returnedTransaction).toEqual(mockTransactionUpdate);
 
-        const updatedNode = await db.transaction(async (tx) =>
-          throwIfError(await fetchEntity(tx, "node", mockTask1Uid)),
+        const updatedRecord = await db.transaction(async (tx) =>
+          throwIfError(await fetchEntity(tx, "record", mockTask1Uid)),
         );
 
-        expect(updatedNode).toEqual(mockTaskNode1Updated);
+        expect(updatedRecord).toEqual(mockTaskRecord1Updated);
         expect(savedTransaction).toEqual(mockTransactionUpdate);
       });
     });
@@ -222,22 +228,22 @@ describe("knowledge graph", () => {
     describe("search", () => {
       beforeEach(async () => {
         await db.transaction(async (tx) => {
-          const { mockTask2Node, mockTask3Node, mockProjectNode } =
-            await import("./model/node.mock.ts");
-          await createEntity(tx, "node", mockProjectNode);
-          await createEntity(tx, "node", mockTask2Node);
-          await createEntity(tx, "node", mockTask3Node);
+          const { mockTask2Record, mockTask3Record, mockProjectRecord } =
+            await import("./model/record.mock.ts");
+          await createEntity(tx, "record", mockProjectRecord);
+          await createEntity(tx, "record", mockTask2Record);
+          await createEntity(tx, "record", mockTask3Record);
         });
       });
 
-      it("returns all nodes without filters", async () => {
+      it("returns all records without filters", async () => {
         const result = throwIfError(await kg.search({}));
 
         expect(result.items).toEqual([
-          mockTask1Node,
-          mockProjectNode,
-          mockTask2Node,
-          mockTask3Node,
+          mockTask1Record,
+          mockProjectRecord,
+          mockTask2Record,
+          mockTask3Record,
         ]);
         expect(result.pagination).toMatchObject({ hasNext: false });
       });
@@ -250,9 +256,9 @@ describe("knowledge graph", () => {
         );
 
         expect(result.items).toEqual([
-          mockTask1Node,
-          mockTask2Node,
-          mockTask3Node,
+          mockTask1Record,
+          mockTask2Record,
+          mockTask3Record,
         ]);
       });
 
@@ -264,10 +270,10 @@ describe("knowledge graph", () => {
         );
 
         expect(result.items).toEqual([
-          mockTask1Node,
-          mockProjectNode,
-          mockTask2Node,
-          mockTask3Node,
+          mockTask1Record,
+          mockProjectRecord,
+          mockTask2Record,
+          mockTask3Record,
         ]);
       });
 
@@ -278,7 +284,7 @@ describe("knowledge graph", () => {
           }),
         );
 
-        expect(result.items).toEqual([mockTask1Node, mockProjectNode]);
+        expect(result.items).toEqual([mockTask1Record, mockProjectRecord]);
         expect(result.pagination).toMatchObject({ hasNext: true });
       });
 
@@ -299,25 +305,25 @@ describe("knowledge graph", () => {
           ),
         );
 
-        const types = Object.keys(mockNodeSchemaRaw.types);
+        const types = Object.keys(mockRecordSchemaRaw.types);
         expect(result.items.map((it) => it.key)).toEqual(types);
       });
 
       it("returns relation uid without expansion when includes is true", async () => {
         const result = throwIfError(
           await kg.search({
-            filters: { type: "Task", key: mockTask2Node.key },
+            filters: { type: "Task", key: mockTask2Record.key },
             includes: { project: true },
           }),
         );
 
-        expect(result.items).toEqual([{ project: mockProjectNode.uid }]);
+        expect(result.items).toEqual([{ project: mockProjectRecord.uid }]);
       });
 
       it("expands relation with nested includes", async () => {
         const result = throwIfError(
           await kg.search({
-            filters: { type: "Task", key: mockTask2Node.key },
+            filters: { type: "Task", key: mockTask2Record.key },
             includes: { project: { uid: true, title: true } },
           }),
         );
@@ -325,8 +331,8 @@ describe("knowledge graph", () => {
         expect(result.items).toEqual([
           {
             project: {
-              uid: mockProjectNode.uid,
-              title: mockProjectNode.title,
+              uid: mockProjectRecord.uid,
+              title: mockProjectRecord.title,
             },
           },
         ]);
@@ -357,8 +363,8 @@ describe("knowledge graph", () => {
         expect(result.items).toEqual([
           {
             [mockTasksFieldKey]: [
-              { uid: mockTask2Node.uid, title: mockTask2Node.title },
-              { uid: mockTask3Node.uid, title: mockTask3Node.title },
+              { uid: mockTask2Record.uid, title: mockTask2Record.title },
+              { uid: mockTask3Record.uid, title: mockTask3Record.title },
             ],
           },
         ]);
@@ -367,7 +373,7 @@ describe("knowledge graph", () => {
       it("applies field selection with includes", async () => {
         const result = throwIfError(
           await kg.search({
-            filters: { type: "Task", key: mockTask2Node.key },
+            filters: { type: "Task", key: mockTask2Record.key },
             includes: {
               title: true,
               project: { uid: true, title: true },
@@ -377,10 +383,10 @@ describe("knowledge graph", () => {
 
         expect(result.items).toEqual([
           {
-            title: mockTask2Node.title,
+            title: mockTask2Record.title,
             project: {
-              uid: mockProjectNode.uid,
-              title: mockProjectNode.title,
+              uid: mockProjectRecord.uid,
+              title: mockProjectRecord.title,
             },
           },
         ]);
@@ -388,9 +394,9 @@ describe("knowledge graph", () => {
 
       it("applies field selection with two levels of nested includes", async () => {
         await db.transaction(async (tx) => {
-          await createEntity(tx, "node", mockUserNode);
-          await updateEntity(tx, "node", mockTask2Node.uid, {
-            assignedTo: mockUserNode.uid,
+          await createEntity(tx, "record", mockUserRecord);
+          await updateEntity(tx, "record", mockTask2Record.uid, {
+            assignedTo: mockUserRecord.uid,
           });
         });
 
@@ -400,7 +406,7 @@ describe("knowledge graph", () => {
             includes: {
               title: true,
               tasks: {
-                filters: { uid: mockTask2Node.uid },
+                filters: { uid: mockTask2Record.uid },
                 includes: {
                   title: true,
                   assignedTo: { uid: true, name: true },
@@ -412,11 +418,14 @@ describe("knowledge graph", () => {
 
         expect(result.items).toEqual([
           {
-            title: mockProjectNode.title,
+            title: mockProjectRecord.title,
             tasks: [
               {
-                title: mockTask2Node.title,
-                assignedTo: { uid: mockUserNode.uid, name: mockUserNode.name },
+                title: mockTask2Record.title,
+                assignedTo: {
+                  uid: mockUserRecord.uid,
+                  name: mockUserRecord.name,
+                },
               },
             ],
           },
@@ -427,25 +436,29 @@ describe("knowledge graph", () => {
     describe("rollback", () => {
       it("reverts changes", async () => {
         throwIfError(await kg.update(mockTransactionInputUpdate));
-        const updatedNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
-        expect(updatedNode).toEqual(mockTaskNode1Updated);
+        const updatedRecord = throwIfError(await kg.fetchEntity(mockTask1Uid));
+        expect(updatedRecord).toEqual(mockTaskRecord1Updated);
 
         throwIfError(await kg.rollback(1));
 
-        const rolledBackNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
-        expect(rolledBackNode).toEqual(mockTask1Node);
+        const rolledBackRecord = throwIfError(
+          await kg.fetchEntity(mockTask1Uid),
+        );
+        expect(rolledBackRecord).toEqual(mockTask1Record);
       });
 
       it("reverts changes with explicit version", async () => {
         throwIfError(await kg.update(mockTransactionInputUpdate));
         const version = throwIfError(await kg.version());
-        const updatedNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
-        expect(updatedNode).toEqual(mockTaskNode1Updated);
+        const updatedRecord = throwIfError(await kg.fetchEntity(mockTask1Uid));
+        expect(updatedRecord).toEqual(mockTaskRecord1Updated);
 
         throwIfError(await kg.rollback(1, version.id));
 
-        const rolledBackNode = throwIfError(await kg.fetchEntity(mockTask1Uid));
-        expect(rolledBackNode).toEqual(mockTask1Node);
+        const rolledBackRecord = throwIfError(
+          await kg.fetchEntity(mockTask1Uid),
+        );
+        expect(rolledBackRecord).toEqual(mockTask1Record);
       });
 
       it("returns error when version mismatches", async () => {

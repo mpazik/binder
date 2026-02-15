@@ -16,7 +16,7 @@ import {
   getPlaintextFormat,
   getRichtextFormat,
   type Namespace,
-  type NodeDataType,
+  type RecordDataType,
   periodFormats,
   plaintextFormats,
   QueryParamsSchema,
@@ -208,8 +208,8 @@ const stringValidator: DataTypeValidator<string> = (value) => {
   );
 };
 
-export const nodeDataTypeValidators: {
-  [K in NodeDataType]: DataTypeValidator<K>;
+export const recordDataTypeValidators: {
+  [K in RecordDataType]: DataTypeValidator<K>;
 } = {
   ...coreValidators,
   option: optionValidator,
@@ -315,7 +315,7 @@ type FieldDefValidator<D extends string> = (
 export const namespaceDataTypeValidators: {
   [N in Namespace]: FieldDefValidator<DataTypeNs[N]>;
 } = {
-  node: createValidateDataType(nodeDataTypeValidators),
+  record: createValidateDataType(recordDataTypeValidators),
   config: createValidateDataType(configDataTypeValidators),
   transaction: createValidateDataType(coreValidators),
 };

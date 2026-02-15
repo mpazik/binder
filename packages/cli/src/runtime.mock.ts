@@ -74,7 +74,7 @@ export const createMockRuntimeContextWithDb =
       { ...context, db, templates: () => templateCache.load() },
       {
         afterCommit: async (transaction) => {
-          if (isEmptyObject(transaction.configurations)) return;
+          if (isEmptyObject(transaction.configs)) return;
           navigationCache.invalidate();
           templateCache.invalidate();
         },

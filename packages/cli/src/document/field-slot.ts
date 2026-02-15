@@ -351,7 +351,7 @@ const transformTree = (): Transformer => {
         slot.slotPosition = getSlotPosition(index, parent, grandparent, root);
       }
 
-      // Merge adjacent text nodes (needed for escaped braces: {{ and }})
+      // Merge adjacent text records (needed for escaped braces: {{ and }})
       if ("children" in node) {
         const p = node as Parent;
         const newChildren: Node[] = [];

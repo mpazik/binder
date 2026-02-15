@@ -36,7 +36,7 @@ export type ConfigType = ConfigKey;
 export type ConfigRef = ConfigId | ConfigUid | ConfigKey;
 export type ConfigRelation = ConfigKey;
 
-export const nodeDataTypes = {
+export const recordDataTypes = {
   ...coreDataTypes,
   option: { name: "Option", description: "Option value" },
   fileHash: { name: "File Hash", description: "SHA-256 hash of the file" },
@@ -54,6 +54,6 @@ export const nodeDataTypes = {
   image: { name: "Image", description: "Image URL" },
 } as const satisfies DataTypeDefs;
 
-export type NodeDataType = keyof typeof nodeDataTypes;
-export type NodeFieldDef = FieldDef<NodeDataType>;
-export type NodeSchema = EntitySchema<NodeDataType>;
+export type RecordDataType = keyof typeof recordDataTypes;
+export type RecordFieldDef = FieldDef<RecordDataType>;
+export type RecordSchema = EntitySchema<RecordDataType>;

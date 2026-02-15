@@ -73,7 +73,7 @@ export const handleDocumentSave = async (
   const transactionInput =
     namespace === "config"
       ? { author: config.author, configs: syncResult.data }
-      : { author: config.author, nodes: syncResult.data };
+      : { author: config.author, records: syncResult.data };
 
   const applyResult = await kg.update(transactionInput);
   if (isErr(applyResult)) return applyResult;

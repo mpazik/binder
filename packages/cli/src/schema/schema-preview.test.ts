@@ -1,17 +1,17 @@
 import { describe, expect, it } from "bun:test";
-import { mockNodeSchema } from "@binder/db/mocks";
+import { mockRecordSchema } from "@binder/db/mocks";
 import {
   type ConfigId,
   type ConfigKey,
   type ConfigUid,
   fieldSystemType,
-  type NodeFieldDef,
-  type NodeSchema,
+  type RecordFieldDef,
+  type RecordSchema,
 } from "@binder/db";
 import { renderSchemaPreview } from "./schema-preview.ts";
 
 describe("renderSchemaPreview", () => {
-  const result = renderSchemaPreview(mockNodeSchema);
+  const result = renderSchemaPreview(mockRecordSchema);
 
   it("should render complete schema with fields and types sections", () => {
     expect(result).toContain("FIELDS:");
@@ -78,14 +78,14 @@ describe("renderSchemaPreview", () => {
   });
 
   it("should render single-line format for simple types", () => {
-    const result = renderSchemaPreview(mockNodeSchema);
+    const result = renderSchemaPreview(mockRecordSchema);
     expect(result).toContain(
       `• User - Individual user account [name{required, description: "Full name"}, email]\n`,
     );
   });
 
   it("should render field constraint attributes", () => {
-    const result = renderSchemaPreview(mockNodeSchema);
+    const result = renderSchemaPreview(mockRecordSchema);
 
     expect(result).toContain("title{required}");
     expect(result).toContain("status{exclude: archived}");
@@ -94,20 +94,20 @@ describe("renderSchemaPreview", () => {
   });
 
   it("should render only and exclude constraints", () => {
-    const result = renderSchemaPreview(mockNodeSchema);
+    const result = renderSchemaPreview(mockRecordSchema);
 
     expect(result).toContain("assignedTo{only: User}");
     expect(result).toContain("status{exclude: archived}");
   });
 
   it("should render when constraint", () => {
-    const result = renderSchemaPreview(mockNodeSchema);
+    const result = renderSchemaPreview(mockRecordSchema);
 
     expect(result).toContain("completedAt: datetime {when: status=complete}");
   });
 
   it("should handle empty schema", () => {
-    const emptySchema: NodeSchema = {
+    const emptySchema: RecordSchema = {
       fields: {},
       types: {},
     };
@@ -121,8 +121,8 @@ describe("renderSchemaPreview", () => {
   describe("field helper", () => {
     const check = (
       key: string,
-      dataType: NodeFieldDef["dataType"],
-      opts: Partial<NodeFieldDef> | undefined,
+      dataType: RecordFieldDef["dataType"],
+      opts: Partial<RecordFieldDef> | undefined,
       expected: string,
     ) => {
       const result = renderSchemaPreview({

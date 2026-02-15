@@ -8,9 +8,9 @@ import type {
   NestedFieldValueProvider,
 } from "@binder/db";
 import {
-  mockNodeSchema,
-  mockProjectNode,
-  mockUserNode,
+  mockRecordSchema,
+  mockProjectRecord,
+  mockUserRecord,
 } from "@binder/db/mocks";
 import { resolvePath } from "../document/navigation.ts";
 import { DOCUMENT_TEMPLATE_KEY } from "../document/template-entity.ts";
@@ -26,7 +26,7 @@ import {
 describe("interpolateFields", () => {
   const check = (template: string, fieldset: Fieldset, expected: string) => {
     const result = throwIfError(
-      interpolateFields(mockNodeSchema, template, fieldset),
+      interpolateFields(mockRecordSchema, template, fieldset),
     );
     expect(result).toBe(expected);
   };
@@ -36,7 +36,7 @@ describe("interpolateFields", () => {
     fieldset: Fieldset,
     errorKey: string,
   ) => {
-    const result = interpolateFields(mockNodeSchema, template, fieldset);
+    const result = interpolateFields(mockRecordSchema, template, fieldset);
     expect(result).toBeErrWithKey(errorKey);
   };
 
@@ -164,7 +164,7 @@ describe("interpolateNestedFields", () => {
     expected: string,
   ) => {
     const result = throwIfError(
-      interpolateNestedFields(mockNodeSchema, template, fieldset),
+      interpolateNestedFields(mockRecordSchema, template, fieldset),
     );
     expect(result).toBe(expected);
   };
@@ -206,7 +206,7 @@ describe("interpolateNestedFields", () => {
     };
     const result = throwIfError(
       interpolateNestedFields(
-        mockNodeSchema,
+        mockRecordSchema,
         "{id} - {project.name}",
         provider,
       ),
@@ -361,7 +361,7 @@ describe("parseAncestralPlaceholder", () => {
 describe("interpolateAncestralFields", () => {
   const check = (template: string, chain: Fieldset[], expected: string) => {
     const result = throwIfError(
-      interpolateAncestralFields(mockNodeSchema, template, chain),
+      interpolateAncestralFields(mockRecordSchema, template, chain),
     );
     expect(result).toBe(expected);
   };
@@ -410,7 +410,7 @@ describe("interpolateAncestralFields", () => {
     };
     const result = throwIfError(
       interpolateAncestralFields(
-        mockNodeSchema,
+        mockRecordSchema,
         "{id} - {parent.name}",
         provider,
       ),
@@ -418,10 +418,10 @@ describe("interpolateAncestralFields", () => {
     expect(result).toBe("42 - Parent Name");
   });
 
-  it("works with mock nodes", () => {
+  it("works with mock records", () => {
     check(
       "{key} by {parent.name}",
-      [mockProjectNode, mockUserNode],
+      [mockProjectRecord, mockUserRecord],
       "project-binder-system by Rick",
     );
   });
@@ -433,7 +433,7 @@ it("round-trips with resolvePath", () => {
     path: "projects/{project}/{title}",
     template: DOCUMENT_TEMPLATE_KEY,
   };
-  const path = throwIfError(resolvePath(mockNodeSchema, navItem, item));
+  const path = throwIfError(resolvePath(mockRecordSchema, navItem, item));
   expect(path).toBe("projects/binder-cli/My Task.md");
   const result = throwIfError(extractFieldValues(navItem.path + ".md", path));
   expect(result).toEqual({ project: "binder-cli", title: "My Task" });

@@ -34,25 +34,25 @@ export const renderDocs = async (services: {
   const templatesResult = await loadTemplates();
   if (isErr(templatesResult)) return templatesResult;
 
-  const renderNodeResult = await renderNavigation(
+  const renderRecordResult = await renderNavigation(
     db,
     kg,
     fs,
     paths,
     navigationResult.data,
     templatesResult.data,
-    "node",
+    "record",
   );
-  if (isErr(renderNodeResult)) return renderNodeResult;
+  if (isErr(renderRecordResult)) return renderRecordResult;
 
-  const cleanupNodeResult = await cleanupOrphanSnapshots(
+  const cleanupRecordResult = await cleanupOrphanSnapshots(
     db,
     fs,
     paths,
-    renderNodeResult.data.renderedPaths,
-    "node",
+    renderRecordResult.data.renderedPaths,
+    "record",
   );
-  if (isErr(cleanupNodeResult)) return cleanupNodeResult;
+  if (isErr(cleanupRecordResult)) return cleanupRecordResult;
 
   const renderConfigResult = await renderNavigation(
     db,
@@ -76,7 +76,7 @@ export const renderDocs = async (services: {
 
   log.debug("renderDocs: complete");
   return ok([
-    ...renderNodeResult.data.modifiedPaths,
+    ...renderRecordResult.data.modifiedPaths,
     ...renderConfigResult.data.modifiedPaths,
   ]);
 };

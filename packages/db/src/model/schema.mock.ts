@@ -26,7 +26,7 @@ import {
 } from "./config.mock.ts";
 
 import { coreSchema, mergeSchema } from "./schema.ts";
-import type { NodeSchema } from "./config.ts";
+import type { RecordSchema } from "./config.ts";
 
 const mockFields = {
   [mockStatusField.key]: mockStatusField,
@@ -59,13 +59,13 @@ const mockTypes = {
 };
 
 // Base schema without coreFields - used for transaction mocks
-export const mockNodeSchemaRaw = {
+export const mockRecordSchemaRaw = {
   fields: mockFields,
   types: mockTypes,
-} as const satisfies NodeSchema;
+} as const satisfies RecordSchema;
 
 // Full schema with coreFields - used for tests that need complete field lookup
-export const mockNodeSchema = mergeSchema(
+export const mockRecordSchema = mergeSchema(
   coreSchema(),
-  mockNodeSchemaRaw,
-) as NodeSchema;
+  mockRecordSchemaRaw,
+) as RecordSchema;

@@ -28,7 +28,7 @@ describe("parseFieldExpression", () => {
       }));
 
     it("parses global access with all keyword", () =>
-      check("all.nodes", { path: ["all", "nodes"] }));
+      check("all.records", { path: ["all", "records"] }));
   });
 
   describe("whitespace handling", () => {

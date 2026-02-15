@@ -23,9 +23,9 @@ import {
   mergeSchema,
   type NamespaceEditable,
   type NamespaceSchema,
-  type NodeFieldDef,
-  type NodeRef,
-  type NodeSchema,
+  type RecordFieldDef,
+  type RecordRef,
+  type RecordSchema,
   type PaginationInfo,
   type QueryParams,
   type Transaction,
@@ -37,7 +37,7 @@ import {
   validateAppConfigSchema,
 } from "./model";
 import type { Database, DbTransaction } from "./db.ts";
-import { configTable, nodeTable } from "./schema.ts";
+import { configTable, recordTable } from "./schema.ts";
 import { dbModelToEntity, fetchEntity } from "./entity-store.ts";
 import { fetchTransaction, getVersion } from "./transaction-store.ts";
 import {
@@ -68,7 +68,7 @@ export type KnowledgeGraph<
   update: (input: TransactionInput) => ResultAsync<Transaction>;
   apply: (transaction: Transaction) => ResultAsync<Transaction>;
   rollback: (count: number, version?: TransactionId) => ResultAsync<void>;
-  getNodeSchema: () => ResultAsync<NodeSchema>;
+  getRecordSchema: () => ResultAsync<RecordSchema>;
   getConfigSchema: () => ConfigSchemaExtended<C>;
   getSchema: <N extends NamespaceEditable>(
     namespace: N,
@@ -92,7 +92,7 @@ const internalSearch = async (
   filters: Filters,
   schema: EntitySchema,
 ): ResultAsync<Fieldset[]> => {
-  const table = namespace === "config" ? configTable : nodeTable;
+  const table = namespace === "config" ? configTable : recordTable;
   return tryCatch(
     tx
       .select()
@@ -106,7 +106,7 @@ const internalSearch = async (
 const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
   db: Database,
   options?: {
-    providerSchema?: NodeSchema;
+    providerSchema?: RecordSchema;
     configSchema?: C;
     callbacks?: KnowledgeGraphCallbacks;
   },
@@ -120,11 +120,11 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     options?.configSchema,
   ) as ConfigSchemaExtended<C>;
 
-  let nodeSchemaCache: NodeSchema | null = null;
+  let recordSchemaCache: RecordSchema | null = null;
 
-  const getNodeSchema = async (): ResultAsync<NodeSchema> => {
-    if (nodeSchemaCache !== null) {
-      return ok(nodeSchemaCache);
+  const getRecordSchema = async (): ResultAsync<RecordSchema> => {
+    if (recordSchemaCache !== null) {
+      return ok(recordSchemaCache);
     }
 
     return db.transaction(async (tx) => {
@@ -140,13 +140,13 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
 
       const fields = configsResult.data.filter((config) =>
         fieldTypes.includes(config.type as any),
-      ) as unknown as NodeFieldDef[];
+      ) as unknown as RecordFieldDef[];
 
       const types = configsResult.data.filter(
         (config) => config.type === typeSystemType,
       ) as unknown as TypeDef[];
 
-      const schema: NodeSchema = mergeSchema(
+      const schema: RecordSchema = mergeSchema(
         mergeSchema(coreSchema(), options?.providerSchema),
         {
           fields: groupByToObject(fields, (f) => f.key),
@@ -154,14 +154,14 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         },
       );
 
-      nodeSchemaCache = schema;
+      recordSchemaCache = schema;
       return ok(schema);
     });
   };
   const getSchema = async (
     namespace: NamespaceEditable,
-  ): ResultAsync<NodeSchema | ConfigSchemaExtended<C>> =>
-    namespace === "config" ? ok(configSchema) : getNodeSchema();
+  ): ResultAsync<RecordSchema | ConfigSchemaExtended<C>> =>
+    namespace === "config" ? ok(configSchema) : getRecordSchema();
 
   const applyAndNotify = async (transaction: Transaction) => {
     let rollbackBeforeHook: TransactionRollback | null = null;
@@ -176,10 +176,9 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       const applyResult = await applyAndSaveTransaction(tx, transaction);
       if (isErr(applyResult)) return applyResult;
 
-      const hasConfigChanges =
-        Object.keys(transaction.configurations).length > 0;
+      const hasConfigChanges = Object.keys(transaction.configs).length > 0;
       if (hasConfigChanges) {
-        nodeSchemaCache = null;
+        recordSchemaCache = null;
       }
 
       if (callbacks?.beforeCommit) {
@@ -204,9 +203,9 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
 
   return {
     fetchEntity: async (
-      ref: NodeRef,
+      ref: RecordRef,
       includes?: Includes,
-      namespace = "node",
+      namespace = "record",
     ) => {
       return db.transaction(async (tx) => {
         const entityResult = await fetchEntity(tx, namespace, ref as any);
@@ -235,7 +234,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     },
     search: async (
       query: QueryParams,
-      namespace: "node" | "config" = "node",
+      namespace: "record" | "config" = "record",
     ) => {
       return db.transaction(async (tx) => {
         const { filters = {}, pagination, includes } = query;
@@ -258,7 +257,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
           );
         }
 
-        const table = namespace === "config" ? configTable : nodeTable;
+        const table = namespace === "config" ? configTable : recordTable;
         const filterClause = buildWhereClause(table, filters, schema);
 
         const orderClause = before ? desc(table.id) : asc(table.id);
@@ -318,12 +317,12 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     },
     update: async (input: TransactionInput) => {
       return db.transaction(async (tx) => {
-        const nodeSchemaResult = await getNodeSchema();
-        if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+        const recordSchemaResult = await getRecordSchema();
+        if (isErr(recordSchemaResult)) return recordSchemaResult;
         const processedResult = await processTransactionInput(
           tx,
           input,
-          nodeSchemaResult.data,
+          recordSchemaResult.data,
           configSchema,
         );
 
@@ -341,7 +340,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         if (isErr(versionResult)) return versionResult;
         const txId = version ?? versionResult.data.id;
 
-        nodeSchemaCache = null;
+        recordSchemaCache = null;
 
         return rollbackTransaction(dbTx, count, txId);
       });
@@ -352,7 +351,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       }
       return ok(undefined);
     },
-    getNodeSchema,
+    getRecordSchema,
     getConfigSchema: () => configSchema,
     getSchema: <N extends NamespaceEditable>(namespace: N) =>
       getSchema(namespace) as ResultAsync<NamespaceSchema<N>>,

@@ -7,29 +7,29 @@ export const transactToolName = "transact";
 
 export const transactTool = defineTool({
   name: transactToolName,
-  description: `Create or update nodes and configuration entities in the knowledge graph.
+  description: `Create or update records and configuration entities in the knowledge graph.
 
 EXAMPLES:
-1. Create a new node:
+1. Create a new record:
 {
-  "nodes": [{
+  "records": [{
     "type": "Task",
     "key": "task-review-pr",
     "title": "Review pull request",
   }]
 }
 
-2. Update an existing node:
+2. Update an existing record:
 {
-  "nodes": [{
+  "records": [{
     "$ref": "task-review-pr",
     "status": "done"
   }]
 }
 
-3. Create a node type (schema):
+3. Create a record type (schema):
 {
-  "configurations": [{
+  "configs": [{
     "type": "Type",
     "key": "Bug",
     "name": "Bug Report",
@@ -40,7 +40,7 @@ EXAMPLES:
 
 4. Create a relation field:
 {
-  "configurations": [{
+  "configs": [{
     "type": "RelationField",
     "key": "assignedTo",
     "name": "Assigned To",
@@ -52,19 +52,19 @@ EXAMPLES:
 
 5. Multiple operations:
 {
-  "nodes": [
+  "records": [
     { "type": "Task", "title": "First task" },
     { "type": "Task", "title": "Second task" },
     { "$ref": "existing-task", "status": "done" }
   ],
-  "configurations": [
+  "configs": [
     { "type": "Type", "key": "Bug", "name": "Bug Report", "fields": ["title", "severity", "assignedTo"]}
   ]
 }
 
 6. Working with array fields:
 {
-  "nodes": [{
+  "records": [{
     "$ref": "task-1",
     "tags": ["insert", "urgent"]
   }]
@@ -72,17 +72,17 @@ EXAMPLES:
 
 Call the 'schema' tool first to understand available types, fields, and data types.`,
   parameters: z.object({
-    nodes: z
+    records: z
       .array(z.record(z.string(), z.unknown()))
       .optional()
       .describe(
-        "Array of node changesets to create or update nodes. To CREATE: include 'type' field. To UPDATE: include '$ref' field with node reference (uid, key, or id). All other fields become node attributes.",
+        "Array of record changesets to create or update records. To CREATE: include 'type' field. To UPDATE: include '$ref' field with record reference (uid, key, or id). All other fields become record attributes.",
       ),
-    configurations: z
+    configs: z
       .array(z.record(z.string(), z.unknown()))
       .optional()
       .describe(
-        "Array of configuration changesets to create or update schema elements. Same pattern as nodes: use 'type' and 'key' to create, '$ref' to update. Common config types: 'Type' (node type definition), 'Field' (field definition), 'RelationField' (relation field definition).",
+        "Array of configuration changesets to create or update schema elements. Same pattern as records: use 'type' and 'key' to create, '$ref' to update. Common config types: 'Type' (record type definition), 'Field' (field definition), 'RelationField' (relation field definition).",
       ),
   }),
   annotation: {
@@ -92,25 +92,25 @@ Call the 'schema' tool first to understand available types, fields, and data typ
   async execute(args, { kg, config }) {
     const input = TransactionInputSchema.parse({
       author: config.author,
-      nodes: args.nodes,
-      configurations: args.configurations,
+      records: args.records,
+      configs: args.configs,
     });
 
     const updateResult = await kg.update(input);
     if (isErr(updateResult)) return updateResult;
 
     const transaction = updateResult.data;
-    const nodeCount = Object.keys(transaction.nodes).length;
-    const configCount = Object.keys(transaction.configurations).length;
+    const recordCount = Object.keys(transaction.records).length;
+    const configCount = Object.keys(transaction.configs).length;
 
     return ok({
       metadata: {
         transactionId: transaction.id,
         transactionHash: transaction.hash,
-        nodeCount,
+        recordCount,
         configCount,
       },
-      output: `Transaction ${transaction.id} applied: ${nodeCount} node(s), ${configCount} config(s) affected`,
+      output: `Transaction ${transaction.id} applied: ${recordCount} record(s), ${configCount} config(s) affected`,
       structuredData: transaction,
     });
   },

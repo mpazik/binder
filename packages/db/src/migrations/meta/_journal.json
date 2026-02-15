@@ -15,6 +15,13 @@
       "when": 1762178790843,
       "tag": "0001_thin_kylun",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771146812086,
+      "tag": "0002_foamy_salo",
+      "breakpoints": true
     }
   ]
 }

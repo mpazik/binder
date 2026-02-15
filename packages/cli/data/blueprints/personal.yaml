@@ -2,7 +2,7 @@
 # Provides: Area, Project, Task, Note, Resource types
 
 - author: system
-  configurations:
+  configs:
     # Fields
     - key: status
       type: Field
@@ -120,7 +120,7 @@
 
 # Navigation Structure (PARA-based workspace)
 - author: system
-  configurations:
+  configs:
     # Areas
     - key: nav-areas-index
       type: Navigation
@@ -283,7 +283,7 @@
 
 # Sample data for personal knowledge management blueprint
 - author: system
-  nodes:
+  records:
     # Areas
     - type: Area
       key: health

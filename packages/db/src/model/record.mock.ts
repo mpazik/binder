@@ -1,4 +1,4 @@
-import type { NodeId, NodeKey, NodeUid } from "./node.ts";
+import type { RecordId, RecordKey, RecordUid } from "./record.ts";
 import {
   mockFieldKeyEmail,
   mockPriorityFieldKey,
@@ -8,17 +8,17 @@ import {
 } from "./config.mock.ts";
 import type { Fieldset } from "./field.ts";
 
-export const NONEXISTENT_NODE_UID = "_nonexisten" as NodeUid;
+export const NONEXISTENT_NODE_UID = "_nonexisten" as RecordUid;
 
-export const mockTask1Uid = "_taskAbc123" as NodeUid;
-export const mockTask2Uid = "_taskDef456" as NodeUid;
-export const mockTask3Uid = "_taskGhi789" as NodeUid;
-export const mockProjectUid = "_projJkl012" as NodeUid;
-export const mockUserUid = "_userRick00" as NodeUid;
+export const mockTask1Uid = "_taskAbc123" as RecordUid;
+export const mockTask2Uid = "_taskDef456" as RecordUid;
+export const mockTask3Uid = "_taskGhi789" as RecordUid;
+export const mockProjectUid = "_projJkl012" as RecordUid;
+export const mockUserUid = "_userRick00" as RecordUid;
 
-export const mockTask1Key = "task-implement-user-auth" as NodeKey;
-export const mockTask1Node = {
-  id: 1 as NodeId,
+export const mockTask1Key = "task-implement-user-auth" as RecordKey;
+export const mockTask1Record = {
+  id: 1 as RecordId,
   uid: mockTask1Uid,
   key: mockTask1Key,
   type: mockTaskTypeKey,
@@ -29,27 +29,27 @@ export const mockTask1Node = {
   tags: ["urgent", "important"],
 } as const satisfies Fieldset;
 
-export const mockTaskWithOwnersUid = "_taskOwners" as NodeUid;
-export const mockTaskWithOwnersNode = {
-  id: 10 as NodeId,
+export const mockTaskWithOwnersUid = "_taskOwners" as RecordUid;
+export const mockTaskWithOwnersRecord = {
+  id: 10 as RecordId,
   uid: mockTaskWithOwnersUid,
   type: mockTaskTypeKey,
   title: "Task with owners",
   owners: [["user-1", { role: "lead" }]],
 } as const satisfies Fieldset;
 
-export const mockTaskNode1Updated = {
-  ...mockTask1Node,
+export const mockTaskRecord1Updated = {
+  ...mockTask1Record,
   title: "Implement user authentication system",
   tags: ["urgent", "completed", "important"],
 } as const satisfies Fieldset;
 
-export const mockProjectKey = "project-binder-system" as NodeKey;
-export const mockTask2Key = "task-implement-auth" as NodeKey;
-export const mockTask3Key = "task-create-api" as NodeKey;
+export const mockProjectKey = "project-binder-system" as RecordKey;
+export const mockTask2Key = "task-implement-auth" as RecordKey;
+export const mockTask3Key = "task-create-api" as RecordKey;
 
-export const mockProjectNode = {
-  id: 2 as NodeId,
+export const mockProjectRecord = {
+  id: 2 as RecordId,
   uid: mockProjectUid,
   key: mockProjectKey,
   type: mockProjectTypeKey,
@@ -58,8 +58,8 @@ export const mockProjectNode = {
   status: "active",
 } as const satisfies Fieldset;
 
-export const mockTask2Node = {
-  id: 3 as NodeId,
+export const mockTask2Record = {
+  id: 3 as RecordId,
   uid: mockTask2Uid,
   key: mockTask2Key,
   type: mockTaskTypeKey,
@@ -70,8 +70,8 @@ export const mockTask2Node = {
   project: mockProjectUid,
 } as const satisfies Fieldset;
 
-export const mockTask3Node = {
-  id: 4 as NodeId,
+export const mockTask3Record = {
+  id: 4 as RecordId,
   uid: mockTask3Uid,
   key: mockTask3Key,
   type: mockTaskTypeKey,
@@ -82,8 +82,8 @@ export const mockTask3Node = {
   project: mockProjectUid,
 } as const satisfies Fieldset;
 
-export const mockUserNode = {
-  id: 5 as NodeId,
+export const mockUserRecord = {
+  id: 5 as RecordId,
   uid: mockUserUid,
   type: mockUserTypeKey,
   name: "Rick",

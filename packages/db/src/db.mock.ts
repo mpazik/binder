@@ -9,8 +9,8 @@ export const getTestDatabase = (): Database => {
   return throwIfError(openDb({ memory: true }));
 };
 
-export const insertNode = async (db: Database, entity: Fieldset) => {
-  await db.insert(editableEntityTables.node).values(entityToDbModel(entity));
+export const insertRecord = async (db: Database, entity: Fieldset) => {
+  await db.insert(editableEntityTables.record).values(entityToDbModel(entity));
 };
 
 export const insertConfig = async (db: Database, config: Fieldset) => {

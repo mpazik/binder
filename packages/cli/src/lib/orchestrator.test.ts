@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import {
-  mockNodeSchema,
+  mockRecordSchema,
   mockTransaction3,
   mockTransaction4,
   mockTransactionInit,
@@ -113,7 +113,7 @@ describe("orchestrator", () => {
     it("detects divergence when hashes differ", async () => {
       const divergedTx = await withHashTransaction(
         coreConfigSchema,
-        mockNodeSchema,
+        mockRecordSchema,
         {
           ...mockTransactionUpdate,
           author: "different-user",
@@ -204,7 +204,7 @@ describe("orchestrator", () => {
           mockTransactionInit,
           await withHashTransaction(
             coreConfigSchema,
-            mockNodeSchema,
+            mockRecordSchema,
             {
               ...mockTransactionUpdate,
               author: "different-user",

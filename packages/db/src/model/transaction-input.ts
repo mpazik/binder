@@ -14,11 +14,11 @@ export const TransactionInputSchema = z.object({
     .string()
     .transform((val) => val as IsoTimestamp | undefined)
     .optional(),
-  nodes: z
+  records: z
     .array(z.record(z.string(), z.unknown()))
-    .transform((val) => val as ChangesetsInput<"node">)
+    .transform((val) => val as ChangesetsInput<"record">)
     .optional(),
-  configurations: z
+  configs: z
     .array(z.record(z.string(), z.unknown()))
     .transform((val) => val as ChangesetsInput<"config">)
     .optional(),
@@ -30,28 +30,28 @@ export const createTransactionInput = (
   namespace: NamespaceEditable,
   changesets: EntityChangesetInput<NamespaceEditable>[],
 ): TransactionInput =>
-  namespace === "node"
-    ? { author, nodes: changesets }
-    : { author, configurations: changesets };
+  namespace === "record"
+    ? { author, records: changesets }
+    : { author, configs: changesets };
 
 export const transactionToInput = (tx: Transaction): TransactionInput => {
-  const nodes: EntityChangesetInput<"node">[] = [];
-  for (const [uid, changeset] of Object.entries(tx.nodes)) {
+  const records: EntityChangesetInput<"record">[] = [];
+  for (const [uid, changeset] of Object.entries(tx.records)) {
     const input = changesetToInput(changeset);
     if ("type" in input) {
-      nodes.push(input as EntityChangesetInput<"node">);
+      records.push(input as EntityChangesetInput<"record">);
     } else {
-      nodes.push({ $ref: uid, ...input } as EntityChangesetInput<"node">);
+      records.push({ $ref: uid, ...input } as EntityChangesetInput<"record">);
     }
   }
 
-  const configurations: EntityChangesetInput<"config">[] = [];
-  for (const [key, changeset] of Object.entries(tx.configurations)) {
+  const configs: EntityChangesetInput<"config">[] = [];
+  for (const [key, changeset] of Object.entries(tx.configs)) {
     const input = changesetToInput(changeset);
     if ("type" in input) {
-      configurations.push(input as EntityChangesetInput<"config">);
+      configs.push(input as EntityChangesetInput<"config">);
     } else {
-      configurations.push({
+      configs.push({
         $ref: key,
         ...input,
       } as EntityChangesetInput<"config">);
@@ -61,8 +61,8 @@ export const transactionToInput = (tx: Transaction): TransactionInput => {
   return {
     author: tx.author,
     createdAt: tx.createdAt,
-    ...(nodes.length > 0 && { nodes }),
-    ...(configurations.length > 0 && { configurations }),
+    ...(records.length > 0 && { records }),
+    ...(configs.length > 0 && { configs }),
   };
 };
 
@@ -71,9 +71,9 @@ export const normalizeTransactionInput = (
 ): TransactionInput => ({
   author: input.author,
   ...(input.createdAt && { createdAt: input.createdAt }),
-  ...(input.nodes && input.nodes.length > 0 && { nodes: input.nodes }),
-  ...(input.configurations &&
-    input.configurations.length > 0 && {
-      configurations: input.configurations,
+  ...(input.records && input.records.length > 0 && { records: input.records }),
+  ...(input.configs &&
+    input.configs.length > 0 && {
+      configs: input.configs,
     }),
 });

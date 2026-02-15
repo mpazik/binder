@@ -18,7 +18,7 @@ It is essentially Git for structured data with RDF-style semantic flexibility an
 **Namespaces** - Three isolated namespaces that function like sub-databases with no direct inter-linking.
 - **Transaction Namespace**: Contains transaction entities, uses built-in transaction schema
 - **Config Namespace**: Contains field and type definitions, uses built-in fields schema. Config entities use immutable keys for references.
-- **Node Namespace**: Contains user data entities, uses user-defined schema that evolves through config namespace transactions. Node entities use UIDs for references.
+- **Record Namespace**: Contains user data entities, uses user-defined schema that evolves through config namespace transactions. Record entities use UIDs for references.
 
 **Transaction** - Atomic collection of changesets modifying multiple entities simultaneously.
 
@@ -39,7 +39,7 @@ It is essentially Git for structured data with RDF-style semantic flexibility an
 The system uses a three-level hierarchy for changes:
 - **Value Change** (atomic unit): Change to a single field value. Example: `{ op: "set", value: "New Title", previous: "Old Title" }`
 - **Field Changeset** (entity-level): Maps field keys to value changes for one entity. Example: `{ title: { op: "set", value: "New Title" }, status: { op: "set", value: "active" } }`
-- **Transaction** (atomic commit): Contains field changesets for multiple entities in `nodes` and `configurations` properties. All changes apply atomically or not at all.
+- **Transaction** (atomic commit): Contains field changesets for multiple entities in `records` and `configs` properties. All changes apply atomically or not at all.
 
 
 ## User-Facing Terminology
@@ -59,7 +59,7 @@ End-user friendly terms for technical concepts:
 
 1. **Schema Compliance**: Fields must exist in schema before use
 2. **Type Safety**: Field values must match their defined data types
-3. **Reference Integrity**: Node references use UIDs, config references use immutable keys
+3. **Reference Integrity**: Record references use UIDs, config references use immutable keys
 4. **Atomic Transactions**: All changes in a transaction succeed or fail together
 5. **Immutability**: Changes create new versions, never modify existing data
 6. **System Fields**: Entities have system-managed fields: `id`, `uid`, `key`, `type`, `version`, `createdAt`, `updatedAt`, `createdBy`, `updatedBy`
@@ -69,7 +69,7 @@ End-user friendly terms for technical concepts:
 ### Core Data Types
 - **seqId**: Sequential ID for entities (internal use)
 - **uid**: Unique identifier (e.g., "tsk-abc123")
-- **relation**: Link to another entity (nodes use UID, configs use key)
+- **relation**: Link to another entity (records use UID, configs use key)
 - **boolean**: true/false values
 - **integer**: Whole numbers
 - **decimal**: Decimal numbers
@@ -83,8 +83,8 @@ End-user friendly terms for technical concepts:
 - **formula**: Formula expression
 - **condition**: Filter conditions
 
-### Node Data Types
-In addition to core types, nodes can use:
+### Record Data Types
+In addition to core types, records can use:
 - **fileHash**: SHA-256 hash of a file
 - **interval**: Time period (timezone relative or specific)
 - **duration**: Length of time

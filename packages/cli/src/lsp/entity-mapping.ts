@@ -3,8 +3,8 @@ import type {
   EntityType,
   EntityUid,
   FieldsetNested,
-  NodeType,
-  NodeUid,
+  RecordType,
+  RecordUid,
 } from "@binder/db";
 import { classifyFields } from "../diff/field-classifier.ts";
 import { matchEntities } from "../diff/entity-matcher.ts";
@@ -12,8 +12,8 @@ import type { ExtractedFileData } from "../document/extraction.ts";
 import type { DocumentEntityContext } from "./entity-context.ts";
 
 export type EntityMapping =
-  | { status: "matched"; uid: NodeUid; type: NodeType }
-  | { status: "new"; type?: NodeType };
+  | { status: "matched"; uid: RecordUid; type: RecordType }
+  | { status: "new"; type?: RecordType };
 
 export type EntityMappings =
   | { kind: "single"; mapping: EntityMapping }
@@ -50,9 +50,9 @@ const computeListMappings = (
   schema: EntitySchema,
   docEntities: FieldsetNested[],
   dbEntities: FieldsetNested[],
-  queryType?: NodeType,
+  queryType?: RecordType,
 ): EntityMapping[] => {
-  const getType = (entity: FieldsetNested): NodeType | undefined =>
+  const getType = (entity: FieldsetNested): RecordType | undefined =>
     (entity.type as EntityType) ?? queryType;
 
   if (dbEntities.length === 0) {

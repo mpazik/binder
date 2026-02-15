@@ -61,9 +61,9 @@ import {
   type ListMutation,
   type NamespaceEditable,
   type NamespaceSchema,
-  type NodeFieldDef,
-  type NodeKey,
-  type NodeSchema,
+  type RecordFieldDef,
+  type RecordKey,
+  type RecordSchema,
   normalizeInput,
   normalizeOptionSet,
   normalizeValueChange,
@@ -232,8 +232,12 @@ const validateFieldDefaultValue = (
     dataType,
     allowMultiple: false,
     options,
-  } as NodeFieldDef;
-  const validationResult = validateDataType("node", tempFieldDef, defaultValue);
+  } as RecordFieldDef;
+  const validationResult = validateDataType(
+    "record",
+    tempFieldDef,
+    defaultValue,
+  );
 
   if (isErr(validationResult)) {
     errors.push({
@@ -337,9 +341,9 @@ const validateTypeFieldDefaults = (
       dataType: fieldDef.dataType,
       allowMultiple: false,
       options: fieldDef.options,
-    } as NodeFieldDef;
+    } as RecordFieldDef;
     const validationResult = validateDataType(
-      "node",
+      "record",
       tempFieldDef,
       attrs.default,
     );
@@ -606,7 +610,7 @@ const validateUniquenessConstraints = async <N extends NamespaceEditable>(
         .where(
           and(
             fieldKey === "key"
-              ? eq(table.key, value as NodeKey | ConfigKey)
+              ? eq(table.key, value as RecordKey | ConfigKey)
               : sql`json_extract(fields, '$.${sql.raw(fieldKey)}') = ${value}`,
             currentEntityUid ? ne(table.uid, currentEntityUid) : undefined,
           ),
@@ -678,22 +682,20 @@ const validationError = <R>(
 ): Result<R, ValidationError[]> => err([{ field, message }]);
 
 export const applyConfigChangesetToSchema = (
-  baseSchema: NodeSchema,
-  configurationsChangeset: EntitiesChangeset<"config">,
-): NodeSchema => {
-  const newFields: NodeSchema["fields"] = { ...baseSchema.fields };
-  const newTypes: NodeSchema["types"] = { ...baseSchema.types };
+  baseSchema: RecordSchema,
+  configsChangeset: EntitiesChangeset<"config">,
+): RecordSchema => {
+  const newFields: RecordSchema["fields"] = { ...baseSchema.fields };
+  const newTypes: RecordSchema["types"] = { ...baseSchema.types };
 
-  for (const [configKey, changeset] of Object.entries(
-    configurationsChangeset,
-  )) {
+  for (const [configKey, changeset] of Object.entries(configsChangeset)) {
     const idChange = changeset.id ? normalizeValueChange(changeset.id) : null;
 
     if (idChange && isSetChange(idChange) && idChange.length === 2) {
       const entity = applyChangesetModel(emptyFieldset, changeset);
 
       if (includes(fieldTypes, entity.type)) {
-        const field = entity as NodeFieldDef;
+        const field = entity as RecordFieldDef;
         newFields[field.key] = field;
       } else if (entity.type === typeSystemType) {
         const type = entity as TypeDef;
@@ -705,7 +707,7 @@ export const applyConfigChangesetToSchema = (
 
       if (existingField) {
         const updated = applyChangesetModel(existingField, changeset);
-        newFields[configKey as FieldKey] = updated as NodeFieldDef;
+        newFields[configKey as FieldKey] = updated as RecordFieldDef;
       } else if (existingType) {
         const updated = applyChangesetModel(existingType, changeset);
         newTypes[configKey as EntityType] = updated as TypeDef;
@@ -812,7 +814,7 @@ const buildRefToUidMap = async <N extends NamespaceEditable>(
 
   if (refsToResolve.length === 0) return ok(intraBatchMap);
 
-  const resolvedResult = await resolveEntityRefs(tx, "node", refsToResolve);
+  const resolvedResult = await resolveEntityRefs(tx, "record", refsToResolve);
   if (isErr(resolvedResult)) return resolvedResult;
 
   const refToUid: RefToUidMap = new Map(intraBatchMap);
@@ -1043,7 +1045,7 @@ const buildChangeset = async <N extends NamespaceEditable>(
       }
     }
     changesetRef = (
-      namespace === "node"
+      namespace === "record"
         ? currentValues.uid
         : assertDefinedPass(currentValues.key)
     ) as EntityChangesetRef<N>;
@@ -1096,7 +1098,7 @@ const buildChangeset = async <N extends NamespaceEditable>(
       changeset[key] = (entityData as Fieldset)[key];
     }
     changesetRef = (
-      namespace === "node"
+      namespace === "record"
         ? entityData.uid
         : assertDefinedPass(entityData.key as ConfigKey)
     ) as EntityChangesetRef<N>;
@@ -1156,7 +1158,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
   const normalizedInputs = inputs.map((raw) => normalizeInput(raw, schema));
 
   const refToUidResult =
-    namespace === "node"
+    namespace === "record"
       ? await buildRefToUidMap(tx, normalizedInputs, schema)
       : ok(new Map<string, EntityUid>());
   if (isErr(refToUidResult)) return refToUidResult;

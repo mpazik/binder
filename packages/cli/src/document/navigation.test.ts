@@ -11,11 +11,11 @@ import {
   type KnowledgeGraph,
 } from "@binder/db";
 import {
-  mockNodeSchema,
+  mockRecordSchema,
   mockProjectKey,
-  mockProjectNode,
-  mockTask1Node,
-  mockTask2Node,
+  mockProjectRecord,
+  mockTask1Record,
+  mockTask2Record,
   mockTransactionInit,
 } from "@binder/db/mocks";
 import type { DatabaseCli } from "../db";
@@ -50,7 +50,7 @@ import {
 import { mockTemplates } from "./template.mock.ts";
 
 describe("navigation", () => {
-  const schema = mockNodeSchema;
+  const schema = mockRecordSchema;
 
   describe("findNavigationItemByPath", () => {
     const check = (
@@ -162,7 +162,7 @@ describe("navigation", () => {
       throwIfError(
         await kg.update({
           author: "test",
-          configurations: [
+          configs: [
             {
               type: typeTemplateKey,
               key: "static-template" as ConfigKey,
@@ -208,7 +208,7 @@ describe("navigation", () => {
           const viewAst = parseTemplate(file.view ?? defaultTemplateContent);
           const snapshot = throwIfError(
             renderTemplateAst(
-              mockNodeSchema,
+              mockRecordSchema,
               mockTemplates,
               viewAst,
               file.data,
@@ -247,14 +247,14 @@ describe("navigation", () => {
         ],
         [
           {
-            path: `tasks/${mockTask1Node.title}/info.md`,
+            path: `tasks/${mockTask1Record.title}/info.md`,
             view: infoViewContent,
-            data: mockTask1Node,
+            data: mockTask1Record,
           },
           {
-            path: `tasks/${mockTask2Node.title}/info.md`,
+            path: `tasks/${mockTask2Record.title}/info.md`,
             view: infoViewContent,
-            data: mockTask2Node,
+            data: mockTask2Record,
           },
         ],
       );
@@ -276,9 +276,9 @@ describe("navigation", () => {
         ],
         [
           {
-            path: `projects/${mockProjectNode.title}/tasks.yaml`,
+            path: `projects/${mockProjectRecord.title}/tasks.yaml`,
             yamlList: [
-              omit({ ...mockTask2Node, project: mockProjectKey }, [
+              omit({ ...mockTask2Record, project: mockProjectKey }, [
                 "id",
                 "type",
               ]),
@@ -304,8 +304,8 @@ describe("navigation", () => {
         ],
         [
           {
-            path: `projects/${mockProjectNode.title}/${mockProjectNode.uid}.md`,
-            data: mockProjectNode,
+            path: `projects/${mockProjectRecord.title}/${mockProjectRecord.uid}.md`,
+            data: mockProjectRecord,
           },
         ],
       );
@@ -367,7 +367,7 @@ describe("navigation", () => {
       fs = createInMemoryFileSystem();
       throwIfError(await kg.apply(mockTransactionInit));
 
-      schema = throwIfError(await kg.getSchema("node"));
+      schema = throwIfError(await kg.getSchema("record"));
       version = throwIfError(await kg.version());
       templates = throwIfError(await loadTemplates(kg));
     });
@@ -380,7 +380,7 @@ describe("navigation", () => {
       throwIfError(
         await kg.update({
           author: "test",
-          configurations: [
+          configs: [
             {
               type: typeTemplateKey,
               key: key as ConfigKey,
@@ -416,7 +416,7 @@ describe("navigation", () => {
           item,
           parentPath,
           parentEntities,
-          "node",
+          "record",
           templates,
         ),
       );
@@ -434,8 +434,8 @@ describe("navigation", () => {
           where: { type: "Task" },
           template: "local-template",
         },
-        `tasks/${mockTask1Node.title}.md`,
-        `# ${mockTask1Node.title}\n\n${mockTask1Node.description}\n`,
+        `tasks/${mockTask1Record.title}.md`,
+        `# ${mockTask1Record.title}\n\n${mockTask1Record.description}\n`,
       );
     });
 
@@ -450,8 +450,8 @@ describe("navigation", () => {
           where: { type: "Task" },
           template: "nested-template",
         },
-        `tasks/${mockTask2Node.title}.md`,
-        `# ${mockTask2Node.title}\n\nProject: ${mockProjectNode.title}\n`,
+        `tasks/${mockTask2Record.title}.md`,
+        `# ${mockTask2Record.title}\n\nProject: ${mockProjectRecord.title}\n`,
       );
     });
 
@@ -461,8 +461,8 @@ describe("navigation", () => {
           path: "projects/{title}",
           where: { type: "Project" },
         },
-        `projects/${mockProjectNode.title}.yaml`,
-        renderYamlEntity(omit(mockProjectNode, ["id", "type"])),
+        `projects/${mockProjectRecord.title}.yaml`,
+        renderYamlEntity(omit(mockProjectRecord, ["id", "type"])),
       );
     });
 
@@ -474,8 +474,8 @@ describe("navigation", () => {
         },
         "all-tasks.yaml",
         renderYamlList([
-          omit(mockTask1Node, ["id", "type"]),
-          omit({ ...mockTask2Node, project: mockProjectKey }, ["id", "type"]),
+          omit(mockTask1Record, ["id", "type"]),
+          omit({ ...mockTask2Record, project: mockProjectKey }, ["id", "type"]),
         ]),
       );
     });
@@ -485,7 +485,7 @@ describe("navigation", () => {
         {
           path: "tasks-with-project",
           query: {
-            filters: { type: "Task", project: mockProjectNode.uid },
+            filters: { type: "Task", project: mockProjectRecord.uid },
             includes: { project: true },
           },
         },
@@ -506,8 +506,8 @@ describe("navigation", () => {
           includes: { project: true },
           template: "task-with-project",
         },
-        `tasks/${mockTask2Node.title}.md`,
-        `# ${mockTask2Node.title}\n\nProject: ${mockProjectNode.title}\n`,
+        `tasks/${mockTask2Record.title}.md`,
+        `# ${mockTask2Record.title}\n\nProject: ${mockProjectRecord.title}\n`,
       );
     });
 
@@ -522,8 +522,8 @@ describe("navigation", () => {
           where: { type: "Task" },
           template: "task-preamble",
         },
-        `tasks/${mockTask1Node.title}.md`,
-        `---\nstatus: ${mockTask1Node.status}\n---\n\n# ${mockTask1Node.title}\n\n${mockTask1Node.description}\n`,
+        `tasks/${mockTask1Record.title}.md`,
+        `---\nstatus: ${mockTask1Record.status}\n---\n\n# ${mockTask1Record.title}\n\n${mockTask1Record.description}\n`,
       );
     });
 
@@ -538,8 +538,8 @@ describe("navigation", () => {
           where: { type: "Task" },
           template: "task-no-fm",
         },
-        `tasks/${mockTask1Node.title}.md`,
-        `# ${mockTask1Node.title}\n`,
+        `tasks/${mockTask1Record.title}.md`,
+        `# ${mockTask1Record.title}\n`,
       );
     });
 
@@ -551,11 +551,11 @@ describe("navigation", () => {
           where: { type: "Task", project: "{parent.uid}" },
           template: "task-detail",
         },
-        `projects/${mockProjectNode.title}/tasks/${mockTask2Node.title}.md`,
-        `# ${mockTask2Node.title}\n`,
+        `projects/${mockProjectRecord.title}/tasks/${mockTask2Record.title}.md`,
+        `# ${mockTask2Record.title}\n`,
         {
-          parentPath: `projects/${mockProjectNode.title}/`,
-          parentEntities: [mockProjectNode],
+          parentPath: `projects/${mockProjectRecord.title}/`,
+          parentEntities: [mockProjectRecord],
         },
       );
     });
@@ -571,7 +571,7 @@ describe("navigation", () => {
       throwIfError(
         await kg.update({
           author: "test",
-          configurations: mockNavigationConfigInput,
+          configs: mockNavigationConfigInput,
         }),
       );
     });
@@ -620,7 +620,7 @@ describe("navigation", () => {
 
     it("returns undefined when no matching nav item found", async () => {
       const result = throwIfError(
-        await findEntityLocation(fs, paths, schema, mockTask1Node, []),
+        await findEntityLocation(fs, paths, schema, mockTask1Record, []),
       );
       expect(result).toBeUndefined();
     });
@@ -635,10 +635,16 @@ describe("navigation", () => {
       ];
 
       const result = throwIfError(
-        await findEntityLocation(fs, paths, schema, mockTask1Node, navigation),
+        await findEntityLocation(
+          fs,
+          paths,
+          schema,
+          mockTask1Record,
+          navigation,
+        ),
       );
       expect(result).toEqual({
-        filePath: `${paths.docs}/tasks/${mockTask1Node.title}.md`,
+        filePath: `${paths.docs}/tasks/${mockTask1Record.title}.md`,
         line: 0,
       });
     });
@@ -693,10 +699,16 @@ describe("navigation", () => {
       ];
 
       const result = throwIfError(
-        await findEntityLocation(fs, paths, schema, mockTask1Node, navigation),
+        await findEntityLocation(
+          fs,
+          paths,
+          schema,
+          mockTask1Record,
+          navigation,
+        ),
       );
       expect(result).toEqual({
-        filePath: `${paths.docs}/tasks/${mockTask1Node.title}.md`,
+        filePath: `${paths.docs}/tasks/${mockTask1Record.title}.md`,
         line: 0,
       });
     });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { CodeAction, Diagnostic, Range } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { mockNodeSchema, mockTaskType } from "@binder/db/mocks";
+import { mockRecordSchema, mockTaskType } from "@binder/db/mocks";
 import type { DocumentContext } from "../document-context.ts";
 import { handleCodeAction } from "./code-actions.ts";
 
@@ -27,7 +27,7 @@ const createMockContext = (
 ): DocumentContext =>
   ({
     documentType,
-    schema: mockNodeSchema,
+    schema: mockRecordSchema,
     typeDef: mockTaskType,
     entityMappings: { kind: "single", mapping: { status: "new" } },
   }) as unknown as DocumentContext;

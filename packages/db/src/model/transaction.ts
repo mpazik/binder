@@ -7,9 +7,9 @@ import {
 import { hashString, hashToBase64Uri } from "../utils/hash.ts";
 import { type EntityId, type EntityKey, GENESIS_ENTITY_ID } from "./entity.ts";
 import type {
-  ConfigurationsChangeset,
+  ConfigChangeset,
   FieldChangeset,
-  NodesChangeset,
+  RecordsChangeset,
 } from "./changeset.ts";
 import {
   canonicalizeEntitiesChangeset,
@@ -18,7 +18,7 @@ import {
 } from "./changeset.ts";
 
 import type { ConfigSchema } from "./system.ts";
-import type { NodeSchema } from "./config.ts";
+import type { RecordSchema } from "./config.ts";
 
 export type TransactionId = BrandDerived<EntityId, "TransactionId">;
 export type TransactionHash = BrandDerived<EntityKey, "TransactionHash">;
@@ -31,8 +31,8 @@ export type Transaction = {
   id: TransactionId;
   hash: TransactionHash;
   previous: TransactionHash;
-  nodes: NodesChangeset;
-  configurations: ConfigurationsChangeset;
+  records: RecordsChangeset;
+  configs: ConfigChangeset;
   author: string;
   createdAt: IsoTimestamp;
 };
@@ -41,8 +41,8 @@ type CanonicalTransaction = {
   previous: TransactionHash;
   createdAt: IsoTimestamp;
   author: string;
-  nodes?: NodesChangeset;
-  configurations?: ConfigurationsChangeset;
+  records?: RecordsChangeset;
+  configs?: ConfigChangeset;
 };
 
 const isNonEmptyChangeset = (changeset: FieldChangeset): boolean =>
@@ -50,18 +50,18 @@ const isNonEmptyChangeset = (changeset: FieldChangeset): boolean =>
 
 export const transactionToCanonical = (
   configSchema: ConfigSchema,
-  nodeSchema: NodeSchema,
+  recordSchema: RecordSchema,
   tx: Pick<
     Transaction,
-    "previous" | "author" | "createdAt" | "nodes" | "configurations"
+    "previous" | "author" | "createdAt" | "records" | "configs"
   >,
 ): CanonicalTransaction => {
-  const nodes = filterObjectValues(
-    canonicalizeEntitiesChangeset(nodeSchema, tx.nodes),
+  const records = filterObjectValues(
+    canonicalizeEntitiesChangeset(recordSchema, tx.records),
     isNonEmptyChangeset,
   );
-  const configurations = filterObjectValues(
-    canonicalizeEntitiesChangeset(configSchema, tx.configurations),
+  const configs = filterObjectValues(
+    canonicalizeEntitiesChangeset(configSchema, tx.configs),
     isNonEmptyChangeset,
   );
 
@@ -69,8 +69,8 @@ export const transactionToCanonical = (
     previous: tx.previous,
     createdAt: tx.createdAt,
     author: tx.author,
-    ...(Object.keys(nodes).length > 0 && { nodes }),
-    ...(Object.keys(configurations).length > 0 && { configurations }),
+    ...(Object.keys(records).length > 0 && { records }),
+    ...(Object.keys(configs).length > 0 && { configs }),
   };
 };
 
@@ -83,22 +83,22 @@ export const hashTransaction = async (
 
 export const withHashTransaction = async (
   configSchema: ConfigSchema,
-  nodeSchema: NodeSchema,
+  recordSchema: RecordSchema,
   tx: Pick<
     Transaction,
-    "previous" | "author" | "createdAt" | "nodes" | "configurations"
+    "previous" | "author" | "createdAt" | "records" | "configs"
   >,
   id: TransactionId,
 ): Promise<Transaction> => {
-  const canonical = transactionToCanonical(configSchema, nodeSchema, tx);
+  const canonical = transactionToCanonical(configSchema, recordSchema, tx);
   return {
     id,
     hash: await hashTransaction(canonical),
     previous: canonical.previous,
     createdAt: canonical.createdAt,
     author: canonical.author,
-    nodes: canonical.nodes ?? {},
-    configurations: canonical.configurations ?? {},
+    records: canonical.records ?? {},
+    configs: canonical.configs ?? {},
   };
 };
 
@@ -124,8 +124,8 @@ export const GENESIS_VERSION: GraphVersion = {
 
 export const invertTransaction = (transaction: Transaction): Transaction => ({
   ...transaction,
-  nodes: mapObjectValues(transaction.nodes, inverseChangeset),
-  configurations: mapObjectValues(transaction.configurations, inverseChangeset),
+  records: mapObjectValues(transaction.records, inverseChangeset),
+  configs: mapObjectValues(transaction.configs, inverseChangeset),
 });
 
 export const shortTransactionHash = (
@@ -135,40 +135,40 @@ export const shortTransactionHash = (
 
 export const squashTransactions = async (
   transactions: Transaction[],
-  nodeSchema: NodeSchema,
+  recordSchema: RecordSchema,
   configSchema: ConfigSchema,
 ): Promise<Transaction> => {
   const oldest = transactions[0]!;
   const newest = transactions[transactions.length - 1]!;
 
-  const squashedNodes = {} as NodesChangeset;
-  const squashedConfigurations = {} as ConfigurationsChangeset;
+  const squashedRecords = {} as RecordsChangeset;
+  const squashedConfigs = {} as ConfigChangeset;
 
   for (const tx of transactions) {
-    for (const [uid, changeset] of Object.entries(tx.nodes)) {
-      const nodeUid = uid as keyof NodesChangeset;
-      squashedNodes[nodeUid] = squashedNodes[nodeUid]
-        ? squashChangesets(squashedNodes[nodeUid]!, changeset)
+    for (const [uid, changeset] of Object.entries(tx.records)) {
+      const recordUid = uid as keyof RecordsChangeset;
+      squashedRecords[recordUid] = squashedRecords[recordUid]
+        ? squashChangesets(squashedRecords[recordUid]!, changeset)
         : changeset;
     }
 
-    for (const [uid, changeset] of Object.entries(tx.configurations)) {
-      const configUid = uid as keyof ConfigurationsChangeset;
-      squashedConfigurations[configUid] = squashedConfigurations[configUid]
-        ? squashChangesets(squashedConfigurations[configUid]!, changeset)
+    for (const [uid, changeset] of Object.entries(tx.configs)) {
+      const configUid = uid as keyof ConfigChangeset;
+      squashedConfigs[configUid] = squashedConfigs[configUid]
+        ? squashChangesets(squashedConfigs[configUid]!, changeset)
         : changeset;
     }
   }
 
   return withHashTransaction(
     configSchema,
-    nodeSchema,
+    recordSchema,
     {
       previous: oldest.previous,
       author: newest.author,
       createdAt: newest.createdAt,
-      nodes: squashedNodes,
-      configurations: squashedConfigurations,
+      records: squashedRecords,
+      configs: squashedConfigs,
     },
     oldest.id,
   );

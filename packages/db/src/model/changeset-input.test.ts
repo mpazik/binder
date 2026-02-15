@@ -3,7 +3,7 @@ import {
   normalizeInput,
   type EntityChangesetInput,
 } from "./changeset-input.ts";
-import { mockNodeSchema } from "./schema.mock.ts";
+import { mockRecordSchema } from "./schema.mock.ts";
 import { mockChaptersFieldKey, mockTaskTypeKey } from "./config.mock.ts";
 
 describe("changeset-input", () => {
@@ -20,13 +20,13 @@ Content of first doc.
 
 Content of second doc.`;
 
-      const input: EntityChangesetInput<"node"> = {
+      const input: EntityChangesetInput<"record"> = {
         type: mockTaskTypeKey,
         title: "Test Task",
         [mockChaptersFieldKey]: multiDocContent as unknown as string[],
       };
 
-      const result = normalizeInput(input, mockNodeSchema);
+      const result = normalizeInput(input, mockRecordSchema);
 
       expect(result).toMatchObject({
         [mockChaptersFieldKey]: [
@@ -41,13 +41,13 @@ Content of second doc.`;
 
 Content without any delimiter.`;
 
-      const input: EntityChangesetInput<"node"> = {
+      const input: EntityChangesetInput<"record"> = {
         type: mockTaskTypeKey,
         title: "Test Task",
         [mockChaptersFieldKey]: singleDocContent as unknown as string[],
       };
 
-      const result = normalizeInput(input, mockNodeSchema);
+      const result = normalizeInput(input, mockRecordSchema);
 
       expect(result).toMatchObject({
         [mockChaptersFieldKey]: [singleDocContent],

@@ -29,7 +29,14 @@ export const activate = (context: vscode.ExtensionContext): void => {
   const command = devMode ? "bun" : cliPath;
   const logLevel = config.get<string>("logLevel", "info");
   const args = devMode
-    ? ["run", "--conditions=development", "packages/cli/src/index.ts", "lsp", "--log-level", logLevel]
+    ? [
+        "run",
+        "--conditions=development",
+        "packages/cli/src/index.ts",
+        "lsp",
+        "--log-level",
+        logLevel,
+      ]
     : ["lsp", "--log-level", logLevel];
   const outputChannel = vscode.window.createOutputChannel("Binder");
 

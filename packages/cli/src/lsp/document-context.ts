@@ -8,7 +8,7 @@ import type {
   EntitySchema,
   FieldKey,
   NamespaceEditable,
-  NodeType,
+  RecordType,
   TypeDef,
 } from "@binder/db";
 import { getAllFieldsForType } from "@binder/db";
@@ -381,5 +381,5 @@ export const getAllowedFields = (
   schema: EntitySchema,
 ): string[] => {
   if (!typeDef) return Object.keys(schema.fields);
-  return getAllFieldsForType(typeDef.key as NodeType, schema);
+  return getAllFieldsForType(typeDef.key as RecordType, schema);
 };

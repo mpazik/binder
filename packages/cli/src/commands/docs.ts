@@ -49,8 +49,8 @@ export const docsSyncHandler: CommandHandlerWithDb<{
   if (isErr(updateResult)) return updateResult;
 
   const changeCount =
-    (syncResult.data.nodes?.length ?? 0) +
-    (syncResult.data.configurations?.length ?? 0);
+    (syncResult.data.records?.length ?? 0) +
+    (syncResult.data.configs?.length ?? 0);
 
   ui.block(() => {
     ui.printTransaction(updateResult.data);
@@ -85,7 +85,7 @@ const lintNamespace = async <N extends NamespaceEditable>(
   if (isErr(navigationResult)) return navigationResult;
 
   const shouldInclude =
-    namespace === "node"
+    namespace === "record"
       ? createPathMatcher({ include: config.include, exclude: config.exclude })
       : () => true;
 
@@ -168,10 +168,10 @@ export const docsLintHandler: CommandHandlerWithDb<{
     toLint = [[namespace, absolutePath]];
   } else {
     const namespacesToLint: NamespaceEditable[] = args.all
-      ? ["node", "config"]
+      ? ["record", "config"]
       : args.config
         ? ["config"]
-        : ["node"];
+        : ["record"];
     toLint = namespacesToLint.map((ns) => [
       ns,
       snapshotRootForNamespace(ns, config.paths),

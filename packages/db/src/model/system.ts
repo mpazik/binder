@@ -27,7 +27,7 @@ import {
   type ConfigId,
   type ConfigKey,
   type ConfigType,
-  nodeDataTypes,
+  recordDataTypes,
 } from "./config.ts";
 
 /**
@@ -104,7 +104,7 @@ export const configFieldsDefs = {
     key: "dataType" as SystemKey,
     name: "Data Type",
     dataType: "option",
-    options: dataTypeDefsToOptions(nodeDataTypes),
+    options: dataTypeDefsToOptions(recordDataTypes),
     immutable: true,
   },
   options: {

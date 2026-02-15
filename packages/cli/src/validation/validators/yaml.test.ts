@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mockNodeSchema } from "@binder/db/mocks";
+import { mockRecordSchema } from "@binder/db/mocks";
 import type { KnowledgeGraph } from "@binder/db";
 import { parseYamlDocument } from "../../document/yaml-cst.ts";
 import { createYamlValidator } from "./yaml.ts";
@@ -31,8 +31,8 @@ describe("createYamlValidator", () => {
     const errors = await validator.validate(content, {
       filePath: "test.yaml",
       navigationItem,
-      namespace: "node",
-      schema: mockNodeSchema,
+      namespace: "record",
+      schema: mockRecordSchema,
       ruleConfig: {},
       kg: mockKg,
     });

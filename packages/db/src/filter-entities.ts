@@ -1,6 +1,10 @@
 import { includes } from "@binder/utils";
 import { and, sql, type SQL } from "drizzle-orm";
-import { type configTable, type nodeTable, tableStoredFields } from "./schema";
+import {
+  type configTable,
+  type recordTable,
+  tableStoredFields,
+} from "./schema";
 import type {
   ComplexFilter,
   EntitySchema,
@@ -10,7 +14,7 @@ import type {
   Filters,
 } from "./model";
 
-type EntityTable = typeof nodeTable | typeof configTable;
+type EntityTable = typeof recordTable | typeof configTable;
 
 export const isComplexFilter = (filter: Filter): filter is ComplexFilter => {
   return (

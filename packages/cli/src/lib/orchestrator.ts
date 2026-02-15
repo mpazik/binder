@@ -49,14 +49,14 @@ export const verifySync = async (
   binderPath: string,
 ): ResultAsync<VerifySync> => {
   const configSchema = kg.getConfigSchema();
-  const nodeSchemaResult = await kg.getNodeSchema();
-  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+  const recordSchemaResult = await kg.getRecordSchema();
+  if (isErr(recordSchemaResult)) return recordSchemaResult;
 
   const logPath = join(binderPath, TRANSACTION_LOG_FILE);
   const logVerifyResult = await verifyLog(
     fs,
     configSchema,
-    nodeSchemaResult.data,
+    recordSchemaResult.data,
     logPath,
   );
   if (isErr(logVerifyResult)) return logVerifyResult;
@@ -482,12 +482,12 @@ export const squashTransactions = async (
         );
     }
 
-    const nodeSchemaResult = await kg.getNodeSchema();
-    if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+    const recordSchemaResult = await kg.getRecordSchema();
+    if (isErr(recordSchemaResult)) return recordSchemaResult;
 
     const squashedTransaction = await mergeTransactions(
       dbTransactions,
-      nodeSchemaResult.data,
+      recordSchemaResult.data,
       kg.getConfigSchema(),
     );
 

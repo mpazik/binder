@@ -55,7 +55,7 @@ const entityRefClause = <N extends Namespace>(
       ref as TransactionHash,
     );
 
-  const editableTable = entityTables[namespace as "config" | "node"];
+  const editableTable = entityTables[namespace as "config" | "record"];
   if (isEntityUid(ref)) {
     return eq(editableTable.uid, ref);
   }

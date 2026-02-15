@@ -9,24 +9,24 @@ import {
 import "@binder/utils/tests";
 import {
   mockProjectKey,
-  mockProjectNode,
+  mockProjectRecord,
   mockProjectUid,
-  mockTask1Node,
-  mockTask2Node,
+  mockTask1Record,
+  mockTask2Record,
   mockTask2Uid,
-  mockTask3Node,
+  mockTask3Record,
   mockTask3Uid,
-  mockTaskNode1Updated,
-  mockTaskWithOwnersNode,
+  mockTaskRecord1Updated,
+  mockTaskWithOwnersRecord,
   mockTaskWithOwnersUid,
-  mockUserNode,
+  mockUserRecord,
   mockUserUid,
-} from "./model/node.mock.ts";
+} from "./model/record.mock.ts";
 import {
   mockChangesetCreateTask1,
   mockChangesetUpdateTask1,
 } from "./model/changeset.mock.ts";
-import { getTestDatabase, insertConfig, insertNode } from "./db.mock.ts";
+import { getTestDatabase, insertConfig, insertRecord } from "./db.mock.ts";
 import { type Database } from "./db.ts";
 import {
   applyChangeset,
@@ -49,9 +49,9 @@ import {
   inverseChangeset,
   mergeSchema,
   type NamespaceEditable,
-  type NodeKey,
-  type NodeType,
-  type NodeUid,
+  type RecordKey,
+  type RecordType,
+  type RecordUid,
   typeSystemType,
 } from "./model";
 import {
@@ -61,10 +61,10 @@ import {
 } from "./entity-store.ts";
 import { saveTransaction } from "./transaction-store.ts";
 import { mockTransactionInit } from "./model/transaction.mock.ts";
-import { mockNodeSchema } from "./model/schema.mock.ts";
+import { mockRecordSchema } from "./model/schema.mock.ts";
 import {
   mockFieldKeyEmail,
-  mockNotExistingNodeTypeKey,
+  mockNotExistingRecordTypeKey,
   mockPriorityField,
   mockPriorityFieldKey,
   mockProjectFieldKey,
@@ -77,7 +77,7 @@ import {
 } from "./model/config.mock.ts";
 import { mockChangesetInputUpdateTask1 } from "./model/changeset-input.mock.ts";
 
-const mockTask1FieldKeys = Object.keys(mockTask1Node) as FieldKey[];
+const mockTask1FieldKeys = Object.keys(mockTask1Record) as FieldKey[];
 
 describe("applyChangeset", () => {
   let db: Database;
@@ -85,7 +85,7 @@ describe("applyChangeset", () => {
   const apply = async (changeset: Parameters<typeof applyChangeset>[3]) => {
     await db.transaction(async (tx) => {
       throwIfError(
-        await applyChangeset(tx, "node", mockTask1Node.uid, changeset),
+        await applyChangeset(tx, "record", mockTask1Record.uid, changeset),
       );
     });
   };
@@ -95,8 +95,8 @@ describe("applyChangeset", () => {
       throwIfError(
         await fetchEntityFieldset(
           tx,
-          "node",
-          mockTask1Node.uid,
+          "record",
+          mockTask1Record.uid,
           mockTask1FieldKeys,
         ),
       ),
@@ -107,22 +107,22 @@ describe("applyChangeset", () => {
   });
 
   it("applies and reverts changeset", async () => {
-    await insertNode(db, mockTask1Node);
+    await insertRecord(db, mockTask1Record);
 
     await apply(mockChangesetUpdateTask1);
-    expect(await fetchTask1()).toEqual(mockTaskNode1Updated);
+    expect(await fetchTask1()).toEqual(mockTaskRecord1Updated);
 
     await apply(inverseChangeset(mockChangesetUpdateTask1));
-    expect(await fetchTask1()).toEqual(mockTask1Node);
+    expect(await fetchTask1()).toEqual(mockTask1Record);
   });
 
-  it("applies and reverts changeset for new node entity", async () => {
+  it("applies and reverts changeset for new record entity", async () => {
     await apply(mockChangesetCreateTask1);
-    expect(await fetchTask1()).toEqual(mockTask1Node);
+    expect(await fetchTask1()).toEqual(mockTask1Record);
 
     await apply(inverseChangeset(mockChangesetCreateTask1));
     const exists = await db.transaction(async (tx) =>
-      throwIfError(await entityExists(tx, "node", mockTask1Node.uid)),
+      throwIfError(await entityExists(tx, "record", mockTask1Record.uid)),
     );
     expect(exists).toBe(false);
   });
@@ -130,15 +130,15 @@ describe("applyChangeset", () => {
 
 describe("processChangesetInput", () => {
   let db: Database;
-  const mockTask1LastEntityId = mockTask1Node.id;
+  const mockTask1LastEntityId = mockTask1Record.id;
   const invalidConfigType = "InvalidConfigType" as ConfigType;
   const testFieldKey = "testField" as ConfigKey;
 
   const process = async (
     inputs: EntityChangesetInput<NamespaceEditable>[],
-    namespace: NamespaceEditable = "node",
+    namespace: NamespaceEditable = "record",
   ): ResultAsync<EntitiesChangeset<NamespaceEditable>> => {
-    const schema = namespace === "config" ? coreConfigSchema : mockNodeSchema;
+    const schema = namespace === "config" ? coreConfigSchema : mockRecordSchema;
     return await db.transaction(async (tx) =>
       processChangesetInput(tx, namespace, inputs, schema, GENESIS_ENTITY_ID),
     );
@@ -176,7 +176,7 @@ describe("processChangesetInput", () => {
   const setup = async (...entities: Fieldset[]) => {
     await db.transaction(async (tx) => {
       for (const entity of entities) {
-        await createEntity(tx, "node", entity);
+        await createEntity(tx, "record", entity);
       }
       await saveTransaction(tx, mockTransactionInit);
     });
@@ -188,22 +188,22 @@ describe("processChangesetInput", () => {
 
   describe("create", () => {
     it("creates changeset for updated entity", async () => {
-      await insertNode(db, mockTask1Node);
+      await insertRecord(db, mockTask1Record);
 
       const result = await db.transaction(async (tx) =>
         throwIfError(
           await processChangesetInput(
             tx,
-            "node",
+            "record",
             [mockChangesetInputUpdateTask1],
-            mockNodeSchema,
+            mockRecordSchema,
             mockTask1LastEntityId,
           ),
         ),
       );
 
       expect(result).toEqual({
-        [mockTask1Node.uid]: mockChangesetUpdateTask1,
+        [mockTask1Record.uid]: mockChangesetUpdateTask1,
       });
     });
 
@@ -238,7 +238,7 @@ describe("processChangesetInput", () => {
 
   describe("default values", () => {
     const check = async (
-      input: EntityChangesetInput<"node">,
+      input: EntityChangesetInput<"record">,
       expected: Record<string, unknown>,
     ) => {
       const result = throwIfError(await process([input]));
@@ -406,17 +406,17 @@ describe("processChangesetInput", () => {
   });
 
   describe("validation", () => {
-    it("rejects create with invalid node type", () =>
-      expectError([{ type: mockNotExistingNodeTypeKey, name: "Test Item" }], {
+    it("rejects create with invalid record type", () =>
+      expectError([{ type: mockNotExistingRecordTypeKey, name: "Test Item" }], {
         key: "changeset-input-process-failed",
         message: "failed creating changeset",
         data: {
           errors: [
             {
               index: 0,
-              namespace: "node",
+              namespace: "record",
               field: "type",
-              message: "invalid type: NotExistingNodeType",
+              message: "invalid type: NotExistingRecordType",
             },
           ],
         },
@@ -449,7 +449,7 @@ describe("processChangesetInput", () => {
         [
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: "title",
             message: "mandatory property is missing or null",
           },
@@ -474,7 +474,7 @@ describe("processChangesetInput", () => {
         [
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: "cancelReason",
             message: "mandatory property is missing or null",
           },
@@ -493,19 +493,19 @@ describe("processChangesetInput", () => {
       ]));
 
     it("rejects update to status triggering conditional required field", async () => {
-      await insertNode(db, mockTask1Node);
+      await insertRecord(db, mockTask1Record);
 
       await checkErrors(
         [
           {
-            $ref: mockTask1Node.uid,
+            $ref: mockTask1Record.uid,
             status: "cancelled",
           },
         ],
         [
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: "cancelReason",
             message: "mandatory property is missing or null",
           },
@@ -514,11 +514,11 @@ describe("processChangesetInput", () => {
     });
 
     it("accepts update to status with conditional required field provided", async () => {
-      await insertNode(db, mockTask1Node);
+      await insertRecord(db, mockTask1Record);
 
       await checkSuccess([
         {
-          $ref: mockTask1Node.uid,
+          $ref: mockTask1Record.uid,
           status: "cancelled",
           cancelReason: "Project cancelled",
         },
@@ -550,18 +550,20 @@ describe("processChangesetInput", () => {
       await checkErrors(
         [
           { type: mockTaskTypeKey },
-          { title: "Updated Task" } as unknown as EntityChangesetInput<"node">,
+          {
+            title: "Updated Task",
+          } as unknown as EntityChangesetInput<"record">,
         ],
         [
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: "title",
             message: "mandatory property is missing or null",
           },
           {
             index: 1,
-            namespace: "node",
+            namespace: "record",
             field: "type",
             message: "type is required for create entity changeset",
           },
@@ -576,19 +578,19 @@ describe("processChangesetInput", () => {
             type: mockTaskTypeKey,
             title: "Test Task",
             invalidField: "test value",
-          } as EntityChangesetInput<"node">,
-          { $ref: mockTask1Node.uid, anotherInvalidField: "test" },
+          } as EntityChangesetInput<"record">,
+          { $ref: mockTask1Record.uid, anotherInvalidField: "test" },
         ],
         [
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: "invalidField",
             message: 'field "invalidField" is not defined in schema',
           },
           {
             index: 1,
-            namespace: "node",
+            namespace: "record",
             field: "anotherInvalidField",
             message: 'field "anotherInvalidField" is not defined in schema',
           },
@@ -681,7 +683,7 @@ describe("processChangesetInput", () => {
 
     describe("normalization", () => {
       const checkNormalized = async (
-        input: EntityChangesetInput<"node">,
+        input: EntityChangesetInput<"record">,
         expected: Record<string, unknown>,
       ) => {
         const result = throwIfError(await process([input]));
@@ -723,7 +725,7 @@ describe("processChangesetInput", () => {
         ));
 
       it("handles ObjTuple format in relation array field", async () => {
-        await insertNode(db, mockUserNode);
+        await insertRecord(db, mockUserRecord);
 
         const result = throwIfError(
           await process([
@@ -764,12 +766,12 @@ describe("processChangesetInput", () => {
     });
 
     it("validates values in list mutations", async () => {
-      await insertNode(db, mockTask1Node);
+      await insertRecord(db, mockTask1Record);
 
       await checkErrors(
         [
           {
-            $ref: mockTask1Node.uid,
+            $ref: mockTask1Record.uid,
             tags: [
               ["insert", 123 as unknown as string, 0],
               ["remove", 456 as unknown as string, 1],
@@ -779,13 +781,13 @@ describe("processChangesetInput", () => {
         [
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: "tags",
             message: expect.stringContaining("Invalid insert value"),
           },
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: "tags",
             message: expect.stringContaining("Invalid remove value"),
           },
@@ -794,11 +796,11 @@ describe("processChangesetInput", () => {
     });
 
     it("accepts valid list mutations", async () => {
-      await insertNode(db, mockTask1Node);
+      await insertRecord(db, mockTask1Record);
 
       await checkSuccess([
         {
-          $ref: mockTask1Node.uid,
+          $ref: mockTask1Record.uid,
           tags: [
             ["insert", "urgent", 0],
             ["remove", "important", 1],
@@ -808,7 +810,7 @@ describe("processChangesetInput", () => {
     });
 
     it("rejects duplicate unique field value", async () => {
-      await insertNode(db, mockUserNode);
+      await insertRecord(db, mockUserRecord);
 
       await checkErrors(
         [
@@ -821,7 +823,7 @@ describe("processChangesetInput", () => {
         [
           {
             index: 0,
-            namespace: "node",
+            namespace: "record",
             field: mockFieldKeyEmail,
             message: expect.stringContaining(
               "value must be unique, already exists",
@@ -913,19 +915,19 @@ describe("processChangesetInput", () => {
 
     describe("patch", () => {
       it("validates patch attrs against field attributes", async () => {
-        await insertNode(db, mockTaskWithOwnersNode);
+        await insertRecord(db, mockTaskWithOwnersRecord);
 
         await checkErrors(
           [
             {
-              $ref: mockTaskWithOwnersNode.uid,
+              $ref: mockTaskWithOwnersRecord.uid,
               owners: [["patch", "user-1", { role: 123 }]],
             },
           ],
           [
             {
               index: 0,
-              namespace: "node",
+              namespace: "record",
               field: "owners.role",
               message: "Expected string for plaintext, got: number",
             },
@@ -934,41 +936,41 @@ describe("processChangesetInput", () => {
       });
 
       it("accepts valid patch attrs", async () => {
-        await insertNode(db, mockTaskWithOwnersNode);
+        await insertRecord(db, mockTaskWithOwnersRecord);
 
         await checkSuccess([
           {
-            $ref: mockTaskWithOwnersNode.uid,
+            $ref: mockTaskWithOwnersRecord.uid,
             owners: [["patch", "user-1", { role: "admin" }]],
           },
         ]);
       });
 
       it("ignores patch attrs not in field attributes", async () => {
-        await insertNode(db, mockTaskWithOwnersNode);
+        await insertRecord(db, mockTaskWithOwnersRecord);
 
         await checkSuccess([
           {
-            $ref: mockTaskWithOwnersNode.uid,
+            $ref: mockTaskWithOwnersRecord.uid,
             owners: [["patch", "user-1", { unknownAttr: "value" }]],
           },
         ]);
       });
 
       it("validates single patch mutation", async () => {
-        await insertNode(db, mockTaskWithOwnersNode);
+        await insertRecord(db, mockTaskWithOwnersRecord);
 
         await checkErrors(
           [
             {
-              $ref: mockTaskWithOwnersNode.uid,
+              $ref: mockTaskWithOwnersRecord.uid,
               owners: ["patch", "user-1", { role: false }],
             },
           ],
           [
             {
               index: 0,
-              namespace: "node",
+              namespace: "record",
               field: "owners.role",
               message: "Expected string for plaintext, got: boolean",
             },
@@ -1086,9 +1088,9 @@ describe("processChangesetInput", () => {
   });
 
   describe("relation key resolution", () => {
-    const mockUserKey = "user-rick" as NodeKey;
-    const mockUserWithKey = { ...mockUserNode, key: mockUserKey };
-    const mockTeamNode = {
+    const mockUserKey = "user-rick" as RecordKey;
+    const mockUserWithKey = { ...mockUserRecord, key: mockUserKey };
+    const mockTeamRecord = {
       id: 100 as EntityId,
       uid: mockTaskWithOwnersUid,
       type: mockTeamTypeKey,
@@ -1096,22 +1098,22 @@ describe("processChangesetInput", () => {
     };
 
     const check = async (
-      inputs: EntityChangesetInput<"node">[],
+      inputs: EntityChangesetInput<"record">[],
       expectedField: string,
-      expectedValue: NodeUid | NodeUid[],
+      expectedValue: RecordUid | RecordUid[],
     ) => {
       const result = throwIfError(await process(inputs));
-      const nodeUids = Object.keys(result) as NodeUid[];
-      const nodeChangeset = result[nodeUids[0]!];
-      expect(nodeChangeset[expectedField]).toEqual(expectedValue);
+      const recordUids = Object.keys(result) as RecordUid[];
+      const recordChangeset = result[recordUids[0]!];
+      expect(recordChangeset[expectedField]).toEqual(expectedValue);
     };
 
-    it("resolves relation keys to UIDs in node changesets", async () => {
-      await setup(mockProjectNode);
+    it("resolves relation keys to UIDs in record changesets", async () => {
+      await setup(mockProjectRecord);
       await check(
         [{ type: mockTaskTypeKey, title: "Task", project: mockProjectKey }],
         "project",
-        mockProjectNode.uid,
+        mockProjectRecord.uid,
       );
     });
 
@@ -1125,7 +1127,7 @@ describe("processChangesetInput", () => {
     });
 
     it("resolves relation keys in list mutation insert", async () => {
-      await setup(mockUserWithKey, mockTeamNode);
+      await setup(mockUserWithKey, mockTeamRecord);
       const result = throwIfError(
         await process([
           { $ref: mockTaskWithOwnersUid, members: [["insert", mockUserKey]] },
@@ -1138,7 +1140,7 @@ describe("processChangesetInput", () => {
     });
 
     it("resolves relation keys in tuple format with attributes", async () => {
-      await setup(mockUserWithKey, mockTeamNode);
+      await setup(mockUserWithKey, mockTeamRecord);
       const result = throwIfError(
         await process([
           {
@@ -1186,26 +1188,26 @@ describe("processChangesetInput", () => {
         (cs) => cs.type === mockTeamTypeKey,
       );
 
-      expect(teamChangeset!.members).toEqual([userChangeset!.uid as NodeUid]);
+      expect(teamChangeset!.members).toEqual([userChangeset!.uid as RecordUid]);
     });
   });
 
   describe("inverse relations", () => {
-    const task2Unlinked = omit(mockTask2Node, ["project"]);
-    const task3Unlinked = omit(mockTask3Node, ["project"]);
-    const otherProjectUid = "_projOther0" as NodeUid;
+    const task2Unlinked = omit(mockTask2Record, ["project"]);
+    const task3Unlinked = omit(mockTask3Record, ["project"]);
+    const otherProjectUid = "_projOther0" as RecordUid;
     const otherProject = {
-      ...mockProjectNode,
+      ...mockProjectRecord,
       id: 10 as EntityId,
       uid: otherProjectUid,
-      key: "other-project" as NodeKey,
+      key: "other-project" as RecordKey,
       title: "Other Project",
     };
 
     const check = async (
       entities: Fieldset[],
-      input: EntityChangesetInput<"node">,
-      expected: EntitiesChangeset<"node">,
+      input: EntityChangesetInput<"record">,
+      expected: EntitiesChangeset<"record">,
     ) => {
       await setup(...entities);
       const result = throwIfError(await process([input]));
@@ -1214,7 +1216,7 @@ describe("processChangesetInput", () => {
 
     it("translates remove mutation on inverse field to direct field update", () =>
       check(
-        [mockProjectNode, mockTask2Node],
+        [mockProjectRecord, mockTask2Record],
         {
           $ref: mockProjectUid,
           [mockTasksFieldKey]: [["remove", mockTask2Uid]],
@@ -1228,7 +1230,7 @@ describe("processChangesetInput", () => {
 
     it("translates insert mutation on inverse field to direct field update", () =>
       check(
-        [mockProjectNode, task2Unlinked],
+        [mockProjectRecord, task2Unlinked],
         {
           $ref: mockProjectUid,
           [mockTasksFieldKey]: [["insert", mockTask2Uid]],
@@ -1238,7 +1240,7 @@ describe("processChangesetInput", () => {
 
     it("translates insert mutation when task already has different project", () =>
       check(
-        [mockProjectNode, otherProject, mockTask2Node],
+        [mockProjectRecord, otherProject, mockTask2Record],
         {
           $ref: otherProjectUid,
           [mockTasksFieldKey]: [["insert", mockTask2Uid]],
@@ -1252,7 +1254,7 @@ describe("processChangesetInput", () => {
 
     it("handles mixed insert and remove mutations", () =>
       check(
-        [mockProjectNode, mockTask2Node, task3Unlinked],
+        [mockProjectRecord, mockTask2Record, task3Unlinked],
         {
           $ref: mockProjectUid,
           [mockTasksFieldKey]: [
@@ -1269,7 +1271,7 @@ describe("processChangesetInput", () => {
       ));
 
     it("strips inverse field from parent changeset while keeping other fields", async () => {
-      await setup(mockProjectNode, task2Unlinked);
+      await setup(mockProjectRecord, task2Unlinked);
       const result = throwIfError(
         await process([
           {
@@ -1280,7 +1282,7 @@ describe("processChangesetInput", () => {
         ]),
       );
       expect(result[mockProjectUid]).toEqual({
-        title: ["set", "Updated Project Title", mockProjectNode.title],
+        title: ["set", "Updated Project Title", mockProjectRecord.title],
       });
       expect(result[mockTask2Uid]).toEqual({
         [mockProjectFieldKey]: ["set", mockProjectUid],
@@ -1288,7 +1290,7 @@ describe("processChangesetInput", () => {
     });
 
     it("produces no parent changeset when only inverse field is updated", async () => {
-      await setup(mockProjectNode, task2Unlinked);
+      await setup(mockProjectRecord, task2Unlinked);
       const result = throwIfError(
         await process([
           {
@@ -1317,8 +1319,8 @@ describe("processChangesetInput", () => {
         (cs) => cs.title === "New Project",
       );
       const projectUid = Object.keys(result).find(
-        (uid) => result[uid as NodeUid] === projectChangeset,
-      ) as NodeUid;
+        (uid) => result[uid as RecordUid] === projectChangeset,
+      ) as RecordUid;
 
       expect(projectChangeset).toBeDefined();
       expect(projectChangeset![mockTasksFieldKey]).toBeUndefined();
@@ -1331,7 +1333,7 @@ describe("processChangesetInput", () => {
 
 describe("applyConfigChangesetToSchema", () => {
   const newFieldKey = "priority" as ConfigKey;
-  const newTypeKey = "Bug" as NodeType;
+  const newTypeKey = "Bug" as RecordType;
 
   it("adds new field to schema", () => {
     const changeset: EntitiesChangeset<"config"> = {
@@ -1387,7 +1389,7 @@ describe("applyConfigChangesetToSchema", () => {
       },
     };
 
-    const result = applyConfigChangesetToSchema(mockNodeSchema, changeset);
+    const result = applyConfigChangesetToSchema(mockRecordSchema, changeset);
 
     expect(result.types[mockTaskTypeKey]?.fields).toEqual([
       [mockPriorityFieldKey, { required: true }],
@@ -1406,7 +1408,7 @@ describe("applyConfigChangesetToSchema", () => {
       },
     };
 
-    const result = applyConfigChangesetToSchema(mockNodeSchema, changeset);
+    const result = applyConfigChangesetToSchema(mockRecordSchema, changeset);
 
     expect(result.fields[mockPriorityFieldKey]?.description).toBe(
       "Updated description",

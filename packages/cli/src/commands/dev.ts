@@ -38,13 +38,13 @@ export const backupHandler: CommandHandlerWithDb = async ({
     );
 
   const configSchema = kg.getConfigSchema();
-  const nodeSchemaResult = await kg.getNodeSchema();
-  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+  const recordSchemaResult = await kg.getRecordSchema();
+  if (isErr(recordSchemaResult)) return recordSchemaResult;
 
   const verifyResult = await verifyLog(
     fs,
     configSchema,
-    nodeSchemaResult.data,
+    recordSchemaResult.data,
     transactionLogPath,
     {
       verifyIntegrity: false,
@@ -126,13 +126,13 @@ export const resetHandler: CommandHandlerWithDb<{ yes?: boolean }> = async (
     );
 
   const configSchema = kg.getConfigSchema();
-  const nodeSchemaResult = await kg.getNodeSchema();
-  if (isErr(nodeSchemaResult)) return nodeSchemaResult;
+  const recordSchemaResult = await kg.getRecordSchema();
+  if (isErr(recordSchemaResult)) return recordSchemaResult;
 
   const verifyResult = await verifyLog(
     fs,
     configSchema,
-    nodeSchemaResult.data,
+    recordSchemaResult.data,
     backupPath,
     {
       verifyIntegrity: true,

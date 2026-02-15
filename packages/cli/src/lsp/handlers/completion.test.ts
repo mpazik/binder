@@ -54,7 +54,7 @@ describe("completion", () => {
     throwIfError(
       await runtime.kg.update({
         author: "test",
-        configurations: mockNavigationConfigInput,
+        configs: mockNavigationConfigInput,
       }),
     );
     documentCache = createDocumentCache(runtime.log);

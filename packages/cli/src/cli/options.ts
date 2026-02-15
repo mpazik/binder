@@ -6,7 +6,7 @@ export const namespaceOption = {
     alias: "n",
     describe: "namespace",
     choices: namespacesEditable,
-    default: "node" as NamespaceEditable,
+    default: "record" as NamespaceEditable,
   },
 } as const;
 

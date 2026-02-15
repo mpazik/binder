@@ -2,15 +2,15 @@ import { describe, expect, it } from "bun:test";
 import {
   type ChangesetsInput,
   type FieldsetNested,
-  type NodeUid,
+  type RecordUid,
 } from "@binder/db";
 import {
-  mockNodeSchema,
-  mockProjectNode,
+  mockRecordSchema,
+  mockProjectRecord,
   mockProjectUid,
-  mockTask1Node,
+  mockTask1Record,
   mockTask1Uid,
-  mockTask2Node,
+  mockTask2Record,
   mockTask2Uid,
   mockTaskTypeKey,
 } from "@binder/db/mocks";
@@ -18,11 +18,11 @@ import { omit } from "@binder/utils";
 import { diffEntities, diffQueryResults } from "./entity-diff.ts";
 
 describe("diffEntities", () => {
-  const schema = mockNodeSchema;
+  const schema = mockRecordSchema;
 
-  const task1 = mockTask1Node as FieldsetNested;
-  const task2 = mockTask2Node as FieldsetNested;
-  const project = mockProjectNode as FieldsetNested;
+  const task1 = mockTask1Record as FieldsetNested;
+  const task2 = mockTask2Record as FieldsetNested;
+  const project = mockProjectRecord as FieldsetNested;
 
   const check = (
     newEntity: FieldsetNested,
@@ -100,7 +100,7 @@ describe("diffEntities", () => {
       const newWithProject = {
         ...task1,
         project: {
-          uid: "other-project" as NodeUid,
+          uid: "other-project" as RecordUid,
           type: "Project",
           title: "Project B",
         },
@@ -217,10 +217,10 @@ describe("diffEntities", () => {
 });
 
 describe("diffQueryResults", () => {
-  const schema = mockNodeSchema;
+  const schema = mockRecordSchema;
 
-  const task1 = mockTask1Node as FieldsetNested;
-  const task2 = mockTask2Node as FieldsetNested;
+  const task1 = mockTask1Record as FieldsetNested;
+  const task2 = mockTask2Record as FieldsetNested;
   const { uid: _, ...anonTask1 } = task1;
 
   describe("matching and updates", () => {
@@ -268,7 +268,7 @@ describe("diffQueryResults", () => {
   describe("entity creation", () => {
     it("creates entity when uid not found in old list", () => {
       const newTask = {
-        uid: "new-task-uid" as NodeUid,
+        uid: "new-task-uid" as RecordUid,
         type: mockTaskTypeKey,
         title: "Brand New Task",
         status: "pending",

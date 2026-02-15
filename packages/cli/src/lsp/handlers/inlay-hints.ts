@@ -1,7 +1,7 @@
 import type { InlayHint, InlayHintParams } from "vscode-languageserver/node";
 import { InlayHintKind } from "vscode-languageserver/node";
 import { isMap, isPair, isScalar, isSeq, type YAMLMap } from "yaml";
-import type { EntitySchema, NodeRef } from "@binder/db";
+import type { EntitySchema, RecordRef } from "@binder/db";
 import { isErr } from "@binder/utils";
 import type { RuntimeContextWithDb } from "../../runtime.ts";
 import type { ParsedYaml } from "../../document/yaml-cst.ts";
@@ -90,7 +90,7 @@ const resolveEntityTitle = async (
   ref: string,
   runtime: RuntimeContextWithDb,
 ): Promise<string | undefined> => {
-  const result = await runtime.kg.fetchEntity(ref as NodeRef);
+  const result = await runtime.kg.fetchEntity(ref as RecordRef);
   if (isErr(result)) return undefined;
 
   const entity = result.data;

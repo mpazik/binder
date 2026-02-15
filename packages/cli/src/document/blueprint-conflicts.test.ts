@@ -63,7 +63,7 @@ describe("blueprint conflict detection", () => {
         await synchronizeModifiedFiles(ctx, filePath),
       );
       expect(result).toMatchObject({
-        nodes: [expect.objectContaining({ status: "complete" })],
+        records: [expect.objectContaining({ status: "complete" })],
       });
     });
 
@@ -98,7 +98,7 @@ describe("blueprint conflict detection", () => {
         await synchronizeModifiedFiles(ctx, filePath),
       );
       expect(result).toMatchObject({
-        nodes: [expect.objectContaining({ title: "Updated auth flow" })],
+        records: [expect.objectContaining({ title: "Updated auth flow" })],
       });
     });
 
@@ -116,7 +116,7 @@ describe("blueprint conflict detection", () => {
         await synchronizeModifiedFiles(ctx, filePath),
       );
       expect(result).toMatchObject({
-        nodes: [expect.objectContaining({ title: "Different title here" })],
+        records: [expect.objectContaining({ title: "Different title here" })],
       });
     });
 

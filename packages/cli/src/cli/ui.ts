@@ -275,16 +275,16 @@ const printTransaction = (
   const timestamp = new Date(transaction.createdAt).toISOString();
 
   if (format === "oneline") {
-    const nodeCount = Object.keys(transaction.nodes).length;
-    const configCount = Object.keys(transaction.configurations).length;
+    const recordCount = Object.keys(transaction.records).length;
+    const configCount = Object.keys(transaction.configs).length;
 
-    const nodeText = nodeCount === 1 ? "node" : "nodes";
+    const recordText = recordCount === 1 ? "record" : "records";
     const configText = configCount === 1 ? "config" : "configs";
 
     println(
       `${Style.TEXT_INFO_BOLD}#${transaction.id} ` +
         `${Style.TEXT_DIM}${hash} (${transaction.author})` +
-        `${Style.TEXT_NORMAL} ${timestamp} - ${nodeCount} ${nodeText}, ${configCount} ${configText}`,
+        `${Style.TEXT_NORMAL} ${timestamp} - ${recordCount} ${recordText}, ${configCount} ${configText}`,
     );
     return;
   }
@@ -298,8 +298,8 @@ const printTransaction = (
     ["Created", timestamp],
   );
 
-  printEntityChanges("Node changes", transaction.nodes, format);
-  printEntityChanges("Config changes", transaction.configurations, format);
+  printEntityChanges("Record changes", transaction.records, format);
+  printEntityChanges("Config changes", transaction.configs, format);
 };
 
 const formatFieldValue = (value: FieldValue | undefined): string => {

@@ -21,7 +21,7 @@ import {
   squashChangesets,
   type ValueChange,
 } from "./changeset.ts";
-import { mockTask1Node, mockTaskNode1Updated } from "./node.mock.ts";
+import { mockTask1Record, mockTaskRecord1Updated } from "./record.mock.ts";
 import type { Fieldset, FieldValue } from "./field.ts";
 
 describe("normalize", () => {
@@ -61,8 +61,8 @@ describe("inverseChange", () => {
     const result = inverseChange(mockTitleSetChange);
     expect(result).toEqual([
       "set",
-      mockTask1Node.title,
-      mockTaskNode1Updated.title,
+      mockTask1Record.title,
+      mockTaskRecord1Updated.title,
     ]);
   });
 
@@ -120,16 +120,16 @@ describe("inverseChange", () => {
   test("applying change then its inverse returns original value", () => {
     expect(
       applyChange(
-        mockTaskNode1Updated.title,
+        mockTaskRecord1Updated.title,
         inverseChange(mockTitleSetChange),
       ),
-    ).toEqual(mockTask1Node.title);
+    ).toEqual(mockTask1Record.title);
   });
 
   test("applying change then its inverse removes field", () => {
     expect(
       applyChange(
-        mockTask1Node.title,
+        mockTask1Record.title,
         inverseChange(normalizeValueChange(mockChangesetCreateTask1.title)),
       ),
     ).toEqual(null);
@@ -160,19 +160,23 @@ describe("applyChange", () => {
 
   test("applies set change", () => {
     checkApply(
-      mockTask1Node.title,
+      mockTask1Record.title,
       mockTitleSetChange,
-      mockTaskNode1Updated.title,
+      mockTaskRecord1Updated.title,
     );
   });
 
   test("applies remove change", () => {
-    checkApply(mockTaskNode1Updated.tags, mockRemoveChange, mockTask1Node.tags);
+    checkApply(
+      mockTaskRecord1Updated.tags,
+      mockRemoveChange,
+      mockTask1Record.tags,
+    );
   });
 
   test("throws when remove mutation targets missing value", () => {
     expect(() =>
-      applyChange(mockTask1Node.tags, ["seq", [["remove", "completed", 1]]]),
+      applyChange(mockTask1Record.tags, ["seq", [["remove", "completed", 1]]]),
     ).toThrowError();
   });
 
@@ -206,7 +210,7 @@ describe("applyChange", () => {
   });
 
   test("removes field by applying inverted field creation", () =>
-    checkApply(mockTask1Node.title, ["clear", mockTask1Node.title], null));
+    checkApply(mockTask1Record.title, ["clear", mockTask1Record.title], null));
 
   test("removes field when all array elements are removed", () => {
     checkApply(["a"], ["seq", [["remove", "a", 0]]], null);
@@ -308,13 +312,17 @@ describe("applyChangeset", () => {
   };
 
   test("applies mixed changeset", () =>
-    checkApply(mockTask1Node, mockChangesetUpdateTask1, mockTaskNode1Updated));
+    checkApply(
+      mockTask1Record,
+      mockChangesetUpdateTask1,
+      mockTaskRecord1Updated,
+    ));
 
   test("applies empty changeset", () =>
-    checkApply(mockTask1Node, emptyChangeset, mockTask1Node));
+    checkApply(mockTask1Record, emptyChangeset, mockTask1Record));
 
   test("removes entity fields by applying inverted entity creation", () =>
-    checkApply(mockTask1Node, inverseChangeset(mockChangesetCreateTask1), {
+    checkApply(mockTask1Record, inverseChangeset(mockChangesetCreateTask1), {
       id: null,
       uid: null,
       type: null,
@@ -370,9 +378,9 @@ describe("applyChangeset", () => {
 
   test("removes entity fields that no longer have value", () => {
     checkApply(
-      mockTask1Node,
+      mockTask1Record,
       {
-        description: ["clear", mockTask1Node.description],
+        description: ["clear", mockTask1Record.description],
         tags: [
           "seq",
           [
@@ -381,7 +389,7 @@ describe("applyChangeset", () => {
           ],
         ],
       },
-      omit({ ...mockTask1Node, description: null }, ["tags"]),
+      omit({ ...mockTask1Record, description: null }, ["tags"]),
     );
   });
 });
@@ -395,7 +403,7 @@ const baseSeqAddChangeset: FieldChangeset = {
 };
 const baseSeqRemoveChangeset: FieldChangeset = { tags: mockRemoveChange };
 const secondTitleChangeset: FieldChangeset = {
-  title: ["set", finalTitle, mockTaskNode1Updated.title],
+  title: ["set", finalTitle, mockTaskRecord1Updated.title],
 };
 
 describe("rebaseChangeset", () => {
@@ -418,7 +426,7 @@ describe("rebaseChangeset", () => {
 
   test("rebases set change sharing the same ancestor", () => {
     const changeset: FieldChangeset = {
-      title: ["set", finalTitle, mockTask1Node.title],
+      title: ["set", finalTitle, mockTask1Record.title],
     };
 
     checkRebase(baseTitleChangeset, changeset, secondTitleChangeset);
@@ -552,7 +560,7 @@ describe("squashChangesets", () => {
 
   test("squashes set changes on same attribute", () =>
     checkSquash(baseTitleChangeset, secondTitleChangeset, {
-      title: ["set", finalTitle, mockTask1Node.title],
+      title: ["set", finalTitle, mockTask1Record.title],
     }));
 
   test("squashes sequence operations", () =>
@@ -595,10 +603,10 @@ describe("squashChangesets", () => {
     const squashed = squashChangesets(baseTitleChangeset, secondTitleChangeset);
 
     const sequential = applyChangeset(
-      applyChangeset(mockTask1Node, baseTitleChangeset),
+      applyChangeset(mockTask1Record, baseTitleChangeset),
       secondTitleChangeset,
     );
-    const direct = applyChangeset(mockTask1Node, squashed);
+    const direct = applyChangeset(mockTask1Record, squashed);
 
     expect(sequential).toEqual(direct);
   });

@@ -9,8 +9,8 @@ import type {
   FieldDef,
   KnowledgeGraph,
   NamespaceEditable,
-  NodeFieldDef,
-  NodeType,
+  RecordFieldDef,
+  RecordType,
 } from "@binder/db";
 import { isErr } from "@binder/utils";
 import { getFieldKeys, getParentMap } from "../../document/yaml-cst.ts";
@@ -50,7 +50,9 @@ export type CompletionInput =
   | FieldKeyCompletionInput
   | FieldValueCompletionInput;
 
-const createOptionCompletions = (fieldDef: NodeFieldDef): CompletionItem[] => {
+const createOptionCompletions = (
+  fieldDef: RecordFieldDef,
+): CompletionItem[] => {
   if (fieldDef.dataType !== "option" || !fieldDef.options) return [];
 
   return fieldDef.options.map((opt) => ({
@@ -93,7 +95,7 @@ const createRelationCompletions = async (
   for (const targetType of range) {
     const searchResult = await kg.search(
       {
-        filters: { type: targetType as NodeType },
+        filters: { type: targetType as RecordType },
         pagination: { limit: 50 },
       },
       namespace,

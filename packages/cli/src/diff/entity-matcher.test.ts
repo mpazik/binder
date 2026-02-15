@@ -1,33 +1,33 @@
 import { describe, it, expect } from "bun:test";
 import { type FieldsetNested } from "@binder/db";
 import {
-  mockNodeSchema,
-  mockProjectNode,
-  mockTask1Node,
-  mockTask2Node,
+  mockRecordSchema,
+  mockProjectRecord,
+  mockTask1Record,
+  mockTask2Record,
 } from "@binder/db/mocks";
 import { omit } from "@binder/utils";
 import { matchEntities } from "./entity-matcher.ts";
 import { classifyFields } from "./field-classifier.ts";
 
-describe("matchNodes", () => {
-  const schema = mockNodeSchema;
+describe("matchEntities", () => {
+  const schema = mockRecordSchema;
   const classifications = classifyFields(schema);
   const config = { schema, classifications };
 
-  const task1 = mockTask1Node as FieldsetNested;
-  const task2 = mockTask2Node as FieldsetNested;
+  const task1 = mockTask1Record as FieldsetNested;
+  const task2 = mockTask2Record as FieldsetNested;
   const { uid: _, ...anonTask1 } = task1;
   const { uid: __, ...anonTask2 } = task2;
 
   const check = (
-    newNodes: FieldsetNested[],
-    oldNodes: FieldsetNested[],
+    newRecords: FieldsetNested[],
+    oldRecords: FieldsetNested[],
     matches: [number, number][],
     toCreate: number[] = [],
     toRemove: number[] = [],
   ) => {
-    const result = matchEntities(config, newNodes, oldNodes);
+    const result = matchEntities(config, newRecords, oldRecords);
     expect(result).toEqual({
       matches: matches.map(([newIndex, oldIndex]) => ({ newIndex, oldIndex })),
       toCreate,
@@ -36,7 +36,7 @@ describe("matchNodes", () => {
   };
 
   describe("UID matching", () => {
-    it("matches nodes with identical UIDs", () => {
+    it("matches records with identical UIDs", () => {
       check([task1], [task1], [[0, 0]]);
     });
 
@@ -48,7 +48,7 @@ describe("matchNodes", () => {
       );
     });
 
-    it("matches multiple nodes by UID in different order", () => {
+    it("matches multiple records by UID in different order", () => {
       check(
         [task1, task2],
         [task2, task1],
@@ -65,11 +65,11 @@ describe("matchNodes", () => {
   });
 
   describe("similarity-based matching", () => {
-    it("matches anonymous nodes by similarity", () => {
+    it("matches anonymous records by similarity", () => {
       check([anonTask1], [anonTask1], [[0, 0]]);
     });
 
-    it("matches similar anonymous node over dissimilar one", () => {
+    it("matches similar anonymous record over dissimilar one", () => {
       check(
         [{ ...anonTask1, title: "Implement user authentication v2" }],
         [anonTask1, anonTask2],
@@ -80,7 +80,7 @@ describe("matchNodes", () => {
     });
 
     it("rejects match below threshold (negative score)", () => {
-      const anonProject = omit(mockProjectNode, ["uid"]);
+      const anonProject = omit(mockProjectRecord, ["uid"]);
       check([anonTask1], [anonProject], [], [0], [0]);
     });
   });
@@ -99,11 +99,11 @@ describe("matchNodes", () => {
   });
 
   describe("edge cases", () => {
-    it("empty new nodes", () => {
+    it("empty new records", () => {
       check([], [task1, task2], [], [], [0, 1]);
     });
 
-    it("empty old nodes", () => {
+    it("empty old records", () => {
       check([task1, task2], [], [], [0, 1], []);
     });
 

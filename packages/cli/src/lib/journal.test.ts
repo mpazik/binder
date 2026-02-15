@@ -7,7 +7,7 @@ import {
 } from "@binder/db";
 import {
   mockAuthor2,
-  mockNodeSchema,
+  mockRecordSchema,
   mockTransaction3,
   mockTransaction4,
   mockTransactionInit,
@@ -125,7 +125,7 @@ describe("journal", () => {
       const result = await verifyLog(
         fs,
         coreConfigSchema,
-        mockNodeSchema,
+        mockRecordSchema,
         verifyPath,
         options,
       );
@@ -258,7 +258,7 @@ describe("journal", () => {
       const result = await rehashLog(
         fs,
         coreConfigSchema,
-        mockNodeSchema,
+        mockRecordSchema,
         rehashPath,
       );
 

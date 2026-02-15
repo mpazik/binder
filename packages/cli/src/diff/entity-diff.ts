@@ -10,7 +10,7 @@ import type {
   FieldsetNested,
   FieldValue,
   ListMutation,
-  NodeUid,
+  RecordUid,
   QueryParams,
 } from "@binder/db";
 import { coreIdentityFieldKeys, createUid, isFieldsetNested } from "@binder/db";
@@ -32,8 +32,8 @@ const getType = (node: Fieldset): EntityType | undefined => {
 const buildEntityCreate = (
   schema: EntitySchema,
   node: FieldsetNested,
-  generatedUid: NodeUid,
-): EntityChangesetInput<"node"> | null => {
+  generatedUid: RecordUid,
+): EntityChangesetInput<"record"> | null => {
   const type = getType(node);
   if (!type) return null;
 
@@ -47,7 +47,7 @@ const buildEntityCreate = (
     fields[key] = value;
   }
 
-  return { type, ...fields } as EntityChangesetInput<"node">;
+  return { type, ...fields } as EntityChangesetInput<"record">;
 };
 
 const extractOwnedChildren = (value: FieldNestedValue): FieldsetNested[] => {
@@ -70,7 +70,7 @@ const diffOwnedChildren = (
 
   for (const newIdx of matchResult.toCreate) {
     const newEntity = newChildren[newIdx]!;
-    const generatedUid = createUid() as NodeUid;
+    const generatedUid = createUid() as RecordUid;
 
     const createChangeset = buildEntityCreate(schema, newEntity, generatedUid);
     if (createChangeset) changesets.push(createChangeset);
@@ -245,15 +245,15 @@ export const diffEntities = (
 };
 
 export type DiffQueryResult = {
-  toCreate: EntityChangesetInput<"node">[];
-  toUpdate: ChangesetsInput<"node">;
+  toCreate: EntityChangesetInput<"record">[];
+  toUpdate: ChangesetsInput<"record">;
 };
 
 const hydrateEntity = (
   schema: EntitySchema,
   entity: FieldsetNested,
   queryContext: Fieldset,
-): EntityChangesetInput<"node"> | null => {
+): EntityChangesetInput<"record"> | null => {
   const hydrated = { ...queryContext, ...entity };
   const type = hydrated.type;
   if (typeof type !== "string") return null;
@@ -266,7 +266,7 @@ const hydrateEntity = (
     fields[key] = value;
   }
 
-  return { type, ...fields } as EntityChangesetInput<"node">;
+  return { type, ...fields } as EntityChangesetInput<"record">;
 };
 
 export const diffQueryResults = (
@@ -275,8 +275,8 @@ export const diffQueryResults = (
   oldEntities: FieldsetNested[],
   query: QueryParams,
 ): DiffQueryResult => {
-  const toCreate: EntityChangesetInput<"node">[] = [];
-  const toUpdate: ChangesetsInput<"node"> = [];
+  const toCreate: EntityChangesetInput<"record">[] = [];
+  const toUpdate: ChangesetsInput<"record"> = [];
 
   const queryContext = extractFieldsetFromQuery(query);
   const excludeFields = new Set(Object.keys(queryContext) as FieldKey[]);

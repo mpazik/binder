@@ -13,8 +13,8 @@ import {
   type ConfigUid,
   type FieldChangeset,
   incrementEntityId,
-  type NodeSchema,
-  type NodeUid,
+  type RecordSchema,
+  type RecordUid,
   type Transaction,
   type TransactionId,
   type TransactionInput,
@@ -35,44 +35,44 @@ import { transactionTable } from "./schema.ts";
 export const processTransactionInput = async (
   tx: DbTransaction,
   input: TransactionInput,
-  nodeSchema: NodeSchema,
+  recordSchema: RecordSchema,
   configSchema: ConfigSchema,
 ): ResultAsync<Transaction> => {
   const createdAt = input.createdAt ?? newIsoTimestamp();
 
-  const [lastNodeIdResult, lastConfigIdResult, versionResult] =
+  const [lastRecordIdResult, lastConfigIdResult, versionResult] =
     await Promise.all([
-      getLastEntityId(tx, "node"),
+      getLastEntityId(tx, "record"),
       getLastEntityId(tx, "config"),
       getVersion(tx),
     ]);
-  if (isErr(lastNodeIdResult)) return lastNodeIdResult;
+  if (isErr(lastRecordIdResult)) return lastRecordIdResult;
   if (isErr(lastConfigIdResult)) return lastConfigIdResult;
   if (isErr(versionResult)) return versionResult;
 
-  const configurationsResult = await processChangesetInput(
+  const configsResult = await processChangesetInput(
     tx,
     "config",
-    (input.configurations ?? []) as ChangesetsInput,
+    (input.configs ?? []) as ChangesetsInput,
     configSchema,
     lastConfigIdResult.data,
   );
 
-  if (isErr(configurationsResult)) return configurationsResult;
-  const configurations = configurationsResult.data;
+  if (isErr(configsResult)) return configsResult;
+  const configs = configsResult.data;
 
-  const nodesResult = await processChangesetInput(
+  const recordsResult = await processChangesetInput(
     tx,
-    "node",
-    (input.nodes ?? []) as ChangesetsInput,
-    applyConfigChangesetToSchema(nodeSchema, configurationsResult.data),
-    lastNodeIdResult.data,
+    "record",
+    (input.records ?? []) as ChangesetsInput,
+    applyConfigChangesetToSchema(recordSchema, configsResult.data),
+    lastRecordIdResult.data,
   );
-  if (isErr(nodesResult)) return nodesResult;
+  if (isErr(recordsResult)) return recordsResult;
 
   const updatedSchema = applyConfigChangesetToSchema(
-    nodeSchema,
-    configurationsResult.data,
+    recordSchema,
+    configsResult.data,
   );
 
   return ok(
@@ -83,8 +83,8 @@ export const processTransactionInput = async (
         previous: versionResult.data.hash,
         author: input.author ?? "",
         createdAt,
-        nodes: nodesResult.data,
-        configurations,
+        records: recordsResult.data,
+        configs: configs,
       },
       incrementEntityId(versionResult.data.id),
     ),
@@ -104,8 +104,8 @@ export const applyTransaction = async (
   tx: DbTransaction,
   transaction: Transaction,
 ): ResultAsync<void> => {
-  const nodeEntries = Object.entries(transaction.nodes);
-  const configEntries = Object.entries(transaction.configurations);
+  const recordEntries = Object.entries(transaction.records);
+  const configEntries = Object.entries(transaction.configs);
 
   for (const [entityUid, changeset] of configEntries) {
     const result = await applyChangeset(
@@ -117,11 +117,11 @@ export const applyTransaction = async (
     if (isErr(result)) return result;
   }
 
-  for (const [entityUid, changeset] of nodeEntries) {
+  for (const [entityUid, changeset] of recordEntries) {
     const result = await applyChangeset(
       tx,
-      "node",
-      entityUid as NodeUid,
+      "record",
+      entityUid as RecordUid,
       addTxIdsToChangeset(changeset, transaction.id, "insert"),
     );
     if (isErr(result)) return result;

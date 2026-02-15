@@ -1,16 +1,16 @@
-import { mockTask1Node, mockTaskNode1Updated } from "./node.mock.ts";
+import { mockTask1Record, mockTaskRecord1Updated } from "./record.mock.ts";
 import type {
   FieldChangeset,
   ValueChangeSeq,
   ValueChangeSet,
 } from "./changeset.ts";
 
-export const mockChangesetCreateTask1 = mockTask1Node;
+export const mockChangesetCreateTask1 = mockTask1Record;
 
 export const mockTitleSetChange = [
   "set",
-  mockTaskNode1Updated.title,
-  mockTask1Node.title,
+  mockTaskRecord1Updated.title,
+  mockTask1Record.title,
 ] as const satisfies ValueChangeSet;
 
 export const mockChangesetUpdateTask1 = {
@@ -24,6 +24,6 @@ export const mockRemoveChange = [
 ] as const satisfies ValueChangeSeq;
 
 export const mockChangesetInvert = {
-  title: ["set", mockTask1Node.title, mockTaskNode1Updated.title],
+  title: ["set", mockTask1Record.title, mockTaskRecord1Updated.title],
   tags: mockRemoveChange,
 } as const satisfies FieldChangeset;

@@ -1,46 +1,52 @@
-import type { NodeId, NodeKey, NodeRef, NodeType, NodeUid } from "./node.ts";
+import type {
+  RecordId,
+  RecordKey,
+  RecordRef,
+  RecordType,
+  RecordUid,
+} from "./record.ts";
 import type {
   ConfigId,
   ConfigKey,
   ConfigRef,
   ConfigType,
   ConfigUid,
-  NodeDataType,
+  RecordDataType,
 } from "./config.ts";
 import type { TransactionId, TransactionRef } from "./transaction.ts";
 import type { CoreDataType } from "./data-type.ts";
 import type { EntitySchema } from "./schema.ts";
 import type { ConfigDataType } from "./system.ts";
 
-export const entityNamespaces = ["node", "config", "transaction"] as const;
-export const namespacesEditable = ["node", "config"] as const;
+export const entityNamespaces = ["record", "config", "transaction"] as const;
+export const namespacesEditable = ["record", "config"] as const;
 export type Namespace = (typeof entityNamespaces)[number];
 export type NamespaceEditable = (typeof namespacesEditable)[number];
 
 export type EntityNsId = {
-  node: NodeId;
+  record: RecordId;
   config: ConfigId;
   transaction: TransactionId;
 };
 export type EntityNsUid = {
-  node: NodeUid;
+  record: RecordUid;
   config: ConfigUid;
 };
 export type EntityNsKey = {
-  node: NodeKey;
+  record: RecordKey;
   config: ConfigKey;
 };
 export type EntityNsType = {
-  node: NodeType;
+  record: RecordType;
   config: ConfigType;
 };
 export type EntityNsRef = {
-  node: NodeRef;
+  record: RecordRef;
   config: ConfigRef;
   transaction: TransactionRef;
 };
 export type DataTypeNs = {
-  node: NodeDataType;
+  record: RecordDataType;
   config: ConfigDataType;
   transaction: CoreDataType;
 };

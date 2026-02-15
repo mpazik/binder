@@ -19,7 +19,7 @@ describe("docsLintHandler", () => {
     throwIfError(
       await ctx.kg.update({
         author: "test",
-        configurations: mockNavigationConfigInput,
+        configs: mockNavigationConfigInput,
       }),
     );
   });

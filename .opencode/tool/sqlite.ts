@@ -7,7 +7,7 @@ export default tool({
     query: tool.schema
       .string()
       .describe(
-        "SQL query to execute (read-only: SELECT, PRAGMA). Examples: 'SELECT * FROM nodes LIMIT 10' or 'PRAGMA table_info(transactions)'",
+        "SQL query to execute (read-only: SELECT, PRAGMA). Examples: 'SELECT * FROM records LIMIT 10' or 'PRAGMA table_info(transactions)'",
       ),
   },
   async execute({ query }, context) {

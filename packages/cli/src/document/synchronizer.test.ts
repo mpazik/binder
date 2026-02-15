@@ -4,14 +4,14 @@ import { pick, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { type EntityChangesetInput, type KnowledgeGraph } from "@binder/db";
 import {
-  mockNodeSchema,
-  mockProjectNode,
+  mockRecordSchema,
+  mockProjectRecord,
   mockProjectUid,
-  mockTask1Node,
+  mockTask1Record,
   mockTask1Uid,
-  mockTask2Node,
+  mockTask2Record,
   mockTask2Uid,
-  mockTask3Node,
+  mockTask3Record,
   mockTask3Uid,
   mockTaskType,
   mockTaskTypeKey,
@@ -80,7 +80,7 @@ describe("synchronizeFile", () => {
   const check = async (
     filePath: string,
     content: string,
-    expectedNodes: EntityChangesetInput<"node">[],
+    expectedNodes: EntityChangesetInput<"record">[],
   ) => {
     const fullPath = join(ctx.config.paths.docs, filePath);
     throwIfError(await ctx.fs.mkdir(dirname(fullPath), { recursive: true }));
@@ -93,9 +93,9 @@ describe("synchronizeFile", () => {
         ctx.config,
         throwIfError(await kg.version()),
         navigationItems,
-        mockNodeSchema,
+        mockRecordSchema,
         filePath,
-        "node",
+        "record",
         mockTemplates,
       ),
     );
@@ -105,11 +105,11 @@ describe("synchronizeFile", () => {
   describe("markdown task", () => {
     it("returns empty array when no changes", async () => {
       await check(
-        `tasks/${mockTask1Node.key}.md`,
+        `tasks/${mockTask1Record.key}.md`,
         taskMarkdown(
-          mockTask1Node.title,
-          mockTask1Node.status,
-          mockTask1Node.description,
+          mockTask1Record.title,
+          mockTask1Record.status,
+          mockTask1Record.description,
         ),
         [],
       );
@@ -117,7 +117,7 @@ describe("synchronizeFile", () => {
 
     it("detects field changes", async () => {
       await check(
-        `tasks/${mockTask1Node.key}.md`,
+        `tasks/${mockTask1Record.key}.md`,
         taskMarkdown("Updated Task Title", "done", "New description text"),
         [
           {
@@ -145,11 +145,11 @@ describe("synchronizeFile", () => {
 status: active
 ---
 
-# ${mockTask1Node.title}
+# ${mockTask1Record.title}
 
 **Status:** done
 `;
-      const filePath = `tasks/${mockTask1Node.key}.md`;
+      const filePath = `tasks/${mockTask1Record.key}.md`;
       const fullPath = join(ctx.config.paths.docs, filePath);
       throwIfError(await ctx.fs.mkdir(dirname(fullPath), { recursive: true }));
       throwIfError(await ctx.fs.writeFile(fullPath, markdown));
@@ -160,9 +160,9 @@ status: active
         ctx.config,
         throwIfError(await kg.version()),
         preambleNavItems,
-        mockNodeSchema,
+        mockRecordSchema,
         filePath,
-        "node",
+        "record",
         preambleTemplates,
       );
       expect(result).toBeErrWithKey("field-conflict");
@@ -172,9 +172,9 @@ status: active
   describe("yaml single entity", () => {
     it("returns empty array when no changes", async () => {
       await check(
-        `tasks/${mockTask1Node.key}.yaml`,
+        `tasks/${mockTask1Record.key}.yaml`,
         renderYamlEntity(
-          pick(mockTask1Node, ["title", "status", "description"]),
+          pick(mockTask1Record, ["title", "status", "description"]),
         ),
         [],
       );
@@ -182,11 +182,11 @@ status: active
 
     it("detects field changes", async () => {
       await check(
-        `tasks/${mockTask1Node.key}.yaml`,
+        `tasks/${mockTask1Record.key}.yaml`,
         renderYamlEntity({
           title: "Updated Task Title",
           status: "done",
-          description: mockTask1Node.description,
+          description: mockTask1Record.description,
         }),
         [{ $ref: mockTask1Uid, title: "Updated Task Title", status: "done" }],
       );
@@ -198,8 +198,14 @@ status: active
       throwIfError(
         await kg.update({
           author: "test",
-          nodes: [
-            pick(mockTask3Node, ["uid", "type", "title", "status", "project"]),
+          records: [
+            pick(mockTask3Record, [
+              "uid",
+              "type",
+              "title",
+              "status",
+              "project",
+            ]),
           ],
         }),
       );
@@ -207,10 +213,10 @@ status: active
 
     it("detects removed task from project", async () => {
       await check(
-        `projects/${mockProjectNode.key}.yaml`,
+        `projects/${mockProjectRecord.key}.yaml`,
         renderYamlEntity({
-          ...pick(mockProjectNode, ["title", "status"]),
-          tasks: [pick(mockTask2Node, ["uid", "title", "status"])],
+          ...pick(mockProjectRecord, ["title", "status"]),
+          tasks: [pick(mockTask2Record, ["uid", "title", "status"])],
         }),
         [{ $ref: mockProjectUid, tasks: [["remove", mockTask3Uid]] }],
       );
@@ -221,7 +227,7 @@ status: active
     it("returns empty array when no changes", async () => {
       await check(
         "all-tasks.yaml",
-        renderYamlList([mockTask1Node, mockTask2Node]),
+        renderYamlList([mockTask1Record, mockTask2Record]),
         [],
       );
     });
@@ -230,8 +236,8 @@ status: active
       await check(
         "all-tasks.yaml",
         renderYamlList([
-          mockTask1Node,
-          mockTask2Node,
+          mockTask1Record,
+          mockTask2Record,
           { type: mockTaskTypeKey, title: "New Task", status: "todo" },
         ]),
         [{ type: mockTaskTypeKey, title: "New Task", status: "todo" }],
@@ -242,8 +248,8 @@ status: active
       await check(
         "all-tasks.yaml",
         renderYamlList([
-          { ...mockTask1Node, title: "Modified Task 1" },
-          { ...mockTask2Node, status: "done" },
+          { ...mockTask1Record, title: "Modified Task 1" },
+          { ...mockTask2Record, status: "done" },
         ]),
         [
           { $ref: mockTask1Uid, title: "Modified Task 1" },
@@ -258,7 +264,7 @@ status: active
       throwIfError(
         await kg.update({
           author: "test",
-          configurations: mockNavigationConfigInput,
+          configs: mockNavigationConfigInput,
         }),
       );
     });
@@ -289,11 +295,11 @@ status: active
     it("detects changes in a single modified file", async () => {
       await check(
         join(ctx.config.paths.docs, "all-tasks.yaml"),
-        renderYamlList([{ ...mockTask1Node, title: "Updated Title" }]),
+        renderYamlList([{ ...mockTask1Record, title: "Updated Title" }]),
         {
           author: ctx.config.author,
-          nodes: [{ $ref: mockTask1Uid, title: "Updated Title" }],
-          configurations: [],
+          records: [{ $ref: mockTask1Uid, title: "Updated Title" }],
+          configs: [],
         },
       );
     });
@@ -301,19 +307,19 @@ status: active
     it("detects changes when scoped to specific file", async () => {
       await check(
         join(ctx.config.paths.docs, "all-tasks.yaml"),
-        renderYamlList([{ ...mockTask1Node, title: "Scoped Update" }]),
-        { nodes: [{ $ref: mockTask1Uid, title: "Scoped Update" }] },
+        renderYamlList([{ ...mockTask1Record, title: "Scoped Update" }]),
+        { records: [{ $ref: mockTask1Uid, title: "Scoped Update" }] },
       );
     });
 
     it("detects conflict when two files change same entity field to different values", async () => {
       const yamlPath = join(
         ctx.config.paths.docs,
-        `tasks/${mockTask1Node.key}.yaml`,
+        `tasks/${mockTask1Record.key}.yaml`,
       );
       const mdPath = join(
         ctx.config.paths.docs,
-        `md-tasks/${mockTask1Node.key}.md`,
+        `md-tasks/${mockTask1Record.key}.md`,
       );
 
       throwIfError(await ctx.fs.mkdir(dirname(yamlPath), { recursive: true }));
@@ -324,7 +330,7 @@ status: active
           yamlPath,
           renderYamlEntity({
             title: "Title From YAML",
-            status: mockTask1Node.status,
+            status: mockTask1Record.status,
           }),
         ),
       );
@@ -332,14 +338,14 @@ status: active
         await ctx.fs.writeFile(
           mdPath,
           `---
-status: ${mockTask1Node.status}
+status: ${mockTask1Record.status}
 ---
 
 # Title From Markdown
 
 ## Description
 
-${mockTask1Node.description}
+${mockTask1Record.description}
 `,
         ),
       );
@@ -353,10 +359,8 @@ ${mockTask1Node.description}
         join(ctx.config.paths.binder, "types.yaml"),
         renderYamlList([{ ...mockTaskType, name: "Updated Task Type" }]),
         {
-          nodes: [],
-          configurations: [
-            { $ref: mockTaskType.uid, name: "Updated Task Type" },
-          ],
+          records: [],
+          configs: [{ $ref: mockTaskType.uid, name: "Updated Task Type" }],
         },
       );
     });

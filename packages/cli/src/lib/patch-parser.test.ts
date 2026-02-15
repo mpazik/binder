@@ -4,7 +4,7 @@ import { coreFields, type FieldChangeInput, type FieldDef } from "@binder/db";
 import {
   mockAliasesField,
   mockFavoriteField,
-  mockNodeSchema,
+  mockRecordSchema,
   mockNotesField,
   mockPriceField,
   mockTagsField,
@@ -26,7 +26,7 @@ describe("patch-parser", () => {
     patches: string[],
     expected: Record<string, FieldChangeInput>,
   ) => {
-    const result = parsePatches(patches, mockNodeSchema);
+    const result = parsePatches(patches, mockRecordSchema);
     expect(result).toBeOkWith(expected);
   };
 
@@ -269,7 +269,7 @@ describe("patch-parser", () => {
     });
 
     it("provides helpful hint for shell quoting issues", () => {
-      const result = parsePatches([`Solutions"`], mockNodeSchema);
+      const result = parsePatches([`Solutions"`], mockRecordSchema);
       expect(result).toBeErrWithKey("invalid-patch-format");
       if (isErr(result)) {
         expect(result.error.message).toContain("quote the entire patch");
@@ -277,7 +277,7 @@ describe("patch-parser", () => {
     });
 
     it("returns error for unknown field", () => {
-      const result = parsePatches(["unknown=value"], mockNodeSchema);
+      const result = parsePatches(["unknown=value"], mockRecordSchema);
       expect(result).toBeErrWithKey("field-not-found");
     });
   });

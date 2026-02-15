@@ -128,7 +128,7 @@ export const getNavigationFilePatterns = (items: NavigationItem[]): string[] =>
 
 export const loadNavigation = async (
   kg: KnowledgeGraph,
-  namespace: NamespaceEditable = "node",
+  namespace: NamespaceEditable = "record",
 ): ResultAsync<NavigationItem[]> => {
   if (namespace === "config") return ok(CONFIG_NAVIGATION_ITEMS);
 
@@ -465,7 +465,7 @@ export const renderNavigation = async (
   paths: ConfigPaths,
   navigationItems: NavigationItem[],
   templates: Templates,
-  namespace: NamespaceEditable = "node",
+  namespace: NamespaceEditable = "record",
 ): ResultAsync<RenderResult> => {
   const schemaResult = await kg.getSchema(namespace);
   if (isErr(schemaResult)) return schemaResult;
@@ -601,12 +601,12 @@ export type NavigationCache = {
 
 export const createNavigationCache = (kg: KnowledgeGraph): NavigationCache => {
   const cache: Record<NamespaceEditable, NavigationItem[] | null> = {
-    node: null,
+    record: null,
     config: null,
   };
 
   return {
-    load: async (namespace = "node") => {
+    load: async (namespace = "record") => {
       const cached = cache[namespace];
       if (cached) return ok(cached);
 
@@ -618,7 +618,7 @@ export const createNavigationCache = (kg: KnowledgeGraph): NavigationCache => {
     },
     invalidate: () => {
       // config navigation items are hardcoded
-      cache.node = null;
+      cache.record = null;
     },
   };
 };

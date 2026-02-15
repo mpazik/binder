@@ -2,7 +2,11 @@ import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import type { FieldsetNested } from "@binder/db";
-import { mockNodeSchema, mockTask1Node, mockTask2Node } from "@binder/db/mocks";
+import {
+  mockRecordSchema,
+  mockTask1Record,
+  mockTask2Record,
+} from "@binder/db/mocks";
 import { type NavigationItem } from "./navigation.ts";
 import {
   mockTemplates,
@@ -25,7 +29,7 @@ describe("extract", () => {
     base: FieldsetNested = {},
   ) => {
     const result = throwIfError(
-      extract(mockNodeSchema, navItem, content, path, templateList, base),
+      extract(mockRecordSchema, navItem, content, path, templateList, base),
     );
     expect(result).toEqual(expected);
   };
@@ -47,13 +51,13 @@ describe("extract", () => {
 
   describe("markdown", () => {
     it("extracts document entity from markdown", () => {
-      const markdown = `# ${mockTask1Node.title}
+      const markdown = `# ${mockTask1Record.title}
 
-**Status:** ${mockTask1Node.status}
+**Status:** ${mockTask1Record.status}
 
 ## Description
 
-${mockTask1Node.description}
+${mockTask1Record.description}
 `;
       check(
         markdownNavItem,
@@ -62,9 +66,9 @@ ${mockTask1Node.description}
         {
           kind: "document",
           entity: {
-            title: mockTask1Node.title,
-            status: mockTask1Node.status,
-            description: mockTask1Node.description,
+            title: mockTask1Record.title,
+            status: mockTask1Record.status,
+            description: mockTask1Record.description,
           },
           projections: [],
           includes: { title: true, status: true, description: true },
@@ -79,13 +83,16 @@ ${mockTask1Node.description}
       check(
         yamlSingleNavItem,
         renderYamlEntity({
-          title: mockTask1Node.title,
-          status: mockTask1Node.status,
+          title: mockTask1Record.title,
+          status: mockTask1Record.status,
         }),
         "task.yaml",
         {
           kind: "single",
-          entity: { title: mockTask1Node.title, status: mockTask1Node.status },
+          entity: {
+            title: mockTask1Record.title,
+            status: mockTask1Record.status,
+          },
         },
       );
     });
@@ -96,15 +103,15 @@ ${mockTask1Node.description}
       check(
         yamlListNavItem,
         renderYamlList([
-          { uid: mockTask1Node.uid, title: mockTask1Node.title },
-          { uid: mockTask2Node.uid, title: mockTask2Node.title },
+          { uid: mockTask1Record.uid, title: mockTask1Record.title },
+          { uid: mockTask2Record.uid, title: mockTask2Record.title },
         ]),
         "all-tasks.yaml",
         {
           kind: "list",
           entities: [
-            { uid: mockTask1Node.uid, title: mockTask1Node.title },
-            { uid: mockTask2Node.uid, title: mockTask2Node.title },
+            { uid: mockTask1Record.uid, title: mockTask1Record.title },
+            { uid: mockTask2Record.uid, title: mockTask2Record.title },
           ],
           query: { filters: { type: "Task" } },
         },
@@ -115,17 +122,17 @@ ${mockTask1Node.description}
       check(
         yamlListNavItem,
         renderYamlList([
-          { uid: mockTask1Node.uid, title: "First" },
-          { uid: mockTask1Node.uid, title: "Duplicate" },
-          { uid: mockTask2Node.uid, title: "Second" },
+          { uid: mockTask1Record.uid, title: "First" },
+          { uid: mockTask1Record.uid, title: "Duplicate" },
+          { uid: mockTask2Record.uid, title: "Second" },
         ]),
         "all-tasks.yaml",
         {
           kind: "list",
           entities: [
-            { uid: mockTask1Node.uid, title: "First" },
+            { uid: mockTask1Record.uid, title: "First" },
             { title: "Duplicate" },
-            { uid: mockTask2Node.uid, title: "Second" },
+            { uid: mockTask2Record.uid, title: "Second" },
           ],
           query: { filters: { type: "Task" } },
         },
@@ -166,14 +173,14 @@ ${mockTask1Node.description}
 
     it("extracts frontmatter fields, merges with body, and includes preamble keys", () => {
       const markdown = `---
-status: ${mockTask1Node.status}
+status: ${mockTask1Record.status}
 ---
 
-# ${mockTask1Node.title}
+# ${mockTask1Record.title}
 
 ## Description
 
-${mockTask1Node.description}
+${mockTask1Record.description}
 `;
       check(
         preambleNavItem,
@@ -182,9 +189,9 @@ ${mockTask1Node.description}
         {
           kind: "document",
           entity: {
-            title: mockTask1Node.title,
-            status: mockTask1Node.status,
-            description: mockTask1Node.description,
+            title: mockTask1Record.title,
+            status: mockTask1Record.status,
+            description: mockTask1Record.description,
           },
           projections: [],
           // status is in includes via preamble, not the template body
@@ -206,7 +213,7 @@ status: active
 **Status:** pending
 `;
       const result = extract(
-        mockNodeSchema,
+        mockRecordSchema,
         { path: "tasks/{key}", template: "task-status-body" },
         markdown,
         "task.md",
@@ -261,7 +268,7 @@ status: pending
 **Status:** done
 `;
       const result = extract(
-        mockNodeSchema,
+        mockRecordSchema,
         { path: "tasks/{key}", template: "task-status-body" },
         markdown,
         "task.md",
@@ -272,11 +279,11 @@ status: pending
     });
 
     it("handles missing frontmatter when template has preamble", () => {
-      const markdown = `# ${mockTask1Node.title}
+      const markdown = `# ${mockTask1Record.title}
 
 ## Description
 
-${mockTask1Node.description}
+${mockTask1Record.description}
 `;
       check(
         preambleNavItem,
@@ -285,8 +292,8 @@ ${mockTask1Node.description}
         {
           kind: "document",
           entity: {
-            title: mockTask1Node.title,
-            description: mockTask1Node.description,
+            title: mockTask1Record.title,
+            description: mockTask1Record.description,
           },
           projections: [],
           includes: { title: true, status: true, description: true },
@@ -307,7 +314,7 @@ ${mockTask1Node.description}
 Content
 `;
       const result = extract(
-        mockNodeSchema,
+        mockRecordSchema,
         preambleNavItem,
         markdown,
         "task.md",
@@ -324,7 +331,7 @@ Content
       const yaml = renderYamlList([{ title: "Task" }]);
 
       const result = extract(
-        mockNodeSchema,
+        mockRecordSchema,
         navItemWithoutQuery,
         yaml,
         "all-tasks.yaml",
@@ -337,7 +344,7 @@ Content
 
     it("returns error for unsupported file extension", () => {
       const result = extract(
-        mockNodeSchema,
+        mockRecordSchema,
         markdownNavItem,
         "content",
         "file.txt",

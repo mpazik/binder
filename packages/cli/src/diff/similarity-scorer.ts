@@ -11,7 +11,7 @@ import {
   type FieldValue,
   getAllFieldsForType,
   isFieldsetNested,
-  type NodeDataType,
+  type RecordDataType,
 } from "@binder/db";
 import {
   assertDefined,
@@ -200,7 +200,7 @@ const compareFieldValues = (
   if (fieldDef.unique || fieldDef.immutable || fieldDef.options !== undefined)
     return 0;
 
-  switch (fieldDef.dataType as NodeDataType | ConfigDataType) {
+  switch (fieldDef.dataType as RecordDataType | ConfigDataType) {
     case "boolean":
     case "uid":
     case "seqId":
@@ -220,10 +220,10 @@ const compareFieldValues = (
 
     case "plaintext":
     case "richtext": {
-      const sim = levenshteinSimilarity(
-        assertString(newVal),
-        assertString(oldVal),
-      );
+      // Guard: values may be non-string (e.g. nested objects from relation
+      // projections like {parent.plan}); treat as mismatch.
+      if (typeof newVal !== "string" || typeof oldVal !== "string") return 0;
+      const sim = levenshteinSimilarity(newVal, oldVal);
       return scaleTextSimilarity(sim);
     }
 

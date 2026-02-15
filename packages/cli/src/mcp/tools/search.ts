@@ -7,7 +7,7 @@ export const searchToolName = "search";
 
 export const searchTool = defineTool({
   name: searchToolName,
-  description: `Search for nodes in the knowledge graph using filters and pagination.
+  description: `Search for records in the knowledge graph using filters and pagination.
 
 Use the 'schema' tool to see all available types and fields.`,
   parameters: z.object({
@@ -54,7 +54,7 @@ Filter examples:
         nextCursor: pagination.nextCursor,
         previousCursor: pagination.previousCursor,
       },
-      output: `Found ${items.length} node(s)`,
+      output: `Found ${items.length} record(s)`,
       structuredData: {
         items,
         pagination,

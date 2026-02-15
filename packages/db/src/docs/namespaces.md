@@ -6,9 +6,9 @@ Namespaces are isolated partitions within the database that function like sub-da
 
 The system uses three primary namespaces, each with distinct responsibilities:
 
-### Node Namespace
+### Record Namespace
 - **Purpose**: Stores all user-facing data and business objects
-- **Contents**: User data entities with node-specific fields
+- **Contents**: User data entities with record-specific fields
 - **Schema**: Uses dynamically evolving, user-defined schema that references the Config Namespace
 - **Characteristics**: Fully mutable, evolves through transactions that modify the Config Namespace
 - **Data Flow**: Data here is constrained by and interpreted through the Config Namespace definitions
@@ -18,12 +18,12 @@ The system uses three primary namespaces, each with distinct responsibilities:
 - **Contents**: Field definitions, data type definitions, validation rules, entity type definitions, views, inbox configuration, mcp clients
 - **Schema**: Uses a built-in fields schema that establishes the meta-model
 - **Characteristics**: Semi-mutable - can evolve through schema migrations but follows strict versioning rules
-- **Data Flow**: Changes here directly affect what can be stored in the Node Namespace
+- **Data Flow**: Changes here directly affect what can be stored in the Record Namespace
 
 
 ### Transaction Namespace
 - **Purpose**: Stores the complete transaction history and change tracking metadata
-- **Contents**: Transaction entities with field changesets for nodes and configs
+- **Contents**: Transaction entities with field changesets for records and configs
 - **Schema**: Uses a built-in, immutable transaction schema that cannot be modified
 - **Characteristics**: Append-only, immutable history that provides the foundation for audit trails and time-travel capabilities
 - **Data Flow**: All modifications to other namespaces are recorded here first
@@ -44,9 +44,9 @@ The system uses three primary namespaces, each with distinct responsibilities:
 - **Namespace-Aware Queries**: The API for querying entities would need to allow for optional namespace parameter
 - **Transaction Atomicity**: Even though namespaces are isolated, transactions should maintain atomicity across namespace boundaries when necessary. The order of applying transactions across namespaces will be predefined.
 - **Namespace Identifiers**: Each namespace needs a distinct, single-word identifier that clearly conveys its use case and has an intuitive meaning on its own (e.g., `transaction`).
-    - **Final Names**: `node`, `config`, `transaction`.
+    - **Final Names**: `record`, `config`, `transaction`.
     - **Names Considered**:
-        - For `node` (user data): `record`, `objects`, `data`, `entities`(too generic), `user`(might be misleading), `content`(too close to config), `domain`, `realm`, `workspace` (not meaningful on its own),
+        - For `record` (user data): `node`, `objects`, `data`, `entities`(too generic), `user`(might be misleading), `content`(too close to config), `domain`, `realm`, `workspace` (not meaningful on its own),
         - For `config` (configuration/schema): `attributes`, `schema`, `meta`, `definition`, `settings`, `structure`, `blueprint`.
 
 ## Other considerations
@@ -56,7 +56,7 @@ The system uses three primary namespaces, each with distinct responsibilities:
 An alternative architecture would split the Config namespace into two separate namespaces:
 
 **4-Namespace Architecture:**
-- **Node** - User's actual data (Person Mike)
+- **Record** - User's actual data (Person Mike)
 - **Schema** - Structure definitions (Person type, fields, data types)
 - **Space Config** - System behavior (LLM instructions, views, inboxes, assistants)
 - **Transaction** - Audit log of all changes

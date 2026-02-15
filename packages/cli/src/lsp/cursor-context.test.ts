@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { assertFailed } from "@binder/utils";
 import {
-  mockNodeSchema,
+  mockRecordSchema,
   mockTask1Uid,
   mockTaskTypeKey,
   mockProjectFieldKey,
@@ -82,10 +82,10 @@ const createYamlContext = (
       documentType: "yaml",
       document: { getText: () => content } as TextDocument,
       uri: "file:///test.yaml",
-      namespace: "node",
-      schema: mockNodeSchema,
+      namespace: "record",
+      schema: mockRecordSchema,
       navigationItem: mockNavigationItem,
-      typeDef: mockNodeSchema.types[mockTaskTypeKey],
+      typeDef: mockRecordSchema.types[mockTaskTypeKey],
       entityMappings,
       parsed: parseYamlDocument(content),
     },
@@ -139,7 +139,7 @@ describe("cursor-context", () => {
         {
           mapping: mockMatchedMapping,
           entityIndex: 0,
-          typeDef: mockNodeSchema.types[mockTaskTypeKey],
+          typeDef: mockRecordSchema.types[mockTaskTypeKey],
         },
       );
     });
@@ -154,7 +154,7 @@ describe("cursor-context", () => {
         {
           mapping: mockMatchedMapping,
           entityIndex: 0,
-          typeDef: mockNodeSchema.types[mockTaskTypeKey],
+          typeDef: mockRecordSchema.types[mockTaskTypeKey],
         },
       );
     });
@@ -184,7 +184,7 @@ describe("cursor-context", () => {
         {
           mapping: mockMatchedMapping,
           entityIndex: 0,
-          typeDef: mockNodeSchema.types[mockTaskTypeKey],
+          typeDef: mockRecordSchema.types[mockTaskTypeKey],
         },
       );
     });
@@ -432,11 +432,11 @@ tags:
           documentType: "markdown",
           document: { getText: () => content } as TextDocument,
           uri: "file:///test.md",
-          namespace: "node",
-          schema: mockNodeSchema,
+          namespace: "record",
+          schema: mockRecordSchema,
           navigationItem:
             opts?.navigationItem ?? mockNavigationItemWithTemplate,
-          typeDef: mockNodeSchema.types[mockTaskTypeKey],
+          typeDef: mockRecordSchema.types[mockTaskTypeKey],
           entityMappings: singleMapping,
           parsed,
           fieldMappings,

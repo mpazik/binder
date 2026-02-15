@@ -3,13 +3,13 @@ import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import { type FieldsetNested, type KnowledgeGraph } from "@binder/db";
 import {
-  mockNodeSchema,
+  mockRecordSchema,
   mockProjectField,
   mockProjectKey,
-  mockProjectNode,
+  mockProjectRecord,
   mockProjectUid,
-  mockTask2Node,
-  mockTask3Node,
+  mockTask2Record,
+  mockTask3Record,
   mockTasksField,
   mockTransactionInitInput,
 } from "@binder/db/mocks";
@@ -37,7 +37,7 @@ describe("reference", () => {
   describe("normalizeReferences", () => {
     const check = async (input: FieldsetNested, expected: FieldsetNested) => {
       const result = throwIfError(
-        await normalizeReferences(input, mockNodeSchema, kg),
+        await normalizeReferences(input, mockRecordSchema, kg),
       );
       expect(result).toEqual(expected);
     };
@@ -75,15 +75,15 @@ describe("reference", () => {
     it("normalizes nested relation references", async () => {
       await check(
         {
-          ...mockProjectNode,
+          ...mockProjectRecord,
           [mockTasksField.key]: [
-            { ...mockTask2Node, [mockProjectField.key]: mockProjectKey },
+            { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
           ],
         },
         {
-          ...mockProjectNode,
+          ...mockProjectRecord,
           [mockTasksField.key]: [
-            { ...mockTask2Node, [mockProjectField.key]: mockProjectUid },
+            { ...mockTask2Record, [mockProjectField.key]: mockProjectUid },
           ],
         },
       );
@@ -93,7 +93,7 @@ describe("reference", () => {
   describe("formatReferences", () => {
     const check = async (input: FieldsetNested, expected: FieldsetNested) => {
       const result = throwIfError(
-        await formatReferences(input, mockNodeSchema, kg),
+        await formatReferences(input, mockRecordSchema, kg),
       );
       expect(result).toEqual(expected);
     };
@@ -115,15 +115,15 @@ describe("reference", () => {
     it("formats nested relation references", async () => {
       await check(
         {
-          ...mockProjectNode,
+          ...mockProjectRecord,
           [mockTasksField.key]: [
-            { ...mockTask2Node, [mockProjectField.key]: mockProjectUid },
+            { ...mockTask2Record, [mockProjectField.key]: mockProjectUid },
           ],
         },
         {
-          ...mockProjectNode,
+          ...mockProjectRecord,
           [mockTasksField.key]: [
-            { ...mockTask2Node, [mockProjectField.key]: mockProjectKey },
+            { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
           ],
         },
       );
@@ -135,17 +135,17 @@ describe("reference", () => {
       const result = throwIfError(
         await normalizeReferencesList(
           [
-            { ...mockTask2Node, [mockProjectField.key]: mockProjectKey },
-            { ...mockTask3Node, [mockProjectField.key]: mockProjectKey },
+            { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
+            { ...mockTask3Record, [mockProjectField.key]: mockProjectKey },
           ],
-          mockNodeSchema,
+          mockRecordSchema,
           kg,
         ),
       );
 
       expect(result).toEqual([
-        { ...mockTask2Node, [mockProjectField.key]: mockProjectUid },
-        { ...mockTask3Node, [mockProjectField.key]: mockProjectUid },
+        { ...mockTask2Record, [mockProjectField.key]: mockProjectUid },
+        { ...mockTask3Record, [mockProjectField.key]: mockProjectUid },
       ]);
     });
   });
@@ -154,15 +154,15 @@ describe("reference", () => {
     it("formats references in multiple entities", async () => {
       const result = throwIfError(
         await formatReferencesList(
-          [mockTask2Node, mockTask3Node],
-          mockNodeSchema,
+          [mockTask2Record, mockTask3Record],
+          mockRecordSchema,
           kg,
         ),
       );
 
       expect(result).toEqual([
-        { ...mockTask2Node, [mockProjectField.key]: mockProjectKey },
-        { ...mockTask3Node, [mockProjectField.key]: mockProjectKey },
+        { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
+        { ...mockTask3Record, [mockProjectField.key]: mockProjectKey },
       ]);
     });
   });
@@ -175,7 +175,7 @@ describe("reference", () => {
             title: "Test",
             fields: [["title", { required: true }]],
           },
-          mockNodeSchema,
+          mockRecordSchema,
           kg,
         ),
       );

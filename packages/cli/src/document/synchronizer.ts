@@ -72,9 +72,9 @@ const synchronizeSingle = async (
 
   if (kgResult.data.items.length !== 1) {
     return fail(
-      "invalid_node_count",
-      "Path fields must resolve to exactly one node",
-      { pathFields, nodeCount: kgResult.data.items.length },
+      "invalid_record_count",
+      "Path fields must resolve to exactly one record",
+      { pathFields, recordCount: kgResult.data.items.length },
     );
   }
 
@@ -180,9 +180,9 @@ const synchronizeDocument = async (
 
   if (kgResult.data.items.length !== 1) {
     return fail(
-      "invalid_node_count",
-      "Path fields must resolve to exactly one node",
-      { pathFields, nodeCount: kgResult.data.items.length },
+      "invalid_record_count",
+      "Path fields must resolve to exactly one record",
+      { pathFields, recordCount: kgResult.data.items.length },
     );
   }
 
@@ -436,7 +436,7 @@ export const synchronizeModifiedFiles = async (
     CONFIG_NAVIGATION_ITEMS,
   );
 
-  const nodeNavigationResult = await runtime.nav("node");
+  const nodeNavigationResult = await runtime.nav("record");
   if (isErr(nodeNavigationResult)) return nodeNavigationResult;
   const nodeIncludePatterns = [
     ...getNavigationFilePatterns(nodeNavigationResult.data),
@@ -445,7 +445,7 @@ export const synchronizeModifiedFiles = async (
 
   const [configResult, nodeResult] = await Promise.all([
     scanNamespace("config", { include: configIncludePatterns }),
-    scanNamespace("node", {
+    scanNamespace("record", {
       include: nodeIncludePatterns,
       exclude: config.exclude,
     }),
@@ -467,21 +467,21 @@ export const synchronizeModifiedFiles = async (
   if (isErr(templatesResult)) return templatesResult;
   const templates = templatesResult.data;
 
-  const [configsResult, nodesResult] = await Promise.all([
+  const [configsResult, recordsResult] = await Promise.all([
     synchronizeNamespaceFiles(runtime, configFiles, "config", templates),
-    synchronizeNamespaceFiles(runtime, nodeFiles, "node", templates),
+    synchronizeNamespaceFiles(runtime, nodeFiles, "record", templates),
   ]);
 
   if (isErr(configsResult)) return configsResult;
-  if (isErr(nodesResult)) return nodesResult;
+  if (isErr(recordsResult)) return recordsResult;
 
   const configs = configsResult.data;
-  const nodes = nodesResult.data;
+  const records = recordsResult.data;
 
   log?.debug("Changesets after synchronization", {
     configChangesets: configs.length,
-    nodeChangesets: nodes.length,
-    nodeDetails: nodes.map((n) => {
+    nodeChangesets: records.length,
+    nodeDetails: records.map((n) => {
       const { $ref, type, key, ...fields } = n as Record<string, unknown>;
       return {
         ref: $ref ?? key ?? type,
@@ -490,16 +490,16 @@ export const synchronizeModifiedFiles = async (
     }),
   });
 
-  if (configs.length === 0 && nodes.length === 0) return ok(null);
+  if (configs.length === 0 && records.length === 0) return ok(null);
 
-  const nodeConflicts = detectCrossFileConflicts(nodes);
+  const nodeConflicts = detectCrossFileConflicts(records);
   if (isErr(nodeConflicts)) return nodeConflicts;
   const configConflicts = detectCrossFileConflicts(configs);
   if (isErr(configConflicts)) return configConflicts;
 
   return ok({
     author: config.author,
-    nodes,
-    configurations: configs,
+    records,
+    configs: configs,
   });
 };

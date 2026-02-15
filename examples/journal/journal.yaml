@@ -192,6 +192,98 @@
 # ====================
 
 - configs:
+    # All days by period
+    - key: nav-journal-days
+      type: Navigation
+      path: journal/days/{dayPeriod}
+      where: { type: JournalDay }
+      includes:
+        dayPeriod: true
+        moodScore: true
+        sleepScore: true
+        foodScore: true
+        workScore: true
+        fitnessScore: true
+        totalScore: true
+        plan: true
+        log: true
+        summary: true
+        parent:
+          weekPeriod: true
+          goal: true
+          plan: true
+
+    # All weeks
+    - key: nav-journal-weeks
+      type: Navigation
+      path: journal/weeks/{weekPeriod}
+      where: { type: JournalWeek }
+      includes:
+        weekPeriod: true
+        totalScore: true
+        goal: true
+        plan: true
+        summary: true
+        parent:
+          monthPeriod: true
+          goal: true
+          plan: true
+        children:
+          dayPeriod: true
+          totalScore: true
+          summary: true
+
+    # All months
+    - key: nav-journal-months
+      type: Navigation
+      path: journal/months/{monthPeriod}
+      where: { type: JournalMonth }
+      includes:
+        monthPeriod: true
+        goal: true
+        plan: true
+        summary: true
+        parent:
+          quarterPeriod: true
+          goal: true
+          plan: true
+        children:
+          weekPeriod: true
+          summary: true
+
+    # All quarters
+    - key: nav-journal-quarters
+      type: Navigation
+      path: journal/quarters/{quarterPeriod}
+      where: { type: JournalQuarter }
+      includes:
+        quarterPeriod: true
+        goal: true
+        plan: true
+        summary: true
+        parent:
+          yearPeriod: true
+          goal: true
+          plan: true
+        children:
+          monthPeriod: true
+          summary: true
+
+    # All years
+    - key: nav-journal-years
+      type: Navigation
+      path: journal/years/{yearPeriod}
+      where: { type: JournalYear }
+      includes:
+        yearPeriod: true
+        goal: true
+        plan: true
+        summary: true
+        children:
+          quarterPeriod: true
+          summary: true
+
+- configs:
     # Templates
     - key: journal-day-summary
       type: Template

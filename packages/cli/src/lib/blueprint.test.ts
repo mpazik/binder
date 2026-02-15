@@ -17,12 +17,12 @@ describe("blueprint", () => {
   it("loadBlueprint parses transactions from YAML", async () => {
     const blueprintContent = `
 - author: system
-  configurations:
+  configs:
     - key: email
       type: Field
       dataType: plaintext
 - author: system
-  configurations:
+  configs:
     - key: Person
       type: Type
       name: Person
@@ -42,20 +42,20 @@ describe("blueprint", () => {
     expect(transactions[0]).toMatchObject({
       author: "system",
     });
-    expect(transactions[0].configurations).toMatchObject([
+    expect(transactions[0].configs).toMatchObject([
       { key: "email", type: "Field", dataType: "plaintext" },
     ]);
     expect(transactions[1]).toMatchObject({
       author: "system",
     });
-    expect(transactions[1].configurations).toMatchObject([
+    expect(transactions[1].configs).toMatchObject([
       { key: "Person", type: "Type", name: "Person", fields: ["email"] },
     ]);
   });
 
   it("loadBlueprint uses default author when not specified", async () => {
     const blueprintContent = `
-- configurations:
+- configs:
     - key: name
       type: Field
       dataType: plaintext

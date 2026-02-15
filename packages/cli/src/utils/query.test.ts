@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import "@binder/utils/tests";
 import {
-  mockNodeSchema,
-  mockProjectNode,
-  mockUserNode,
+  mockRecordSchema,
+  mockProjectRecord,
+  mockUserRecord,
 } from "@binder/db/mocks";
 import { throwIfError } from "@binder/utils";
 import type { AncestralFieldsetChain } from "@binder/db";
@@ -14,7 +14,7 @@ const check = (
   parents: AncestralFieldsetChain | undefined,
   expected: Record<string, string>,
 ) => {
-  const result = parseStringQuery(mockNodeSchema, text, parents);
+  const result = parseStringQuery(mockRecordSchema, text, parents);
   expect(result).toBeOkWith({ filters: expected });
 };
 
@@ -23,12 +23,12 @@ const checkError = (
   parents: AncestralFieldsetChain | undefined,
   errorKey: string,
 ) => {
-  const result = parseStringQuery(mockNodeSchema, text, parents);
+  const result = parseStringQuery(mockRecordSchema, text, parents);
   expect(result).toBeErrWithKey(errorKey);
 };
 
 const checkLegacy = (query: string, expected: Record<string, string>) => {
-  const queryParams = throwIfError(parseStringQuery(mockNodeSchema, query));
+  const queryParams = throwIfError(parseStringQuery(mockRecordSchema, query));
   const result = extractFieldsetFromQuery(queryParams);
   expect(result).toEqual(expected);
 };
@@ -105,7 +105,7 @@ describe("parseStringQuery", () => {
   });
 
   test("resolves {parent.key} with parent context", () => {
-    check("type=Task AND project={parent.key}", [mockProjectNode], {
+    check("type=Task AND project={parent.key}", [mockProjectRecord], {
       type: "Task",
       project: "project-binder-system",
     });
@@ -114,7 +114,7 @@ describe("parseStringQuery", () => {
   test("resolves multiple placeholders in single query", () => {
     check(
       "type=Task AND project={parent.key} AND projectTitle={parent.title}",
-      [mockProjectNode],
+      [mockProjectRecord],
       {
         type: "Task",
         project: "project-binder-system",
@@ -126,7 +126,7 @@ describe("parseStringQuery", () => {
   test("resolves {parent2.key} with grandparent context", () => {
     check(
       "type=Milestone AND owner={parent2.name}",
-      [mockProjectNode, mockUserNode],
+      [mockProjectRecord, mockUserRecord],
       {
         type: "Milestone",
         owner: "Rick",
@@ -135,7 +135,7 @@ describe("parseStringQuery", () => {
   });
 
   test("omits filter when parent field is missing", () => {
-    check("type=Task AND milestone={parent.nonexistent}", [mockProjectNode], {
+    check("type=Task AND milestone={parent.nonexistent}", [mockProjectRecord], {
       type: "Task",
     });
   });
@@ -143,7 +143,7 @@ describe("parseStringQuery", () => {
   test("returns error when unrecognized placeholder syntax", () => {
     checkError(
       "type=Task AND project={parent9.key}",
-      [mockProjectNode],
+      [mockProjectRecord],
       "context-not-found",
     );
   });

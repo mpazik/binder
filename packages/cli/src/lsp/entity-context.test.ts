@@ -3,12 +3,12 @@ import { pick, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
 import type { KnowledgeGraph } from "@binder/db";
 import {
-  mockNodeSchema,
-  mockProjectNode,
+  mockRecordSchema,
+  mockProjectRecord,
   mockProjectTypeKey,
-  mockTask1Node,
+  mockTask1Record,
   mockTask1Uid,
-  mockTask2Node,
+  mockTask2Record,
   mockTask2Uid,
   mockTaskTypeKey,
   mockTransactionInitInput,
@@ -27,7 +27,7 @@ import {
 import { fetchEntityContext } from "./entity-context.ts";
 
 describe("entity-context", () => {
-  const schema = mockNodeSchema;
+  const schema = mockRecordSchema;
   let ctx: RuntimeContextWithDb;
   let kg: KnowledgeGraph;
 
@@ -64,9 +64,9 @@ describe("entity-context", () => {
 
     it("resolves matched entity by path fields", async () => {
       const content = renderYamlEntity(
-        pick(mockTask1Node, ["title", "status"]),
+        pick(mockTask1Record, ["title", "status"]),
       );
-      await check(navItem, content, `tasks/${mockTask1Node.key}.yaml`, {
+      await check(navItem, content, `tasks/${mockTask1Record.key}.yaml`, {
         kind: "single",
         mapping: {
           status: "matched",
@@ -81,7 +81,7 @@ describe("entity-context", () => {
     // that exists in DB but the file path doesn't match, we won't find it.
     it.skip("resolves matched entity by uid in content", async () => {
       const content = renderYamlEntity({
-        ...pick(mockTask1Node, ["uid"]),
+        ...pick(mockTask1Record, ["uid"]),
         title: "Different Title",
         status: "different",
       });
@@ -97,7 +97,7 @@ describe("entity-context", () => {
 
     it("resolves new entity when not in database", async () => {
       const content = renderYamlEntity({
-        ...pick(mockTask1Node, ["type"]),
+        ...pick(mockTask1Record, ["type"]),
         title: "New Task",
         status: "todo",
       });
@@ -119,8 +119,8 @@ describe("entity-context", () => {
 
     it("resolves all matched entities by uid", async () => {
       const content = renderYamlList([
-        pick(mockTask1Node, ["uid", "title"]),
-        pick(mockTask2Node, ["uid", "title"]),
+        pick(mockTask1Record, ["uid", "title"]),
+        pick(mockTask2Record, ["uid", "title"]),
       ]);
       await check(navItem, content, "all-tasks.yaml", {
         kind: "list",
@@ -133,8 +133,8 @@ describe("entity-context", () => {
 
     it("resolves entities without uid using similarity matching", async () => {
       const content = renderYamlList([
-        pick(mockTask1Node, ["title"]),
-        pick(mockTask2Node, ["title"]),
+        pick(mockTask1Record, ["title"]),
+        pick(mockTask2Record, ["title"]),
       ]);
       await check(navItem, content, "all-tasks.yaml", {
         kind: "list",
@@ -147,9 +147,9 @@ describe("entity-context", () => {
 
     it("resolves new entities using type from filter", async () => {
       const content = renderYamlList([
-        pick(mockTask1Node, ["title"]),
+        pick(mockTask1Record, ["title"]),
         { title: "New Task" },
-        pick(mockTask2Node, ["title"]),
+        pick(mockTask2Record, ["title"]),
       ]);
       await check(navItem, content, "all-tasks.yaml", {
         kind: "list",
@@ -163,9 +163,9 @@ describe("entity-context", () => {
 
     it("use type that comes from the field if specified", async () => {
       const content = renderYamlList([
-        pick(mockTask1Node, ["title"]),
-        mockProjectNode,
-        pick(mockTask2Node, ["title"]),
+        pick(mockTask1Record, ["title"]),
+        mockProjectRecord,
+        pick(mockTask2Record, ["title"]),
       ]);
       await check(navItem, content, "all-tasks.yaml", {
         kind: "list",
@@ -198,8 +198,8 @@ ${task.description}
 `;
 
     it("resolves matched document entity", async () => {
-      const content = renderTaskMarkdown(mockTask1Node);
-      await check(navItem, content, `tasks/${mockTask1Node.key}.md`, {
+      const content = renderTaskMarkdown(mockTask1Record);
+      await check(navItem, content, `tasks/${mockTask1Record.key}.md`, {
         kind: "document",
         mapping: {
           status: "matched",
@@ -236,7 +236,7 @@ ${task.description}
           kg,
           schema,
           navItem,
-          `tasks/${mockTask1Node.key}.yaml`,
+          `tasks/${mockTask1Record.key}.yaml`,
         ),
       );
       expect(result).toEqual({

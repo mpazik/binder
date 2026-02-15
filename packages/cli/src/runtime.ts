@@ -213,7 +213,7 @@ export const initializeDbRuntime = async (
 
   const orchestratorCallbacks: OrchestratorCallbacks = {
     afterCommit: async (transaction) => {
-      if (isEmptyObject(transaction.configurations)) return;
+      if (isEmptyObject(transaction.configs)) return;
       navigationCache.invalidate();
       templateCache.invalidate();
     },
