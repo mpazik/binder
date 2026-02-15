@@ -29,6 +29,10 @@ export const txIds = blob("tx_ids", { mode: "json" })
   .notNull()
   .$type<TransactionId[]>()
   .default(sql`'[]'`);
+export const tags = blob("tags", { mode: "json" })
+  .notNull()
+  .$type<string[]>()
+  .default(sql`'[]'`);
 export const name = text("name").notNull();
 const fields = blob("fields", { mode: "json" }).notNull().$type<JsonObject>();
 
@@ -42,6 +46,7 @@ export const recordTable = sqliteTable(
     type: text("type").notNull().$type<RecordType>(),
     fields,
     txIds,
+    tags,
   },
   (table) => [
     index("record_type_idx").on(table.type),
@@ -59,6 +64,7 @@ export const configTable = sqliteTable(
     type: text("type").notNull().$type<ConfigType>(),
     fields,
     txIds,
+    tags,
   },
   (table) => [
     index("config_uid_idx").on(table.uid),
@@ -81,6 +87,7 @@ export const transactionTable = sqliteTable(
       .$type<RecordsChangeset>(),
     author: text("author").notNull(),
     fields,
+    tags,
     createdAt: text("created_at").$type<IsoTimestamp>().notNull(),
   },
   (table) => [
@@ -99,4 +106,8 @@ export const entityTables = {
   transaction: transactionTable,
 } as const satisfies Record<Namespace, Table>;
 
-export const tableStoredFields = [...coreIdentityFieldKeys, "txIds"] as const;
+export const tableStoredFields = [
+  ...coreIdentityFieldKeys,
+  "txIds",
+  "tags",
+] as const;

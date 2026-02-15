@@ -7,6 +7,7 @@ import {
 import type { RecordType } from "./record.ts";
 import {
   fieldSystemType,
+  tagsFieldKey,
   titleFieldKey,
   type TypeDef,
   typeSystemType,
@@ -55,7 +56,7 @@ export const mockAssignedToField = {
 
 export const mockRoleFieldKey = "role" as ConfigKey;
 export const mockRoleField = {
-  id: newUserConfigId(10),
+  id: newUserConfigId(9),
   uid: "_fldRole001" as ConfigUid,
   key: mockRoleFieldKey,
   type: fieldSystemType,
@@ -108,22 +109,9 @@ export const mockTasksField = {
   inverseOf: "project" as ConfigKey,
 } as const satisfies RecordFieldDef;
 
-export const mockTagsFieldKey = "tags" as ConfigKey;
-export const mockTagsField = {
-  id: newUserConfigId(5),
-  uid: "_fldTags000" as ConfigUid,
-  key: mockTagsFieldKey,
-  type: fieldSystemType,
-  name: "Tags",
-  description: "Category labels",
-  dataType: "plaintext",
-  plaintextFormat: "identifier",
-  allowMultiple: true,
-} as const satisfies RecordFieldDef;
-
 export const mockDueDateFieldKey = "dueDate" as ConfigKey;
 export const mockDueDateField = {
-  id: newUserConfigId(6),
+  id: newUserConfigId(5),
   uid: "_fldDueDat1" as ConfigUid,
   key: mockDueDateFieldKey,
   type: fieldSystemType,
@@ -134,7 +122,7 @@ export const mockDueDateField = {
 
 export const mockFieldKeyEmail = "email" as ConfigKey;
 export const mockEmailField = {
-  id: newUserConfigId(7),
+  id: newUserConfigId(6),
   uid: "_fldEmail01" as ConfigUid,
   key: mockFieldKeyEmail,
   type: fieldSystemType,
@@ -147,7 +135,7 @@ export const mockEmailField = {
 
 export const mockProjectFieldKey = "project" as ConfigKey;
 export const mockProjectField = {
-  id: newUserConfigId(8),
+  id: newUserConfigId(7),
   uid: "_fldProjct1" as ConfigUid,
   key: mockProjectFieldKey,
   type: fieldSystemType,
@@ -159,7 +147,7 @@ export const mockProjectField = {
 
 export const mockFavoriteFieldKey = "favorite" as ConfigKey;
 export const mockFavoriteField = {
-  id: newUserConfigId(9),
+  id: newUserConfigId(8),
   uid: "_fldFavort1" as ConfigUid,
   key: mockFavoriteFieldKey,
   type: fieldSystemType,
@@ -170,7 +158,7 @@ export const mockFavoriteField = {
 
 export const mockCompletedAtFieldKey = "completedAt" as ConfigKey;
 export const mockCompletedAtField = {
-  id: newUserConfigId(11),
+  id: newUserConfigId(10),
   uid: "_fldCompAt1" as ConfigUid,
   key: mockCompletedAtFieldKey,
   type: fieldSystemType,
@@ -183,7 +171,7 @@ export const mockCompletedAtField = {
 
 export const mockCancelReasonFieldKey = "cancelReason" as ConfigKey;
 export const mockCancelReasonField = {
-  id: newUserConfigId(12),
+  id: newUserConfigId(11),
   uid: "_fldCancRe2" as ConfigUid,
   key: mockCancelReasonFieldKey,
   type: fieldSystemType,
@@ -196,7 +184,7 @@ export const mockCancelReasonField = {
 
 export const mockPriorityFieldKey = "priority" as ConfigKey;
 export const mockPriorityField = {
-  id: newUserConfigId(13),
+  id: newUserConfigId(12),
   uid: "_fldPriort2" as ConfigUid,
   key: mockPriorityFieldKey,
   type: fieldSystemType,
@@ -216,7 +204,7 @@ export const mockPartnerFieldKey = "partner" as ConfigKey;
 export const mockRelatedToFieldKey = "relatedTo" as ConfigKey;
 
 export const mockTaskType = {
-  id: newUserConfigId(22),
+  id: newUserConfigId(21),
   uid: "_typTask001" as ConfigUid,
   key: mockTaskTypeKey,
   type: typeSystemType,
@@ -227,7 +215,7 @@ export const mockTaskType = {
     [mockStatusFieldKey, { exclude: ["archived"] }],
     [mockPriorityFieldKey, {}],
     [mockAssignedToFieldKey, { only: ["User"] }],
-    mockTagsFieldKey,
+    tagsFieldKey,
     mockDueDateFieldKey,
     mockCompletedAtFieldKey,
     [mockCancelReasonFieldKey, { required: true }],
@@ -236,7 +224,7 @@ export const mockTaskType = {
 } as const satisfies TypeDef;
 
 export const mockProjectType = {
-  id: newUserConfigId(23),
+  id: newUserConfigId(22),
   uid: "_typProjct1" as ConfigUid,
   key: mockProjectTypeKey,
   type: typeSystemType,
@@ -246,13 +234,13 @@ export const mockProjectType = {
     [titleFieldKey, { required: true }],
     [mockStatusFieldKey, { default: "active", required: true }],
     mockAssignedToFieldKey,
-    mockTagsFieldKey,
+    tagsFieldKey,
     mockTasksFieldKey,
   ],
 } as const satisfies TypeDef;
 
 export const mockUserType = {
-  id: newUserConfigId(24),
+  id: newUserConfigId(23),
   uid: "_typUser001" as ConfigUid,
   key: mockUserTypeKey,
   type: typeSystemType,
@@ -266,7 +254,7 @@ export const mockUserType = {
 } as const satisfies TypeDef;
 
 export const mockTeamType = {
-  id: newUserConfigId(25),
+  id: newUserConfigId(24),
   uid: "_typTeam001" as ConfigUid,
   key: mockTeamTypeKey,
   type: typeSystemType,
@@ -277,7 +265,7 @@ export const mockTeamType = {
 
 export const mockAliasesFieldKey = "aliases" as ConfigKey;
 export const mockAliasesField = {
-  id: newUserConfigId(14),
+  id: newUserConfigId(13),
   uid: "_fldAlias02" as ConfigUid,
   key: mockAliasesFieldKey,
   type: fieldSystemType,
@@ -290,7 +278,7 @@ export const mockAliasesField = {
 
 export const mockNotesFieldKey = "notes" as ConfigKey;
 export const mockNotesField = {
-  id: newUserConfigId(15),
+  id: newUserConfigId(14),
   uid: "_fldNotes02" as ConfigUid,
   key: mockNotesFieldKey,
   type: fieldSystemType,
@@ -303,7 +291,7 @@ export const mockNotesField = {
 
 export const mockStepsFieldKey = "steps" as ConfigKey;
 export const mockStepsField = {
-  id: newUserConfigId(16),
+  id: newUserConfigId(15),
   uid: "_fldSteps02" as ConfigUid,
   key: mockStepsFieldKey,
   type: fieldSystemType,
@@ -316,7 +304,7 @@ export const mockStepsField = {
 
 export const mockChaptersFieldKey = "chapters" as ConfigKey;
 export const mockChaptersField = {
-  id: newUserConfigId(17),
+  id: newUserConfigId(16),
   uid: "_fldChpts02" as ConfigUid,
   key: mockChaptersFieldKey,
   type: fieldSystemType,
@@ -329,7 +317,7 @@ export const mockChaptersField = {
 
 export const mockTemplatesFieldKey = "templates" as ConfigKey;
 export const mockTemplatesField = {
-  id: newUserConfigId(18),
+  id: newUserConfigId(17),
   uid: "_fldTmpls02" as ConfigUid,
   key: mockTemplatesFieldKey,
   type: fieldSystemType,
@@ -342,7 +330,7 @@ export const mockTemplatesField = {
 
 export const mockPriceFieldKey = "price" as ConfigKey;
 export const mockPriceField = {
-  id: newUserConfigId(19),
+  id: newUserConfigId(18),
   uid: "_fldPrice02" as ConfigUid,
   key: mockPriceFieldKey,
   type: fieldSystemType,
@@ -354,7 +342,7 @@ export const mockPriceField = {
 // --- One-to-one: partner (self-referential on User) ---
 
 export const mockPartnerField = {
-  id: newUserConfigId(20),
+  id: newUserConfigId(19),
   uid: "_fldPartnr1" as ConfigUid,
   key: mockPartnerFieldKey,
   type: fieldSystemType,
@@ -368,7 +356,7 @@ export const mockPartnerField = {
 // --- Many-to-many: relatedTo (self-referential on Task) ---
 
 export const mockRelatedToField = {
-  id: newUserConfigId(21),
+  id: newUserConfigId(20),
   uid: "_fldRelTo01" as ConfigUid,
   key: mockRelatedToFieldKey,
   type: fieldSystemType,

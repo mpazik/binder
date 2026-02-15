@@ -53,7 +53,7 @@ describe("renderSchemaPreview", () => {
   });
 
   it("should render array of primitives", () => {
-    expect(result).toContain("• tags: plaintext[] - Category labels");
+    expect(result).toContain("• tags: plaintext[]");
   });
 
   it("should render boolean field", () => {

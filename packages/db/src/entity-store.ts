@@ -41,6 +41,7 @@ export type EntityDb = {
   key: EntityKey | null;
   type: EntityType;
   txIds: TransactionId[];
+  tags: string[];
   fields: JsonObject;
 };
 
@@ -79,6 +80,7 @@ export const dbModelToEntity = (db: EntityDb): Fieldset => ({
   uid: db.uid,
   key: db.key,
   type: db.type,
+  ...(db.tags.length > 0 ? { tags: db.tags } : {}),
   ...db.fields,
 });
 

@@ -7,8 +7,8 @@ import {
   mockTaskTypeKey,
   mockProjectFieldKey,
   mockStatusFieldKey,
-  mockTagsFieldKey,
 } from "@binder/db/mocks";
+import { tagsFieldKey } from "@binder/db";
 import { LineCounter } from "yaml";
 import { parseYamlDocument } from "../document/yaml-cst.ts";
 import { parseMarkdownDocument } from "../document/markdown.ts";
@@ -288,7 +288,7 @@ tags:
   - important`,
         {
           type: "field-value",
-          fieldPath: [mockTagsFieldKey, "0"],
+          fieldPath: [tagsFieldKey, "0"],
           itemIndex: 0,
           currentValue: "urgent",
         },
@@ -303,7 +303,7 @@ tags:
   - import█ant`,
         {
           type: "field-value",
-          fieldPath: [mockTagsFieldKey, "1"],
+          fieldPath: [tagsFieldKey, "1"],
           itemIndex: 1,
           currentValue: "important",
         },
@@ -317,7 +317,7 @@ tags:
   - █`,
         {
           type: "field-value",
-          fieldPath: [mockTagsFieldKey, "0"],
+          fieldPath: [tagsFieldKey, "0"],
           itemIndex: 0,
         },
       );

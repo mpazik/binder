@@ -11,10 +11,11 @@ import {
   mockNotesField,
   mockPriorityField,
   mockStepsField,
-  mockTagsField,
   mockTemplatesField,
 } from "./config.mock.ts";
 import { coreFields } from "./schema.ts";
+
+const mockTagsField = coreFields.tags;
 
 // Test-only field definition for section format parsing tests
 const mockSectionField = {

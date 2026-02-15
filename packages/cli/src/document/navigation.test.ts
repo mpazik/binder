@@ -49,6 +49,14 @@ import {
 } from "./template-entity.ts";
 import { mockTemplates } from "./template.mock.ts";
 
+/** Reorder fieldset so tags comes after key (matching dbModelToEntity order) */
+const reorderTagsField = (fieldset: Fieldset): Fieldset => {
+  const { tags, ...rest } = fieldset;
+  if (tags === undefined) return fieldset;
+  const { uid, key, ...fields } = rest;
+  return { uid, key, tags, ...fields } as Fieldset;
+};
+
 describe("navigation", () => {
   const schema = mockRecordSchema;
 
@@ -474,8 +482,13 @@ describe("navigation", () => {
         },
         "all-tasks.yaml",
         renderYamlList([
-          omit(mockTask1Record, ["id", "type"]),
-          omit({ ...mockTask2Record, project: mockProjectKey }, ["id", "type"]),
+          reorderTagsField(omit(mockTask1Record, ["id", "type"])),
+          reorderTagsField(
+            omit({ ...mockTask2Record, project: mockProjectKey }, [
+              "id",
+              "type",
+            ]),
+          ),
         ]),
       );
     });

@@ -49,6 +49,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'[]'"
+        },
+        "tags": {
+          "name": "tags",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
         }
       },
       "indexes": {
@@ -133,6 +141,14 @@
         },
         "tx_ids": {
           "name": "tx_ids",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "tags": {
+          "name": "tags",
           "type": "blob",
           "primaryKey": false,
           "notNull": true,
@@ -233,6 +249,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
         }
       },
       "indexes": {

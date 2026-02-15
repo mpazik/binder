@@ -13,4 +13,7 @@ DROP INDEX `node_key_idx`;--> statement-breakpoint
 CREATE UNIQUE INDEX `records_uid_unique` ON `records` (`uid`);--> statement-breakpoint
 CREATE UNIQUE INDEX `records_key_unique` ON `records` (`key`);--> statement-breakpoint
 CREATE INDEX `record_type_idx` ON `records` (`type`);--> statement-breakpoint
-CREATE INDEX `record_key_idx` ON `records` (`key`);
+CREATE INDEX `record_key_idx` ON `records` (`key`);--> statement-breakpoint
+ALTER TABLE `configs` ADD `tags` blob DEFAULT '[]' NOT NULL;--> statement-breakpoint
+ALTER TABLE `records` ADD `tags` blob DEFAULT '[]' NOT NULL;--> statement-breakpoint
+ALTER TABLE `transactions` ADD `tags` blob DEFAULT '[]' NOT NULL;

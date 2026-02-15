@@ -74,6 +74,7 @@ export const coreIds = {
   description: newId(7, 0),
   parent: newId(8, 0),
   children: newId(9, 0),
+  tags: newId(10, 0),
 } as const;
 
 export const titleFieldKey = "title" as EntityKey;
@@ -81,6 +82,7 @@ export const descriptionFieldKey = "description" as EntityKey;
 export const nameFieldKey = "name" as EntityKey;
 export const parentFieldKey = "parent" as EntityKey;
 export const childrenFieldKey = "children" as EntityKey;
+export const tagsFieldKey = "tags" as EntityKey;
 export const coreFields = {
   id: {
     id: coreIds.id,
@@ -149,6 +151,14 @@ export const coreFields = {
     description: "Child entities in hierarchical structure",
     allowMultiple: true,
     inverseOf: parentFieldKey,
+  },
+  tags: {
+    id: coreIds.tags,
+    key: tagsFieldKey,
+    name: "Tags",
+    dataType: "plaintext",
+    plaintextFormat: "identifier",
+    allowMultiple: true,
   },
 } as const satisfies Record<string, FieldDef>;
 
