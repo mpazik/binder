@@ -38,21 +38,18 @@ if (!result.success) {
 
 console.log(`✓ Built successfully: dist/index.js`);
 
-const coreMigrationsSource = join(import.meta.dir, "../db/src/migrations");
-const coreMigrationsTarget = join(import.meta.dir, "dist/migrations-core");
+const { mergeMigrationFolders } = await import("./src/db/merge-migrations.ts");
 
-mkdirSync(coreMigrationsTarget, { recursive: true });
-cpSync(coreMigrationsSource, coreMigrationsTarget, { recursive: true });
-
-console.log(`✓ Copied core migrations to dist/migrations-core`);
-
+const dbMigrationsSource = join(import.meta.dir, "../db/src/migrations");
 const cliMigrationsSource = join(import.meta.dir, "src/db/migrations");
-const cliMigrationsTarget = join(import.meta.dir, "dist/migrations-cli");
+const migrationsTarget = join(import.meta.dir, "dist/migrations");
 
-mkdirSync(cliMigrationsTarget, { recursive: true });
-cpSync(cliMigrationsSource, cliMigrationsTarget, { recursive: true });
+mergeMigrationFolders(
+  [dbMigrationsSource, cliMigrationsSource],
+  migrationsTarget,
+);
 
-console.log(`✓ Copied CLI migrations to dist/migrations-cli`);
+console.log(`✓ Merged migrations to dist/migrations`);
 
 const blueprintsSource = join(import.meta.dir, "data/blueprints");
 const blueprintsTarget = join(import.meta.dir, "dist/blueprints");
