@@ -144,9 +144,8 @@ export const updateEntity = async <N extends NamespaceEditable>(
   const updateObj = entityToDbModel(patch);
 
   if (updateObj.fields) {
-    updateObj.fields = sql.raw(
-      `json_patch(fields, '${JSON.stringify(updateObj.fields)}')`,
-    ) as any;
+    updateObj.fields =
+      sql`json_patch(fields, ${JSON.stringify(updateObj.fields)})` as any;
   }
 
   return tryCatch(
