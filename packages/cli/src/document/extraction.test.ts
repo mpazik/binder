@@ -15,7 +15,7 @@ import {
 } from "./template.mock.ts";
 import { extract, type ExtractedFileData } from "./extraction.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
-import type { Templates } from "./template-entity.ts";
+import { createTemplateEntity, type Templates } from "./template-entity.ts";
 
 describe("extract", () => {
   const emptyTemplates: Templates = [];
@@ -300,6 +300,44 @@ ${mockTask1Record.description}
         },
         preambleTemplates,
       );
+    });
+
+    it("does not conflict when frontmatter has relation ref and body has relation projection", () => {
+      // Reproduces the journal-day bug: template has `parent` in preamble
+      // and uses {parent.title} in body. Frontmatter holds the ref string
+      // ("some-parent-key") while body extraction produces a nested object
+      // ({ title: "Parent Title" }). These are complementary, not conflicting.
+      const template = createTemplateEntity(
+        "task-with-parent-body",
+        `# {title}
+
+## Parent
+
+{parent.title}
+`,
+        { preamble: ["parent"] },
+      );
+      const templates: Templates = [template, ...mockTemplates];
+
+      const markdown = `---
+parent: some-parent-key
+---
+
+# My Task
+
+## Parent
+
+Parent Title
+`;
+      const result = extract(
+        mockRecordSchema,
+        { path: "tasks/{key}", template: "task-with-parent-body" },
+        markdown,
+        "task.md",
+        templates,
+        {},
+      );
+      expect(result).toBeOk();
     });
 
     it("propagates error for malformed frontmatter YAML", () => {

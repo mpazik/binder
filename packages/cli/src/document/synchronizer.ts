@@ -312,7 +312,13 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
     templates,
     base,
   );
-  if (isErr(extractResult)) return extractResult;
+  if (isErr(extractResult)) {
+    extractResult.error.data = {
+      ...extractResult.error.data,
+      file: relativePath,
+    };
+    return extractResult;
+  }
 
   const changesets = await synchronizeExtracted(
     kg,

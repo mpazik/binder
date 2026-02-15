@@ -133,8 +133,15 @@ const extractFromMarkdown = (
   if (isErr(fileFieldsResult)) return fileFieldsResult;
 
   const accumulator = createFieldAccumulator(base);
+  const preambleKeys = new Set(template.preamble ?? []);
 
   for (const [key, value] of Object.entries(fileFieldsResult.data)) {
+    // Preamble relation fields appear in the body as projected/included data
+    // (e.g. {parent.title}), not as editable values. The frontmatter holds
+    // the authoritative relation ref. Skip these to avoid false conflicts.
+    if (preambleKeys.has(key) && isFieldsetNested(value as FieldValue)) {
+      continue;
+    }
     accumulator.set([key], value as FieldValue, { origin: "body" });
   }
   for (const [key, value] of Object.entries(frontmatterFields)) {

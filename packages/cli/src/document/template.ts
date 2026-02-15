@@ -180,6 +180,49 @@ const getTemplateBlockCount = (templateAst: TemplateAST): number =>
   templateAst.children.filter((n) => !FRONTMATTER_TYPES.includes(n.type))
     .length;
 
+type BlockSignature = { type: string; depth?: number };
+
+const getFirstBlockSignature = (
+  templateAst: TemplateAST,
+): BlockSignature | undefined => {
+  const first = templateAst.children.find(
+    (n) => !FRONTMATTER_TYPES.includes(n.type),
+  );
+  if (!first) return undefined;
+  return {
+    type: first.type,
+    depth: "depth" in first ? (first.depth as number) : undefined,
+  };
+};
+
+const matchesSignature = (node: Nodes, sig: BlockSignature): boolean =>
+  node.type === sig.type &&
+  (sig.depth === undefined || !("depth" in node) || node.depth === sig.depth);
+
+/**
+ * Split a flat array of block nodes into groups, where each group starts at
+ * a node matching the given signature (e.g. a heading at a specific depth).
+ * This handles entities with variable block counts (e.g. empty fields that
+ * produce fewer blocks than the template defines).
+ */
+const splitBlocksBySignature = (
+  blocks: Nodes[],
+  sig: BlockSignature,
+): Nodes[][] => {
+  const groups: Nodes[][] = [];
+  let current: Nodes[] = [];
+
+  for (const block of blocks) {
+    if (matchesSignature(block, sig) && current.length > 0) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(block);
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+};
+
 const renderRelationField = (
   schema: EntitySchema,
   templates: Templates,
@@ -556,11 +599,36 @@ const extractRelationFromBlocks = (
   if (blocks.length === 0) return ok([]);
 
   // For non-inline positions with block-level templates, we need to group
-  // blocks by the template's block count rather than using text-based delimiters
+  // blocks by entity boundaries rather than using text-based delimiters
   if (!isInlinePosition(slotPosition) && slotPosition !== "document") {
+    const sig = getFirstBlockSignature(itemTemplate.templateAst);
     const templateBlockCount = getTemplateBlockCount(itemTemplate.templateAst);
 
-    if (templateBlockCount > 0) {
+    // Use signature-based splitting for templates starting with a heading
+    // (structural marker with depth). Fall back to fixed block count for
+    // paragraph-based templates where signature splitting would over-split.
+    if (sig && sig.type === "heading" && sig.depth !== undefined) {
+      const groups = splitBlocksBySignature(blocks, sig);
+      const entities: FieldsetNested[] = [];
+      for (const entityBlocks of groups) {
+        const markdown = renderAstToMarkdown({
+          type: "root",
+          children: entityBlocks as Root["children"],
+        });
+        const segmentAst = parseMarkdown(markdown);
+        // TODO: pass matched nested entity base for three-way merge on relations
+        const result = extractFieldsAst(
+          schema,
+          templates,
+          itemTemplate.templateAst,
+          segmentAst,
+          {},
+        );
+        if (isErr(result)) return result;
+        entities.push(result.data);
+      }
+      return ok(entities);
+    } else if (templateBlockCount > 0) {
       const entities: FieldsetNested[] = [];
       for (let i = 0; i < blocks.length; i += templateBlockCount) {
         const entityBlocks = blocks.slice(i, i + templateBlockCount);
@@ -569,7 +637,6 @@ const extractRelationFromBlocks = (
           children: entityBlocks as Root["children"],
         });
         const segmentAst = parseMarkdown(markdown);
-        // TODO: pass matched nested entity base for three-way merge on relations
         const result = extractFieldsAst(
           schema,
           templates,
@@ -845,20 +912,45 @@ export const extractFieldsAst = (
 
       if (templateBlockCount > 0) {
         if (isMultiValueRelation(fieldDef)) {
-          // For multi-value, collect complete entity groups until we can't form another
-          // complete group (remaining blocks needed for next view content)
-          const remainingSnapBlocks = snapChildren.length - state.snapIndex - 1; // -1 for next view paragraph
-          const maxEntities = Math.floor(
-            remainingSnapBlocks / templateBlockCount,
-          );
-          const maxBlocks = maxEntities * templateBlockCount;
+          // For section-format templates starting with a heading, we can
+          // detect entity boundaries by heading depth and collect all blocks
+          // until the next view element at the same or shallower depth.
+          const sig = getFirstBlockSignature(itemTemplate.templateAst);
+          const canDetectBoundary =
+            sig?.type === "heading" && sig.depth !== undefined;
 
-          while (
-            state.snapIndex < snapChildren.length &&
-            blockNodes.length < maxBlocks
-          ) {
-            blockNodes.push(snapChildren[state.snapIndex]!);
-            state.snapIndex++;
+          if (canDetectBoundary) {
+            while (state.snapIndex < snapChildren.length) {
+              const snapNode = snapChildren[state.snapIndex]!;
+              // Stop at a heading with depth <= the template's first heading
+              // that is NOT the template's entity heading depth (i.e. a
+              // sibling/parent section boundary like ## Summary)
+              if (
+                snapNode.type === "heading" &&
+                "depth" in snapNode &&
+                (snapNode.depth as number) < sig.depth!
+              ) {
+                break;
+              }
+              blockNodes.push(snapNode);
+              state.snapIndex++;
+            }
+          } else {
+            // Fallback: use fixed block count when we can't detect boundaries
+            const remainingSnapBlocks =
+              snapChildren.length - state.snapIndex - 1;
+            const maxEntities = Math.floor(
+              remainingSnapBlocks / templateBlockCount,
+            );
+            const maxBlocks = maxEntities * templateBlockCount;
+
+            while (
+              state.snapIndex < snapChildren.length &&
+              blockNodes.length < maxBlocks
+            ) {
+              blockNodes.push(snapChildren[state.snapIndex]!);
+              state.snapIndex++;
+            }
           }
         } else {
           // For single relation, collect exactly as many blocks as the template expects
@@ -994,14 +1086,18 @@ export const extractFieldsAst = (
     }
 
     if (state.snapIndex >= snapChildren.length) {
-      error = literalMismatch();
+      error = literalMismatch(
+        `snapIndex ${state.snapIndex} >= snapChildren.length ${snapChildren.length}, viewChild.type: ${viewChild.type}`,
+      );
       return false;
     }
 
     const snapChild = snapChildren[state.snapIndex]!;
 
     if (viewChild.type !== snapChild.type) {
-      error = literalMismatch();
+      error = literalMismatch(
+        `viewChild.type "${viewChild.type}" !== snapChild.type "${snapChild.type}" at snapIndex ${state.snapIndex}`,
+      );
       return false;
     }
 

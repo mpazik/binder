@@ -1,7 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { pick, throwIfError } from "@binder/utils";
-import type { FieldsetNested } from "@binder/db";
+import {
+  type FieldsetNested,
+  type EntityKey,
+  type EntitySchema,
+  coreSchema,
+  mergeSchema,
+  newId,
+} from "@binder/db";
 import {
   mockRecordSchema,
   mockProjectRecord,
@@ -949,6 +956,57 @@ Excellent first week. Schema is minimal and consistent.
           },
           [...mockDefaultTemplates, weekSummaryTemplate],
         );
+      });
+
+      it("section template with empty block fields in some entities", () => {
+        const journalSchema = mergeSchema(coreSchema(), {
+          fields: {
+            dayPeriod: {
+              id: newId(100, 0),
+              key: "dayPeriod" as EntityKey,
+              name: "Day Period",
+              dataType: "period",
+              periodFormat: "day",
+            },
+            summary: {
+              id: newId(101, 0),
+              key: "summary" as EntityKey,
+              name: "Summary",
+              dataType: "richtext",
+              richtextFormat: "block",
+            },
+          },
+          types: {},
+        }) as EntitySchema;
+
+        const daySummaryTemplate = createTemplateEntity(
+          "day-summary",
+          "### {dayPeriod}\n\n{summary}\n",
+          { templateFormat: "section" },
+        );
+
+        const viewAst = parseTemplate(
+          "## Days Summary\n\n{children|template:day-summary}\n\n## Summary\n\n{description}\n",
+        );
+        const snapAst = parseMarkdown(
+          "## Days Summary\n\n### 2026-02-09\n\n### 2026-02-10\n\nGood day.\n\n## Summary\n\n",
+        );
+        const result = throwIfError(
+          extractFieldsAst(
+            journalSchema,
+            [...mockDefaultTemplates, daySummaryTemplate],
+            viewAst,
+            snapAst,
+            {},
+          ),
+        );
+        expect(result).toEqual({
+          children: [
+            { dayPeriod: "2026-02-09", summary: null },
+            { dayPeriod: "2026-02-10", summary: "Good day." },
+          ],
+          description: null,
+        });
       });
 
       it("parses markdown with trailing empty section", () => {
