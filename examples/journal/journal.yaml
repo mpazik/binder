@@ -1,0 +1,530 @@
+# Personal Journaling System
+# Minimal schema for daily, weekly, monthly, quarterly, and yearly journals
+# Provides: JournalDay, JournalWeek, JournalMonth, JournalQuarter, JournalYear types with plan, log, and reflection
+# Updated: Separate period fields with specific periodFormat, using system parent/children fields
+
+# ====================
+# JOURNALING SCHEMA FIELDS
+# ====================
+
+- configs:
+    # ====================
+    # FIELDS
+    # ====================
+
+    # Temporal identifiers - each journal type has its own period field
+    # with the appropriate periodFormat for validation
+    - key: dayPeriod
+      type: Field
+      name: Day Period
+      dataType: period
+      periodFormat: day
+      description: Day identifier in YYYY-MM-DD format (e.g. 2024-03-25)
+
+    - key: weekPeriod
+      type: Field
+      name: Week Period
+      dataType: period
+      periodFormat: week
+      description: Week identifier in YYYY-W## format (e.g. 2024-W12)
+
+    - key: monthPeriod
+      type: Field
+      name: Month Period
+      dataType: period
+      periodFormat: month
+      description: Month identifier in YYYY-MM format (e.g. 2024-03)
+
+    - key: quarterPeriod
+      type: Field
+      name: Quarter Period
+      dataType: period
+      periodFormat: quarter
+      description: Quarter identifier in YYYY-Q# format (e.g. 2024-Q1)
+
+    - key: yearPeriod
+      type: Field
+      name: Year Period
+      dataType: period
+      periodFormat: year
+      description: Year identifier in YYYY format (e.g. 2024)
+
+    # Journal content fields
+    - key: goal
+      type: Field
+      name: Goal
+      dataType: richtext
+      richtextFormat: line
+      allowMultiple: true
+      description: Desired state to achieve — directional, not necessarily all actionable. May not know the full path yet.
+
+    - key: plan
+      type: Field
+      name: Plan
+      dataType: richtext
+      richtextFormat: block
+      description: Defined tasks to do — concrete, actionable checklist items that move toward the goals.
+
+    - key: log
+      type: Field
+      name: Log
+      dataType: richtext
+      richtextFormat: line
+      allowMultiple: true
+      description: Timestamped activity log (one entry per line)
+
+    - key: summary
+      type: Field
+      name: Summary
+      dataType: richtext
+      richtextFormat: block
+      allowMultiple: true
+      description: Summary and insights
+
+    # Score fields (1-10 scale)
+    - key: moodScore
+      type: Field
+      name: Mood Score
+      dataType: integer
+      description: Overall mood rating (1-10)
+
+    - key: sleepScore
+      type: Field
+      name: Sleep Score
+      dataType: integer
+      description: Sleep quality rating (1-10)
+
+    - key: foodScore
+      type: Field
+      name: Food Score
+      dataType: integer
+      description: Nutrition quality rating (1-10)
+
+    - key: workScore
+      type: Field
+      name: Work Score
+      dataType: integer
+      description: Work productivity rating (1-10)
+
+    - key: fitnessScore
+      type: Field
+      name: Fitness Score
+      dataType: integer
+      description: Exercise/fitness rating (1-10)
+
+    - key: totalScore
+      type: Field
+      name: Total Score
+      dataType: integer
+      description: Average of all scores (1-10)
+
+    # ====================
+    # TYPES
+    # ====================
+
+    - key: JournalDay
+      type: Type
+      name: Journal Day
+      description: Daily journal entry
+      fields:
+        - dayPeriod: { required: true }
+        - parent: { only: [JournalWeek] }
+        - moodScore
+        - sleepScore
+        - foodScore
+        - workScore
+        - fitnessScore
+        - totalScore
+        - plan
+        - log
+        - summary
+
+    - key: JournalWeek
+      type: Type
+      name: Journal Week
+      description: Weekly journal entry
+      fields:
+        - weekPeriod: { required: true }
+        - parent: { only: [JournalMonth] }
+        - totalScore
+        - goal
+        - plan
+        - summary
+        - children: { only: [JournalDay] }
+
+    - key: JournalMonth
+      type: Type
+      name: Journal Month
+      description: Monthly journal entry
+      fields:
+        - monthPeriod: { required: true }
+        - parent: { only: [JournalQuarter] }
+        - goal
+        - plan
+        - summary
+        - children: { only: [JournalWeek] }
+
+    - key: JournalQuarter
+      type: Type
+      name: Journal Quarter
+      description: Quarterly journal entry
+      fields:
+        - quarterPeriod: { required: true }
+        - parent: { only: [JournalYear] }
+        - goal
+        - plan
+        - summary
+        - children: { only: [JournalMonth] }
+
+    - key: JournalYear
+      type: Type
+      name: Journal Year
+      description: Yearly journal entry
+      fields:
+        - yearPeriod: { required: true }
+        - goal
+        - plan
+        - summary
+        - children: { only: [JournalQuarter] }
+
+# ====================
+# NAVIGATION
+# ====================
+
+- configs:
+    # Templates
+    - key: journal-day-summary
+      type: Template
+      name: Journal Day Summary
+      templateFormat: section
+      templateContent: |
+        ### {dayPeriod}
+        {summary}
+
+    - key: journal-week-summary
+      type: Template
+      name: Journal Week Summary
+      templateFormat: section
+      templateContent: |
+        ### {weekPeriod}
+        {summary}
+
+    - key: journal-month-summary
+      type: Template
+      name: Journal Month Summary
+      templateFormat: section
+      templateContent: |
+        ### {monthPeriod}
+        {summary}
+
+    - key: journal-quarter-summary
+      type: Template
+      name: Journal Quarter Summary
+      templateFormat: section
+      templateContent: |
+        ### {quarterPeriod}
+        {summary}
+
+    - key: journal-day-template
+      type: Template
+      name: Journal Day Template
+      preamble:
+        [
+          dayPeriod,
+          parent,
+          moodScore,
+          sleepScore,
+          foodScore,
+          workScore,
+          fitnessScore,
+          totalScore,
+        ]
+      templateContent: |
+        # {dayPeriod}
+
+        ## Context ({parent.weekPeriod})
+
+        ### Week Goal
+        {parent.goal}
+
+        ### Week Plan
+        {parent.plan}
+
+        ## Plan
+        {plan}
+
+        ## Log
+        {log}
+
+        ## Summary
+        {summary}
+
+    - key: journal-week-template
+      type: Template
+      name: Journal Week Template
+      preamble: [weekPeriod, parent, totalScore, goal]
+      templateContent: |
+        # Week {weekPeriod}
+
+        ## Context ({parent.monthPeriod})
+
+        ### Month Goal
+        {parent.goal}
+
+        ### Month Plan
+        {parent.plan}
+
+        ## Goal
+        {goal}
+
+        ## Plan
+        {plan}
+
+        ## Days Summary
+        {children|template:journal-day-summary}
+
+        ## Summary
+        {summary}
+
+    - key: journal-month-template
+      type: Template
+      name: Journal Month Template
+      preamble: [monthPeriod, parent, goal]
+      templateContent: |
+        # {monthPeriod}
+
+        ## Context ({parent.quarterPeriod})
+
+        ### Quarter Goal
+        {parent.goal}
+
+        ### Quarter Plan
+        {parent.plan}
+
+        ## Goal
+        {goal}
+
+        ## Plan
+        {plan}
+
+        ## Weeks Summary
+        {children|template:journal-week-summary}
+
+        ## Summary
+        {summary}
+
+    - key: journal-quarter-template
+      type: Template
+      name: Journal Quarter Template
+      preamble: [quarterPeriod, parent, goal]
+      templateContent: |
+        # {quarterPeriod}
+
+        ## Context ({parent.yearPeriod})
+
+        ### Year Goal
+        {parent.goal}
+
+        ### Year Plan
+        {parent.plan}
+
+        ## Goal
+        {goal}
+
+        ## Plan
+        {plan}
+
+        ## Months Summary
+        {children|template:journal-month-summary}
+
+        ## Summary
+        {summary}
+
+    - key: journal-year-template
+      type: Template
+      name: Journal Year Template
+      preamble: [yearPeriod, goal]
+      templateContent: |
+        # {yearPeriod}
+
+        ## Goal
+        {goal}
+
+        ## Plan
+        {plan}
+
+        ## Quarters Summary
+        {children|template:journal-quarter-summary}
+
+        ## Summary
+        {summary}
+
+    # Navigation with markdown templates
+    - key: nav-journal-day-doc
+      type: Navigation
+      path: journal/days/{dayPeriod}
+      where: { type: JournalDay }
+      template: journal-day-template
+
+    - key: nav-journal-week-doc
+      type: Navigation
+      path: journal/weeks/{weekPeriod}
+      where: { type: JournalWeek }
+      template: journal-week-template
+
+    - key: nav-journal-month-doc
+      type: Navigation
+      path: journal/months/{monthPeriod}
+      where: { type: JournalMonth }
+      template: journal-month-template
+
+    - key: nav-journal-quarter-doc
+      type: Navigation
+      path: journal/quarters/{quarterPeriod}
+      where: { type: JournalQuarter }
+      template: journal-quarter-template
+
+    - key: nav-journal-year-doc
+      type: Navigation
+      path: journal/years/{yearPeriod}
+      where: { type: JournalYear }
+      template: journal-year-template
+
+# ====================
+# SAMPLE DATA
+# ====================
+
+- records:
+    # Sample year
+    - type: JournalYear
+      key: jy-2026
+      yearPeriod: "2026"
+      goal:
+        - "Ship the product and grow to 1k users"
+        - "Run a half marathon"
+        - "Read 24 books (2/month)"
+        - "Build a consistent journaling habit"
+      plan: |
+        - Focus on MVP first, then iterate based on user feedback
+        - Training plan: build up to half marathon by October
+        - 2 books/month, alternate fiction and non-fiction
+        - Use binder journaling system daily
+      summary: ""
+
+    # Sample quarter
+    - type: JournalQuarter
+      key: jq-2026-Q1
+      quarterPeriod: "2026-Q1"
+      parent: jy-2026
+      goal:
+        - "Launch the MVP by end of February"
+        - "Establish gym routine (4x/week)"
+        - "Read 6 books"
+        - "Set up meal prep system"
+      plan: |
+        - Jan: core features + schema system
+        - Feb: templates, navigation, polish, launch
+        - Mar: user feedback, iterate, first 100 users
+        - Gym: Mon/Wed/Fri/Sat, meal prep on Sundays
+      summary: ""
+
+    # Sample month
+    - type: JournalMonth
+      key: jm-2026-02
+      monthPeriod: "2026-02"
+      parent: jq-2026-Q1
+      goal:
+        - "Ship templates and navigation features"
+        - "Consistent gym routine (4x/week)"
+        - "Cook more at home, less takeout"
+        - "Read at least 2 books"
+      plan: |
+        - Week 1: template frontmatter + rendering
+        - Week 2: navigation system + includes
+        - Week 3: polish, docs, launch prep
+        - Week 4: launch MVP
+        - Gym: Mon/Wed/Fri + one weekend session
+        - Meal prep Sundays, no takeout on weekdays
+      summary: ""
+
+    # Sample week
+    - type: JournalWeek
+      key: jw-2026-W07
+      weekPeriod: "2026-W07"
+      parent: jm-2026-02
+      totalScore: 7
+      goal:
+        - "Ship the template frontmatter feature"
+        - "Hit the gym 3 times"
+        - "Meal prep consistently"
+      plan: |
+        - [ ] 3 gym sessions (Mon, Wed, Fri)
+        - [ ] Meal prep on Sunday
+        - [ ] Ship the template frontmatter feature
+        - [ ] Catch up with Alex over coffee
+      summary: |
+        Solid week overall. Hit the gym 3 times, meal prep saved me
+        from ordering pizza twice. Got the frontmatter feature merged
+        on Thursday. Skipped Friday's gym though — was too tired after
+        the release. Coffee with Alex was great, need to do that more often.
+
+    # Sample days
+    - type: JournalDay
+      key: jd-2026-02-09
+      dayPeriod: "2026-02-09"
+      parent: jw-2026-W07
+      moodScore: 7
+      sleepScore: 6
+      foodScore: 8
+      workScore: 7
+      fitnessScore: 8
+      totalScore: 7
+      plan: |
+        - [ ] Morning gym — upper body
+        - [ ] Grocery shopping and meal prep
+        - [ ] Work on frontmatter parsing
+        - [ ] Call mum
+      log:
+        - "07:30 - Woke up groggy, snoozed twice. Need to stop staying up late."
+        - "08:30 - Gym. Bench felt good, hit a new PR on overhead press."
+        - "10:00 - Grocery run. Stocked up for the week."
+        - "11:30 - Meal prep — chicken, rice, roasted veggies. Enough for 4 days."
+        - "13:00 - Started on the frontmatter parser. YAML edge cases are annoying."
+        - "15:30 - Got the basic extraction working. Tests passing."
+        - "17:00 - Called mum. She's doing well, wants me to visit next month."
+        - "18:30 - Cooked dinner instead of ordering. Small win."
+        - "21:00 - Read for a bit, then bed."
+      summary: |
+        Good day. Gym went well, meal prep done for the week.
+        Made decent progress on the parser. Felt good about
+        cooking dinner — trying to make it a habit.
+
+    - type: JournalDay
+      key: jd-2026-02-10
+      dayPeriod: "2026-02-10"
+      parent: jw-2026-W07
+      moodScore: 5
+      sleepScore: 4
+      foodScore: 6
+      workScore: 8
+      fitnessScore: 3
+      totalScore: 5
+      plan: |
+        - [ ] Fix the nested includes bug
+        - [ ] Review PR from Sara
+        - [ ] Gym — leg day
+        - [ ] Early bed, catch up on sleep
+      log:
+        - "07:00 - Terrible sleep. Woke up at 3am and couldn't fall back asleep."
+        - "08:00 - Coffee. Lots of coffee."
+        - "09:00 - Dove into the nested includes bug. Took longer than expected."
+        - "12:00 - Finally found it — off-by-one in the path resolver."
+        - "12:30 - Leftover meal prep for lunch. At least that's sorted."
+        - "14:00 - Reviewed Sara's PR. Clean code, just a few suggestions."
+        - "16:00 - Tried to go to the gym but zero energy. Skipped it."
+        - "17:00 - Grabbed a burger on the way home. So much for eating well."
+        - "20:00 - Watched some TV, crashed early."
+      summary: |
+        Rough day energy-wise. Bad sleep cascaded into everything.
+        Work was actually productive though — nailed that bug.
+        Skipped gym and ate junk. Tomorrow is a reset.
