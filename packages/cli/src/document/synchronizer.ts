@@ -1,5 +1,6 @@
 import type {
   ChangesetsInput,
+  EntityChangesetInput,
   EntitySchema,
   Fieldset,
   FieldsetNested,
@@ -11,7 +12,15 @@ import type {
   TransactionInput,
 } from "@binder/db";
 import { includesWithUid } from "@binder/db";
-import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
+import {
+  createError,
+  fail,
+  isEqual,
+  isErr,
+  ok,
+  type Result,
+  type ResultAsync,
+} from "@binder/utils";
 import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
 import { diffEntities, diffQueryResults } from "../diff";
@@ -281,12 +290,27 @@ export const synchronizeFile = async <N extends NamespaceEditable>(
   if (isErr(contentResult)) return contentResult;
   const content = contentResult.data;
 
+  const baseResult = await kg.search(
+    {
+      filters: pathFields as Record<string, string>,
+      includes: navItem.includes
+        ? includesWithUid(navItem.includes)
+        : undefined,
+    },
+    namespace,
+  );
+  const base =
+    !isErr(baseResult) && baseResult.data.items.length === 1
+      ? baseResult.data.items[0]!
+      : {};
+
   const extractResult = extract(
     schema,
     navItem,
     content,
     absolutePath,
     templates,
+    base,
   );
   if (isErr(extractResult)) return extractResult;
 
@@ -346,6 +370,47 @@ const synchronizeNamespaceFiles = async <N extends NamespaceEditable>(
   }
 
   return ok(changesets);
+};
+
+const detectCrossFileConflicts = <N extends NamespaceEditable>(
+  changesets: ChangesetsInput<N>,
+): Result<void> => {
+  const byRef = new Map<string, EntityChangesetInput<N>[]>();
+  for (const cs of changesets) {
+    const ref = "$ref" in cs ? (cs.$ref as string) : undefined;
+    if (!ref) continue;
+    const group = byRef.get(ref);
+    if (group) group.push(cs);
+    else byRef.set(ref, [cs]);
+  }
+
+  for (const [ref, group] of byRef) {
+    if (group.length < 2) continue;
+
+    // Check all field keys across the group for conflicting values
+    const fieldValues = new Map<string, unknown>();
+    for (const cs of group) {
+      for (const [key, value] of Object.entries(cs)) {
+        if (key === "$ref" || key === "type" || key === "key") continue;
+        const existing = fieldValues.get(key);
+        if (existing === undefined) {
+          fieldValues.set(key, value);
+        } else if (!isEqual(existing, value)) {
+          return fail(
+            "field-conflict",
+            `Conflicting values for field '${key}' on entity '${ref}' from different files`,
+            {
+              fieldPath: [key],
+              values: [{ value: existing }, { value }],
+              baseValue: null,
+            },
+          );
+        }
+      }
+    }
+  }
+
+  return ok(undefined);
 };
 
 export const synchronizeModifiedFiles = async (
@@ -416,14 +481,21 @@ export const synchronizeModifiedFiles = async (
   log?.debug("Changesets after synchronization", {
     configChangesets: configs.length,
     nodeChangesets: nodes.length,
-    nodeDetails: nodes.map((n) => ({
-      uid: n.uid,
-      type: n.type,
-      changes: n.changes ? Object.keys(n.changes) : [],
-    })),
+    nodeDetails: nodes.map((n) => {
+      const { $ref, type, key, ...fields } = n as Record<string, unknown>;
+      return {
+        ref: $ref ?? key ?? type,
+        fields: Object.keys(fields),
+      };
+    }),
   });
 
   if (configs.length === 0 && nodes.length === 0) return ok(null);
+
+  const nodeConflicts = detectCrossFileConflicts(nodes);
+  if (isErr(nodeConflicts)) return nodeConflicts;
+  const configConflicts = detectCrossFileConflicts(configs);
+  if (isErr(configConflicts)) return configConflicts;
 
   return ok({
     author: config.author,

@@ -303,12 +303,17 @@ export const getDocumentContext = async (
   const templatesResult = await runtime.templates();
   if (isErr(templatesResult)) return templatesResult;
 
+  const baseEntity =
+    entityContextResult.data.entities.length > 0
+      ? entityContextResult.data.entities[0]!
+      : {};
   const extractResult = extract(
     schema,
     navigationItem,
     document.getText(),
     relativePath,
     templatesResult.data,
+    baseEntity,
   );
   if (isErr(extractResult))
     return fail("extract-failed", "Failed to extract document data", {

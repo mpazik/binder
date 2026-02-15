@@ -27,7 +27,6 @@
       name: Milestone
       dataType: relation
       range: [Milestone]
-      inverseOf: milestoneTasks
 
     - key: milestoneTasks
       type: Field
@@ -35,7 +34,6 @@
       dataType: relation
       range: [Task]
       allowMultiple: true
-      inverseOf: milestone
 
     # Types
     - key: Task
@@ -61,10 +59,67 @@
         - dueDate
         - milestoneTasks
 
-# Navigation Structure
+# Navigation & Templates
 - author: system
   configurations:
-    # Milestones (one file per milestone with its tasks)
+    # --- Case 1: Frontmatter + body overlap ---
+    # Template has {status} in body AND status in preamble (frontmatter).
+    # If user edits body status but not frontmatter, the body edit should win.
+    - key: task-detail-template
+      type: Template
+      name: Task Detail
+      preamble: [status, priority]
+      templateContent: |
+        # {title}
+
+        **Status:** {status}
+
+        ## Description
+
+        {description}
+
+    # --- Case 2: Duplicate field slot in one template ---
+    # Template has {title} in two places. If user edits them to different
+    # values, extraction should detect a conflict.
+    - key: task-summary-template
+      type: Template
+      name: Task Summary
+      templateContent: |
+        # {title}
+
+        > **Summary:** {title}
+
+        **Status:** {status}
+
+    # Navigation: markdown tasks with preamble (Case 1)
+    - key: nav-tasks-md
+      type: Navigation
+      path: tasks/{key}
+      where: { type: Task }
+      template: task-detail-template
+
+    # Navigation: markdown tasks with duplicate slot (Case 2)
+    - key: nav-tasks-summary
+      type: Navigation
+      path: summaries/{key}
+      where: { type: Task }
+      template: task-summary-template
+
+    # --- Case 3: Same field across files ---
+    # YAML route at a different path for the same entity. If both files
+    # are modified with different values for the same field, sync should
+    # detect a cross-file conflict.
+    - key: nav-tasks-yaml
+      type: Navigation
+      path: tasks-yaml/{key}
+      where: { type: Task }
+      includes:
+        key: true
+        title: true
+        status: true
+        description: true
+
+    # Milestones (YAML)
     - key: nav-milestone
       type: Navigation
       path: milestones/{key}
@@ -78,10 +133,8 @@
         milestoneTasks:
           title: true
           status: true
-          priority: true
-          dueDate: true
 
-    # Backlog (tasks without milestones)
+    # Backlog
     - key: nav-backlog
       type: Navigation
       path: backlog
@@ -91,61 +144,9 @@
           milestone: { op: empty, value: true }
           status: [pending, active]
 
-    # Archive
-    - key: nav-archive-milestone
-      type: Navigation
-      path: archive/milestones/{key}
-      where: { type: Milestone, status: complete }
-      includes:
-        key: true
-        title: true
-        description: true
-        status: true
-        dueDate: true
-        milestoneTasks:
-          title: true
-          status: true
-          priority: true
-          dueDate: true
-
-    - key: nav-archive-backlog
-      type: Navigation
-      path: archive/tasks
-      query:
-        filters:
-          {
-            type: Task,
-            milestone: { op: empty, value: true },
-            status: complete,
-          }
-
-    # Milestone markdown documents
-    - key: nav-milestone-doc
-      type: Navigation
-      path: docs/milestones/{key}
-      where: { type: Milestone }
-      template: milestone-template
-
-    # Templates
-    - key: milestone-template
-      type: Template
-      name: Milestone Template
-      templateContent: |
-        # {title}
-
-        **Status:** {status}
-        **Due Date:** {dueDate}
-
-        ## Description
-
-        {description}
-
-        ## Tasks
-
 # Sample data
 - author: system
   nodes:
-    # Milestones (concurrent goals, not sequential phases)
     - type: Milestone
       key: mvp-release
       title: MVP Release
@@ -154,61 +155,35 @@
       dueDate: 2025-02-15
 
     - type: Milestone
-      key: user-feedback
-      title: User Testing Round
-      description: Gather feedback from 20 beta users
-      status: active
-      dueDate: 2025-02-28
-
-    - type: Milestone
       key: v1-launch
       title: V1 Public Launch
       description: App store release
       dueDate: 2025-04-01
 
-    # Tasks - mixed work streams
     - type: Task
+      key: build-auth
       title: Build authentication flow
       description: Login, signup, password reset
-      status: complete
+      status: active
       priority: high
       milestone: mvp-release
 
     - type: Task
+      key: design-onboarding
       title: Design onboarding screens
-      status: active
+      status: pending
       priority: medium
       milestone: mvp-release
 
     - type: Task
-      title: Set up crash reporting
-      status: active
-      priority: high
-      milestone: mvp-release
-
-    - type: Task
-      title: Write user interview script
-      status: complete
-      priority: medium
-      milestone: user-feedback
-
-    - type: Task
-      title: Recruit beta testers
-      status: active
-      priority: high
-      milestone: user-feedback
-
-    - type: Task
+      key: app-store-copy
       title: App store listing copy
       priority: low
       milestone: v1-launch
 
     - type: Task
-      title: Investigate push notifications
-      description: Research options for cross-platform push
-      priority: low
-
-    - type: Task
+      key: fix-landscape-bug
       title: Fix landscape orientation bug
+      description: Orientation breaks on tablets
       status: active
       priority: medium

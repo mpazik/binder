@@ -364,13 +364,38 @@ const getMarkdownDiagnostics = async (
     content,
     relativePath,
     templatesResult.data,
+    {},
   );
 
   if (isErr(extractResult)) {
-    log.debug("Markdown extraction failed for validation", {
-      error: extractResult.error,
-    });
-    return diagnostics;
+    if (extractResult.error.key !== "field-conflict") {
+      log.debug("Markdown extraction failed for validation", {
+        error: extractResult.error,
+      });
+      return diagnostics;
+    }
+
+    const conflictData = extractResult.error.data as
+      | { fieldPath?: FieldPath }
+      | undefined;
+    const fieldPath = conflictData?.fieldPath ?? [];
+    const range = resolveFieldRange(
+      fieldPath,
+      context.fieldMappings,
+      context.frontmatter,
+    );
+    return [
+      ...diagnostics,
+      {
+        range,
+        severity: DiagnosticSeverity.Error,
+        message:
+          extractResult.error.message ?? "Conflicting field values detected",
+        source: "binder",
+        code: "field-conflict",
+        data: conflictData,
+      },
+    ];
   }
 
   const extracted = extractResult.data;

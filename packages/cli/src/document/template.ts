@@ -58,6 +58,7 @@ import {
   type TemplateKey,
 } from "./template.const.ts";
 import { type TemplateEntity, type Templates } from "./template-entity.ts";
+import { createFieldAccumulator } from "./field-accumulator.ts";
 
 // Union of all possible node types in a simplified view (block or inline level)
 type SimplifiedViewChild = SimplifiedViewBlockChild | SimplifiedViewInlineChild;
@@ -530,11 +531,13 @@ const extractRelationFromText = (
   const entities: FieldsetNested[] = [];
   for (const segment of segments) {
     const segmentAst = parseMarkdown(segment);
+    // TODO: pass matched nested entity base for three-way merge on relations
     const result = extractFieldsAst(
       schema,
       templates,
       itemTemplate.templateAst,
       segmentAst,
+      {},
     );
     if (isErr(result)) return result;
     entities.push(result.data);
@@ -566,11 +569,13 @@ const extractRelationFromBlocks = (
           children: entityBlocks as Root["children"],
         });
         const segmentAst = parseMarkdown(markdown);
+        // TODO: pass matched nested entity base for three-way merge on relations
         const result = extractFieldsAst(
           schema,
           templates,
           itemTemplate.templateAst,
           segmentAst,
+          {},
         );
         if (isErr(result)) return result;
         entities.push(result.data);
@@ -598,8 +603,9 @@ export const extractFieldsAst = (
   templates: Templates,
   view: TemplateAST,
   snapshot: BlockAST,
+  base: FieldsetNested,
 ): Result<FieldsetNested> => {
-  const fieldset: FieldsetNested = {};
+  const accumulator = createFieldAccumulator(base);
   let error: ErrorObject | undefined = undefined;
 
   const simplifiedView = simplifyViewAst(view);
@@ -682,30 +688,32 @@ export const extractFieldsAst = (
         error = valueResult.error;
         return false;
       }
-      setNestedValue(fieldset, fieldPath, valueResult.data);
+      accumulator.set(fieldPath, valueResult.data);
       state.viewIndex++;
       return true;
     }
 
     if (isRelation(fieldDef)) {
       if (snapText.trim() === "") {
-        setNestedValue(fieldset, fieldPath, null);
+        accumulator.set(fieldPath, null);
         state.viewIndex++;
         return true;
       }
       const itemTemplate = getItemTemplate(viewChild, templates);
       const segmentAst = parseMarkdown(snapText);
+      // TODO: pass matched nested entity base for three-way merge on relations
       const extractResult = extractFieldsAst(
         schema,
         templates,
         itemTemplate.templateAst,
         segmentAst,
+        {},
       );
       if (isErr(extractResult)) {
         error = extractResult.error;
         return false;
       }
-      setNestedValue(fieldset, fieldPath, extractResult.data);
+      accumulator.set(fieldPath, extractResult.data);
       state.viewIndex++;
       return true;
     }
@@ -717,7 +725,7 @@ export const extractFieldsAst = (
       return false;
     }
 
-    setNestedValue(fieldset, fieldPath, valueResult.data);
+    accumulator.set(fieldPath, valueResult.data);
     state.viewIndex++;
     return true;
   };
@@ -886,11 +894,11 @@ export const extractFieldsAst = (
     // Handle empty content
     if (blockNodes.length === 0 && startIndex === state.snapIndex) {
       if (isMultiValueRelation(fieldDef)) {
-        setNestedValue(fieldset, fieldPath, []);
+        accumulator.set(fieldPath, []);
         state.viewIndex++;
         return true;
       }
-      setNestedValue(fieldset, fieldPath, null);
+      accumulator.set(fieldPath, null);
       state.viewIndex++;
       return true;
     }
@@ -908,7 +916,7 @@ export const extractFieldsAst = (
         error = valueResult.error;
         return false;
       }
-      setNestedValue(fieldset, fieldPath, valueResult.data);
+      accumulator.set(fieldPath, valueResult.data);
       state.viewIndex++;
       return true;
     }
@@ -920,17 +928,19 @@ export const extractFieldsAst = (
         children: blockNodes as Root["children"],
       });
       const segmentAst = parseMarkdown(markdown);
+      // TODO: pass matched nested entity base for three-way merge on relations
       const extractResult = extractFieldsAst(
         schema,
         templates,
         itemTemplate.templateAst,
         segmentAst,
+        {},
       );
       if (isErr(extractResult)) {
         error = extractResult.error;
         return false;
       }
-      setNestedValue(fieldset, fieldPath, extractResult.data);
+      accumulator.set(fieldPath, extractResult.data);
       state.viewIndex++;
       return true;
     }
@@ -945,7 +955,7 @@ export const extractFieldsAst = (
       error = valueResult.error;
       return false;
     }
-    setNestedValue(fieldset, fieldPath, valueResult.data);
+    accumulator.set(fieldPath, valueResult.data);
     state.viewIndex++;
     return true;
   };
@@ -1075,7 +1085,7 @@ export const extractFieldsAst = (
 
   if (error) return err(error);
 
-  return ok(fieldset);
+  return accumulator.result();
 };
 
 export const extractFields = (
@@ -1083,6 +1093,7 @@ export const extractFields = (
   templates: Templates,
   templateKey: TemplateKey,
   snapshot: BlockAST,
+  base: FieldsetNested,
 ): Result<FieldsetNested> => {
   const templateResult = findTemplateByKey(templates, templateKey);
   if (isErr(templateResult)) return templateResult;
@@ -1092,6 +1103,7 @@ export const extractFields = (
     templates,
     templateResult.data.templateAst,
     snapshot,
+    base,
   );
 };
 

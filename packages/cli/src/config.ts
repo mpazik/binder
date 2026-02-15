@@ -159,10 +159,7 @@ export const loadWorkspaceConfig = async (
   const { docsPath, author, logLevel, include, exclude, validation } =
     loadedConfig.data;
 
-  const mergedExclude = [
-    ...DEFAULT_EXCLUDE_PATTERNS,
-    ...(exclude ?? []),
-  ];
+  const mergedExclude = [...DEFAULT_EXCLUDE_PATTERNS, ...(exclude ?? [])];
 
   return ok({
     author: author || globalConfig.author || DEFAULT_AUTHOR,

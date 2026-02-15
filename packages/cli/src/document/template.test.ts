@@ -588,16 +588,22 @@ describe("template", () => {
       output: string,
       expected: FieldsetNested,
       templates: Templates = mockDefaultTemplates,
+      base: FieldsetNested = {},
     ) => {
       const viewAst = parseTemplate(view);
       const snapAst = parseMarkdown(output);
       const result = throwIfError(
-        extractFieldsAst(mockNodeSchema, templates, viewAst, snapAst),
+        extractFieldsAst(mockNodeSchema, templates, viewAst, snapAst, base),
       );
       expect(result).toEqual(expected);
     };
 
-    const checkErr = (view: string, output: string, expectedKey: string) => {
+    const checkErr = (
+      view: string,
+      output: string,
+      expectedKey: string,
+      base: FieldsetNested = {},
+    ) => {
       const ast = parseTemplate(view);
       const snapAst = parseMarkdown(output);
       const result = extractFieldsAst(
@@ -605,6 +611,7 @@ describe("template", () => {
         mockDefaultTemplates,
         ast,
         snapAst,
+        base,
       );
       expect(result).toBeErrWithKey(expectedKey);
     };
@@ -1005,6 +1012,44 @@ Excellent first week. Schema is minimal and consistent.
         );
       });
     });
+
+    describe("duplicate field slots", () => {
+      it("detects conflict when duplicate inline slots have different values", () => {
+        checkErr(
+          "# {title}\n\n**Title again:** {title}\n",
+          "# Title A\n\n**Title again:** Title B\n",
+          "field-conflict",
+        );
+      });
+
+      it("detects conflict when duplicate block slots have different values", () => {
+        checkErr(
+          "## Notes\n\n{description}\n\n## Notes Copy\n\n{description}\n",
+          "## Notes\n\nFirst version of notes\n\n## Notes Copy\n\nSecond version of notes\n",
+          "field-conflict",
+        );
+      });
+
+      it("ignores duplicate slot value that matches base", () => {
+        check(
+          "# {title}\n\n**Title again:** {title}\n",
+          "# New Title\n\n**Title again:** Original Title\n",
+          { title: "New Title" },
+          mockDefaultTemplates,
+          { title: "Original Title" },
+        );
+      });
+
+      it("returns empty when both duplicate slots match base", () => {
+        check(
+          "# {title}\n\n**Title again:** {title}\n",
+          "# Original Title\n\n**Title again:** Original Title\n",
+          {},
+          mockDefaultTemplates,
+          { title: "Original Title" },
+        );
+      });
+    });
   });
 
   describe("round-trip", () => {
@@ -1020,7 +1065,7 @@ Add login and registration functionality with JWT tokens
       const viewAst = parseTemplate(mockTaskTemplate.templateContent);
       const snapAst = parseMarkdown(snapshot);
       const extracted = throwIfError(
-        extractFieldsAst(mockNodeSchema, [], viewAst, snapAst),
+        extractFieldsAst(mockNodeSchema, [], viewAst, snapAst, {}),
       );
       const rendered = throwIfError(
         renderTemplateAst(mockNodeSchema, [], viewAst, extracted),

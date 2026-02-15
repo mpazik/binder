@@ -49,7 +49,7 @@ describe("entity-context", () => {
     );
 
     const extracted = throwIfError(
-      extract(schema, navItem, content, filePath, mockTemplates),
+      extract(schema, navItem, content, filePath, mockTemplates, {}),
     );
 
     const mappings = computeEntityMappings(schema, extracted, entityContext);

@@ -24,7 +24,11 @@ import { mockNavigationConfigInput } from "./navigation.mock.ts";
 import { synchronizeFile, synchronizeModifiedFiles } from "./synchronizer.ts";
 import { renderYamlEntity, renderYamlList } from "./yaml.ts";
 import { type NavigationItem } from "./navigation.ts";
-import { mockTemplates } from "./template.mock.ts";
+import {
+  mockPreambleStatusInBodyTemplate,
+  mockPreambleTemplate,
+  mockTemplates,
+} from "./template.mock.ts";
 
 const navigationItems: NavigationItem[] = [
   {
@@ -124,6 +128,44 @@ describe("synchronizeFile", () => {
           },
         ],
       );
+    });
+  });
+
+  describe("markdown with preamble", () => {
+    it("propagates field-conflict when frontmatter and body diverge", async () => {
+      const preambleTemplates = [
+        mockPreambleTemplate,
+        mockPreambleStatusInBodyTemplate,
+        ...mockTemplates,
+      ];
+      const preambleNavItems: NavigationItem[] = [
+        { path: "tasks/{key}", template: "task-status-body" },
+      ];
+      const markdown = `---
+status: active
+---
+
+# ${mockTask1Node.title}
+
+**Status:** done
+`;
+      const filePath = `tasks/${mockTask1Node.key}.md`;
+      const fullPath = join(ctx.config.paths.docs, filePath);
+      throwIfError(await ctx.fs.mkdir(dirname(fullPath), { recursive: true }));
+      throwIfError(await ctx.fs.writeFile(fullPath, markdown));
+      const result = await synchronizeFile(
+        ctx.fs,
+        ctx.db,
+        kg,
+        ctx.config,
+        throwIfError(await kg.version()),
+        preambleNavItems,
+        mockNodeSchema,
+        filePath,
+        "node",
+        preambleTemplates,
+      );
+      expect(result).toBeErrWithKey("field-conflict");
     });
   });
 
@@ -262,6 +304,48 @@ describe("synchronizeFile", () => {
         renderYamlList([{ ...mockTask1Node, title: "Scoped Update" }]),
         { nodes: [{ $ref: mockTask1Uid, title: "Scoped Update" }] },
       );
+    });
+
+    it("detects conflict when two files change same entity field to different values", async () => {
+      const yamlPath = join(
+        ctx.config.paths.docs,
+        `tasks/${mockTask1Node.key}.yaml`,
+      );
+      const mdPath = join(
+        ctx.config.paths.docs,
+        `md-tasks/${mockTask1Node.key}.md`,
+      );
+
+      throwIfError(await ctx.fs.mkdir(dirname(yamlPath), { recursive: true }));
+      throwIfError(await ctx.fs.mkdir(dirname(mdPath), { recursive: true }));
+
+      throwIfError(
+        await ctx.fs.writeFile(
+          yamlPath,
+          renderYamlEntity({
+            title: "Title From YAML",
+            status: mockTask1Node.status,
+          }),
+        ),
+      );
+      throwIfError(
+        await ctx.fs.writeFile(
+          mdPath,
+          `---
+status: ${mockTask1Node.status}
+---
+
+# Title From Markdown
+
+## Description
+
+${mockTask1Node.description}
+`,
+        ),
+      );
+
+      const result = await synchronizeModifiedFiles(ctx, ctx.config.paths.docs);
+      expect(result).toBeErrWithKey("field-conflict");
     });
 
     it("detects changes in config namespace", async () => {
