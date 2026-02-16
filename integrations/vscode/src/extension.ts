@@ -1,10 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as vscode from "vscode";
-import type {
-  LanguageClientOptions,
-  ServerOptions,
-} from "vscode-languageclient/node";
 import { LanguageClient } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
@@ -22,22 +18,14 @@ export const activate = (context: vscode.ExtensionContext): void => {
   if (!isBinderWorkspace(workspaceRoot)) return;
 
   const config = vscode.workspace.getConfiguration("binder");
-  const cliPath = config.get<string>("path", "binder");
-  const devMode = config.get<boolean>("devMode", false);
+  const binderCmd = config.get<string>("command", "binder");
   const traceConfig = vscode.workspace.getConfiguration("binderLsp");
   const traceLevel = traceConfig.get<string>("trace.server", "off");
-  const command = devMode ? "bun" : cliPath;
+
+  const cmdParts = binderCmd.split(" ").filter(Boolean);
+  const command = cmdParts[0];
   const logLevel = config.get<string>("logLevel", "info");
-  const args = devMode
-    ? [
-        "run",
-        "--conditions=development",
-        "packages/cli/src/index.ts",
-        "lsp",
-        "--log-level",
-        logLevel,
-      ]
-    : ["lsp", "--log-level", logLevel];
+  const args = [...cmdParts.slice(1), "lsp", "--log-level", logLevel];
   const outputChannel = vscode.window.createOutputChannel("Binder");
 
   client = new LanguageClient(
@@ -62,22 +50,11 @@ export const activate = (context: vscode.ExtensionContext): void => {
     },
   );
 
-  if (devMode || traceLevel !== "off") {
+  if (traceLevel !== "off") {
     outputChannel.appendLine(
-      `Binder LSP starting in ${devMode ? "development" : "production"} mode`,
+      `Binder LSP starting: ${command} ${args.join(" ")}`,
     );
-  }
-
-  if (devMode) {
-    outputChannel.appendLine(`Command: ${command} ${args.join(" ")}`);
     outputChannel.show(true);
-
-    const telemetryChannel =
-      vscode.window.createOutputChannel("Binder Telemetry");
-
-    client.onTelemetry((data) => {
-      telemetryChannel.appendLine(JSON.stringify(data, null, 2));
-    });
   }
 
   client.start().catch((error) => {

@@ -26,16 +26,10 @@
       "type": "object",
       "title": "Binder",
       "properties": {
-        "binder.path": {
+        "binder.command": {
           "type": "string",
           "default": "binder",
-          "description": "Path to the Binder executable",
-          "scope": "machine-overridable"
-        },
-        "binder.devMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Run the language server in development mode (uses bun to run from source)",
+          "description": "Command to run the Binder CLI",
           "scope": "machine-overridable"
         },
         "binder.logLevel": {
