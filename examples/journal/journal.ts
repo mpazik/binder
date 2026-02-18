@@ -2,27 +2,20 @@
 
 // Journal
 //
-// Opens (or creates) a periodic journal entry in Binder.
+// Opens (or creates) a periodic journal entry in Binder
+// and prints the file path to stdout.
 // Supports day, week, month, quarter, and year granularities
 // with optional prev/next offset navigation.
 //
 // Usage:
 //   journal [granularity] [offset]
 //   journal              → today
-//   journal w prev       → previous week
-//   journal m next       → next month
+//   journal w p          → previous week
+//   journal m n          → next month
 //
 // Setup:
 //   JOURNAL_DIR   Path to your journal workspace directory (required)
 //                 export JOURNAL_DIR="$HOME/my-journal"
-//
-//   EDITOR        Editor command to open journal files (default: "code")
-//                 The file path is appended to this command.
-//                 The script sets cwd to JOURNAL_DIR, which is enough
-//                 for terminal editors (vim/neovim LSP workspace detection).
-//                 For GUI editors that need an explicit workspace folder:
-//                   export EDITOR="code $JOURNAL_DIR -g"
-//                   export EDITOR="zed $JOURNAL_DIR"
 //
 //   BINDER_CMD    Command to run binder (optional, default: "binder")
 //                 export BINDER_CMD="binder"
@@ -77,16 +70,15 @@ Granularity:
   y, year     Year
 
 Offset:
-  c, current  Current period (default)
   p, prev     Previous period
   n, next     Next period
 
 Examples:
   journal           Today
-  journal prev      Yesterday
+  journal p         Yesterday
   journal w         Current week
-  journal w prev    Previous week
-  journal m next    Next month`);
+  journal w p       Previous week
+  journal m n       Next month`);
 };
 
 const isGranularity = (s: string): s is Granularity =>
@@ -318,9 +310,4 @@ if (!locateResult.success) {
 }
 
 const filePath = locateResult.output;
-const editorArgs = (process.env.EDITOR || "code").split(" ");
-
-Bun.spawn([...editorArgs, filePath], {
-  cwd: CWD,
-  stdio: ["inherit", "inherit", "inherit"],
-});
+console.log(filePath);

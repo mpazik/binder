@@ -1,6 +1,6 @@
 # Personal Journaling System
 # Minimal schema for daily, weekly, monthly, quarterly, and yearly journals
-# Provides: JournalDay, JournalWeek, JournalMonth, JournalQuarter, JournalYear types with plan, log, and reflection
+# Provides: JournalDay, JournalWeek, JournalMonth, JournalQuarter, JournalYear types with plan, achievements, events, log, and reflection
 # Updated: Separate period fields with specific periodFormat, using system parent/children fields
 
 # ====================
@@ -63,7 +63,24 @@
       name: Plan
       dataType: richtext
       richtextFormat: block
+      allowMultiple: true
       description: Defined tasks to do — concrete, actionable checklist items that move toward the goals.
+
+    - key: achievements
+      type: Field
+      name: Achievements
+      dataType: richtext
+      richtextFormat: line
+      allowMultiple: true
+      description: Things completed or accomplished worth mentioning for the period.
+
+    - key: events
+      type: Field
+      name: Events
+      dataType: richtext
+      richtextFormat: line
+      allowMultiple: true
+      description: Unexpected things that happened and required attention during the period.
 
     - key: log
       type: Field
@@ -136,6 +153,8 @@
         - fitnessScore
         - totalScore
         - plan
+        - achievements
+        - events
         - log
         - summary
 
@@ -149,6 +168,8 @@
         - totalScore
         - goal
         - plan
+        - achievements
+        - events
         - summary
         - children: { only: [JournalDay] }
 
@@ -161,6 +182,8 @@
         - parent: { only: [JournalQuarter] }
         - goal
         - plan
+        - achievements
+        - events
         - summary
         - children: { only: [JournalWeek] }
 
@@ -173,6 +196,8 @@
         - parent: { only: [JournalYear] }
         - goal
         - plan
+        - achievements
+        - events
         - summary
         - children: { only: [JournalMonth] }
 
@@ -184,104 +209,14 @@
         - yearPeriod: { required: true }
         - goal
         - plan
+        - achievements
+        - events
         - summary
         - children: { only: [JournalQuarter] }
 
 # ====================
 # NAVIGATION
 # ====================
-
-- configs:
-    # All days by period
-    - key: nav-journal-days
-      type: Navigation
-      path: journal/days/{dayPeriod}
-      where: { type: JournalDay }
-      includes:
-        dayPeriod: true
-        moodScore: true
-        sleepScore: true
-        foodScore: true
-        workScore: true
-        fitnessScore: true
-        totalScore: true
-        plan: true
-        log: true
-        summary: true
-        parent:
-          weekPeriod: true
-          goal: true
-          plan: true
-
-    # All weeks
-    - key: nav-journal-weeks
-      type: Navigation
-      path: journal/weeks/{weekPeriod}
-      where: { type: JournalWeek }
-      includes:
-        weekPeriod: true
-        totalScore: true
-        goal: true
-        plan: true
-        summary: true
-        parent:
-          monthPeriod: true
-          goal: true
-          plan: true
-        children:
-          dayPeriod: true
-          totalScore: true
-          summary: true
-
-    # All months
-    - key: nav-journal-months
-      type: Navigation
-      path: journal/months/{monthPeriod}
-      where: { type: JournalMonth }
-      includes:
-        monthPeriod: true
-        goal: true
-        plan: true
-        summary: true
-        parent:
-          quarterPeriod: true
-          goal: true
-          plan: true
-        children:
-          weekPeriod: true
-          summary: true
-
-    # All quarters
-    - key: nav-journal-quarters
-      type: Navigation
-      path: journal/quarters/{quarterPeriod}
-      where: { type: JournalQuarter }
-      includes:
-        quarterPeriod: true
-        goal: true
-        plan: true
-        summary: true
-        parent:
-          yearPeriod: true
-          goal: true
-          plan: true
-        children:
-          monthPeriod: true
-          summary: true
-
-    # All years
-    - key: nav-journal-years
-      type: Navigation
-      path: journal/years/{yearPeriod}
-      where: { type: JournalYear }
-      includes:
-        yearPeriod: true
-        goal: true
-        plan: true
-        summary: true
-        children:
-          quarterPeriod: true
-          summary: true
 
 - configs:
     # Templates
@@ -345,6 +280,12 @@
         ## Plan
         {plan}
 
+        ## Achievements
+        {achievements}
+
+        ## Events
+        {events}
+
         ## Log
         {log}
 
@@ -371,6 +312,12 @@
 
         ## Plan
         {plan}
+
+        ## Achievements
+        {achievements}
+
+        ## Events
+        {events}
 
         ## Days Summary
         {children|template:journal-day-summary}
@@ -399,6 +346,12 @@
         ## Plan
         {plan}
 
+        ## Achievements
+        {achievements}
+
+        ## Events
+        {events}
+
         ## Weeks Summary
         {children|template:journal-week-summary}
 
@@ -426,6 +379,12 @@
         ## Plan
         {plan}
 
+        ## Achievements
+        {achievements}
+
+        ## Events
+        {events}
+
         ## Months Summary
         {children|template:journal-month-summary}
 
@@ -444,6 +403,12 @@
 
         ## Plan
         {plan}
+
+        ## Achievements
+        {achievements}
+
+        ## Events
+        {events}
 
         ## Quarters Summary
         {children|template:journal-quarter-summary}
@@ -501,6 +466,8 @@
         - Training plan: build up to half marathon by October
         - 2 books/month, alternate fiction and non-fiction
         - Use binder journaling system daily
+      achievements: []
+      events: []
       summary: ""
 
     # Sample quarter
@@ -518,6 +485,8 @@
         - Feb: templates, navigation, polish, launch
         - Mar: user feedback, iterate, first 100 users
         - Gym: Mon/Wed/Fri/Sat, meal prep on Sundays
+      achievements: []
+      events: []
       summary: ""
 
     # Sample month
@@ -537,6 +506,8 @@
         - Week 4: launch MVP
         - Gym: Mon/Wed/Fri + one weekend session
         - Meal prep Sundays, no takeout on weekdays
+      achievements: []
+      events: []
       summary: ""
 
     # Sample week
@@ -554,6 +525,13 @@
         - [ ] Meal prep on Sunday
         - [ ] Ship the template frontmatter feature
         - [ ] Catch up with Alex over coffee
+      achievements:
+        - "Shipped the template frontmatter feature"
+        - "Hit the gym 3 out of 4 planned sessions"
+        - "Meal prepped every Sunday"
+      events:
+        - "Sara's navigation PR landed — big step for the project"
+        - "Coffee with Alex — he's starting a new job next month"
       summary: |
         Solid week overall. Hit the gym 3 times, meal prep saved me
         from ordering pizza twice. Got the frontmatter feature merged
@@ -576,6 +554,12 @@
         - [ ] Grocery shopping and meal prep
         - [ ] Work on frontmatter parsing
         - [ ] Call mum
+      achievements:
+        - "New PR on overhead press"
+        - "Got frontmatter parser basic extraction working"
+        - "Meal prep done for the whole week"
+      events:
+        - "Mum wants me to visit next month"
       log:
         - "07:30 - Woke up groggy, snoozed twice. Need to stop staying up late."
         - "08:30 - Gym. Bench felt good, hit a new PR on overhead press."
@@ -606,6 +590,11 @@
         - [ ] Review PR from Sara
         - [ ] Gym — leg day
         - [ ] Early bed, catch up on sleep
+      achievements:
+        - "Fixed the nested includes bug — tricky off-by-one"
+        - "Reviewed Sara's PR"
+      events:
+        - "Bad sleep night — woke at 3am"
       log:
         - "07:00 - Terrible sleep. Woke up at 3am and couldn't fall back asleep."
         - "08:00 - Coffee. Lots of coffee."

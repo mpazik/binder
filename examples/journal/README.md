@@ -7,50 +7,46 @@ A personal journaling system built on [Binder](../../). Entries are structured a
 | File | Purpose |
 |---|---|
 | `journal.yaml` | Schema — defines journal types, fields, navigation, and templates |
-| `journal.ts` | Main script — opens (or creates) a journal entry in your editor |
+| `journal.ts` | Main script — creates a journal entry if needed and prints its file path |
 | `add-log.ts` | Appends a timestamped log line to today's entry |
 | `git-import-logs.ts` | Generates journal logs from git commits using an LLM |
-| `setup.sh` | Interactive setup — configures directory, editor, and binder workspace |
 
 ## Setup
 
 ```sh
-./setup.sh
-```
-
-This will:
-1. Ask where your journal should live (sets `JOURNAL_DIR`)
-2. Initialize a binder workspace and copy the schema
-3. Detect or ask for your editor (sets `EDITOR`)
-4. Write exports to your shell profile
-
-Or configure manually:
-
-```sh
+# Set your journal directory
 export JOURNAL_DIR="$HOME/journal"
-export EDITOR="code $JOURNAL_DIR -g"  # or vim, nvim, zed, etc.
 
-cd $JOURNAL_DIR
-binder init --quiet
-cp /path/to/journal.yaml .
+# Initialize binder workspace and apply the schema
+mkdir -p $JOURNAL_DIR && cd $JOURNAL_DIR
+binder init
+binder blueprint apply /path/to/journal.yaml
+
+# Add to your shell profile
+echo 'export JOURNAL_DIR="$HOME/journal"' >> ~/.zshrc
 ```
 
 ## Usage
 
+The `journal` script prints a file path. Compose it with your editor:
+
 ```sh
-# Open today's journal (creates day → week → month → quarter → year if needed)
-journal
+# Open today's journal
+$EDITOR $(journal)
 
 # Navigate by granularity
-journal w          # this week
-journal m          # this month
-journal q          # this quarter
-journal y          # this year
+$EDITOR $(journal w)        # this week
+$EDITOR $(journal m)        # this month
+$EDITOR $(journal q)        # this quarter
+$EDITOR $(journal y)        # this year
 
-# Offset with prev/next
-journal prev       # yesterday
-journal w prev     # last week
-journal m next     # next month
+# Offset with p(rev) / n(ext)
+$EDITOR $(journal p)        # yesterday
+$EDITOR $(journal w p)      # last week
+$EDITOR $(journal m n)      # next month
+
+# Just get the path
+journal w p
 
 # Quick log entry — appends "HH:MM - message" to today
 add-log "Fixed the auth bug"
@@ -74,21 +70,3 @@ JournalYear    2026
 ```
 
 Entries are linked via `parent`/`children` fields — opening a day shows the week's plan, opening a week shows summaries of its days, and so on.
-
-## Editor notes
-
-Terminal editors (vim, nvim, nano) work out of the box — the script sets `cwd` to `JOURNAL_DIR`.
-
-GUI editors need the workspace path for features like LSP. `setup.sh` detects these and adds the right flags automatically:
-
-| Editor | Command set by setup |
-|---|---|
-| VS Code / Codium | `code $JOURNAL_DIR -g` |
-| Cursor | `cursor $JOURNAL_DIR -g` |
-| Zed | `zed $JOURNAL_DIR` |
-
-If your editor isn't listed, you can configure it manually:
-
-```sh
-export EDITOR="your-editor $JOURNAL_DIR"
-```
