@@ -132,6 +132,25 @@ const resolveNestedTemplateIncludes = (
   let includes = template.templateIncludes;
 
   visit(template.templateAst, "fieldSlot", (node: TemplateFieldSlot) => {
+    const fieldKey = node.path[0];
+    if (!fieldKey) return;
+
+    // Include where: filter field keys in the relation's includes
+    const whereStr = node.props?.where;
+    if (typeof whereStr === "string") {
+      const whereKeys = whereStr
+        .split(/\s+AND\s+|,/)
+        .map((p) => p.trim().split("=")[0]?.trim())
+        .filter(Boolean) as string[];
+      if (whereKeys.length > 0) {
+        const whereIncludes = buildIncludes(whereKeys.map((k) => [k]));
+        if (whereIncludes)
+          includes = mergeIncludes(includes, {
+            [fieldKey]: whereIncludes,
+          });
+      }
+    }
+
     const nestedTemplateKey = node.props?.template;
     if (!nestedTemplateKey) return;
 
@@ -146,9 +165,6 @@ const resolveNestedTemplateIncludes = (
     if (!nestedIncludes) return;
 
     // Build includes for the relation field with nested template's includes
-    const fieldKey = node.path[0];
-    if (!fieldKey) return;
-
     const relationIncludes: Includes = { [fieldKey]: nestedIncludes };
     includes = mergeIncludes(includes, relationIncludes);
   });

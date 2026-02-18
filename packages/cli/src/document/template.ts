@@ -11,20 +11,22 @@ import {
 } from "@binder/utils";
 import {
   type EntitySchema,
+  type Fieldset,
   type FieldDef,
   type FieldKey,
   type FieldPath,
   type FieldsetNested,
   type FieldValue,
+  type Filters,
   getDelimiterForRichtextFormat,
   getDelimiterString,
   getFieldDefNested,
   getNestedValue,
   isFieldsetNested,
+  matchesFilters,
   type MultiValueDelimiter,
   parseFieldValue,
   type RichtextFormat,
-  setNestedValue,
   splitByDelimiter,
 } from "@binder/db";
 import type { Nodes, Parent, Root, Text } from "mdast";
@@ -33,6 +35,10 @@ import type { Data, Node, Position as UnistPosition } from "unist";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import { type TemplateFormat } from "../cli-config-schema.ts";
+import {
+  extractFieldsetFromQuery,
+  parseFiltersFromString,
+} from "../utils/query.ts";
 import {
   type FieldSlot,
   fieldSlot,
@@ -73,9 +79,32 @@ export type TemplateAST = Brand<TemplateRoot, "TemplateAST">;
 
 export type TemplateFieldSlotProps = {
   template?: string;
+  where?: string;
 };
 
 export type TemplateFieldSlot = FieldSlot<TemplateFieldSlotProps>;
+
+const parseWhereFilters = (slot: TemplateFieldSlot): Filters | undefined => {
+  const whereStr = slot.props?.where;
+  if (typeof whereStr !== "string") return undefined;
+  return parseFiltersFromString(whereStr);
+};
+
+const injectWhereFields = (
+  entities: FieldValue,
+  slot: TemplateFieldSlot,
+): void => {
+  const filters = parseWhereFilters(slot);
+  if (!filters) return;
+  const whereFieldset = extractFieldsetFromQuery({ filters });
+  if (Array.isArray(entities)) {
+    for (const entity of entities) {
+      if (isFieldsetNested(entity)) Object.assign(entity, whereFieldset);
+    }
+  } else if (isFieldsetNested(entities)) {
+    Object.assign(entities, whereFieldset);
+  }
+};
 
 export const parseTemplate = (content: string): TemplateAST => {
   const processor = unified().use(remarkParse).use(fieldSlot);
@@ -378,8 +407,13 @@ const renderFieldSlot = (
   );
   if (isErr(formatCheck)) return formatCheck;
 
+  const whereFilters = parseWhereFilters(slot);
+
   if (isMultiValueRelation(fieldDef) && Array.isArray(value)) {
-    const entities = value.filter(isFieldsetNested);
+    const allEntities = value.filter(isFieldsetNested);
+    const entities = whereFilters
+      ? allEntities.filter((e) => matchesFilters(whereFilters, e as Fieldset))
+      : allEntities;
     if (entities.length > 0) {
       const itemTemplate = getItemTemplate(slot, templates);
       // Validate template's templateFormat compatibility with slot position
@@ -397,9 +431,14 @@ const renderFieldSlot = (
         renderingTemplates,
       );
     }
+    if (whereFilters) return ok([]);
+    if (allEntities.length === 0)
+      return ok([{ type: "text", value: "" } as Nodes]);
   }
 
   if (isRelation(fieldDef) && value && isFieldsetNested(value)) {
+    if (whereFilters && !matchesFilters(whereFilters, value as Fieldset))
+      return ok(renderFieldValue(null, fieldDef));
     const itemTemplate = getItemTemplate(slot, templates);
     // Validate template's templateFormat compatibility with slot position
     const templateFormatCheck = validateFormatPositionCompatibility(
@@ -467,11 +506,13 @@ function renderTemplateAstInternal(
         renderedNodes.some(
           (n) => n.type !== "text" || (n as Text).value !== "",
         );
+      const isEmptyWhereResult =
+        renderedNodes.length === 0 && parseWhereFilters(node) !== undefined;
 
       if (
         (isBlockLevelField(fieldDef) || isRelation(fieldDef)) &&
         isBlockSlot &&
-        hasBlockContent
+        (hasBlockContent || isEmptyWhereResult)
       ) {
         blockReplacements.set(parent, renderedNodes);
         return;
@@ -600,43 +641,44 @@ const extractRelationFromBlocks = (
 
   // For non-inline positions with block-level templates, we need to group
   // blocks by entity boundaries rather than using text-based delimiters
-  if (!isInlinePosition(slotPosition) && slotPosition !== "document") {
+  // Skip for line/phrase format templates where multiple items pack into a single block
+  const templateFormat = itemTemplate.templateFormat;
+  const isBlockGroupable =
+    !isInlinePosition(slotPosition) &&
+    slotPosition !== "document" &&
+    templateFormat !== "line" &&
+    templateFormat !== "phrase";
+
+  if (isBlockGroupable) {
     const sig = getFirstBlockSignature(itemTemplate.templateAst);
     const templateBlockCount = getTemplateBlockCount(itemTemplate.templateAst);
 
     // Use signature-based splitting for templates starting with a heading
     // (structural marker with depth). Fall back to fixed block count for
     // paragraph-based templates where signature splitting would over-split.
-    if (sig && sig.type === "heading" && sig.depth !== undefined) {
-      const groups = splitBlocksBySignature(blocks, sig);
+    const blockGroups =
+      sig?.type === "heading" && sig.depth !== undefined
+        ? splitBlocksBySignature(blocks, sig)
+        : templateBlockCount > 0
+          ? Array.from(
+              { length: Math.ceil(blocks.length / templateBlockCount) },
+              (_, i) =>
+                blocks.slice(
+                  i * templateBlockCount,
+                  (i + 1) * templateBlockCount,
+                ),
+            )
+          : null;
+
+    if (blockGroups) {
       const entities: FieldsetNested[] = [];
-      for (const entityBlocks of groups) {
+      for (const entityBlocks of blockGroups) {
         const markdown = renderAstToMarkdown({
           type: "root",
           children: entityBlocks as Root["children"],
         });
         const segmentAst = parseMarkdown(markdown);
         // TODO: pass matched nested entity base for three-way merge on relations
-        const result = extractFieldsAst(
-          schema,
-          templates,
-          itemTemplate.templateAst,
-          segmentAst,
-          {},
-        );
-        if (isErr(result)) return result;
-        entities.push(result.data);
-      }
-      return ok(entities);
-    } else if (templateBlockCount > 0) {
-      const entities: FieldsetNested[] = [];
-      for (let i = 0; i < blocks.length; i += templateBlockCount) {
-        const entityBlocks = blocks.slice(i, i + templateBlockCount);
-        const markdown = renderAstToMarkdown({
-          type: "root",
-          children: entityBlocks as Root["children"],
-        });
-        const segmentAst = parseMarkdown(markdown);
         const result = extractFieldsAst(
           schema,
           templates,
@@ -676,6 +718,20 @@ export const extractFieldsAst = (
   let error: ErrorObject | undefined = undefined;
 
   const simplifiedView = simplifyViewAst(view);
+
+  const accumulateRelationValue = (
+    fieldPath: FieldPath,
+    value: FieldValue,
+    slot: TemplateFieldSlot,
+    isMultiValue: boolean,
+  ): void => {
+    injectWhereFields(value, slot);
+    if (isMultiValue && parseWhereFilters(slot)) {
+      accumulator.append(fieldPath, value);
+    } else {
+      accumulator.set(fieldPath, value);
+    }
+  };
 
   const literalMismatch = (context?: string) =>
     createError("literal-mismatch", "View and snapshot content do not match", {
@@ -755,7 +811,7 @@ export const extractFieldsAst = (
         error = valueResult.error;
         return false;
       }
-      accumulator.set(fieldPath, valueResult.data);
+      accumulateRelationValue(fieldPath, valueResult.data, viewChild, true);
       state.viewIndex++;
       return true;
     }
@@ -780,7 +836,7 @@ export const extractFieldsAst = (
         error = extractResult.error;
         return false;
       }
-      accumulator.set(fieldPath, extractResult.data);
+      accumulateRelationValue(fieldPath, extractResult.data, viewChild, false);
       state.viewIndex++;
       return true;
     }
@@ -944,10 +1000,28 @@ export const extractFieldsAst = (
             );
             const maxBlocks = maxEntities * templateBlockCount;
 
+            const matchesNextViewNode = (snapNode: Nodes): boolean => {
+              if (!hasMoreViewContent) return false;
+              const nextView = viewChildren[nextViewIndex]!;
+              if (
+                nextView.type !== snapNode.type ||
+                nextView.type === "paragraph"
+              )
+                return false;
+              if (
+                nextView.type === "heading" &&
+                "depth" in nextView &&
+                "depth" in snapNode
+              )
+                return nextView.depth === snapNode.depth;
+              return true;
+            };
+
             while (
               state.snapIndex < snapChildren.length &&
               blockNodes.length < maxBlocks
             ) {
+              if (matchesNextViewNode(snapChildren[state.snapIndex]!)) break;
               blockNodes.push(snapChildren[state.snapIndex]!);
               state.snapIndex++;
             }
@@ -986,7 +1060,7 @@ export const extractFieldsAst = (
     // Handle empty content
     if (blockNodes.length === 0 && startIndex === state.snapIndex) {
       if (isMultiValueRelation(fieldDef)) {
-        accumulator.set(fieldPath, []);
+        accumulateRelationValue(fieldPath, [], slot, true);
         state.viewIndex++;
         return true;
       }
@@ -1008,7 +1082,7 @@ export const extractFieldsAst = (
         error = valueResult.error;
         return false;
       }
-      accumulator.set(fieldPath, valueResult.data);
+      accumulateRelationValue(fieldPath, valueResult.data, slot, true);
       state.viewIndex++;
       return true;
     }
@@ -1032,7 +1106,7 @@ export const extractFieldsAst = (
         error = extractResult.error;
         return false;
       }
-      accumulator.set(fieldPath, extractResult.data);
+      accumulateRelationValue(fieldPath, extractResult.data, slot, false);
       state.viewIndex++;
       return true;
     }

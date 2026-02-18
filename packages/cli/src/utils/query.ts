@@ -103,17 +103,20 @@ export const parseStringQuery = (
   const result = interpolateAncestralFields(schema, query, [{}, ...parents]);
   if (isErr(result)) return result;
 
-  const filters: Record<string, string> = {};
-  const pairs = result.data.split(/\s+AND\s+|,/).map((p: string) => p.trim());
+  return ok({ filters: parseFiltersFromString(result.data) ?? {} });
+};
 
+export const parseFiltersFromString = (query: string): Filters | undefined => {
+  const filters: Filters = {};
+  const pairs = query.split(/\s+AND\s+|,/).map((p) => p.trim());
   for (const pair of pairs) {
-    const [field, value] = pair.split("=").map((s: string) => s.trim());
-    if (field && value) {
-      filters[field] = value;
-    }
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx === -1) continue;
+    const field = pair.slice(0, eqIdx).trim();
+    const value = pair.slice(eqIdx + 1).trim();
+    if (field && value) filters[field] = value;
   }
-
-  return ok({ filters });
+  return Object.keys(filters).length > 0 ? filters : undefined;
 };
 
 export const queryParamsToString = (queryParams: QueryParams): string => {

@@ -47,6 +47,11 @@ export type FieldAccumulator = {
     value: FieldValue,
     source?: FieldConflictSource,
   ) => void;
+  append: (
+    fieldPath: FieldPath,
+    value: FieldValue,
+    source?: FieldConflictSource,
+  ) => void;
   result: () => Result<FieldsetNested, FieldConflictError>;
 };
 
@@ -88,6 +93,32 @@ export const createFieldAccumulator = (
           baseValue: baseValue as FieldValue,
         }),
       );
+    },
+
+    append: (
+      fieldPath: FieldPath,
+      value: FieldValue,
+      source?: FieldConflictSource,
+    ): void => {
+      const key = fieldPathKey(fieldPath);
+      const existing = stored.get(key);
+
+      if (!existing) {
+        stored.set(key, { value, source });
+        return;
+      }
+
+      // Concatenate arrays when appending
+      if (Array.isArray(existing.value) && Array.isArray(value)) {
+        stored.set(key, {
+          value: [...existing.value, ...value],
+          source,
+        });
+        return;
+      }
+
+      // Fallback to set semantics for non-array values
+      stored.set(key, { value, source });
     },
 
     result: (): Result<FieldsetNested, FieldConflictError> => {

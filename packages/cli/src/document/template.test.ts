@@ -30,6 +30,11 @@ import { createTemplateEntity, type Templates } from "./template-entity.ts";
 import { mockDefaultTemplates, mockTaskTemplate } from "./template.mock.ts";
 
 describe("template", () => {
+  const taskItemTemplate = createTemplateEntity("task-item", "- {title}", {
+    templateFormat: "line",
+  });
+  const whereTemplates: Templates = [...mockDefaultTemplates, taskItemTemplate];
+
   describe("renderTemplateAst", () => {
     const check = (
       view: string,
@@ -485,6 +490,61 @@ describe("template", () => {
       });
     });
 
+    describe("where: filter", () => {
+      it("filters multi-value relation in section position", () => {
+        const view = `## Pending\n\n{tasks|where:status=pending|template:task-item}\n\n## Active\n\n{tasks|where:status=active|template:task-item}\n`;
+        const data = {
+          tasks: [mockTask1Record, mockTask2Record, mockTask3Record],
+        };
+        // task1 and task2 are pending, task3 is active
+        check(
+          view,
+          data,
+          `## Pending\n\n- ${mockTask1Record.title}\n- ${mockTask2Record.title}\n\n## Active\n\n- ${mockTask3Record.title}\n`,
+          whereTemplates,
+        );
+      });
+
+      it("where: with no matches produces empty section", () => {
+        const view = `## Cancelled\n\n{tasks|where:status=cancelled|template:task-item}\n\n## Active\n\n{tasks|where:status=active|template:task-item}\n`;
+        const data = { tasks: [mockTask3Record] };
+        check(
+          view,
+          data,
+          `## Cancelled\n\n## Active\n\n- ${mockTask3Record.title}\n`,
+          whereTemplates,
+        );
+      });
+
+      it("where: with multiple conditions (AND)", () => {
+        const view = `{tasks|where:status=pending AND priority=medium|template:task-item}\n`;
+        const data = {
+          tasks: [
+            mockTask1Record, // pending, medium
+            mockTask3Record, // active, medium
+          ],
+        };
+        check(view, data, `- ${mockTask1Record.title}\n`, whereTemplates);
+      });
+
+      it("where: combined with template:", () => {
+        const sectionTemplate = createTemplateEntity(
+          "task-section",
+          `### {title}\n\n{description}\n`,
+          { templateFormat: "section" },
+        );
+        const templates: Templates = [...mockDefaultTemplates, sectionTemplate];
+        const view = `## Active Tasks\n\n{tasks|where:status=active|template:task-section}\n\n## End\n`;
+        const data = { tasks: [mockTask1Record, mockTask3Record] };
+        check(
+          view,
+          data,
+          `## Active Tasks\n\n### ${mockTask3Record.title}\n\n${mockTask3Record.description}\n\n## End\n`,
+          templates,
+        );
+      });
+    });
+
     describe("errors", () => {
       it("non-existent field in schema", () => {
         checkError("**Missing:** {nonExistentField}\n", {}, "field-not-found");
@@ -605,7 +665,7 @@ describe("template", () => {
       expect(result).toEqual(expected);
     };
 
-    const checkErr = (
+    const checkError = (
       view: string,
       output: string,
       expectedKey: string,
@@ -1008,18 +1068,50 @@ Excellent first week. Schema is minimal and consistent.
           description: null,
         });
       });
+    });
 
-      it("parses markdown with trailing empty section", () => {
-        const ast = parseMarkdown("## Summary\n\n");
-        expect(ast.children).toEqual([
-          expect.objectContaining({ type: "heading", depth: 2 }),
-        ]);
+    describe("where: filter extraction", () => {
+      it("extracts from two where: sections and concatenates entities", () => {
+        check(
+          `## Pending\n\n{tasks|where:status=pending|template:task-item}\n\n## Active\n\n{tasks|where:status=active|template:task-item}\n`,
+          `## Pending\n\n- Write docs\n- Create logo\n\n## Active\n\n- Markdown support\n`,
+          {
+            tasks: [
+              { title: "Write docs", status: "pending" },
+              { title: "Create logo", status: "pending" },
+              { title: "Markdown support", status: "active" },
+            ],
+          },
+          whereTemplates,
+        );
+      });
+
+      it("empty where: section contributes no entities", () => {
+        check(
+          `## Pending\n\n{tasks|where:status=pending|template:task-item}\n\n## Active\n\n{tasks|where:status=active|template:task-item}\n`,
+          `## Pending\n\n## Active\n\n- Markdown support\n`,
+          {
+            tasks: [{ title: "Markdown support", status: "active" }],
+          },
+          whereTemplates,
+        );
+      });
+
+      it("single where: section extracts with injected fields", () => {
+        check(
+          `## Active\n\n{tasks|where:status=active|template:task-item}\n`,
+          `## Active\n\n- Task one\n`,
+          {
+            tasks: [{ title: "Task one", status: "active" }],
+          },
+          whereTemplates,
+        );
       });
     });
 
     describe("errors", () => {
       it("non-existent field in schema", () => {
-        checkErr(
+        checkError(
           "**Missing:** {nonExistentField}\n",
           "**Missing:** value\n",
           "field-not-found",
@@ -1027,7 +1119,7 @@ Excellent first week. Schema is minimal and consistent.
       });
 
       it("non-existent nested field in schema", () => {
-        checkErr(
+        checkError(
           "**Project:** {project.nonExistentField}\n",
           `**Project:** ${mockProjectRecord.title}\n`,
           "field-not-found",
@@ -1035,7 +1127,7 @@ Excellent first week. Schema is minimal and consistent.
       });
 
       it("multi-relation with nested multi-value field", () => {
-        checkErr(
+        checkError(
           "{tasks.steps}\n",
           "Step 1\n\nStep 2\n",
           "nested-multi-value-not-supported",
@@ -1043,11 +1135,15 @@ Excellent first week. Schema is minimal and consistent.
       });
 
       it("path with more than 2 levels", () => {
-        checkErr("{project.tasks.title}\n", "Task 1\n", "nested-path-too-deep");
+        checkError(
+          "{project.tasks.title}\n",
+          "Task 1\n",
+          "nested-path-too-deep",
+        );
       });
 
       it("field has wrong type", () => {
-        checkErr(
+        checkError(
           "**Favorite:** {favorite}\n",
           "**Favorite:** teur\n",
           "invalid-field-value",
@@ -1055,7 +1151,7 @@ Excellent first week. Schema is minimal and consistent.
       });
 
       it("literal text mismatch", () => {
-        checkErr(
+        checkError(
           "# {title}\n\n**Type:** {type}\n",
           "# My Task\n\nSome random text\n",
           "literal-mismatch",
@@ -1063,7 +1159,7 @@ Excellent first week. Schema is minimal and consistent.
       });
 
       it("extra content after view", () => {
-        checkErr(
+        checkError(
           "# {title}\n",
           "# My Task\n\nExtra content\n\nMore content\n",
           "extra-content",
@@ -1073,7 +1169,7 @@ Excellent first week. Schema is minimal and consistent.
 
     describe("duplicate field slots", () => {
       it("detects conflict when duplicate inline slots have different values", () => {
-        checkErr(
+        checkError(
           "# {title}\n\n**Title again:** {title}\n",
           "# Title A\n\n**Title again:** Title B\n",
           "field-conflict",
@@ -1081,7 +1177,7 @@ Excellent first week. Schema is minimal and consistent.
       });
 
       it("detects conflict when duplicate block slots have different values", () => {
-        checkErr(
+        checkError(
           "## Notes\n\n{description}\n\n## Notes Copy\n\n{description}\n",
           "## Notes\n\nFirst version of notes\n\n## Notes Copy\n\nSecond version of notes\n",
           "field-conflict",
@@ -1111,24 +1207,53 @@ Excellent first week. Schema is minimal and consistent.
   });
 
   describe("round-trip", () => {
-    it("round-trips template with extracted fields", () => {
-      const snapshot = `# Implement user authentication
-
-**Status:** todo
-
-## Description
-
-Add login and registration functionality with JWT tokens
-`;
-      const viewAst = parseTemplate(mockTaskTemplate.templateContent);
+    const checkRoundTrip = (
+      view: string,
+      snapshot: string,
+      expected: FieldsetNested,
+      templates: Templates = mockDefaultTemplates,
+    ) => {
+      const viewAst = parseTemplate(view);
       const snapAst = parseMarkdown(snapshot);
       const extracted = throwIfError(
-        extractFieldsAst(mockRecordSchema, [], viewAst, snapAst, {}),
+        extractFieldsAst(mockRecordSchema, templates, viewAst, snapAst, {}),
       );
+      expect(extracted).toEqual(expected);
       const rendered = throwIfError(
-        renderTemplateAst(mockRecordSchema, [], viewAst, extracted),
+        renderTemplateAst(mockRecordSchema, templates, viewAst, extracted),
       );
       expect(rendered).toBe(snapshot);
+    };
+
+    it("where-filtered relation sections", () => {
+      checkRoundTrip(
+        `# {title}\n\n{description}\n\n## Pending\n\n{tasks|where:status=pending|template:task-item}\n\n## Active\n\n{tasks|where:status=active|template:task-item}\n`,
+        `# Pre-Launch\n\nPrepare for release.\n\n## Pending\n\n- Write docs\n- Create logo\n\n## Active\n\n- Markdown support\n`,
+        {
+          title: "Pre-Launch",
+          description: "Prepare for release.",
+          tasks: [
+            { title: "Write docs", status: "pending" },
+            { title: "Create logo", status: "pending" },
+            { title: "Markdown support", status: "active" },
+          ],
+        },
+        whereTemplates,
+      );
+    });
+
+    it("extracted fields", () => {
+      checkRoundTrip(
+        mockTaskTemplate.templateContent,
+        `# Implement user authentication\n\n**Status:** todo\n\n## Description\n\nAdd login and registration functionality with JWT tokens\n`,
+        {
+          title: "Implement user authentication",
+          status: "todo",
+          description:
+            "Add login and registration functionality with JWT tokens",
+        },
+        [],
+      );
     });
   });
 
@@ -1305,6 +1430,15 @@ Add login and registration functionality with JWT tokens
           },
         ],
       );
+    });
+  });
+
+  describe("parseMarkdown", () => {
+    it("trailing empty section produces only heading node", () => {
+      const ast = parseMarkdown("## Summary\n\n");
+      expect(ast.children).toEqual([
+        expect.objectContaining({ type: "heading", depth: 2 }),
+      ]);
     });
   });
 });

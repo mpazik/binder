@@ -7,7 +7,11 @@ import {
 } from "@binder/db/mocks";
 import { throwIfError } from "@binder/utils";
 import type { AncestralFieldsetChain } from "@binder/db";
-import { extractFieldsetFromQuery, parseStringQuery } from "./query.ts";
+import {
+  extractFieldsetFromQuery,
+  parseFiltersFromString,
+  parseStringQuery,
+} from "./query.ts";
 
 const check = (
   text: string,
@@ -80,6 +84,46 @@ describe("extractFieldsetFromQuery", () => {
       type: "Task",
       status: "done",
       priority: "high",
+    });
+  });
+});
+
+describe("parseFiltersFromString", () => {
+  test("parses single pair", () => {
+    expect(parseFiltersFromString("status=pending")).toEqual({
+      status: "pending",
+    });
+  });
+
+  test("parses multiple AND-separated pairs", () => {
+    expect(parseFiltersFromString("status=pending AND priority=high")).toEqual({
+      status: "pending",
+      priority: "high",
+    });
+  });
+
+  test("parses comma-separated pairs", () => {
+    expect(parseFiltersFromString("status=pending, priority=high")).toEqual({
+      status: "pending",
+      priority: "high",
+    });
+  });
+
+  test("returns undefined for empty string", () => {
+    expect(parseFiltersFromString("")).toBeUndefined();
+  });
+
+  test("returns undefined for whitespace", () => {
+    expect(parseFiltersFromString("   ")).toBeUndefined();
+  });
+
+  test("returns undefined when no = sign", () => {
+    expect(parseFiltersFromString("invalid")).toBeUndefined();
+  });
+
+  test("handles value containing =", () => {
+    expect(parseFiltersFromString("formula=a=b")).toEqual({
+      formula: "a=b",
     });
   });
 });

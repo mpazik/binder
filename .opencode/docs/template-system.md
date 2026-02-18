@@ -24,6 +24,41 @@ Field slots are placeholders in templates that get replaced with actual field va
 - **With template**: `{tasks|template:task-card}`
 - **Escaping**: `{{literal}}` -> `{literal}`
 
+### Field Expression Syntax
+
+Field slots support an expression syntax with a **path** and optional **pipe-delimited properties** (props):
+
+```
+{path|prop1|prop2:value|prop3:"quoted value"}
+```
+
+**Path**: Dot-separated field key, e.g. `fieldName` or `parent.child`.
+
+**Props**: Each prop is separated by `|`. A prop can be:
+- **Flag**: `{field|highlight}` → `{ highlight: true }`
+- **Single value**: `{field|template:task-card}` → `{ template: "task-card" }`
+- **Multiple args**: `{field|prop:arg1,arg2}` → `{ prop: ["arg1", "arg2"] }`
+- **Quoted value**: `{field|where:"a=1,b=2"}` → `{ where: "a=1,b=2" }` (commas protected)
+
+**Value coercion rules**:
+- `true` / `false` → boolean
+- Digits (e.g. `5`, `3.14`) → number
+- Quoted strings (`"..."` or `'...'`) → string with quotes stripped
+- Everything else → string
+
+Commas separate multiple arguments: `prop:a,b` → `["a", "b"]`. Use quotes to pass a single value containing commas: `prop:"a,b"` → `"a,b"`.
+
+Props are accumulated left-to-right into a single object.
+
+**Implementation**: `packages/cli/src/document/field-expression-parser.ts`
+
+#### Supported Props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `template` | string | Sub-template key for rendering relation items |
+| `where` | string | Filter multi-value relations by field values (see below) |
+
 ### Nested Field Access
 
 Access fields from related entities using dot notation:
@@ -151,6 +186,42 @@ When rendering related items (e.g., `{tasks}`), you can specify which template t
 ```
 
 If no template is specified, the system picks a default based on the **Slot Position**.
+
+### Filtering with `where:`
+
+The `where:` prop filters multi-value relation fields by entity field values before rendering. This enables grouping related entities into separate sections based on status or any other field.
+
+**Syntax**: `{field|where:key=value}` or `{field|where:key1=value1 AND key2=value2}`
+
+Quotes are optional unless the filter string contains commas (which would otherwise be parsed as multiple prop arguments). Use `AND` to separate multiple conditions.
+
+```markdown
+## Tasks to do
+
+{milestoneTasks|where:status=pending|template:task-item}
+
+## In progress
+
+{milestoneTasks|where:status=active|template:task-item}
+
+## Completed tasks
+
+{milestoneTasks|where:status=complete|template:task-item}
+```
+
+**Rendering behavior**:
+- Entities are filtered by the `where:` predicate before rendering
+- When no entities match the filter, the slot produces no output (the paragraph is removed entirely, no blank lines)
+- The same relation field can appear multiple times in a template with different `where:` filters
+
+**Extraction behavior**:
+- When extracting from a document, entities under a `where:`-filtered section automatically inherit the filter's field values (e.g., a task listed under "In progress" gets `status: active`)
+- When the same relation field appears in multiple `where:` sections, extracted entities are concatenated into a single array
+
+**Includes resolution**:
+- Field keys referenced in `where:` filters are automatically added to the relation's database query includes, so filtered fields are fetched without manual configuration
+
+**Filter string format**: Uses the same `key=value` format as navigation `where` filters and `parseStringQuery`. Multiple conditions are separated by ` AND ` or `,`. Values are compared as strings (string equality only).
 
 ## YAML Front Matter (Preamble)
 

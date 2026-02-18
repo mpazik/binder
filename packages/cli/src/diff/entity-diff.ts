@@ -33,8 +33,9 @@ const buildEntityCreate = (
   schema: EntitySchema,
   node: FieldsetNested,
   generatedUid: RecordUid,
+  range?: EntityType[],
 ): EntityChangesetInput<"record"> | null => {
-  const type = getType(node);
+  const type = getType(node) ?? (range?.length === 1 ? range[0] : undefined);
   if (!type) return null;
 
   const fields: Record<string, unknown> = { uid: generatedUid };
@@ -59,6 +60,7 @@ const diffOwnedChildren = (
   schema: EntitySchema,
   newChildren: FieldsetNested[],
   oldChildren: FieldsetNested[],
+  range?: EntityType[],
 ): { changesets: ChangesetsInput; mutations: ListMutation[] } => {
   const changesets: ChangesetsInput = [];
   const mutations: ListMutation[] = [];
@@ -72,7 +74,12 @@ const diffOwnedChildren = (
     const newEntity = newChildren[newIdx]!;
     const generatedUid = createUid() as RecordUid;
 
-    const createChangeset = buildEntityCreate(schema, newEntity, generatedUid);
+    const createChangeset = buildEntityCreate(
+      schema,
+      newEntity,
+      generatedUid,
+      range,
+    );
     if (createChangeset) changesets.push(createChangeset);
 
     mutations.push(["insert", generatedUid]);
@@ -172,7 +179,12 @@ const diffField = (
     const oldChildren = extractOwnedChildren(oldValue);
     if (newChildren.length === 0 && oldChildren.length === 0) return null;
 
-    const result = diffOwnedChildren(schema, newChildren, oldChildren);
+    const result = diffOwnedChildren(
+      schema,
+      newChildren,
+      oldChildren,
+      fieldDef.range,
+    );
     const fieldChange =
       result.mutations.length > 0
         ? (result.mutations as FieldValue)
