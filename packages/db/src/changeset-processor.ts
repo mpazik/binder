@@ -8,6 +8,7 @@ import {
   type ErrorObject,
   fail,
   includes,
+  isEmptyObject,
   isErr,
   isTuple,
   objEntries,
@@ -210,6 +211,51 @@ const validatePatchAttrs = <N extends NamespaceEditable>(
   return errors;
 };
 
+const collectMutationsFromValue = (value: unknown): ListMutation[] | null => {
+  if (Array.isArray(value) && value[0] === "seq" && Array.isArray(value[1]))
+    return value[1] as ListMutation[];
+  if (isListMutationArray(value)) return value;
+  if (isListMutation(value)) return [value];
+  return null;
+};
+
+const validateMutations = <N extends NamespaceEditable>(
+  namespace: N,
+  fieldKey: FieldKey,
+  fieldDef: FieldDef<DataTypeNs[N]>,
+  mutations: ListMutation[],
+  schema: EntitySchema,
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
+  for (const mutation of mutations) {
+    if (isPatchMutation(mutation)) {
+      errors.push(
+        ...validatePatchAttrs(
+          namespace,
+          fieldKey,
+          fieldDef,
+          mutation[2] as Fieldset,
+          schema,
+        ),
+      );
+      continue;
+    }
+    const [kind, mutationValue] = mutation;
+    const validationResult = validateDataType(
+      namespace,
+      { ...fieldDef, allowMultiple: false },
+      mutationValue as FieldValue,
+    );
+    if (isErr(validationResult)) {
+      errors.push({
+        field: fieldKey,
+        message: `Invalid ${kind} value: ${validationResult.error.message}`,
+      });
+    }
+  }
+  return errors;
+};
+
 const validateFieldDefaultValue = (
   input: EntityChangesetInput<"config">,
   existingEntity: Fieldset | undefined,
@@ -257,22 +303,15 @@ const validateInverseOfField = (
   const inverseOfValue = input["inverseOf"] as string | undefined;
   if (!inverseOfValue) return [];
 
+  const fieldKey = input["key"] as string | undefined;
   const allowMultiple = input["allowMultiple"] as boolean | undefined;
-  if (!allowMultiple) {
-    return [
-      {
-        field: "inverseOf",
-        message:
-          "inverseOf can only be used on allowMultiple relation fields (the 'many' side of a one-to-many relationship)",
-      },
-    ];
-  }
 
   const inverseFieldDef = schema.fields[inverseOfValue as FieldKey];
   const batchFieldInput = batchInputs.find(
     (i) => i["key"] === inverseOfValue && includes(fieldTypes, i["type"]),
   );
 
+  // Target must exist
   if (!inverseFieldDef && !batchFieldInput) {
     return [
       {
@@ -282,6 +321,7 @@ const validateInverseOfField = (
     ];
   }
 
+  // Target must be a relation field
   const dataType =
     inverseFieldDef?.dataType ?? (batchFieldInput?.["dataType"] as string);
   if (dataType !== "relation") {
@@ -293,26 +333,28 @@ const validateInverseOfField = (
     ];
   }
 
+  // Single-value field cannot reference an allowMultiple target
   const targetAllowMultiple =
     inverseFieldDef?.allowMultiple ??
     (batchFieldInput?.["allowMultiple"] as boolean | undefined);
-  if (targetAllowMultiple) {
+  if (!allowMultiple && targetAllowMultiple) {
     return [
       {
         field: "inverseOf",
-        message: `inverseOf must reference a single-value relation field, but "${inverseOfValue}" has allowMultiple`,
+        message: `inverseOf on a single-value field cannot reference an allowMultiple field "${inverseOfValue}". Place inverseOf on the allowMultiple side instead.`,
       },
     ];
   }
 
+  // If target also has inverseOf, it must point back to this field
   const targetInverseOf =
     inverseFieldDef?.inverseOf ??
     (batchFieldInput?.["inverseOf"] as string | undefined);
-  if (targetInverseOf) {
+  if (targetInverseOf && targetInverseOf !== fieldKey) {
     return [
       {
         field: "inverseOf",
-        message: `inverseOf cannot reference a field that also has inverseOf (field "${inverseOfValue}" already has inverseOf)`,
+        message: `inverseOf target "${inverseOfValue}" has inverseOf="${targetInverseOf}" which does not point back to "${fieldKey}"`,
       },
     ];
   }
@@ -423,92 +465,11 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       }
     }
 
-    // Handle ["seq", mutations[]] format (ValueChangeSeq)
-    if (Array.isArray(value) && value[0] === "seq" && Array.isArray(value[1])) {
-      for (const mutation of value[1] as ListMutation[]) {
-        if (isPatchMutation(mutation)) {
-          errors.push(
-            ...validatePatchAttrs(
-              namespace,
-              fieldKey,
-              fieldDef,
-              mutation[2] as Fieldset,
-              schema,
-            ),
-          );
-          continue;
-        }
-        const [kind, mutationValue] = mutation;
-        const validationResult = validateDataType(
-          namespace,
-          { ...fieldDef, allowMultiple: false },
-          mutationValue as FieldValue,
-        );
-        if (isErr(validationResult)) {
-          errors.push({
-            field: fieldKey,
-            message: `Invalid ${kind} value: ${validationResult.error.message}`,
-          });
-        }
-      }
-      continue;
-    }
-
-    if (isListMutationArray(value)) {
-      for (const mutation of value) {
-        if (isPatchMutation(mutation)) {
-          errors.push(
-            ...validatePatchAttrs(
-              namespace,
-              fieldKey,
-              fieldDef,
-              mutation[2],
-              schema,
-            ),
-          );
-          continue;
-        }
-        const [kind, mutationValue] = mutation;
-        const validationResult = validateDataType(
-          namespace,
-          { ...fieldDef, allowMultiple: false },
-          mutationValue as FieldValue,
-        );
-        if (isErr(validationResult)) {
-          errors.push({
-            field: fieldKey,
-            message: `Invalid ${kind} value: ${validationResult.error.message}`,
-          });
-        }
-      }
-      continue;
-    }
-
-    if (isListMutation(value)) {
-      if (isPatchMutation(value)) {
-        errors.push(
-          ...validatePatchAttrs(
-            namespace,
-            fieldKey,
-            fieldDef,
-            value[2],
-            schema,
-          ),
-        );
-        continue;
-      }
-      const [kind, mutationValue] = value;
-      const validationResult = validateDataType(
-        namespace,
-        { ...fieldDef, allowMultiple: false },
-        mutationValue as FieldValue,
+    const mutations = collectMutationsFromValue(value);
+    if (mutations) {
+      errors.push(
+        ...validateMutations(namespace, fieldKey, fieldDef, mutations, schema),
       );
-      if (isErr(validationResult)) {
-        errors.push({
-          field: fieldKey,
-          message: `Invalid ${kind} value: ${validationResult.error.message}`,
-        });
-      }
       continue;
     }
 
@@ -520,7 +481,11 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       continue;
     }
 
-    const validationResult = validateDataType(namespace, fieldDef, value);
+    const validationResult = validateDataType(
+      namespace,
+      fieldDef,
+      value as FieldValue,
+    );
 
     if (isErr(validationResult)) {
       errors.push({
@@ -639,7 +604,7 @@ export const applyChangeset = async <N extends NamespaceEditable>(
   entityRef: EntityNsRef[N],
   changeset: FieldChangeset,
 ): ResultAsync<void> => {
-  if (Object.keys(changeset).length === 0) return ok(undefined);
+  if (isEmptyObject(changeset)) return ok(undefined);
 
   if ("id" in changeset) {
     const idChange = normalizeValueChange(changeset.id);
@@ -757,21 +722,11 @@ const collectRelationKeys = <N extends NamespaceEditable>(
       if (fieldDef?.dataType !== "relation") continue;
 
       const fieldValue = value as FieldValue;
-      // Handle ["seq", mutations[]] format (ValueChangeSeq)
-      if (
-        Array.isArray(fieldValue) &&
-        fieldValue[0] === "seq" &&
-        Array.isArray(fieldValue[1])
-      ) {
-        for (const mutation of fieldValue[1] as ListMutation[]) {
+      const fieldMutations = collectMutationsFromValue(fieldValue);
+      if (fieldMutations) {
+        for (const mutation of fieldMutations) {
           if (mutation[0] !== "patch") collectFromValue(mutation[1]);
         }
-      } else if (isListMutationArray(fieldValue)) {
-        for (const mutation of fieldValue as ListMutation[]) {
-          if (mutation[0] !== "patch") collectFromValue(mutation[1]);
-        }
-      } else if (isListMutation(fieldValue)) {
-        if (fieldValue[0] !== "patch") collectFromValue(fieldValue[1]);
       } else {
         collectFromValue(fieldValue);
       }
@@ -917,6 +872,118 @@ const extractMutations = (
   return null;
 };
 
+const expandOneToManyInverse = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
+  parentRef: EntityChangesetRef<N>,
+  directFieldKey: FieldKey,
+  mutations: ListMutation[],
+  result: EntitiesChangeset<N>,
+): ResultAsync<void> => {
+  for (const mutation of mutations) {
+    if (isInsertMutation(mutation)) {
+      const childRef = mutation[1] as EntityChangesetRef<N>;
+      const existingResult = await fetchEntityFieldset(
+        tx,
+        namespace,
+        childRef,
+        [directFieldKey],
+      );
+      if (isErr(existingResult)) return existingResult;
+
+      const currentValue = existingResult.data[directFieldKey] as
+        | EntityChangesetRef<N>
+        | undefined;
+      const childChange: ValueChangeSet =
+        currentValue != null
+          ? ["set", parentRef, currentValue]
+          : ["set", parentRef];
+
+      const existing = result[childRef] ?? {};
+      result[childRef] = { ...existing, [directFieldKey]: childChange };
+    } else if (isRemoveMutation(mutation)) {
+      const childRef = mutation[1] as EntityChangesetRef<N>;
+      const childChange: ValueChangeSet = ["set", null, parentRef];
+
+      const existing = result[childRef] ?? {};
+      result[childRef] = { ...existing, [directFieldKey]: childChange };
+    }
+  }
+  return ok(undefined);
+};
+
+const expandOneToOneInverse = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
+  parentRef: EntityChangesetRef<N>,
+  inverseFieldKey: FieldKey,
+  change: FieldChangeset[FieldKey],
+  result: EntitiesChangeset<N>,
+): ResultAsync<void> => {
+  const normalized = normalizeValueChange(change);
+  if (!isSetChange(normalized)) return ok(undefined);
+
+  const newTargetRef = normalized[1] as EntityChangesetRef<N> | null;
+  const oldTargetRef = (normalized.length > 2 ? normalized[2] : undefined) as
+    | EntityChangesetRef<N>
+    | undefined;
+
+  // If we're setting a new target, update its inverse field to point back
+  if (newTargetRef != null) {
+    const existingResult = await fetchEntityFieldset(
+      tx,
+      namespace,
+      newTargetRef,
+      [inverseFieldKey],
+    );
+    if (isErr(existingResult)) return existingResult;
+
+    const currentInverseValue = existingResult.data[inverseFieldKey] as
+      | EntityChangesetRef<N>
+      | undefined;
+    const targetChange: ValueChangeSet =
+      currentInverseValue != null
+        ? ["set", parentRef, currentInverseValue]
+        : ["set", parentRef];
+
+    const existing = result[newTargetRef] ?? {};
+    result[newTargetRef] = { ...existing, [inverseFieldKey]: targetChange };
+  }
+
+  // If we're clearing/replacing, clear the inverse on the old target
+  if (oldTargetRef != null && oldTargetRef !== newTargetRef) {
+    const targetChange: ValueChangeSet = ["set", null, parentRef];
+
+    const existing = result[oldTargetRef] ?? {};
+    result[oldTargetRef] = { ...existing, [inverseFieldKey]: targetChange };
+  }
+
+  return ok(undefined);
+};
+
+const expandManyToManyInverse = <N extends NamespaceEditable>(
+  parentRef: EntityChangesetRef<N>,
+  inverseFieldKey: FieldKey,
+  mutations: ListMutation[],
+  result: EntitiesChangeset<N>,
+): void => {
+  for (const mutation of mutations) {
+    if (!isInsertMutation(mutation) && !isRemoveMutation(mutation)) continue;
+
+    const kind = mutation[0];
+    const targetRef = mutation[1] as EntityChangesetRef<N>;
+    const existing = result[targetRef] ?? {};
+    const existingSeq = existing[inverseFieldKey];
+    const existingMutations = existingSeq
+      ? (extractMutations(existingSeq) ?? [])
+      : [];
+    result[targetRef] = {
+      ...existing,
+      [inverseFieldKey]: ["seq", [...existingMutations, [kind, parentRef]]],
+    };
+  }
+};
+
 const expandInverseRelations = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
@@ -935,47 +1002,56 @@ const expandInverseRelations = async <N extends NamespaceEditable>(
         continue;
       }
 
-      const directFieldKey = fieldDef.inverseOf as FieldKey;
-      const mutations = extractMutations(change);
+      const inverseFieldKey = fieldDef.inverseOf as FieldKey;
+      const inverseFieldDef = schema.fields[inverseFieldKey];
+      const sourceIsMultiple = !!fieldDef.allowMultiple;
+      const targetIsMultiple = !!inverseFieldDef?.allowMultiple;
 
-      if (!mutations) {
-        filteredChangeset[fieldKey] = change;
-        continue;
-      }
-
-      for (const mutation of mutations) {
-        if (isInsertMutation(mutation)) {
-          const childRef = mutation[1] as EntityChangesetRef<N>;
-          const existingResult = await fetchEntityFieldset(
-            tx,
-            namespace,
-            childRef,
-            [directFieldKey],
-          );
-          if (isErr(existingResult)) return existingResult;
-
-          const currentValue = existingResult.data[directFieldKey] as
-            | EntityChangesetRef<N>
-            | undefined;
-          const childChange: ValueChangeSet =
-            currentValue != null
-              ? ["set", parentRef, currentValue]
-              : ["set", parentRef];
-
-          const existing = result[childRef] ?? {};
-          result[childRef] = { ...existing, [directFieldKey]: childChange };
-        } else if (isRemoveMutation(mutation)) {
-          const childRef = mutation[1] as EntityChangesetRef<N>;
-          const childChange: ValueChangeSet = ["set", null, parentRef];
-
-          const existing = result[childRef] ?? {};
-          result[childRef] = { ...existing, [directFieldKey]: childChange };
+      if (sourceIsMultiple && !targetIsMultiple) {
+        // 1:M — strip declaring side, emit set on target (existing behavior)
+        const mutations = extractMutations(change);
+        if (!mutations) {
+          filteredChangeset[fieldKey] = change;
+          continue;
         }
+        const expandResult = await expandOneToManyInverse(
+          tx,
+          namespace,
+          parentRef,
+          inverseFieldKey,
+          mutations,
+          result,
+        );
+        if (isErr(expandResult)) return expandResult;
+      } else if (!sourceIsMultiple && !targetIsMultiple) {
+        // 1:1 — keep declaring side, also emit set on target
+        filteredChangeset[fieldKey] = change;
+        const expandResult = await expandOneToOneInverse(
+          tx,
+          namespace,
+          parentRef,
+          inverseFieldKey,
+          change,
+          result,
+        );
+        if (isErr(expandResult)) return expandResult;
+      } else if (sourceIsMultiple && targetIsMultiple) {
+        // M:M — keep declaring side, emit seq mutations on target
+        filteredChangeset[fieldKey] = change;
+        const mutations = extractMutations(change);
+        if (!mutations) continue;
+        expandManyToManyInverse(parentRef, inverseFieldKey, mutations, result);
+      } else {
+        // single→multiple: should not happen (validation blocks it), keep as-is
+        filteredChangeset[fieldKey] = change;
       }
     }
 
-    if (Object.keys(filteredChangeset).length > 0) {
-      result[parentRef] = filteredChangeset;
+    if (!isEmptyObject(filteredChangeset)) {
+      const existing = result[parentRef];
+      result[parentRef] = existing
+        ? { ...existing, ...filteredChangeset }
+        : filteredChangeset;
     }
   }
 

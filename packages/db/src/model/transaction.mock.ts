@@ -19,7 +19,7 @@ import type { RecordFieldDef } from "./config.ts";
 
 export const mockTransactionInitId = 1 as TransactionId;
 export const mockTransactionInitHash =
-  "mIwJgfDlIg88qnDVUBozuJEmlK2524RJK824i-ithdo" as TransactionHash;
+  "21l1V8ox4bdy6jkDAmgtZ-51X7ZLSsqyRme6G4xoYtU" as TransactionHash;
 
 export const mockAuthor = "test-user";
 export const mockAuthor2 = "test-user2";
@@ -51,7 +51,7 @@ export const mockTransactionInit: Transaction = {
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "Pzm9yH3AWnfMoqMx007x1b2nGIz3vfYqt5IOhy5uOPw" as TransactionHash;
+  "NC1-pK6eP9D_QG7r8eh5fWTSPehGZNvJPKLMJo5iWJw" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
   hash: mockTransactionUpdateHash,

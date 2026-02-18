@@ -211,8 +211,12 @@ export const mockPriorityField = {
   ],
 } as const satisfies RecordFieldDef;
 
+// Forward-declared keys used in type definitions below
+export const mockPartnerFieldKey = "partner" as ConfigKey;
+export const mockRelatedToFieldKey = "relatedTo" as ConfigKey;
+
 export const mockTaskType = {
-  id: newUserConfigId(20),
+  id: newUserConfigId(22),
   uid: "_typTask001" as ConfigUid,
   key: mockTaskTypeKey,
   type: typeSystemType,
@@ -227,11 +231,12 @@ export const mockTaskType = {
     mockDueDateFieldKey,
     mockCompletedAtFieldKey,
     [mockCancelReasonFieldKey, { required: true }],
+    mockRelatedToFieldKey,
   ],
 } as const satisfies TypeDef;
 
 export const mockProjectType = {
-  id: newUserConfigId(21),
+  id: newUserConfigId(23),
   uid: "_typProjct1" as ConfigUid,
   key: mockProjectTypeKey,
   type: typeSystemType,
@@ -247,7 +252,7 @@ export const mockProjectType = {
 } as const satisfies TypeDef;
 
 export const mockUserType = {
-  id: newUserConfigId(22),
+  id: newUserConfigId(24),
   uid: "_typUser001" as ConfigUid,
   key: mockUserTypeKey,
   type: typeSystemType,
@@ -256,11 +261,12 @@ export const mockUserType = {
   fields: [
     [nameFieldKey, { required: true, description: "Full name" }],
     mockFieldKeyEmail,
+    mockPartnerFieldKey,
   ],
 } as const satisfies TypeDef;
 
 export const mockTeamType = {
-  id: newUserConfigId(23),
+  id: newUserConfigId(25),
   uid: "_typTeam001" as ConfigUid,
   key: mockTeamTypeKey,
   type: typeSystemType,
@@ -343,4 +349,33 @@ export const mockPriceField = {
   name: "Price",
   description: "Item price",
   dataType: "decimal",
+} as const satisfies RecordFieldDef;
+
+// --- One-to-one: partner (self-referential on User) ---
+
+export const mockPartnerField = {
+  id: newUserConfigId(20),
+  uid: "_fldPartnr1" as ConfigUid,
+  key: mockPartnerFieldKey,
+  type: fieldSystemType,
+  name: "Partner",
+  description: "Partner user (symmetric 1:1)",
+  dataType: "relation",
+  range: [mockUserTypeKey],
+  inverseOf: "partner" as ConfigKey,
+} as const satisfies RecordFieldDef;
+
+// --- Many-to-many: relatedTo (self-referential on Task) ---
+
+export const mockRelatedToField = {
+  id: newUserConfigId(21),
+  uid: "_fldRelTo01" as ConfigUid,
+  key: mockRelatedToFieldKey,
+  type: fieldSystemType,
+  name: "Related To",
+  description: "Related tasks (symmetric M:M)",
+  dataType: "relation",
+  range: [mockTaskTypeKey],
+  allowMultiple: true,
+  inverseOf: "relatedTo" as ConfigKey,
 } as const satisfies RecordFieldDef;

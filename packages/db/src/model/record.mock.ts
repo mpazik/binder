@@ -89,3 +89,13 @@ export const mockUserRecord = {
   name: "Rick",
   [mockFieldKeyEmail]: "rick@example.com",
 } as const satisfies Fieldset;
+
+// Second user for 1:1 partner tests
+export const mockUser2Uid = "_userMorty0" as RecordUid;
+export const mockUser2Record = {
+  id: 6 as RecordId,
+  uid: mockUser2Uid,
+  type: mockUserTypeKey,
+  name: "Morty",
+  [mockFieldKeyEmail]: "morty@example.com",
+} as const satisfies Fieldset;

@@ -10,10 +10,12 @@ import {
   mockMembersField,
   mockNotesField,
   mockOwnersField,
+  mockPartnerField,
   mockPriceField,
   mockPriorityField,
   mockProjectField,
   mockProjectType,
+  mockRelatedToField,
   mockRoleField,
   mockStatusField,
   mockStepsField,
@@ -49,6 +51,8 @@ const mockFields = {
   [mockChaptersField.key]: mockChaptersField,
   [mockTemplatesField.key]: mockTemplatesField,
   [mockPriceField.key]: mockPriceField,
+  [mockPartnerField.key]: mockPartnerField,
+  [mockRelatedToField.key]: mockRelatedToField,
 };
 
 const mockTypes = {

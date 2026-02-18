@@ -11,19 +11,30 @@ import {
   mockTask1Record,
   mockTask1Uid,
   mockTask2Record,
+  mockTask2Uid,
   mockTask3Record,
   mockTaskRecord1Updated,
+  mockUser2Record,
+  mockUser2Uid,
   mockUserRecord,
+  mockUserUid,
   NONEXISTENT_NODE_UID,
 } from "./model/record.mock.ts";
 import {
   mockTransactionInit,
   mockTransactionUpdate,
 } from "./model/transaction.mock.ts";
-import { mockTaskType, mockTaskTypeKey } from "./model/config.mock.ts";
+import {
+  mockPartnerFieldKey,
+  mockRelatedToFieldKey,
+  mockTasksFieldKey,
+  mockTaskType,
+  mockTaskTypeKey,
+} from "./model/config.mock.ts";
 import {
   type ConfigUid,
   coreFieldKeys,
+  type Fieldset,
   GENESIS_VERSION,
   type Transaction,
   versionFromTransaction,
@@ -75,6 +86,15 @@ describe("knowledge graph", () => {
         throwIfError(await applyAndSaveTransaction(tx, mockTransactionInit));
       });
     });
+
+    const checkSearch = async (
+      query: Parameters<typeof kg.search>[0],
+      expectedItems: Fieldset[],
+      namespace?: Parameters<typeof kg.search>[1],
+    ) => {
+      const result = throwIfError(await kg.search(query, namespace));
+      expect(result.items).toEqual(expectedItems);
+    };
 
     describe("fetchEntity", () => {
       beforeEach(async () => {
@@ -248,34 +268,20 @@ describe("knowledge graph", () => {
         expect(result.pagination).toMatchObject({ hasNext: false });
       });
 
-      it("filters by type", async () => {
-        const result = throwIfError(
-          await kg.search({
-            filters: { type: "Task" },
-          }),
-        );
-
-        expect(result.items).toEqual([
+      it("filters by type", () =>
+        checkSearch({ filters: { type: "Task" } }, [
           mockTask1Record,
           mockTask2Record,
           mockTask3Record,
-        ]);
-      });
+        ]));
 
-      it("filters by type using array shorthand", async () => {
-        const result = throwIfError(
-          await kg.search({
-            filters: { type: ["Task", "Project"] },
-          }),
-        );
-
-        expect(result.items).toEqual([
+      it("filters by type using array shorthand", () =>
+        checkSearch({ filters: { type: ["Task", "Project"] } }, [
           mockTask1Record,
           mockProjectRecord,
           mockTask2Record,
           mockTask3Record,
-        ]);
-      });
+        ]));
 
       it("respects pagination limit", async () => {
         const result = throwIfError(
@@ -297,100 +303,78 @@ describe("knowledge graph", () => {
 
       it("searches config namespace when specified", async () => {
         const result = throwIfError(
-          await kg.search(
-            {
-              filters: { type: "Type" },
-            },
-            "config",
-          ),
+          await kg.search({ filters: { type: "Type" } }, "config"),
         );
-
         const types = Object.keys(mockRecordSchemaRaw.types);
         expect(result.items.map((it) => it.key)).toEqual(types);
       });
 
-      it("returns relation uid without expansion when includes is true", async () => {
-        const result = throwIfError(
-          await kg.search({
+      it("returns relation uid without expansion when includes is true", () =>
+        checkSearch(
+          {
             filters: { type: "Task", key: mockTask2Record.key },
             includes: { project: true },
-          }),
-        );
+          },
+          [{ project: mockProjectRecord.uid }],
+        ));
 
-        expect(result.items).toEqual([{ project: mockProjectRecord.uid }]);
-      });
-
-      it("expands relation with nested includes", async () => {
-        const result = throwIfError(
-          await kg.search({
+      it("expands relation with nested includes", () =>
+        checkSearch(
+          {
             filters: { type: "Task", key: mockTask2Record.key },
             includes: { project: { uid: true, title: true } },
-          }),
-        );
-
-        expect(result.items).toEqual([
-          {
-            project: {
-              uid: mockProjectRecord.uid,
-              title: mockProjectRecord.title,
-            },
           },
-        ]);
-      });
+          [
+            {
+              project: {
+                uid: mockProjectRecord.uid,
+                title: mockProjectRecord.title,
+              },
+            },
+          ],
+        ));
 
-      it("does not expand inverse relationship without nested includes", async () => {
-        const { mockTasksFieldKey } = await import("./model/config.mock.ts");
-        const result = throwIfError(
-          await kg.search({
+      it("does not expand inverse relationship without nested includes", () =>
+        checkSearch(
+          {
             filters: { type: "Project" },
             includes: { [mockTasksFieldKey]: true },
-          }),
-        );
+          },
+          [{}],
+        ));
 
-        // Inverse relations without nested includes are not expanded
-        expect(result.items).toEqual([{}]);
-      });
-
-      it("expands inverse relationship with nested includes", async () => {
-        const { mockTasksFieldKey } = await import("./model/config.mock.ts");
-        const result = throwIfError(
-          await kg.search({
+      it("expands inverse relationship with nested includes", () =>
+        checkSearch(
+          {
             filters: { type: "Project" },
             includes: { [mockTasksFieldKey]: { uid: true, title: true } },
-          }),
-        );
-
-        expect(result.items).toEqual([
-          {
-            [mockTasksFieldKey]: [
-              { uid: mockTask2Record.uid, title: mockTask2Record.title },
-              { uid: mockTask3Record.uid, title: mockTask3Record.title },
-            ],
           },
-        ]);
-      });
+          [
+            {
+              [mockTasksFieldKey]: [
+                { uid: mockTask2Record.uid, title: mockTask2Record.title },
+                { uid: mockTask3Record.uid, title: mockTask3Record.title },
+              ],
+            },
+          ],
+        ));
 
-      it("applies field selection with includes", async () => {
-        const result = throwIfError(
-          await kg.search({
+      it("applies field selection with includes", () =>
+        checkSearch(
+          {
             filters: { type: "Task", key: mockTask2Record.key },
-            includes: {
-              title: true,
-              project: { uid: true, title: true },
-            },
-          }),
-        );
-
-        expect(result.items).toEqual([
-          {
-            title: mockTask2Record.title,
-            project: {
-              uid: mockProjectRecord.uid,
-              title: mockProjectRecord.title,
-            },
+            includes: { title: true, project: { uid: true, title: true } },
           },
-        ]);
-      });
+          [
+            {
+              title: mockTask2Record.title,
+              project: {
+                uid: mockProjectRecord.uid,
+                title: mockProjectRecord.title,
+              },
+            },
+          ],
+        ));
 
       it("applies field selection with two levels of nested includes", async () => {
         await db.transaction(async (tx) => {
@@ -400,8 +384,8 @@ describe("knowledge graph", () => {
           });
         });
 
-        const result = throwIfError(
-          await kg.search({
+        await checkSearch(
+          {
             filters: { type: "Project" },
             includes: {
               title: true,
@@ -413,23 +397,108 @@ describe("knowledge graph", () => {
                 },
               },
             },
-          }),
+          },
+          [
+            {
+              title: mockProjectRecord.title,
+              tasks: [
+                {
+                  title: mockTask2Record.title,
+                  assignedTo: {
+                    uid: mockUserRecord.uid,
+                    name: mockUserRecord.name,
+                  },
+                },
+              ],
+            },
+          ],
         );
+      });
+    });
 
-        expect(result.items).toEqual([
-          {
-            title: mockProjectRecord.title,
-            tasks: [
+    describe("inverse queries", () => {
+      describe("one-to-one", () => {
+        beforeEach(async () => {
+          await db.transaction(async (tx) => {
+            await createEntity(tx, "record", {
+              ...mockUserRecord,
+              [mockPartnerFieldKey]: mockUser2Uid,
+            });
+            await createEntity(tx, "record", {
+              ...mockUser2Record,
+              [mockPartnerFieldKey]: mockUserUid,
+            });
+          });
+        });
+
+        it("resolves 1:1 inverse as single entity, not array", () =>
+          checkSearch(
+            {
+              filters: { uid: mockUserUid },
+              includes: { [mockPartnerFieldKey]: { uid: true, name: true } },
+            },
+            [
               {
-                title: mockTask2Record.title,
-                assignedTo: {
+                [mockPartnerFieldKey]: {
+                  uid: mockUser2Record.uid,
+                  name: mockUser2Record.name,
+                },
+              },
+            ],
+          ));
+
+        it("resolves 1:1 inverse from the other side", () =>
+          checkSearch(
+            {
+              filters: { uid: mockUser2Uid },
+              includes: { [mockPartnerFieldKey]: { uid: true, name: true } },
+            },
+            [
+              {
+                [mockPartnerFieldKey]: {
                   uid: mockUserRecord.uid,
                   name: mockUserRecord.name,
                 },
               },
             ],
-          },
-        ]);
+          ));
+      });
+
+      describe("many-to-many", () => {
+        beforeEach(async () => {
+          await db.transaction(async (tx) => {
+            await createEntity(tx, "record", mockProjectRecord);
+            await createEntity(tx, "record", mockTask2Record);
+            await createEntity(tx, "record", mockTask3Record);
+            await updateEntity(tx, "record", mockTask2Uid, {
+              [mockRelatedToFieldKey]: [mockTask1Uid],
+            });
+          });
+        });
+
+        it("resolves M:M via inverse query", () =>
+          checkSearch(
+            {
+              filters: { uid: mockTask1Uid },
+              includes: { [mockRelatedToFieldKey]: { uid: true, title: true } },
+            },
+            [
+              {
+                [mockRelatedToFieldKey]: [
+                  { uid: mockTask2Record.uid, title: mockTask2Record.title },
+                ],
+              },
+            ],
+          ));
+
+        it("returns empty for entity nobody links to", () =>
+          checkSearch(
+            {
+              filters: { uid: mockTask3Record.uid },
+              includes: { [mockRelatedToFieldKey]: { uid: true, title: true } },
+            },
+            [{ [mockRelatedToFieldKey]: [] }],
+          ));
       });
     });
 

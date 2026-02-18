@@ -77,11 +77,9 @@ describe("renderSchemaPreview", () => {
     );
   });
 
-  it("should render single-line format for simple types", () => {
+  it("should render simple types", () => {
     const result = renderSchemaPreview(mockRecordSchema);
-    expect(result).toContain(
-      `• User - Individual user account [name{required, description: "Full name"}, email]\n`,
-    );
+    expect(result).toContain("• Team - Collaborative group [members{min: 1}]");
   });
 
   it("should render field constraint attributes", () => {

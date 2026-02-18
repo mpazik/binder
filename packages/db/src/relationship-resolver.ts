@@ -75,10 +75,11 @@ const mergeRelationshipData = (
   fieldName: FieldKey,
   relatedEntities: Fieldset[],
   inverseFieldName: FieldKey | undefined,
+  fieldIsMultiple: boolean,
 ): void => {
   if (inverseFieldName) {
     for (const entity of entities) {
-      entity[fieldName] = relatedEntities.filter((related) => {
+      const matching = relatedEntities.filter((related) => {
         const inverseValue = getEntityFieldValue(related, inverseFieldName);
         if (!inverseValue) return false;
         const entityUid = entity.uid as string;
@@ -87,6 +88,8 @@ const mergeRelationshipData = (
         }
         return inverseValue === entityUid;
       });
+      // For 1:1 inverse (single-value field), return single entity not array
+      entity[fieldName] = fieldIsMultiple ? matching : (matching[0] ?? null);
     }
   } else {
     for (const entity of entities) {
@@ -263,6 +266,7 @@ export const resolveIncludes = async (
       fieldKey,
       resolvedRelatedEntitiesResult.data,
       field.inverseOf,
+      !!field.allowMultiple,
     );
   }
 

@@ -5,7 +5,9 @@ import {
   mockCompletedAtField,
   mockDueDateField,
   mockEmailField,
+  mockPartnerField,
   mockRecordSchema,
+  mockRelatedToField,
   mockNotExistingRecordTypeKey,
   mockPriorityField,
   mockProjectType,
@@ -52,7 +54,7 @@ describe("filterSchemaByTypes", () => {
   it("should include simple type", () => {
     check([mockUserTypeKey], {
       types: [mockUserType],
-      fields: [coreFields.name, mockEmailField],
+      fields: [coreFields.name, mockEmailField, mockPartnerField],
     });
   });
 
@@ -68,6 +70,7 @@ describe("filterSchemaByTypes", () => {
         mockDueDateField,
         mockCompletedAtField,
         mockCancelReasonField,
+        mockRelatedToField,
       ],
     });
   });
@@ -85,6 +88,7 @@ describe("filterSchemaByTypes", () => {
         mockDueDateField,
         mockCompletedAtField,
         mockCancelReasonField,
+        mockRelatedToField,
       ],
     });
   });
@@ -99,7 +103,7 @@ describe("filterSchemaByTypes", () => {
   it("should ignore non-existent types", () => {
     check([mockUserTypeKey, mockNotExistingRecordTypeKey], {
       types: [mockUserType],
-      fields: [coreFields.name, mockEmailField],
+      fields: [coreFields.name, mockEmailField, mockPartnerField],
     });
   });
 });
