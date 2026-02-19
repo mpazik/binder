@@ -1,6 +1,6 @@
 import type { Argv } from "yargs";
 import { isErr, ok } from "@binder/utils";
-import { type Filters, type NamespaceEditable } from "@binder/db";
+import { type NamespaceEditable, parseSerialFilters } from "@binder/db";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { types } from "../cli/types.ts";
 import {
@@ -11,47 +11,13 @@ import {
 import type { SerializeFormat } from "../utils/serialize.ts";
 import { applySelection } from "../utils/selection.ts";
 
-const parseQuery = (queryParts: string[]): Filters => {
-  const filters: Filters = {};
-  const plainTextParts: string[] = [];
-
-  for (const part of queryParts) {
-    const equalIndex = part.indexOf("=");
-    if (equalIndex === -1) {
-      plainTextParts.push(part);
-      continue;
-    }
-
-    const key = part.slice(0, equalIndex);
-    const value = part.slice(equalIndex + 1);
-
-    if (value === "true") {
-      filters[key] = true;
-    } else if (value === "false") {
-      filters[key] = false;
-    } else if (/^-?\d+$/.test(value)) {
-      filters[key] = parseInt(value, 10);
-    } else if (/^-?\d+\.\d+$/.test(value)) {
-      filters[key] = parseFloat(value);
-    } else {
-      filters[key] = value;
-    }
-  }
-
-  if (plainTextParts.length > 0) {
-    filters["$text"] = plainTextParts.join(" ");
-  }
-
-  return filters;
-};
-
 const searchHandler: CommandHandlerWithDb<{
   query: string[];
   namespace: NamespaceEditable;
   format?: SerializeFormat;
   limit?: number;
 }> = async ({ kg, ui, args }) => {
-  const filters = parseQuery(args.query);
+  const filters = parseSerialFilters(args.query);
 
   const result = await kg.search({ filters }, args.namespace);
   if (isErr(result)) return result;

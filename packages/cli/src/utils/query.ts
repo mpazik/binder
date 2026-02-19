@@ -4,9 +4,9 @@ import {
   type Fieldset,
   type Filter,
   type Filters,
-  isComplexFilter,
   type AncestralFieldsetChain,
   type QueryParams,
+  serializeFilters,
 } from "@binder/db";
 import { fail, isErr, ok, type Result } from "@binder/utils";
 import {
@@ -16,18 +16,7 @@ import {
 } from "./interpolate-fields.ts";
 
 export const formatWhenCondition = (filters: Filters): string =>
-  Object.entries(filters)
-    .map(([field, filter]) => {
-      if (isComplexFilter(filter)) {
-        const { op, value } = filter;
-        if (op === "not") return `${field}!=${value}`;
-        if (op === "in" && Array.isArray(value))
-          return `${field}=${value.join("|")}`;
-        return `${field}=${value}`;
-      }
-      return `${field}=${filter}`;
-    })
-    .join(", ");
+  serializeFilters(filters).join(", ");
 
 const interpolateFilterValue = (
   schema: EntitySchema,
@@ -114,38 +103,11 @@ export const parseFiltersFromString = (query: string): Filters | undefined => {
     if (eqIdx === -1) continue;
     const field = pair.slice(0, eqIdx).trim();
     const value = pair.slice(eqIdx + 1).trim();
-    if (field && value) filters[field] = value;
-  }
-  return Object.keys(filters).length > 0 ? filters : undefined;
-};
-
-export const queryParamsToString = (queryParams: QueryParams): string => {
-  const filters = queryParams.filters || {};
-  return Object.entries(filters)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(" AND ");
-};
-
-export const stringifyQuery = (params: QueryParams): string => {
-  if (!params.filters) return "";
-
-  const pairs: string[] = [];
-  for (const [field, filter] of Object.entries(params.filters)) {
-    if (typeof filter === "string") {
-      pairs.push(`${field}=${filter}`);
-    } else if (typeof filter === "number" || typeof filter === "boolean") {
-      pairs.push(`${field}=${filter}`);
-    } else if (
-      typeof filter === "object" &&
-      filter !== null &&
-      !Array.isArray(filter)
-    ) {
-      if (filter.op === "eq" && filter.value !== undefined) {
-        pairs.push(`${field}=${filter.value}`);
-      }
+    if (field && value) {
+      filters[field] = value;
     }
   }
-  return pairs.join(" AND ");
+  return Object.keys(filters).length > 0 ? filters : undefined;
 };
 
 export const extractFieldsetFromQuery = (params: QueryParams): Fieldset => {

@@ -23,5 +23,6 @@ export type * from "./namespace.ts";
 export * from "./ref.ts";
 export * from "./query.ts";
 export type * from "./query.ts";
+export * from "./query-serial.ts";
 export * from "./transaction-input.ts";
 export type * from "./transaction-input.ts";
