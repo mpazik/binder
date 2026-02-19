@@ -65,7 +65,7 @@ describe("reference", () => {
       await check(entity, entity);
     });
 
-    it("handles missing relation value gracefully", async () => {
+    it("passes through unresolvable relation value", async () => {
       await check(
         { title: "Test Task", [mockProjectField.key]: "nonexistent-key" },
         { title: "Test Task", [mockProjectField.key]: "nonexistent-key" },
@@ -85,6 +85,32 @@ describe("reference", () => {
           [mockTasksField.key]: [
             { ...mockTask2Record, [mockProjectField.key]: mockProjectUid },
           ],
+        },
+      );
+    });
+
+    it("preserves tuples in canonical format", async () => {
+      await check(
+        {
+          title: "Test",
+          fields: [["title", { required: true }], "status"],
+        },
+        {
+          title: "Test",
+          fields: [["title", { required: true }], "status"],
+        },
+      );
+    });
+
+    it("converts ObjTuples to canonical tuple format", async () => {
+      await check(
+        {
+          title: "Test",
+          fields: [{ title: { required: true } }, "status"],
+        },
+        {
+          title: "Test",
+          fields: [["title", { required: true }], "status"],
         },
       );
     });
@@ -128,62 +154,65 @@ describe("reference", () => {
         },
       );
     });
+
+    it("converts tuples to ObjTuple format", async () => {
+      await check(
+        {
+          title: "Test",
+          fields: [["title", { required: true }], "status"],
+        },
+        {
+          title: "Test",
+          fields: [{ title: { required: true } }, "status"],
+        },
+      );
+    });
   });
 
   describe("normalizeReferencesList", () => {
-    it("normalizes references in multiple entities", async () => {
+    const check = async (
+      input: FieldsetNested[],
+      expected: FieldsetNested[],
+    ) => {
       const result = throwIfError(
-        await normalizeReferencesList(
-          [
-            { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
-            { ...mockTask3Record, [mockProjectField.key]: mockProjectKey },
-          ],
-          mockRecordSchema,
-          kg,
-        ),
+        await normalizeReferencesList(input, mockRecordSchema, kg),
       );
+      expect(result).toEqual(expected);
+    };
 
-      expect(result).toEqual([
-        { ...mockTask2Record, [mockProjectField.key]: mockProjectUid },
-        { ...mockTask3Record, [mockProjectField.key]: mockProjectUid },
-      ]);
+    it("normalizes references in multiple entities", async () => {
+      await check(
+        [
+          { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
+          { ...mockTask3Record, [mockProjectField.key]: mockProjectKey },
+        ],
+        [
+          { ...mockTask2Record, [mockProjectField.key]: mockProjectUid },
+          { ...mockTask3Record, [mockProjectField.key]: mockProjectUid },
+        ],
+      );
     });
   });
 
   describe("formatReferencesList", () => {
+    const check = async (
+      input: FieldsetNested[],
+      expected: FieldsetNested[],
+    ) => {
+      const result = throwIfError(
+        await formatReferencesList(input, mockRecordSchema, kg),
+      );
+      expect(result).toEqual(expected);
+    };
+
     it("formats references in multiple entities", async () => {
-      const result = throwIfError(
-        await formatReferencesList(
-          [mockTask2Record, mockTask3Record],
-          mockRecordSchema,
-          kg,
-        ),
+      await check(
+        [mockTask2Record, mockTask3Record],
+        [
+          { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
+          { ...mockTask3Record, [mockProjectField.key]: mockProjectKey },
+        ],
       );
-
-      expect(result).toEqual([
-        { ...mockTask2Record, [mockProjectField.key]: mockProjectKey },
-        { ...mockTask3Record, [mockProjectField.key]: mockProjectKey },
-      ]);
-    });
-  });
-
-  describe("tuple to ObjTuple conversion", () => {
-    it("converts TypeFieldRef tuple in array to ObjTuple format", async () => {
-      const result = throwIfError(
-        await formatReferences(
-          {
-            title: "Test",
-            fields: [["title", { required: true }]],
-          },
-          mockRecordSchema,
-          kg,
-        ),
-      );
-
-      expect(result).toEqual({
-        title: "Test",
-        fields: [{ title: { required: true } }],
-      });
     });
   });
 });

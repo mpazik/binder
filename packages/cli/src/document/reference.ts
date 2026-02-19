@@ -8,13 +8,16 @@ import type {
 } from "@binder/db";
 import {
   isErr,
+  isObjTuple,
   isTuple,
+  objTupleToTuple,
   ok,
-  tupleToObjTuple,
   type ResultAsync,
 } from "@binder/utils";
 
 type ReferenceMap = Map<string, { uid: string; key: string }>;
+
+type TransformMode = "normalized" | "formatted";
 
 const isRelationField = (
   fieldKey: FieldKey,
@@ -120,20 +123,28 @@ const buildReferenceMap = async (
   return ok(map);
 };
 
+const resolveRef = (
+  value: string,
+  refMap: ReferenceMap,
+  mode: TransformMode,
+): string => {
+  const ref = refMap.get(value);
+  if (!ref) return value;
+  return mode === "normalized" ? ref.uid : ref.key;
+};
+
 const transformValue = (
   value: FieldValue,
   refMap: ReferenceMap,
-  targetField: "uid" | "key",
+  mode: TransformMode,
 ): FieldValue => {
   if (typeof value === "string") {
-    const ref = refMap.get(value);
-    return ref ? ref[targetField] : value;
+    return resolveRef(value, refMap, mode);
   }
   if (Array.isArray(value)) {
     return value.map((v) => {
       if (typeof v === "string") {
-        const ref = refMap.get(v);
-        return ref ? ref[targetField] : v;
+        return resolveRef(v, refMap, mode);
       }
       return v;
     });
@@ -141,26 +152,47 @@ const transformValue = (
   return value;
 };
 
+const transformTupleItem = (
+  key: string,
+  attrs: unknown,
+  schema: EntitySchema,
+  refMap: ReferenceMap,
+  mode: TransformMode,
+): FieldValue => {
+  const transformedAttrs =
+    typeof attrs === "object" && attrs !== null && !Array.isArray(attrs)
+      ? transformEntity(attrs as FieldsetNested, schema, refMap, mode)
+      : attrs;
+
+  if (mode === "normalized") {
+    return [key, transformedAttrs] as FieldValue;
+  }
+  return { [key]: transformedAttrs } as FieldValue;
+};
+
 const transformArrayValue = (
   value: unknown[],
   schema: EntitySchema,
   refMap: ReferenceMap,
-  targetField: "uid" | "key",
+  mode: TransformMode,
   isRelation: boolean,
 ): FieldValue[] =>
   value.map((v) => {
     if (isRelation && typeof v === "string") {
-      const ref = refMap.get(v);
-      return ref ? ref[targetField] : v;
+      return resolveRef(v, refMap, mode);
     }
 
     if (isTuple(v)) {
-      const objTuple = tupleToObjTuple(v) as FieldsetNested;
-      return transformEntity(objTuple, schema, refMap, targetField);
+      return transformTupleItem(v[0], v[1], schema, refMap, mode);
+    }
+
+    if (isObjTuple(v)) {
+      const [key, attrs] = objTupleToTuple(v);
+      return transformTupleItem(key, attrs, schema, refMap, mode);
     }
 
     if (typeof v === "object" && v !== null && !Array.isArray(v)) {
-      return transformEntity(v as FieldsetNested, schema, refMap, targetField);
+      return transformEntity(v as FieldsetNested, schema, refMap, mode);
     }
     return v as FieldValue;
   });
@@ -169,7 +201,7 @@ const transformEntity = (
   entity: FieldsetNested,
   schema: EntitySchema,
   refMap: ReferenceMap,
-  targetField: "uid" | "key",
+  mode: TransformMode,
 ): FieldsetNested => {
   const result: FieldsetNested = {};
 
@@ -177,13 +209,13 @@ const transformEntity = (
     const isRelation = !!isRelationField(fieldKey, schema);
 
     if (typeof value === "string" && isRelation) {
-      result[fieldKey] = transformValue(value, refMap, targetField);
+      result[fieldKey] = transformValue(value, refMap, mode);
     } else if (Array.isArray(value)) {
       result[fieldKey] = transformArrayValue(
         value,
         schema,
         refMap,
-        targetField,
+        mode,
         isRelation,
       );
     } else if (typeof value === "object" && value !== null) {
@@ -191,7 +223,7 @@ const transformEntity = (
         value as FieldsetNested,
         schema,
         refMap,
-        targetField,
+        mode,
       );
     } else {
       result[fieldKey] = value;
@@ -210,7 +242,7 @@ export const normalizeReferences = async (
   const refMapResult = await buildReferenceMap(kg, refs);
   if (isErr(refMapResult)) return refMapResult;
 
-  return ok(transformEntity(entity, schema, refMapResult.data, "uid"));
+  return ok(transformEntity(entity, schema, refMapResult.data, "normalized"));
 };
 
 export const formatReferences = async (
@@ -222,7 +254,7 @@ export const formatReferences = async (
   const refMapResult = await buildReferenceMap(kg, refs);
   if (isErr(refMapResult)) return refMapResult;
 
-  return ok(transformEntity(entity, schema, refMapResult.data, "key"));
+  return ok(transformEntity(entity, schema, refMapResult.data, "formatted"));
 };
 
 export const normalizeReferencesList = async (
@@ -236,7 +268,7 @@ export const normalizeReferencesList = async (
 
   return ok(
     entities.map((entity) =>
-      transformEntity(entity, schema, refMapResult.data, "uid"),
+      transformEntity(entity, schema, refMapResult.data, "normalized"),
     ),
   );
 };
@@ -252,7 +284,7 @@ export const formatReferencesList = async (
 
   return ok(
     entities.map((entity) =>
-      transformEntity(entity, schema, refMapResult.data, "key"),
+      transformEntity(entity, schema, refMapResult.data, "formatted"),
     ),
   );
 };

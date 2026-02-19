@@ -13,9 +13,12 @@ import {
   mockTask2Uid,
   mockTask3Record,
   mockTask3Uid,
+  mockProjectType,
   mockTaskType,
   mockTaskTypeKey,
+  mockTeamType,
   mockTransactionInitInput,
+  mockUserType,
 } from "@binder/db/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
@@ -362,6 +365,23 @@ ${mockTask1Record.description}
           records: [],
           configs: [{ $ref: mockTaskType.uid, name: "Updated Task Type" }],
         },
+      );
+    });
+
+    it("returns null when config types with TypeFieldRef tuples are unchanged", async () => {
+      // Regression: normalizeReferences was converting TypeFieldRef tuples like
+      // ["title", { required: true }] to ObjTuples like { title: { required: true } },
+      // causing phantom diffs against KG-side entities that retain the canonical tuple format.
+      const allTypes = [
+        mockTaskType,
+        mockProjectType,
+        mockUserType,
+        mockTeamType,
+      ];
+      await check(
+        join(ctx.config.paths.binder, "types.yaml"),
+        renderYamlList(allTypes),
+        null,
       );
     });
   });
