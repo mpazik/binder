@@ -1,5 +1,5 @@
 import { includes } from "@binder/utils";
-import { and, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, sql, type SQL } from "drizzle-orm";
 import {
   type configTable,
   type recordTable,
@@ -12,6 +12,7 @@ import type {
   FieldValue,
   Filter,
   Filters,
+  OrderBy,
 } from "./model";
 
 type EntityTable = typeof recordTable | typeof configTable;
@@ -240,3 +241,14 @@ export const buildWhereClause = (
 
   return and(...conditions);
 };
+
+export const buildOrderByClause = (
+  table: EntityTable,
+  orderBy: OrderBy,
+): SQL[] =>
+  orderBy.map((field) => {
+    const descending = field.startsWith("!");
+    const fieldKey = descending ? field.slice(1) : field;
+    const fieldSql = getFieldSql(table, fieldKey);
+    return descending ? desc(fieldSql) : asc(fieldSql);
+  });

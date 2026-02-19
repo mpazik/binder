@@ -1,4 +1,12 @@
-import { type NamespaceEditable, namespacesEditable } from "@binder/db";
+import {
+  type Includes,
+  type NamespaceEditable,
+  type OrderBy,
+  namespacesEditable,
+  parseSerialIncludes,
+  parseSerialOrderBy,
+} from "@binder/db";
+import { throwIfError } from "@binder/utils";
 import { serializeFormats, serializeItemFormats } from "../utils/serialize.ts";
 
 export const namespaceOption = {
@@ -76,3 +84,22 @@ export type SelectionArgs = {
   last?: number;
   skip?: number;
 };
+
+export const includeOption = {
+  include: {
+    alias: "i",
+    describe: "fields to include (e.g. project(title,status),tags)",
+    type: "string",
+    coerce: (value: string): Includes =>
+      throwIfError(parseSerialIncludes(value)),
+  },
+} as const;
+
+export const orderByOption = {
+  orderBy: {
+    alias: "o",
+    describe: "sort order (e.g. !priority,createdAt)",
+    type: "string",
+    coerce: parseSerialOrderBy,
+  },
+} as const;

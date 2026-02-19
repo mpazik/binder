@@ -45,7 +45,7 @@ import {
   processTransactionInput,
   rollbackTransaction,
 } from "./transaction-processor";
-import { buildWhereClause } from "./filter-entities.ts";
+import { buildOrderByClause, buildWhereClause } from "./filter-entities.ts";
 import { resolveIncludes } from "./relationship-resolver.ts";
 
 export type KnowledgeGraph<
@@ -237,7 +237,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       namespace: "record" | "config" = "record",
     ) => {
       return db.transaction(async (tx) => {
-        const { filters = {}, pagination, includes } = query;
+        const { filters = {}, pagination, includes, orderBy } = query;
         const limit = pagination?.limit ?? 50;
         const after = pagination?.after;
         const before = pagination?.before;
@@ -260,7 +260,10 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         const table = namespace === "config" ? configTable : recordTable;
         const filterClause = buildWhereClause(table, filters, schema);
 
-        const orderClause = before ? desc(table.id) : asc(table.id);
+        const orderClauses =
+          orderBy && orderBy.length > 0
+            ? buildOrderByClause(table, orderBy)
+            : [before ? desc(table.id) : asc(table.id)];
         const paginationClause = after
           ? sql`${table.id} > ${parseInt(after, 10)}`
           : before
@@ -273,7 +276,7 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
             .select()
             .from(table)
             .where(whereClause)
-            .orderBy(orderClause)
+            .orderBy(...orderClauses)
             .limit(limit + 1)
             .then((rows) => rows),
         );

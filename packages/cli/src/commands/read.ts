@@ -1,21 +1,55 @@
 import type { Argv } from "yargs";
-import { isErr, ok } from "@binder/utils";
+import { z } from "zod";
+import { fail, isErr, ok } from "@binder/utils";
 import {
   type EntityRef,
+  type Includes,
+  IncludesSchema,
   type NamespaceEditable,
   normalizeEntityRef,
 } from "@binder/db";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { types } from "../cli/types.ts";
-import { itemFormatOption, namespaceOption } from "../cli/options.ts";
+import {
+  includeOption,
+  itemFormatOption,
+  namespaceOption,
+} from "../cli/options.ts";
 import type { SerializeItemFormat } from "../utils/serialize.ts";
+import { isStdinPiped, readStdinAs } from "../cli/stdin.ts";
+
+const ReadStdinSchema = z.object({
+  includes: IncludesSchema.optional(),
+});
 
 const readHandler: CommandHandlerWithDb<{
   ref: EntityRef;
   namespace: NamespaceEditable;
   format?: SerializeItemFormat;
+  include?: Includes;
 }> = async ({ kg, ui, args }) => {
-  const result = await kg.fetchEntity(args.ref, undefined, args.namespace);
+  if (isStdinPiped()) {
+    if (args.include !== undefined)
+      return fail(
+        "conflicting-input",
+        "Cannot combine stdin with --include option",
+      );
+
+    const stdinResult = await readStdinAs(ReadStdinSchema);
+    if (isErr(stdinResult)) return stdinResult;
+
+    const result = await kg.fetchEntity(
+      args.ref,
+      stdinResult.data.includes,
+      args.namespace,
+    );
+    if (isErr(result)) return result;
+
+    ui.printData(result.data, args.format);
+    return ok(undefined);
+  }
+
+  const result = await kg.fetchEntity(args.ref, args.include, args.namespace);
   if (isErr(result)) return result;
 
   ui.printData(result.data, args.format);
@@ -34,6 +68,6 @@ export const ReadCommand = types({
         demandOption: true,
         coerce: (value: string) => normalizeEntityRef(value),
       })
-      .options({ ...namespaceOption, ...itemFormatOption }),
+      .options({ ...namespaceOption, ...itemFormatOption, ...includeOption }),
   handler: runtimeWithDb(readHandler),
 });

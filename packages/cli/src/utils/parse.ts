@@ -62,6 +62,27 @@ const parseYamlArray = (content: string): Result<unknown[]> => {
   return ok(Array.isArray(result.data) ? result.data : [result.data]);
 };
 
+export const parseContentAs = <T>(
+  content: string,
+  schema: ZodType<T>,
+): Result<T> => {
+  const format = detectContentFormat(content);
+  const rawResult =
+    format === "yaml"
+      ? tryCatch(() => YAML.parse(content) as unknown)
+      : parseJson<unknown>(content);
+  if (isErr(rawResult))
+    return wrapError(rawResult, "parse-error", "Failed to parse stdin");
+  const validationResult = tryCatch(() => schema.parse(rawResult.data));
+  if (isErr(validationResult))
+    return wrapError(
+      validationResult,
+      "validation-error",
+      "Invalid input format",
+    );
+  return ok(validationResult.data);
+};
+
 export const parseContentToArray = (
   content: string,
   format?: InputFormat,

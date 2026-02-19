@@ -36,7 +36,7 @@ import {
   detectFileFormat,
   parseTransactionInputContent,
 } from "../utils/parse.ts";
-import { isStdinPiped, parseStdinAs } from "../cli/stdin.ts";
+import { isStdinPiped, readStdinAsArray } from "../cli/stdin.ts";
 import { types } from "../cli/types.ts";
 import {
   dryRunOption,
@@ -68,7 +68,7 @@ export const transactionImportHandler: CommandHandlerWithDb<
     );
 
   if (files.length === 0 && isStdinPiped()) {
-    const parseResult = await parseStdinAs(
+    const parseResult = await readStdinAsArray(
       TransactionInputSchema,
       undefined,
       (raw) => ({

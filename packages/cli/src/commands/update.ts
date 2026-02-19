@@ -17,7 +17,7 @@ import {
 import { types } from "../cli/types.ts";
 import { itemFormatOption, namespaceOption } from "../cli/options.ts";
 import type { SerializeItemFormat } from "../utils/serialize.ts";
-import { isStdinPiped, parseStdinAs } from "../cli/stdin.ts";
+import { isStdinPiped, readStdinAsArray } from "../cli/stdin.ts";
 
 const updateHandler: CommandHandlerWithDb<{
   ref?: EntityRef;
@@ -34,7 +34,7 @@ const updateHandler: CommandHandlerWithDb<{
         "Cannot combine stdin with positional arguments",
       );
 
-    const inputsResult = await parseStdinAs(EntityUpdateInputSchema);
+    const inputsResult = await readStdinAsArray(EntityUpdateInputSchema);
     if (isErr(inputsResult)) return inputsResult;
 
     const inputs = inputsResult.data as EntityUpdate<typeof args.namespace>[];
