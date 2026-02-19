@@ -1,8 +1,28 @@
+import { fstatSync } from "node:fs";
 import type { ZodType } from "zod";
-import { isErr, ok, type Result, tryCatch, wrapError } from "@binder/utils";
+import {
+  isErr,
+  ok,
+  type Result,
+  resultFallback,
+  tryCatch,
+  wrapError,
+} from "@binder/utils";
 import { parseContent, type InputFormat } from "../utils/parse.ts";
 
-export const isStdinPiped = (): boolean => !process.stdin.isTTY;
+/**
+ * We use fstatSync(0) directly instead of `process.stdin.isTTY` because the Bun bundler transforms the latter into `fstatSync(0).isFIFO()`,
+ * That work only for Pipe but misses sockets used in `execSync({ input })`.
+ */
+export const isStdinPiped = (): boolean => {
+  return resultFallback(
+    tryCatch(() => {
+      const stat = fstatSync(0);
+      return stat.isFIFO() || stat.isSocket();
+    }),
+    false,
+  );
+};
 
 export const readStdin = async (): Promise<Result<string>> => {
   const result = await tryCatch(Bun.stdin.text());
