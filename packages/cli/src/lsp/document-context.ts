@@ -265,7 +265,7 @@ export const getDocumentContext = async (
   const parsed = documentCache.getParsed(document);
   if (!parsed) return fail("parse-failed", "Failed to parse document", { uri });
 
-  const filePath = uri.replace(/^file:\/\//, "");
+  const filePath = fileURLToPath(uri);
   const namespace = namespaceFromSnapshotPath(filePath, runtime.config.paths);
   if (!namespace)
     return fail("namespace-not-found", "Could not determine namespace", {
