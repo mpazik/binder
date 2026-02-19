@@ -11,11 +11,23 @@ const isBinderWorkspace = (workspaceRoot: string): boolean => {
 };
 
 export const activate = (context: vscode.ExtensionContext): void => {
+  const outputChannel = vscode.window.createOutputChannel("Binder");
+
   const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) return;
+  if (!workspaceFolders) {
+    outputChannel.appendLine("No workspace folders found, skipping activation");
+    return;
+  }
 
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  if (!isBinderWorkspace(workspaceRoot)) return;
+  outputChannel.appendLine(`Workspace root: ${workspaceRoot}`);
+
+  if (!isBinderWorkspace(workspaceRoot)) {
+    outputChannel.appendLine(
+      `No .binder directory found in ${workspaceRoot}, skipping activation`,
+    );
+    return;
+  }
 
   const config = vscode.workspace.getConfiguration("binder");
   const binderCmd = config.get<string>("command", "binder");
@@ -26,7 +38,9 @@ export const activate = (context: vscode.ExtensionContext): void => {
   const command = cmdParts[0];
   const logLevel = config.get<string>("logLevel", "info");
   const args = [...cmdParts.slice(1), "lsp", "--log-level", logLevel];
-  const outputChannel = vscode.window.createOutputChannel("Binder");
+
+  outputChannel.appendLine(`Starting LSP: ${command} ${args.join(" ")}`);
+  outputChannel.appendLine(`Working directory: ${workspaceRoot}`);
 
   client = new LanguageClient(
     "binderLsp",
@@ -51,19 +65,21 @@ export const activate = (context: vscode.ExtensionContext): void => {
   );
 
   if (traceLevel !== "off") {
-    outputChannel.appendLine(
-      `Binder LSP starting: ${command} ${args.join(" ")}`,
-    );
     outputChannel.show(true);
   }
 
-  client.start().catch((error) => {
-    outputChannel.appendLine(`ERROR: ${error.message}`);
-    outputChannel.show(true);
-    vscode.window.showErrorMessage(
-      `Binder LSP failed to start: ${error.message}`,
-    );
-  });
+  client.start().then(
+    () => {
+      outputChannel.appendLine("LSP client started successfully");
+    },
+    (error) => {
+      outputChannel.appendLine(`ERROR: Failed to start LSP: ${error.message}`);
+      outputChannel.show(true);
+      vscode.window.showErrorMessage(
+        `Binder LSP failed to start: ${error.message}`,
+      );
+    },
+  );
 
   context.subscriptions.push(client);
 };
