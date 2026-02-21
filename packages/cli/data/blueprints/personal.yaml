@@ -238,7 +238,7 @@
       path: resources/articles
       query:
         filters:
-          { type: Resource, resourceType: document, status: [pending, active] }
+          { type: Resource, resourceType: article, status: [pending, active] }
 
     - key: nav-resources-others
       type: Navigation
@@ -270,7 +270,7 @@
       type: Navigation
       path: archive/resources/articles
       query:
-        filters: { type: Resource, resourceType: document, status: complete }
+        filters: { type: Resource, resourceType: article, status: complete }
 
     - key: nav-archive-resources-others
       type: Navigation
@@ -374,7 +374,7 @@
     # Resources
     - type: Resource
       title: TypeScript Handbook
-      resourceType: document
+      resourceType: article
       url: https://www.typescriptlang.org/docs/handbook/
       linksTo: [career]
 
@@ -388,7 +388,7 @@
     - type: Resource
       title: Couch to 5K
       description: Beginner running program guide
-      resourceType: document
+      resourceType: article
       url: https://www.nhs.uk/live-well/exercise/running-and-aerobic-exercises/get-running-with-couch-to-5k/
       status: complete
       linksTo: [health]
@@ -407,7 +407,7 @@
 
     - type: Resource
       title: TypeScript Deep Dive
-      resourceType: document
+      resourceType: article
       url: https://basarat.gitbook.io/typescript/
       status: active
       linksTo: [career]
