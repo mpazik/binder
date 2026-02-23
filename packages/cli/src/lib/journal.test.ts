@@ -218,6 +218,52 @@ describe("journal", () => {
       ]);
     });
 
+    it("reads first N transactions in oldest-first order with asc", async () => {
+      const result = await readTransactions(fs, path, 2, {}, "asc");
+
+      expect(throwIfError(result)).toEqual([
+        mockTransactionInit,
+        mockTransactionUpdate,
+      ]);
+    });
+
+    it("reads all transactions in oldest-first order with asc", async () => {
+      const result = await readTransactions(fs, path, 10, {}, "asc");
+
+      expect(throwIfError(result)).toEqual([
+        mockTransactionInit,
+        mockTransactionUpdate,
+        mockTransaction3,
+        mockTransaction4,
+      ]);
+    });
+
+    it("reads all transactions in newest-first order with desc", async () => {
+      const result = await readTransactions(fs, path, 10, {}, "desc");
+
+      expect(throwIfError(result)).toEqual([
+        mockTransaction4,
+        mockTransaction3,
+        mockTransactionUpdate,
+        mockTransactionInit,
+      ]);
+    });
+
+    it("filters by author with desc order", async () => {
+      const result = await readTransactions(
+        fs,
+        path,
+        10,
+        { author: mockAuthor2 },
+        "desc",
+      );
+
+      expect(throwIfError(result)).toEqual([
+        mockTransaction4,
+        mockTransaction3,
+      ]);
+    });
+
     it("filters by author and returns in oldest-first order with asc", async () => {
       const result = await readTransactions(
         fs,
@@ -231,6 +277,12 @@ describe("journal", () => {
         mockTransaction3,
         mockTransaction4,
       ]);
+    });
+
+    it("returns empty array for count 0", async () => {
+      const result = await readTransactions(fs, path, 0);
+
+      expect(throwIfError(result)).toEqual([]);
     });
   });
 

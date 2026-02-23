@@ -1,6 +1,5 @@
 import {
-  createError,
-  err,
+  fail,
   groupByToObject,
   isErr,
   ok,
@@ -248,12 +247,10 @@ const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
 
         for (const fieldKey of Object.keys(filters)) {
           if (fieldKey in schema.fields) continue;
-          return err(
-            createError(
-              "invalid_filter_field",
-              `Filter field '${fieldKey}' is not defined in schema`,
-              { fieldKey },
-            ),
+          return fail(
+            "invalid_filter_field",
+            `Filter field '${fieldKey}' is not defined in schema`,
+            { fieldKey },
           );
         }
 

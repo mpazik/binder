@@ -13,8 +13,7 @@ import {
   withHashTransaction,
 } from "@binder/db";
 import {
-  createError,
-  err,
+  fail,
   getTimestampForFileName,
   isErr,
   ok,
@@ -49,12 +48,10 @@ const readLinesFromEnd = async function* (
     const readStart = Math.max(position - CHUNK_SIZE, 0);
     const sliceResult = await fs.slice(path, readStart, position);
     if (isErr(sliceResult)) {
-      yield err(
-        createError("file-read-error", "Failed to read transaction log", {
-          path,
-          error: sliceResult.error,
-        }),
-      );
+      yield fail("file-read-error", "Failed to read transaction log", {
+        path,
+        error: sliceResult.error,
+      });
       return;
     }
 
@@ -105,12 +102,10 @@ const readLinesFromBeginning = async function* (
     const readEnd = Math.min(position + CHUNK_SIZE, fileSize);
     const sliceResult = await fs.slice(path, position, readEnd);
     if (isErr(sliceResult)) {
-      yield err(
-        createError("file-read-error", "Failed to read transaction log", {
-          path,
-          error: sliceResult.error,
-        }),
-      );
+      yield fail("file-read-error", "Failed to read transaction log", {
+        path,
+        error: sliceResult.error,
+      });
       return;
     }
 
@@ -273,11 +268,9 @@ export const removeLastFromLog = async (
   }
 
   if (count > transactionsFound)
-    return err(
-      createError(
-        "invalid-count",
-        `Cannot remove ${count} transactions, only ${transactionsFound} available in log`,
-      ),
+    return fail(
+      "invalid-count",
+      `Cannot remove ${count} transactions, only ${transactionsFound} available in log`,
     );
 
   return await fs.truncate(path, truncatePosition);
@@ -305,29 +298,25 @@ export const verifyLog = async (
     lineNumber++;
 
     if (isErr(result))
-      return err(
-        createError(
-          "parse-error",
-          `Failed to parse transaction at line ${lineNumber}`,
-          {
-            line: lineNumber,
-            error: result.error,
-          },
-        ),
+      return fail(
+        "parse-error",
+        `Failed to parse transaction at line ${lineNumber}`,
+        {
+          line: lineNumber,
+          error: result.error,
+        },
       );
 
     const transaction = result.data;
     if (transaction.previous !== previousHash)
-      return err(
-        createError(
-          "chain-error",
-          `Transaction chain broken at transaction ${lineNumber}`,
-          {
-            transactionId: transaction.id,
-            expectedPrevious: previousHash,
-            actualPrevious: transaction.previous,
-          },
-        ),
+      return fail(
+        "chain-error",
+        `Transaction chain broken at transaction ${lineNumber}`,
+        {
+          transactionId: transaction.id,
+          expectedPrevious: previousHash,
+          actualPrevious: transaction.previous,
+        },
       );
 
     if (options?.verifyIntegrity) {
@@ -339,16 +328,14 @@ export const verifyLog = async (
       const expectedHash = await hashTransaction(canonical);
 
       if (expectedHash !== transaction.hash)
-        return err(
-          createError(
-            "hash-mismatch",
-            `Transaction hash mismatch at transaction ${lineNumber}`,
-            {
-              transactionId: transaction.id,
-              expectedHash,
-              actualHash: transaction.hash,
-            },
-          ),
+        return fail(
+          "hash-mismatch",
+          `Transaction hash mismatch at transaction ${lineNumber}`,
+          {
+            transactionId: transaction.id,
+            expectedHash,
+            actualHash: transaction.hash,
+          },
         );
     }
 
@@ -366,11 +353,9 @@ export const rehashLog = async (
   path: string,
 ): ResultAsync<{ transactionsRehashed: number; backupPath: string }> => {
   if (!(await fs.exists(path)))
-    return err(
-      createError("file-not-found", "Transaction log file does not exist", {
-        path,
-      }),
-    );
+    return fail("file-not-found", "Transaction log file does not exist", {
+      path,
+    });
 
   const timestamp = getTimestampForFileName();
   const backupPath = path.replace(/\.jsonl$/, `-${timestamp}.jsonl.bac`);

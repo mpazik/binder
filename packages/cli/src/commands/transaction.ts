@@ -1,14 +1,6 @@
 import { join } from "path";
 import type { Argv } from "yargs";
-import {
-  createError,
-  err,
-  fail,
-  includes,
-  isErr,
-  ok,
-  wrapError,
-} from "@binder/utils";
+import { fail, includes, isErr, ok, wrapError } from "@binder/utils";
 import {
   normalizeEntityRef,
   normalizeTransactionInput,
@@ -50,6 +42,17 @@ import {
   type SerializeItemFormat,
 } from "../utils/serialize.ts";
 import { applySelection, type SelectionArgs } from "../utils/selection.ts";
+import { withPager } from "../cli/pager.ts";
+
+const transactionInputSummary = (input: TransactionInput): string => {
+  const recordCount = input.records?.length ?? 0;
+  const configCount = input.configs?.length ?? 0;
+  const parts = [
+    recordCount > 0 && `${recordCount} record(s)`,
+    configCount > 0 && `${configCount} config(s)`,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "";
+};
 
 export const transactionImportHandler: CommandHandlerWithDb<
   {
@@ -111,12 +114,9 @@ export const transactionImportHandler: CommandHandlerWithDb<
 
   ui.heading(`Importing ${allInputs.length} transaction(s)`);
   for (const input of allInputs) {
-    const recordCount = input.records?.length ?? 0;
-    const configCount = input.configs?.length ?? 0;
-    const parts: string[] = [`author "${input.author}"`];
-    if (recordCount > 0) parts.push(`${recordCount} record(s)`);
-    if (configCount > 0) parts.push(`${configCount} config(s)`);
-    ui.info(`  ${parts.join(", ")}`);
+    const summary = transactionInputSummary(input);
+    const detail = summary ? `, ${summary}` : "";
+    ui.info(`  author "${input.author}"${detail}`);
   }
 
   if (args.dryRun) {
@@ -139,16 +139,11 @@ export const transactionImportHandler: CommandHandlerWithDb<
     const input = allInputs[i]!;
     const result = await kg.update(input);
     if (isErr(result)) {
-      const recordCount = input.records?.length ?? 0;
-      const configCount = input.configs?.length ?? 0;
-      const parts = [
-        recordCount > 0 && `${recordCount} records`,
-        configCount > 0 && `${configCount} configs`,
-      ].filter(Boolean);
-      const summary = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+      const summary = transactionInputSummary(input);
+      const suffix = summary ? ` (${summary})` : "";
       return wrapError(
         result,
-        `Failed to import transaction ${i + 1}${summary}`,
+        `Failed to import transaction ${i + 1}${suffix}`,
         {
           transactionIndex: i + 1,
           author: input.author,
@@ -187,19 +182,12 @@ export const transactionRollbackHandler: CommandHandlerWithDb<{
 
   const currentId = versionResult.data.id;
   if (currentId === 1)
-    return err(
-      createError(
-        "invalid-rollback",
-        "Cannot rollback the genesis transaction",
-      ),
-    );
+    return fail("invalid-rollback", "Cannot rollback the genesis transaction");
 
   if (args.count > currentId - 1)
-    return err(
-      createError(
-        "invalid-rollback",
-        `Cannot rollback ${args.count} transactions, only ${currentId - 1} available`,
-      ),
+    return fail(
+      "invalid-rollback",
+      `Cannot rollback ${args.count} transactions, only ${currentId - 1} available`,
     );
 
   const transactionsToRollback: Transaction[] = [];
@@ -226,7 +214,7 @@ export const transactionSquashHandler: CommandHandlerWithDb<{
   yes?: boolean;
 }> = async (context) => {
   const { ui, log, config, fs, args } = context;
-  const transactionLogPath = join(config.paths.binder, "transactions.jsonl");
+  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
   const logResult = await readLastTransactions(
     fs,
     transactionLogPath,
@@ -286,7 +274,7 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
   ui,
   fs,
 }) => {
-  const transactionLogPath = join(config.paths.binder, "transactions.jsonl");
+  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
   const configSchema = kg.getConfigSchema();
   const recordSchemaResult = await kg.getRecordSchema();
   if (isErr(recordSchemaResult)) return recordSchemaResult;
@@ -357,9 +345,7 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
     }
   });
 
-  return err(
-    createError("sync-verification-failed", "Database and log are out of sync"),
-  );
+  return fail("sync-verification-failed", "Database and log are out of sync");
 };
 
 export const transactionRepairHandler: CommandHandlerWithDb<{
@@ -563,12 +549,14 @@ export const transactionLogHandler: CommandHandlerWithDb<{
       ? "full"
       : "concise";
 
-  for (const tx of transactions) {
-    ui.printTransaction(tx, format);
-    if (format !== "oneline") {
-      ui.divider();
+  await withPager(() => {
+    for (const tx of transactions) {
+      ui.printTransaction(tx, format);
+      if (format !== "oneline") {
+        ui.divider();
+      }
     }
-  }
+  });
   return ok(undefined);
 };
 
