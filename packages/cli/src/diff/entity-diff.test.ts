@@ -36,8 +36,9 @@ describe("entity-diff", () => {
       newEntity: FieldsetNested,
       oldEntity: FieldsetNested,
       expected: ChangesetsInput,
+      opts?: { schema?: EntitySchema },
     ) => {
-      const result = diffEntities(schema, newEntity, oldEntity);
+      const result = diffEntities(opts?.schema ?? schema, newEntity, oldEntity);
       expect(result).toEqual(expected);
     };
 
@@ -81,112 +82,109 @@ describe("entity-diff", () => {
       });
     });
 
-    describe("nested relation diffing", () => {
-      it("diffs nested single relation when uids match", () => {
-        const oldWithProject = {
-          ...task1,
-          project: {
-            uid: mockProjectUid,
-            type: "Project",
-            title: "Old Title",
+    describe("single relation diffing", () => {
+      it("diffs nested fields when uids match", () => {
+        check(
+          {
+            ...task1,
+            project: {
+              uid: mockProjectUid,
+              type: "Project",
+              title: "New Title",
+            },
           },
-        };
-        const newWithProject = {
-          ...task1,
-          project: {
-            uid: mockProjectUid,
-            type: "Project",
-            title: "New Title",
+          {
+            ...task1,
+            project: {
+              uid: mockProjectUid,
+              type: "Project",
+              title: "Old Title",
+            },
           },
-        };
-        check(newWithProject, oldWithProject, [
-          { $ref: mockProjectUid, title: "New Title" },
-        ]);
+          [{ $ref: mockProjectUid, title: "New Title" }],
+        );
       });
 
-      it("ignores nested single relation when uids differ", () => {
-        const oldWithProject = {
-          ...task1,
-          project: {
-            uid: mockProjectUid,
-            type: "Project",
-            title: "Project A",
+      it("ignores when uids differ", () => {
+        check(
+          {
+            ...task1,
+            project: {
+              uid: "other-project" as RecordUid,
+              type: "Project",
+              title: "Project B",
+            },
           },
-        };
-        const newWithProject = {
-          ...task1,
-          project: {
-            uid: "other-project" as RecordUid,
-            type: "Project",
-            title: "Project B",
+          {
+            ...task1,
+            project: {
+              uid: mockProjectUid,
+              type: "Project",
+              title: "Project A",
+            },
           },
-        };
-        check(newWithProject, oldWithProject, []);
+          [],
+        );
       });
 
-      it("diffs nested single relation when new has no uid (extracted from markdown)", () => {
-        const oldWithProject = {
-          ...task1,
-          project: {
-            uid: mockProjectUid,
-            type: "Project",
-            title: "Old Title",
+      it("diffs when new has no uid (extracted from markdown)", () => {
+        check(
+          { ...task1, project: { type: "Project", title: "New Title" } },
+          {
+            ...task1,
+            project: {
+              uid: mockProjectUid,
+              type: "Project",
+              title: "Old Title",
+            },
           },
-        };
-        const newWithProject = {
-          ...task1,
-          project: { type: "Project", title: "New Title" },
-        };
-        check(newWithProject, oldWithProject, [
-          { $ref: mockProjectUid, title: "New Title" },
-        ]);
+          [{ $ref: mockProjectUid, title: "New Title" }],
+        );
       });
 
       it("throws when old is UID string but new is nested (missing includes)", () => {
-        const oldWithProject = {
-          ...task1,
-          project: mockProjectUid,
-        };
-        const newWithProject = {
-          ...task1,
-          project: { type: "Project", title: "New Title" },
-        };
         expect(() =>
-          diffEntities(schema, newWithProject, oldWithProject),
+          diffEntities(
+            schema,
+            { ...task1, project: { type: "Project", title: "New Title" } },
+            { ...task1, project: mockProjectUid },
+          ),
         ).toThrow(
           /relation field 'project'.*oldValue must be a nested fieldset/,
         );
       });
 
-      it("emits update when single relation reference is set", () => {
-        const oldTask = omit(task1, ["project"]) as FieldsetNested;
-        const newTask = { ...task1, project: mockProjectUid };
-        check(newTask, oldTask, [
-          { $ref: mockTask1Uid, project: mockProjectUid },
-        ]);
+      it("emits update when relation reference is set", () => {
+        check(
+          { ...task1, project: mockProjectUid },
+          omit(task1, ["project"]) as FieldsetNested,
+          [{ $ref: mockTask1Uid, project: mockProjectUid }],
+        );
+      });
+    });
+
+    describe("multi-relation diffing", () => {
+      it("diffs children and emits field update", () => {
+        check(
+          {
+            ...project,
+            tasks: [
+              { ...task1, title: "Updated Task 1" },
+              { ...task2, title: "Task 2" },
+            ],
+          },
+          {
+            ...project,
+            tasks: [
+              { ...task1, title: "Original Task 1" },
+              { ...task2, title: "Task 2" },
+            ],
+          },
+          [{ $ref: mockTask1Uid, title: "Updated Task 1" }],
+        );
       });
 
-      it("diffs multi-relation children and emits mutations", () => {
-        const oldProject = {
-          ...project,
-          tasks: [
-            { ...task1, title: "Original Task 1" },
-            { ...task2, title: "Task 2" },
-          ],
-        };
-        const newProject = {
-          ...project,
-          tasks: [
-            { ...task1, title: "Updated Task 1" },
-            { ...task2, title: "Task 2" },
-          ],
-        };
-        check(newProject, oldProject, [
-          { $ref: mockTask1Uid, title: "Updated Task 1" },
-        ]);
-      });
-
-      it("emits remove mutation when child removed from multi-relation", () => {
+      it("emits remove mutation when child removed", () => {
         check(
           { ...project, tasks: [task1] },
           { ...project, tasks: [task1, task2] },
@@ -244,27 +242,69 @@ describe("entity-diff", () => {
             },
           },
         };
-        const result = diffEntities(
-          multiRangeSchema,
+        check(
           { ...project, tasks: [task1, { title: "Ambiguous Task" }] },
           { ...project, tasks: [task1] },
+          [
+            {
+              $ref: mockProjectUid,
+              tasks: [["insert", expect.any(String)]],
+            },
+          ],
+          { schema: multiRangeSchema },
         );
-        expect(result).toEqual([
-          {
-            $ref: mockProjectUid,
-            tasks: [["insert", expect.any(String)]],
-          },
-        ]);
       });
 
-      it("handles empty multi-relation arrays", () => {
+      it("handles empty arrays", () => {
         check({ ...project, tasks: [] }, { ...project, tasks: [] }, []);
+      });
+
+      it("matches anonymous children with sparse fields against old children", () => {
+        // Regression: extraction with base={} produced null tombstones for
+        // empty allowMultiple fields (e.g. tags: null). These flowed through
+        // diffOwnedChildren → matchEntities → compareFieldValues and crashed
+        // on assertIsArray(null).
+        //
+        // The extraction fix threads the correct base so children are sparse
+        // diffs (only changed fields, no null tombstones).
+        check(
+          {
+            ...project,
+            tasks: [
+              { title: "Implement user authentication v2" },
+              { title: "Implement schema generator" },
+            ],
+          },
+          {
+            ...project,
+            tasks: [
+              { ...task1, tags: ["urgent", "important"] },
+              { ...task2, tags: ["backend"] },
+            ],
+          },
+          [{ $ref: mockTask1Uid, title: "Implement user authentication v2" }],
+        );
+      });
+
+      it("throws on null in allowMultiple field during anonymous child matching", () => {
+        // Documents the unguarded crash path in similarity-scorer. The
+        // extraction fix in template.ts prevents null tombstones from reaching
+        // here; this test confirms the crash path exists to justify that fix.
+        expect(() =>
+          diffEntities(schema, {
+            ...project,
+            tasks: [{ title: "Implement user authentication", tags: null }],
+          }, {
+            ...project,
+            tasks: [{ ...task1, tags: ["urgent", "important"] }],
+          }),
+        ).toThrow(/is not an array: null/);
       });
     });
   });
 
   describe("diffQueryResults", () => {
-    const checkQuery = (
+    const check = (
       newEntities: FieldsetNested[],
       oldEntities: FieldsetNested[],
       expected: DiffQueryResult,
@@ -278,11 +318,11 @@ describe("entity-diff", () => {
 
     describe("matching and updates", () => {
       it("returns empty results when both lists are empty", () => {
-        checkQuery([], [], { toCreate: [], toUpdate: [] });
+        check([], [], { toCreate: [], toUpdate: [] });
       });
 
       it("matches entities by uid and returns field updates", () => {
-        checkQuery([{ ...task1, title: "Updated" }], [task1], {
+        check([{ ...task1, title: "Updated" }], [task1], {
           toCreate: [],
           toUpdate: [{ $ref: mockTask1Uid, title: "Updated" }],
         });
@@ -290,7 +330,7 @@ describe("entity-diff", () => {
 
       it("matches anonymous entities by similarity", () => {
         const { uid: _, ...anonTask1 } = task1;
-        checkQuery(
+        check(
           [{ ...anonTask1, title: "Implement user authentication v2" }],
           [task1],
           {
@@ -306,53 +346,60 @@ describe("entity-diff", () => {
       });
 
       it("returns no updates when entities are identical", () => {
-        checkQuery([task1], [task1], { toCreate: [], toUpdate: [] });
+        check([task1], [task1], { toCreate: [], toUpdate: [] });
       });
     });
 
     describe("entity creation", () => {
       it("creates entity when uid not found in old list", () => {
-        const newTask = {
-          uid: "new-task-uid" as RecordUid,
-          type: mockTaskTypeKey,
-          title: "Brand New Task",
-          status: "pending",
-        };
-        checkQuery([newTask], [], {
-          toCreate: [
+        check(
+          [
             {
+              uid: "new-task-uid" as RecordUid,
               type: mockTaskTypeKey,
               title: "Brand New Task",
               status: "pending",
             },
           ],
-          toUpdate: [],
-        });
+          [],
+          {
+            toCreate: [
+              {
+                type: mockTaskTypeKey,
+                title: "Brand New Task",
+                status: "pending",
+              },
+            ],
+            toUpdate: [],
+          },
+        );
       });
 
       it("creates entity when similarity below threshold", () => {
-        const completelyDifferent = {
-          type: mockTaskTypeKey,
-          title: "Completely unrelated content here",
-          status: "active",
-          priority: "high",
-        };
-        const result = diffQueryResults(
-          schema,
-          [completelyDifferent],
+        check(
+          [
+            {
+              type: mockTaskTypeKey,
+              title: "Completely unrelated content here",
+              status: "active",
+              priority: "high",
+            },
+          ],
           [task1],
-          { filters: {} },
+          {
+            toCreate: [
+              expect.objectContaining({
+                type: mockTaskTypeKey,
+                title: "Completely unrelated content here",
+              }),
+            ],
+            toUpdate: [],
+          },
         );
-        expect(result.toCreate).toEqual([
-          expect.objectContaining({
-            type: mockTaskTypeKey,
-            title: "Completely unrelated content here",
-          }),
-        ]);
       });
 
       it("hydrates created entity with query context", () => {
-        checkQuery(
+        check(
           [{ type: mockTaskTypeKey, title: "New Task" }],
           [],
           {
@@ -373,7 +420,7 @@ describe("entity-diff", () => {
 
     describe("mixed operations", () => {
       it("handles updates and creates in same batch", () => {
-        checkQuery(
+        check(
           [
             { ...task1, title: "Updated" },
             { type: mockTaskTypeKey, title: "New Task" },
@@ -387,7 +434,7 @@ describe("entity-diff", () => {
       });
 
       it("matches multiple entities by uid in different order", () => {
-        checkQuery(
+        check(
           [
             { ...task2, title: "Task 2 Updated" },
             { ...task1, title: "Task 1 Updated" },

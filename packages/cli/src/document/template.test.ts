@@ -1068,6 +1068,88 @@ Excellent first week. Schema is minimal and consistent.
           description: null,
         });
       });
+
+      it("section template with empty block fields and realistic base produces sparse diff", () => {
+        // Regression: when base={} was passed for owned children, the field
+        // accumulator stored null tombstones for empty fields (summary: null)
+        // because isEqual(null, undefined) is false. These tombstones leaked
+        // through diffOwnedChildren → matchEntities → compareFieldValues →
+        // assertIsArray(null), crashing the sync.
+        //
+        // The fix threads the parent's base children into extraction so the
+        // accumulator sees base.summary === null and skips the unchanged field.
+        const journalSchema = mergeSchema(coreSchema(), {
+          fields: {
+            dayPeriod: {
+              id: newId(100, 0),
+              key: "dayPeriod" as EntityKey,
+              name: "Day Period",
+              dataType: "period",
+              periodFormat: "day",
+            },
+            summary: {
+              id: newId(101, 0),
+              key: "summary" as EntityKey,
+              name: "Summary",
+              dataType: "richtext",
+              richtextFormat: "block",
+            },
+          },
+          types: {},
+        }) as EntitySchema;
+
+        const daySummaryTemplate = createTemplateEntity(
+          "day-summary",
+          "### {dayPeriod}\n\n{summary}\n",
+          { templateFormat: "section" },
+        );
+
+        const viewAst = parseTemplate(
+          "## Days Summary\n\n{children|template:day-summary}\n\n## Summary\n\n{description}\n",
+        );
+        const snapAst = parseMarkdown(
+          "## Days Summary\n\n### 2026-02-24\n\n### 2026-02-25\n\nGood day.\n\n## Summary\n\n",
+        );
+
+        // Realistic base: DB state with existing children that have uids
+        // and summary already null (empty day entries)
+        const base = {
+          children: [
+            {
+              uid: "_day24000001",
+              dayPeriod: "2026-02-24",
+              summary: null,
+            },
+            {
+              uid: "_day25000002",
+              dayPeriod: "2026-02-25",
+              summary: null,
+            },
+          ],
+          description: null,
+        };
+
+        const result = throwIfError(
+          extractFieldsAst(
+            journalSchema,
+            [...mockDefaultTemplates, daySummaryTemplate],
+            viewAst,
+            snapAst,
+            base,
+          ),
+        );
+
+        // With the fix, extraction with a proper base skips unchanged fields.
+        // The first child has no changes (dayPeriod and summary match base).
+        // The second child only has summary changed from null to "Good day."
+        // No spurious null tombstones appear.
+        expect(result).toEqual({
+          children: [
+            {},
+            { summary: "Good day." },
+          ],
+        });
+      });
     });
 
     describe("where: filter extraction", () => {

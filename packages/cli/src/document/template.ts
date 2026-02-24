@@ -595,12 +595,57 @@ export const extractFieldPathsFromAst = (ast: TemplateAST): FieldPath[] => {
   return fieldPaths;
 };
 
+const resolveBaseChildren = (
+  base: FieldsetNested,
+  fieldPath: FieldPath,
+): FieldsetNested[] => {
+  const value = getNestedValue(base, fieldPath);
+  if (Array.isArray(value)) return value.filter(isFieldsetNested);
+  return [];
+};
+
+const resolveBaseChild = (
+  base: FieldsetNested,
+  fieldPath: FieldPath,
+): FieldsetNested => {
+  const value = getNestedValue(base, fieldPath);
+  if (value !== undefined && isFieldsetNested(value)) return value;
+  return {};
+};
+
+const extractRelationSegments = (
+  schema: EntitySchema,
+  templates: Templates,
+  segments: string[],
+  itemTemplate: TemplateEntity,
+  baseChildren: FieldsetNested[],
+): Result<FieldValue> => {
+  if (segments.length === 0) return ok([]);
+
+  const entities: FieldsetNested[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const segmentAst = parseMarkdown(segments[i]!);
+    const result = extractFieldsAst(
+      schema,
+      templates,
+      itemTemplate.templateAst,
+      segmentAst,
+      baseChildren[i] ?? {},
+    );
+    if (isErr(result)) return result;
+    entities.push(result.data);
+  }
+
+  return ok(entities);
+};
+
 const extractRelationFromText = (
   schema: EntitySchema,
   templates: Templates,
   snapText: string,
   itemTemplate: TemplateEntity,
   slotPosition: SlotPosition,
+  baseChildren: FieldsetNested[],
 ): Result<FieldValue> => {
   const delimiter = getDelimiterForSlotPosition(
     slotPosition,
@@ -610,24 +655,13 @@ const extractRelationFromText = (
     (s) => s.length > 0,
   );
 
-  if (segments.length === 0) return ok([]);
-
-  const entities: FieldsetNested[] = [];
-  for (const segment of segments) {
-    const segmentAst = parseMarkdown(segment);
-    // TODO: pass matched nested entity base for three-way merge on relations
-    const result = extractFieldsAst(
-      schema,
-      templates,
-      itemTemplate.templateAst,
-      segmentAst,
-      {},
-    );
-    if (isErr(result)) return result;
-    entities.push(result.data);
-  }
-
-  return ok(entities);
+  return extractRelationSegments(
+    schema,
+    templates,
+    segments,
+    itemTemplate,
+    baseChildren,
+  );
 };
 
 const extractRelationFromBlocks = (
@@ -636,6 +670,7 @@ const extractRelationFromBlocks = (
   blocks: Nodes[],
   itemTemplate: TemplateEntity,
   slotPosition: SlotPosition,
+  baseChildren: FieldsetNested[],
 ): Result<FieldValue> => {
   if (blocks.length === 0) return ok([]);
 
@@ -671,25 +706,19 @@ const extractRelationFromBlocks = (
           : null;
 
     if (blockGroups) {
-      const entities: FieldsetNested[] = [];
-      for (const entityBlocks of blockGroups) {
-        const markdown = renderAstToMarkdown({
+      const segments = blockGroups.map((group) =>
+        renderAstToMarkdown({
           type: "root",
-          children: entityBlocks as Root["children"],
-        });
-        const segmentAst = parseMarkdown(markdown);
-        // TODO: pass matched nested entity base for three-way merge on relations
-        const result = extractFieldsAst(
-          schema,
-          templates,
-          itemTemplate.templateAst,
-          segmentAst,
-          {},
-        );
-        if (isErr(result)) return result;
-        entities.push(result.data);
-      }
-      return ok(entities);
+          children: group as Root["children"],
+        }),
+      );
+      return extractRelationSegments(
+        schema,
+        templates,
+        segments,
+        itemTemplate,
+        baseChildren,
+      );
     }
   }
 
@@ -704,6 +733,7 @@ const extractRelationFromBlocks = (
     markdown,
     itemTemplate,
     slotPosition,
+    baseChildren,
   );
 };
 
@@ -806,6 +836,7 @@ export const extractFieldsAst = (
         snapText,
         itemTemplate,
         slotPosition,
+        resolveBaseChildren(base, fieldPath),
       );
       if (isErr(valueResult)) {
         error = valueResult.error;
@@ -824,13 +855,12 @@ export const extractFieldsAst = (
       }
       const itemTemplate = getItemTemplate(viewChild, templates);
       const segmentAst = parseMarkdown(snapText);
-      // TODO: pass matched nested entity base for three-way merge on relations
       const extractResult = extractFieldsAst(
         schema,
         templates,
         itemTemplate.templateAst,
         segmentAst,
-        {},
+        resolveBaseChild(base, fieldPath),
       );
       if (isErr(extractResult)) {
         error = extractResult.error;
@@ -1077,6 +1107,7 @@ export const extractFieldsAst = (
         blockNodes,
         itemTemplate,
         slotPosition,
+        resolveBaseChildren(base, fieldPath),
       );
       if (isErr(valueResult)) {
         error = valueResult.error;
@@ -1094,13 +1125,12 @@ export const extractFieldsAst = (
         children: blockNodes as Root["children"],
       });
       const segmentAst = parseMarkdown(markdown);
-      // TODO: pass matched nested entity base for three-way merge on relations
       const extractResult = extractFieldsAst(
         schema,
         templates,
         itemTemplate.templateAst,
         segmentAst,
-        {},
+        resolveBaseChild(base, fieldPath),
       );
       if (isErr(extractResult)) {
         error = extractResult.error;
