@@ -8,13 +8,8 @@ import {
   objTupleToTuple,
   omit,
 } from "@binder/utils";
-import {
-  type FieldKey,
-  type Fieldset,
-  type FieldValue,
-  getMultiValueDelimiter,
-  splitByDelimiter,
-} from "./field.ts";
+import { type FieldKey, type Fieldset, type FieldValue } from "./field.ts";
+import { getMultiValueDelimiter, splitByDelimiter } from "./text-format.ts";
 import type {
   EntityNsKey,
   EntityNsRef,

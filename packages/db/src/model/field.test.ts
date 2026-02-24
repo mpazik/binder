@@ -1,12 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { type JsonValue, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import {
-  getNestedValue,
-  parseFieldValue,
-  setNestedValue,
-  stringifyFieldValue,
-} from "./field.ts";
+import { getNestedValue, setNestedValue } from "./field.ts";
+import { parseFieldValue, stringifyFieldValue } from "./text-format.ts";
 import type { FieldDef, FieldsetNested } from "./index.ts";
 import {
   mockAliasesField,

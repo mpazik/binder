@@ -4,10 +4,9 @@ import {
   type CoreDataType,
   type GetValueType,
   type OptionDef,
-  type PeriodFormat,
-  type PlaintextFormat,
-  type RichtextFormat,
 } from "./data-type.ts";
+import type { PeriodFormat } from "./period-format.ts";
+import type { PlaintextFormat, RichtextFormat } from "./text-format.ts";
 import {
   isFieldsetNested,
   type FieldKey,

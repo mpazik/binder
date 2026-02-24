@@ -11,14 +11,13 @@ import {
 } from "@binder/utils";
 import {
   type EntitySchema,
-  type Fieldset,
   type FieldDef,
   type FieldKey,
   type FieldPath,
+  type Fieldset,
   type FieldsetNested,
   type FieldValue,
   type Filters,
-  getDelimiterForRichtextFormat,
   getDelimiterString,
   getFieldDefNested,
   getNestedValue,
@@ -27,6 +26,7 @@ import {
   type MultiValueDelimiter,
   parseFieldValue,
   type RichtextFormat,
+  richtextFormats,
   splitByDelimiter,
 } from "@binder/db";
 import type { Nodes, Parent, Root, Text } from "mdast";
@@ -199,8 +199,8 @@ const getDelimiterForSlotPosition = (
   slotPosition: SlotPosition,
   templateFormat: TemplateFormat | undefined,
 ): MultiValueDelimiter => {
-  if (templateFormat) return getDelimiterForRichtextFormat(templateFormat);
-  return getDelimiterForRichtextFormat(slotPosition);
+  if (templateFormat) return richtextFormats[templateFormat].delimiter;
+  return richtextFormats[slotPosition].delimiter;
 };
 
 const FRONTMATTER_TYPES = ["yaml", "toml"];
@@ -307,7 +307,7 @@ const renderNestedFieldValues = (
 
   // For block position with block-level content, render as separate blocks
   if (!isInlinePosition(slotPosition) && isBlockLevelField(fieldDef)) {
-    const delimiter = getDelimiterForRichtextFormat(slotPosition);
+    const delimiter = richtextFormats[slotPosition].delimiter;
     const delimiterStr = getDelimiterString(delimiter);
     const combinedMarkdown = values
       .map((v) => String(v).trim())
@@ -316,7 +316,7 @@ const renderNestedFieldValues = (
     return ast.children as Nodes[];
   }
 
-  const delimiter = getDelimiterForRichtextFormat(slotPosition);
+  const delimiter = richtextFormats[slotPosition].delimiter;
   const delimiterStr = getDelimiterString(delimiter);
 
   const renderedValues = values.map((v) => renderFieldValue(v, fieldDef));
@@ -1305,8 +1305,7 @@ const getBlockText = (node: Nodes | SimplifiedViewBlockChild): string => {
   if ("children" in node && Array.isArray(node.children)) {
     return node.children
       .map((child) => {
-        if ("value" in child && typeof child.value === "string")
-          return child.value;
+        if ("value" in child) return child.value;
         if ("children" in child) return getBlockText(child as Nodes);
         return "";
       })

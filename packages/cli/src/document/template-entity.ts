@@ -1,10 +1,10 @@
 import {
   buildIncludes,
-  getDelimiterForRichtextFormat,
   getDelimiterString,
   type Includes,
   type KnowledgeGraph,
   mergeIncludes,
+  richtextFormats,
 } from "@binder/db";
 import { isErr, ok, type ResultAsync } from "@binder/utils";
 import { visit } from "unist-util-visit";
@@ -15,16 +15,17 @@ import {
   type TemplateAST,
   type TemplateFieldSlot,
 } from "./template.ts";
-export {
-  type TemplateKey,
-  TEMPLATE_TEMPLATE_KEY,
-  PHRASE_TEMPLATE_KEY,
-  LINE_TEMPLATE_KEY,
-  BLOCK_TEMPLATE_KEY,
-  SECTION_TEMPLATE_KEY,
-  DOCUMENT_TEMPLATE_KEY,
-} from "./template.const.ts";
 import {
+  BLOCK_TEMPLATE_KEY,
+  DOCUMENT_TEMPLATE_KEY,
+  LINE_TEMPLATE_KEY,
+  PHRASE_TEMPLATE_KEY,
+  SECTION_TEMPLATE_KEY,
+  TEMPLATE_TEMPLATE_KEY,
+  type TemplateKey,
+} from "./template.const.ts";
+
+export {
   type TemplateKey,
   TEMPLATE_TEMPLATE_KEY,
   PHRASE_TEMPLATE_KEY,
@@ -195,9 +196,7 @@ export const loadTemplates = async (
     createTemplateEntity(key, content, options ?? {}),
   );
 
-  const delimiter = getDelimiterString(
-    getDelimiterForRichtextFormat("document"),
-  );
+  const delimiter = getDelimiterString(richtextFormats["document"].delimiter);
   const templates: Templates = searchResult.data.items.map((item) => {
     const content = item.templateContent;
     const templateContent = Array.isArray(content)

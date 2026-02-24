@@ -16,12 +16,14 @@ import {
   coreDataTypes,
   type DataTypeDefs,
   dataTypeDefsToOptions,
+} from "./data-type.ts";
+import { periodFormatOptions } from "./period-format.ts";
+import {
   DEFAULT_PLAINTEXT_FORMAT,
   DEFAULT_RICHTEXT_FORMAT,
-  periodFormatOptions,
   plaintextFormatOptions,
   richtextFormatOptions,
-} from "./data-type.ts";
+} from "./text-format.ts";
 import type { FieldKey } from "./field.ts";
 import {
   type ConfigId,

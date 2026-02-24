@@ -1,5 +1,7 @@
 export * from "./field.ts";
 export type * from "./field.ts";
+export * from "./text-format.ts";
+export type * from "./text-format.ts";
 export * from "./entity.ts";
 export type * from "./entity.ts";
 export * from "./system.ts";
@@ -10,6 +12,8 @@ export * from "./record.ts";
 export type * from "./record.ts";
 export * from "./data-type.ts";
 export type * from "./data-type.ts";
+export * from "./period-format.ts";
+export type * from "./period-format.ts";
 export * from "./schema.ts";
 export type * from "./schema.ts";
 export * from "./changeset.ts";
