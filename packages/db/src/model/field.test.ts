@@ -20,6 +20,7 @@ import { coreFields } from "./schema.ts";
 const mockSectionField = {
   dataType: "richtext",
   richtextFormat: "section",
+  sectionDepth: 2,
   allowMultiple: true,
 } as FieldDef;
 
@@ -273,26 +274,26 @@ describe("field", () => {
     });
 
     describe("allowMultiple with section format", () => {
-      it("splits by headers", () => {
+      it("splits by headers at sectionDepth + 1", () => {
         check(
-          "## Chapter One\nContent here\n\n## Chapter Two\nMore content",
+          "### Chapter One\nContent here\n\n### Chapter Two\nMore content",
           mockSectionField,
-          ["## Chapter One\nContent here", "## Chapter Two\nMore content"],
+          ["### Chapter One\nContent here", "### Chapter Two\nMore content"],
         );
       });
 
-      it("splits by any header level", () => {
+      it("does not split on deeper headers", () => {
         check(
-          "# H1\nContent\n\n### H3\nMore\n\n###### H6\nEnd",
+          "### H3\nContent\n\n#### H4\nMore\n\n###### H6\nEnd",
           mockSectionField,
-          ["# H1\nContent", "### H3\nMore", "###### H6\nEnd"],
+          ["### H3\nContent\n\n#### H4\nMore\n\n###### H6\nEnd"],
         );
       });
 
       it("includes content before first header as separate section", () => {
-        check("Intro content\n\n## First Chapter\nBody", mockSectionField, [
+        check("Intro content\n\n### First Chapter\nBody", mockSectionField, [
           "Intro content",
-          "## First Chapter\nBody",
+          "### First Chapter\nBody",
         ]);
       });
 
@@ -308,17 +309,17 @@ describe("field", () => {
 
       it("trims whitespace from items", () => {
         check(
-          "  \n## Chapter One\nContent  \n\n## Chapter Two\nMore  \n  ",
+          "  \n### Chapter One\nContent  \n\n### Chapter Two\nMore  \n  ",
           mockSectionField,
-          ["## Chapter One\nContent", "## Chapter Two\nMore"],
+          ["### Chapter One\nContent", "### Chapter Two\nMore"],
         );
       });
 
       it("does not split on hash without space (not a header)", () => {
         check(
-          "## Chapter\nContent with #hashtag\n\n## Another",
+          "### Chapter\nContent with #hashtag\n\n### Another",
           mockSectionField,
-          ["## Chapter\nContent with #hashtag", "## Another"],
+          ["### Chapter\nContent with #hashtag", "### Another"],
         );
       });
     });

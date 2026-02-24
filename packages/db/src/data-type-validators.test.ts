@@ -419,24 +419,39 @@ describe("data-type-validators", () => {
     });
 
     describe("format: section", () => {
-      const fieldDef = { richtextFormat: "section" as const };
+      const fieldDef = {
+        richtextFormat: "section" as const,
+        sectionDepth: 2,
+      };
 
-      it("accepts content starting with header", () => {
-        checkOk("richtext", "# Heading\n\nContent", { fieldDef });
-        checkOk("richtext", "## Sub heading\n\nMore content", { fieldDef });
+      it("rejects when sectionDepth is not set", () => {
+        const noDepth = { richtextFormat: "section" as const };
+        checkErr("richtext", "### Heading\n\nContent", {
+          fieldDef: noDepth,
+          message: "requires sectionDepth",
+        });
+      });
+
+      it("accepts content with headers deeper than sectionDepth", () => {
+        checkOk("richtext", "### Heading\n\nContent", { fieldDef });
+        checkOk("richtext", "#### Deep heading\n\nMore content", { fieldDef });
         checkOk("richtext", "", { fieldDef });
       });
 
-      it("rejects content without header at start", () => {
-        checkErr("richtext", "paragraph\n\nanother paragraph", {
+      it("accepts content without any headers", () => {
+        checkOk("richtext", "paragraph\n\nanother paragraph", { fieldDef });
+      });
+
+      it("rejects headers at or above sectionDepth", () => {
+        checkErr("richtext", "## Heading\n\nContent", {
           fieldDef,
-          message: "must start with a header",
+          message: "cannot contain headers at or above depth 2",
         });
-        checkErr("richtext", "Some content\n\n## Heading later", { fieldDef });
+        checkErr("richtext", "# Top level\n\nContent", { fieldDef });
       });
 
       it("rejects horizontal rules", () => {
-        checkErr("richtext", "# Heading\n\n---\n\nMore content", {
+        checkErr("richtext", "### Heading\n\n---\n\nMore content", {
           fieldDef,
           message: "cannot contain horizontal rules",
         });

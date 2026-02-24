@@ -95,6 +95,7 @@ export const configSchemaIds = {
   includes: newMetaSystemId(28),
   plaintextFormat: newMetaSystemId(29),
   richtextFormat: newMetaSystemId(30),
+  sectionDepth: newMetaSystemId(32),
   periodFormat: newMetaSystemId(31),
 } as const;
 export const fieldTypes = [fieldSystemType] as const;
@@ -288,6 +289,15 @@ export const configFieldsDefs = {
     when: { dataType: "richtext" },
     default: DEFAULT_RICHTEXT_FORMAT,
   },
+  sectionDepth: {
+    id: configSchemaIds.sectionDepth,
+    key: "sectionDepth" as SystemKey,
+    name: "Section Depth",
+    dataType: "integer",
+    description:
+      "Heading level this section lives under (1–5). Content may only use deeper headings. 0 means no headings allowed.",
+    when: { richtextFormat: "section" },
+  },
   periodFormat: {
     id: configSchemaIds.periodFormat,
     key: "periodFormat" as SystemKey,
@@ -335,6 +345,7 @@ export const configTypeDefs: ConfigTypeDefinitions = {
       "default",
       "plaintextFormat",
       "richtextFormat",
+      ["sectionDepth", { required: true }],
       "periodFormat",
     ],
   },

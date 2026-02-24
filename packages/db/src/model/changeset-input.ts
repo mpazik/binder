@@ -196,7 +196,7 @@ const normalizeFieldValue = (
       (fieldDef.dataType === "plaintext" || fieldDef.dataType === "richtext")
     ) {
       const delimiter = getMultiValueDelimiter(fieldDef);
-      return splitByDelimiter(value, delimiter).filter(
+      return splitByDelimiter(value, delimiter, fieldDef.sectionDepth).filter(
         (item) => item.length > 0,
       );
     }

@@ -116,6 +116,7 @@ export const coreValidators: { [K in CoreDataType]: DataTypeValidator<K> } = {
     const format = getRichtextFormat(fieldDef.richtextFormat);
     const error = format.validate(value, {
       allowMultiple: fieldDef.allowMultiple,
+      sectionDepth: fieldDef.sectionDepth,
     });
     if (error) return fail("validation-error", error);
     return okVoid;

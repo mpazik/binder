@@ -11,9 +11,14 @@ export type MultiValueDelimiter =
   | "header"
   | "hrule";
 
+export type TextFormatValidatorContext = {
+  allowMultiple?: boolean;
+  sectionDepth?: number;
+};
+
 export type TextFormatValidator = (
   value: string,
-  context: { allowMultiple?: boolean },
+  context: TextFormatValidatorContext,
 ) => string | undefined;
 
 export type TextFormatDef = DataTypeDef & {
@@ -32,11 +37,21 @@ export const createPatternValidator =
 const containsMarkdownHeader = (value: string): boolean =>
   /^#{1,6}\s/m.test(value);
 
-const startsWithMarkdownHeader = (value: string): boolean =>
-  /^#{1,6}\s/.test(value);
-
 const containsHorizontalRule = (value: string): boolean =>
   /^-{3,}\s*$/m.test(value);
+
+/**
+ * Check if value contains any markdown header at or above (shallower than) the given depth.
+ * Depth 1 = `#`, depth 2 = `##`, etc.
+ * E.g. `containsHeaderAtOrAboveDepth(value, 2)` returns true if value has `#` or `##` headers.
+ */
+const containsHeaderAtOrAboveDepth = (
+  value: string,
+  depth: number,
+): boolean => {
+  const pattern = new RegExp(`^#{1,${depth}}\\s`, "m");
+  return pattern.test(value);
+};
 
 export const plaintextFormats = {
   identifier: {
@@ -164,12 +179,15 @@ export const richtextFormats = {
   },
   section: {
     name: "Section",
-    description: "Content section that must start with a header.",
-    validate: (value) => {
-      if (!startsWithMarkdownHeader(value))
-        return "Section must start with a header (e.g., ## Title)";
+    description:
+      "Content section within a heading hierarchy. Requires sectionDepth to specify the heading level this section lives under. Only headers deeper than sectionDepth are allowed.",
+    validate: (value, context) => {
       if (containsHorizontalRule(value))
         return "Section cannot contain horizontal rules (---)";
+      if (context.sectionDepth === undefined)
+        return "Section format requires sectionDepth to be set on the field definition";
+      if (containsHeaderAtOrAboveDepth(value, context.sectionDepth))
+        return `Section content cannot contain headers at or above depth ${context.sectionDepth} (h${"#".repeat(context.sectionDepth)})`;
       return undefined;
     },
     isMultiline: true,
@@ -230,8 +248,15 @@ export const getDelimiterString = (delimiter: MultiValueDelimiter): string => {
   }
 };
 
-const splitByHeader = (value: string): string[] => {
-  const headerPattern = /^#{1,6}\s/;
+/**
+ * Split text by markdown headers. When `depth` is specified, only headers at
+ * exactly that depth act as delimiters (deeper headers are content within a value).
+ * When `depth` is undefined, any header acts as a delimiter (original behavior).
+ */
+const splitByHeader = (value: string, depth?: number): string[] => {
+  const headerPattern = depth
+    ? new RegExp(`^#{${depth}}(?!#)\\s`)
+    : /^#{1,6}\s/;
   const lines = value.split("\n");
   const sections: string[] = [];
   let currentSection: string[] = [];
@@ -256,9 +281,15 @@ const splitByHeader = (value: string): string[] => {
 const splitByHorizontalRule = (value: string): string[] =>
   value.split(/^-{3,}\s*$/m).map((item) => item.trim());
 
+/**
+ * Split a string by the given delimiter. When delimiter is "header" and
+ * `sectionDepth` is provided, splits only on headers at depth `sectionDepth + 1`
+ * (one level below the parent section).
+ */
 export const splitByDelimiter = (
   value: string,
   delimiter: MultiValueDelimiter,
+  sectionDepth?: number,
 ): string[] => {
   switch (delimiter) {
     case "comma":
@@ -268,7 +299,10 @@ export const splitByDelimiter = (
     case "blankline":
       return value.split(/\n\n+/).map((item) => item.trim());
     case "header":
-      return splitByHeader(value);
+      return splitByHeader(
+        value,
+        sectionDepth !== undefined ? sectionDepth + 1 : undefined,
+      );
     case "hrule":
       return splitByHorizontalRule(value);
   }
@@ -291,9 +325,11 @@ export const parseFieldValue = (
   if (fieldDef.allowMultiple) {
     if (trimmed === "") return ok([]);
     const delimiter = getMultiValueDelimiter(fieldDef);
-    const items = splitByDelimiter(trimmed, delimiter).filter(
-      (item) => item.length > 0,
-    );
+    const items = splitByDelimiter(
+      trimmed,
+      delimiter,
+      fieldDef.sectionDepth,
+    ).filter((item) => item.length > 0);
     return ok(items);
   }
 

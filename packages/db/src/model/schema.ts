@@ -7,12 +7,7 @@ import {
 } from "./data-type.ts";
 import type { PeriodFormat } from "./period-format.ts";
 import type { PlaintextFormat, RichtextFormat } from "./text-format.ts";
-import {
-  isFieldsetNested,
-  type FieldKey,
-  type FieldPath,
-  type FieldsetNested,
-} from "./field.ts";
+import { type FieldKey, type FieldPath } from "./field.ts";
 import type { Filters } from "./query.ts";
 
 export type EntityTypeBuilder<
@@ -49,6 +44,7 @@ export type FieldDef<D extends string = string> = {
   default?: JsonValue;
   plaintextFormat?: PlaintextFormat;
   richtextFormat?: RichtextFormat;
+  sectionDepth?: number;
   periodFormat?: PeriodFormat;
 };
 
@@ -209,9 +205,6 @@ export const getAllFieldsForType = (
   const fields = typeDef.fields.map(getTypeFieldKey);
   return includeIdentityFields ? [...coreIdentityFieldKeys, ...fields] : fields;
 };
-
-const isCoreIdentityFieldKey = (key: string): key is CoreIdentityFieldKey =>
-  coreIdentityFieldKeys.includes(key as CoreIdentityFieldKey);
 
 export const getFieldDefNested = <D extends string = CoreDataType>(
   schema: EntitySchema<D>,

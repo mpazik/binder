@@ -109,7 +109,9 @@ const splitForField = (value: string, fieldDef: FieldDef): string[] => {
     return [quoted];
   }
   const delimiter = getMultiValueDelimiter(fieldDef);
-  return splitByDelimiter(value, delimiter).filter((item) => item.length > 0);
+  return splitByDelimiter(value, delimiter, fieldDef.sectionDepth).filter(
+    (item) => item.length > 0,
+  );
 };
 
 const parseSimpleValue = (value: string): string => {
