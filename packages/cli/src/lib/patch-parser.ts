@@ -5,7 +5,11 @@ import {
   type FieldDef,
   type FieldKey,
   type Fieldset,
+  getMultiValueDelimiter,
+  isListMutationInput,
+  isListMutationInputArray,
   parseFieldValue,
+  splitByDelimiter,
 } from "@binder/db";
 import {
   createError,
@@ -52,7 +56,7 @@ const parsePatchOperation = (patch: string): PatchOperation | null => {
     (patch.startsWith("'") && patch.endsWith("'")) ||
     (patch.startsWith('"') && patch.endsWith('"'));
   const trimmedPatch = patchHasOuterQuotes ? patch.slice(1, -1) : patch;
-  const match = trimmedPatch.match(/^([\w]+)(?::([^=+-]+))?([-+]*=|--)(.*)$/s);
+  const match = trimmedPatch.match(/^(\w+)(?::([^=+-]+))?([-+]*=|--)(.*)$/s);
   if (!match) return null;
 
   const [, field, accessor, operator, value] = match;
@@ -99,12 +103,13 @@ const parseQuotedValue = (value: string): string => {
   return value;
 };
 
-const splitCommaSeparated = (value: string): string[] => {
+const splitForField = (value: string, fieldDef: FieldDef): string[] => {
   const quoted = parseQuotedValue(value);
   if (quoted !== value) {
     return [quoted];
   }
-  return value.split(",");
+  const delimiter = getMultiValueDelimiter(fieldDef);
+  return splitByDelimiter(value, delimiter).filter((item) => item.length > 0);
 };
 
 const parseSimpleValue = (value: string): string => {
@@ -180,7 +185,7 @@ export const parseFieldChange = (
         ? accessorToPosition(normalizedAccessor)
         : undefined;
 
-    const values = splitCommaSeparated(value);
+    const values = splitForField(value, fieldDef);
 
     if (values.length === 1) {
       const val = parseSimpleValue(values[0]!);
@@ -207,7 +212,7 @@ export const parseFieldChange = (
         ? accessorToPosition(normalizedAccessor)
         : undefined;
 
-    const values = splitCommaSeparated(value);
+    const values = splitForField(value, fieldDef);
 
     if (values.length === 1) {
       const val = parseSimpleValue(values[0]!);
@@ -252,11 +257,29 @@ export const parseFieldChange = (
   });
 };
 
+const toMutationArray = (
+  input: FieldChangeInput,
+): FieldChangeInput[] | undefined => {
+  if (isListMutationInputArray(input)) return input;
+  if (isListMutationInput(input)) return [input];
+  return undefined;
+};
+
+const mergeMutations = (
+  existing: FieldChangeInput,
+  incoming: FieldChangeInput,
+): FieldChangeInput => {
+  const existingOps = toMutationArray(existing)!;
+  const incomingOps = toMutationArray(incoming)!;
+  return [...existingOps, ...incomingOps] as FieldChangeInput;
+};
+
 export const parsePatches = (
   patches: string[],
   schema: EntitySchema,
 ): Result<FieldChangesetInput> => {
   const result: Record<string, FieldChangeInput> = {};
+  const operators: Record<string, string> = {};
   for (const patch of patches) {
     const patchOp = parsePatchOperation(patch);
     if (!patchOp) return err(createPatchFormatError(patch));
@@ -270,7 +293,27 @@ export const parsePatches = (
 
     const fieldChangeResult = parseFieldChange(patch, fieldDef);
     if (isErr(fieldChangeResult)) return fieldChangeResult;
-    result[fieldKey] = fieldChangeResult.data;
+
+    const existing = result[fieldKey];
+    if (existing !== undefined) {
+      const prevOp = operators[fieldKey]!;
+      const isMutationOp =
+        patchOp.operator === "+=" || patchOp.operator === "-=";
+      const wasMutationOp = prevOp === "+=" || prevOp === "-=";
+
+      if (!isMutationOp || !wasMutationOp) {
+        return fail(
+          "duplicate-field-patch",
+          `Field '${fieldKey}' has conflicting patches. Use a single patch per field, or combine mutations (+=, -=)`,
+          { field: fieldKey },
+        );
+      }
+
+      result[fieldKey] = mergeMutations(existing, fieldChangeResult.data);
+    } else {
+      result[fieldKey] = fieldChangeResult.data;
+    }
+    operators[fieldKey] = patchOp.operator;
   }
   return ok(result);
 };

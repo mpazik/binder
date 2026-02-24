@@ -7,6 +7,7 @@ import {
   mockRecordSchema,
   mockNotesField,
   mockPriceField,
+  mockStepsField,
   mockTagsField,
 } from "@binder/db/mocks";
 import { isErr } from "@binder/utils";
@@ -126,7 +127,7 @@ describe("patch-parser", () => {
       check("tags+=urgent", ["insert", "urgent"], mockTagsField);
     });
 
-    it("appends multiple values", () => {
+    it("appends multiple comma-separated values for identifier format", () => {
       check(
         "tags+=a,b,c",
         [
@@ -135,6 +136,53 @@ describe("patch-parser", () => {
           ["insert", "c"],
         ],
         mockTagsField,
+      );
+    });
+
+    it("does not split on commas for paragraph format (+=)", () => {
+      check(
+        "notes+=This is a sentence, with a comma.",
+        ["insert", "This is a sentence, with a comma."],
+        mockNotesField,
+      );
+    });
+
+    it("does not split on commas for line format (+=)", () => {
+      check(
+        "aliases+=Hello, world",
+        ["insert", "Hello, world"],
+        mockAliasesField,
+      );
+    });
+
+    it("splits on newlines for line format (+=)", () => {
+      check(
+        "aliases+=first\nsecond\nthird",
+        [
+          ["insert", "first"],
+          ["insert", "second"],
+          ["insert", "third"],
+        ],
+        mockAliasesField,
+      );
+    });
+
+    it("splits on blank lines for paragraph format (+=)", () => {
+      check(
+        "notes+=para one\n\npara two",
+        [
+          ["insert", "para one"],
+          ["insert", "para two"],
+        ],
+        mockNotesField,
+      );
+    });
+
+    it("does not split on commas for richtext block format (+=)", () => {
+      check(
+        "steps+=Step one, then step two",
+        ["insert", "Step one, then step two"],
+        mockStepsField,
       );
     });
 
@@ -149,6 +197,34 @@ describe("patch-parser", () => {
       check("tags-=urgent", ["remove", "urgent"], mockTagsField);
       check("tags:last-=urgent", ["remove", "urgent", "last"], mockTagsField);
       check("tags:1-=urgent", ["remove", "urgent", 1], mockTagsField);
+    });
+
+    it("removes multiple comma-separated values for identifier format", () => {
+      check(
+        "tags-=a,b,c",
+        [
+          ["remove", "a"],
+          ["remove", "b"],
+          ["remove", "c"],
+        ],
+        mockTagsField,
+      );
+    });
+
+    it("does not split on commas for paragraph format (-=)", () => {
+      check(
+        "notes-=A paragraph, with a comma.",
+        ["remove", "A paragraph, with a comma."],
+        mockNotesField,
+      );
+    });
+
+    it("does not split on commas for line format (-=)", () => {
+      check(
+        "aliases-=Hello, world",
+        ["remove", "Hello, world"],
+        mockAliasesField,
+      );
     });
 
     it("removes by position with :accessor", () => {
@@ -246,6 +322,58 @@ describe("patch-parser", () => {
         key: "my-key",
         title: "test",
       });
+    });
+
+    it("merges multiple += patches for same field", () => {
+      checkWithSchema(["tags+=one", "tags+=two"], {
+        tags: [
+          ["insert", "one"],
+          ["insert", "two"],
+        ],
+      });
+    });
+
+    it("merges multiple += patches with comma values for same field", () => {
+      checkWithSchema(["tags+=a,b", "tags+=c"], {
+        tags: [
+          ["insert", "a"],
+          ["insert", "b"],
+          ["insert", "c"],
+        ],
+      });
+    });
+
+    it("merges += and -= patches for same field", () => {
+      checkWithSchema(["tags+=new", "tags-=old"], {
+        tags: [
+          ["insert", "new"],
+          ["remove", "old"],
+        ],
+      });
+    });
+
+    it("errors when multiple = patches for same field", () => {
+      const result = parsePatches(
+        ["title=first", "title=second"],
+        mockRecordSchema,
+      );
+      expect(result).toBeErrWithKey("duplicate-field-patch");
+    });
+
+    it("errors when mixing = and += for same field", () => {
+      const result = parsePatches(
+        ["tags=first", "tags+=second"],
+        mockRecordSchema,
+      );
+      expect(result).toBeErrWithKey("duplicate-field-patch");
+    });
+
+    it("errors when mixing += and = for same field", () => {
+      const result = parsePatches(
+        ["tags+=first", "tags=second"],
+        mockRecordSchema,
+      );
+      expect(result).toBeErrWithKey("duplicate-field-patch");
     });
   });
 
