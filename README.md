@@ -21,7 +21,30 @@ Combine the flexibility of plain text with the capabilities of a structured data
 > Internal data structures, configuration formats, and APIs are subject to breaking changes.  
 > **Data loss is possible.** Do not use for critical data without independent backups.
 
-## Key Features
+##  Features
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/bi-sync.png" width="380"/><br/>
+      <sub><b>Bidirectional sync</b> — your edits are automatically captured and reflected in the knowledge graph. Change anything, anywhere, and Binder keeps up.</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/types.png" width="380"/><br/>
+      <sub><b>Data models</b> — define your types and fields in a simple YAML schema. Easy to write, easy to evolve.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/auto-complete.png" width="380"/><br/>
+      <sub><b>Autocomplete</b> — Binder knows your schema, so your editor does too. Links, field names, and valid values complete as you type.</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/error.png" width="380"/><br/>
+      <sub><b>Editor integration</b> — data validation, go to definition, and info on hover. Everything you need, right in your editor.</sub>
+    </td>
+  </tr>
+</table>
 
 - **Bidirectional Markdown sync**: Markdown files are a first-class view of the graph. Edit in any editor or update via the CLI or API and Binder keeps both consistent.
 - **Transaction log**: Every change is recorded as an append-only entry in `.binder/transactions.jsonl`, so state can be rebuilt, audited, and replayed reliably.

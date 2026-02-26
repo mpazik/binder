@@ -20,6 +20,7 @@ docs/*
 docs/concepts/drafts/
 !docs/contributing/
 !docs/guides/
+!docs/screenshots/
 
 # Dependency directories
 node_modules/
