@@ -14,6 +14,13 @@ pids
 .binder-dev/
 docs-dev/
 
+# Docs — ignore all except curated public content
+docs/*
+!docs/concepts/
+docs/concepts/drafts/
+!docs/contributing/
+!docs/guides/
+
 # Dependency directories
 node_modules/
 jspm_packages/
