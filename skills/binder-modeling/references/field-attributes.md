@@ -4,18 +4,25 @@ Attach structured metadata to field values without creating separate entities.
 
 ## Defining Attributes
 
-Attributes are config entities:
+An attribute is a regular `Field` whose values can annotate another field's values. There is no separate `Attribute` type — the runtime rejects `type: Attribute`.
 
 ```yaml
 - key: role
-  type: Attribute
-  dataType: string
+  type: Field
+  dataType: plaintext
 
 - key: percentage
-  type: Attribute
-  dataType: number
-  min: 0
-  max: 100
+  type: Field
+  dataType: integer
+```
+
+If you need to constrain `role` to a fixed set, use `dataType: option`:
+
+```yaml
+- key: role
+  type: Field
+  dataType: option
+  options: [lead, reviewer, contributor]
 ```
 
 ## Attaching to Fields

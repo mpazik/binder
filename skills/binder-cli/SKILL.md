@@ -44,7 +44,7 @@ Use `-f/--fields` to include or traverse relations inline — same syntax as `se
 binder search type=Task status=active       # Filter by field values
 binder search "some text"                   # Full-text search
 binder search type=Task -f partOf(title)    # Include fields from related records
-binder search type=Task -o !priority        # Order by (! = descending)
+binder search type=Task -o '!priority'      # Order by (! = descending)
 binder search type=Task --limit 10          # Limit results
 ```
 
@@ -89,7 +89,8 @@ For 3+ changes or mixed namespace operations, use transaction files instead.
 Delimiter depends on the field's text format (check `binder schema`):
 - Comma-delimited (identifier, word, phrase, semver): `field=a,b,c`
 - Newline-delimited (line, uri, filepath): `field=$'a\nb\nc'`
-- Block formats (paragraph, block, section, document): use transaction files
+- Blank-line-delimited (paragraph, block): `field=$'first block\n\nsecond block'`
+- Section/document: use transaction files (content contains headers and blank lines that don't escape cleanly in shell)
 
 ### Relations
 
@@ -141,7 +142,6 @@ List field mutations in transaction files: `["insert", value]`, `["insert", valu
 binder tx log                        # Recent transactions
 binder tx log --limit 5              # Last N
 binder tx read <ref>                 # Read a transaction
-binder tx verify                     # Check DB/log consistency
 binder undo [N]                      # Undo last N transactions
 binder redo [N]                      # Redo last N undone
 ```

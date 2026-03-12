@@ -53,11 +53,12 @@ Both sides store data. Setting field A on entity X to Y generates a set of field
 
 ## External References
 
-Use the `uri` data type for links to external resources:
+Use the `uri` data type for links to external resources — these are not relations, just typed URLs:
 
 ```yaml
 - key: githubIssue
   type: Field
   dataType: uri
-  uriPrefix: "https://github.com/"
 ```
+
+For multiple external links per record, prefer the built-in `references: uri[]` field rather than defining a custom one.
