@@ -1289,10 +1289,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
   inputs: ChangesetsInput<N>,
   schema: NamespaceSchema<N>,
   lastEntityId: EntityId,
-): ResultAsync<
-  EntitiesChangeset<N>,
-  ErrorObject<{ errors?: ChangesetValidationError[] }>
-> => {
+): ResultAsync<EntitiesChangeset<N>, ErrorObject> => {
   const normalizedInputs = inputs.map((raw) => normalizeInput(raw, schema));
 
   const refToUidResult =
@@ -1331,7 +1328,7 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
   const errorResults = changesetResults.filter(isErr);
   if (errorResults.length > 0) {
     return fail("changeset-input-process-failed", "failed creating changeset", {
-      errors: errorResults.flatMap((it) => it.error),
+      data: { errors: errorResults.flatMap((it) => it.error) },
     });
   }
 

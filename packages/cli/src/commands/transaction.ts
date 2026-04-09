@@ -139,8 +139,7 @@ export const transactionImportHandler: CommandHandlerWithDb<
         result,
         `Failed to import transaction ${i + 1}${suffix}`,
         {
-          transactionIndex: i + 1,
-          author: input.author,
+          data: { transactionIndex: i + 1, author: input.author },
         },
       );
     }

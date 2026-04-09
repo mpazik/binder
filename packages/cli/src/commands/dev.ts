@@ -32,7 +32,7 @@ export const backupHandler: CommandHandlerWithDb = async ({
   if (!(await fs.exists(transactionLogPath)))
     return err(
       createError("no-transaction-log", "No transaction log to backup", {
-        path: transactionLogPath,
+        data: { path: transactionLogPath },
       }),
     );
 
@@ -44,7 +44,6 @@ export const backupHandler: CommandHandlerWithDb = async ({
       createError(
         "invalid-transaction",
         "Transaction log verification failed: " + verifyResult.error.message,
-        verifyResult.data,
       ),
     );
   }
@@ -64,7 +63,7 @@ export const backupHandler: CommandHandlerWithDb = async ({
         createError(
           "backup-rename-failed",
           "Failed to rename existing backup",
-          { error: moveResult.error },
+          { data: { error: moveResult.error } },
         ),
       );
     renamedBackup = timestampedBackup;
@@ -77,7 +76,7 @@ export const backupHandler: CommandHandlerWithDb = async ({
   if (isErr(copyResult))
     return err(
       createError("backup-copy-failed", "Failed to create backup", {
-        error: copyResult.error,
+        data: { error: copyResult.error },
       }),
     );
 
@@ -120,7 +119,7 @@ export const resetHandler: CommandHandlerWithDb = async (ctx) => {
       createError(
         "backup-verification-failed",
         "Backup file verification failed",
-        { error: verifyResult.error },
+        { data: { error: verifyResult.error } },
       ),
     );
 
@@ -146,7 +145,7 @@ export const resetHandler: CommandHandlerWithDb = async (ctx) => {
       createError(
         "restore-failed",
         "Failed to restore backup to transaction log",
-        { error: copyResult.error },
+        { data: { error: copyResult.error } },
       ),
     );
 
@@ -182,7 +181,7 @@ export const resetHandler: CommandHandlerWithDb = async (ctx) => {
       createError(
         "db-repair-failed",
         "Failed to rebuild database from transaction log",
-        { error: repairResult.error },
+        { data: { error: repairResult.error } },
       ),
     );
 

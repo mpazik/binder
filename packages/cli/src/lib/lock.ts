@@ -51,7 +51,7 @@ const tryAcquireLock = async (
   if (exists) {
     return err(
       createError("lock-exists", "Lock file already exists", {
-        path: lockPath,
+        data: { path: lockPath },
       }),
     );
   }
@@ -82,7 +82,7 @@ export const acquireLock = async (
           createError(
             "lock-cleanup-failed",
             "Failed to clean stale lock file",
-            { path: lockPath, error: cleanResult.error },
+            { data: { path: lockPath, error: cleanResult.error } },
           ),
         );
       }
@@ -98,7 +98,7 @@ export const acquireLock = async (
     createError(
       "lock-acquire-failed",
       `Another Binder process is running. Failed to acquire lock after ${LOCK_MAX_RETRIES} attempts.`,
-      { path: lockPath },
+      { data: { path: lockPath } },
     ),
   );
 };
@@ -127,8 +127,7 @@ export const releaseLock = async (
   if (isErr(unlinkResult))
     return err(
       createError("lock-release-failed", "Failed to remove lock file", {
-        path: lockPath,
-        error: unlinkResult.error,
+        data: { path: lockPath, error: unlinkResult.error },
       }),
     );
 

@@ -259,7 +259,7 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
           return fail(
             "invalid_filter_field",
             `Filter field '${fieldKey}' is not defined in schema`,
-            { fieldKey },
+            { data: { fieldKey } },
           );
         }
 

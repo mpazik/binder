@@ -41,7 +41,7 @@ export const interpolatePlain = (
       const closeIndex = template.indexOf("}", i + 1);
       if (closeIndex === -1) {
         return fail("unclosed-bracket", "Unclosed bracket in template", {
-          position: i,
+          data: { position: i },
         });
       }
 
@@ -204,9 +204,7 @@ export const extractFieldValues = (
             "path_template_mismatch",
             "Path does not match the template",
             {
-              template,
-              data,
-              position: dataIndex,
+              data: { template, path: data, position: dataIndex },
             },
           );
         }
@@ -219,9 +217,7 @@ export const extractFieldValues = (
           "path_template_mismatch",
           "Path does not match the template",
           {
-            template,
-            data,
-            position: dataIndex,
+            data: { template, path: data, position: dataIndex },
           },
         );
       }
@@ -234,7 +230,7 @@ export const extractFieldValues = (
       const closeIndex = template.indexOf("}", templateIndex + 1);
       if (closeIndex === -1) {
         return fail("unclosed-bracket", "Unclosed bracket in template", {
-          position: templateIndex,
+          data: { position: templateIndex },
         });
       }
 
@@ -245,7 +241,7 @@ export const extractFieldValues = (
           return fail(
             "path_template_mismatch",
             "Path does not match the template",
-            { template, data, position: dataIndex },
+            { data: { template, path: data, position: dataIndex } },
           );
         }
         templateIndex++;
@@ -264,7 +260,7 @@ export const extractFieldValues = (
           return fail(
             "path_template_mismatch",
             "Path does not match the template",
-            { template, data, position: dataIndex },
+            { data: { template, path: data, position: dataIndex } },
           );
         }
         value = data.slice(dataIndex, literalIndex);
@@ -284,9 +280,7 @@ export const extractFieldValues = (
         "path_template_mismatch",
         "Path does not match the template",
         {
-          template,
-          data,
-          position: dataIndex,
+          data: { template, path: data, position: dataIndex },
         },
       );
     }
@@ -297,9 +291,7 @@ export const extractFieldValues = (
 
   if (dataIndex !== data.length) {
     return fail("path_template_mismatch", "Path does not match the template", {
-      template,
-      data,
-      extraData: data.slice(dataIndex),
+      data: { template, path: data, extraData: data.slice(dataIndex) },
     });
   }
 

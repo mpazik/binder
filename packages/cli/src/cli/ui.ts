@@ -17,7 +17,7 @@ import {
   type Transaction,
   type ValueChange,
 } from "@binder/db";
-import { type ErrorObject, isErr, noop } from "@binder/utils";
+import { type ErrorObject, formatError, isErr, noop } from "@binder/utils";
 import {
   serialize,
   type SerializeFormat,
@@ -201,32 +201,8 @@ const error = (message: string) => {
   eprintln(textErrBold("Error:") + " " + message);
 };
 
-type ValidationError = { field?: string; fieldKey?: string; message?: string };
-
 const printError = (errorObj: ErrorObject) => {
-  eprintln(textErrBold("Error:") + " " + (errorObj.message || errorObj.key));
-
-  if (
-    errorObj.key === "changeset-input-process-failed" &&
-    errorObj.data &&
-    "errors" in errorObj.data
-  ) {
-    const errors = errorObj.data.errors as ValidationError[] | undefined;
-    if (Array.isArray(errors) && errors.length > 0) {
-      eprintln(textErr("Validation errors:"));
-      for (const validationError of errors) {
-        const fieldName = validationError.field ?? validationError.fieldKey;
-        const message = fieldName
-          ? `Field '${textInfo(fieldName)}': ${validationError.message ?? formatValue(validationError, "    ")}`
-          : (validationError.message ?? formatValue(validationError, "    "));
-        eprintln(`  - ${message}`);
-      }
-      return;
-    }
-  }
-
-  eprintln(textDim("Error details:"));
-  eprintln(formatValue(errorObj.data, ""));
+  eprintln(textErrBold(formatError(errorObj)));
 };
 
 const stripNulls = (_: string, v: unknown) => (v === null ? undefined : v);

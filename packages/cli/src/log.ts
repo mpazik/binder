@@ -94,7 +94,7 @@ export const createLogger = async (
   const dirResult = await fs.mkdir(dir, { recursive: true });
   if (isErr(dirResult))
     return wrapError(dirResult, "Failed to create logs directory", {
-      path: dir,
+      data: { path: dir },
     });
 
   await rotateLogFile(logFilePath);

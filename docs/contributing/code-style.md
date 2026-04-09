@@ -158,7 +158,23 @@ export const createUserId = (): UserId => createUid(7, "u") as UserId;
 
 ### No Exceptions, Only Results
 
-No `try-catch` or `throw`. All fallible operations return `Result<T, E>` or `ResultAsync<T, E>`. Errors use `ErrorObject: { key, message, data? }`.
+No `try-catch` or `throw`. All fallible operations return `Result<T, E>` or `ResultAsync<T, E>`.
+
+Errors use `ErrorObject`:
+
+```typescript
+type ErrorObject = {
+  key: string;        // static identifier, telemetry-safe, never interpolated
+  message: string;    // human-readable, may contain user values
+  cause?: ErrorObject; // structured chain replacing string concatenation
+  suggestion?: string; // how to fix it
+  data?: object;      // optional local-only context
+};
+```
+
+Every error answers three questions: what failed (message), why (cause chain), and what to do next (suggestion).
+
+**Error keys** are static string literals in kebab-case. Never interpolate runtime values into keys. For telemetry, use `errorChain(error)` to extract the key array from a cause chain.
 
 Wrap external calls that may throw with `tryCatch`:
 
@@ -173,15 +189,20 @@ Use `fail()` for early-exit errors:
 
 ```typescript
 if (!user) return fail("user-not-found", "User not found");
-if (!user.isActive) return fail("user-inactive", "User is not active");
+if (!config) return fail("missing-config", "No config file", {
+  suggestion: "Run binder init to create a workspace",
+});
 ```
 
-Use `wrapError` to add context when propagating a failure:
+Use `wrapError` to add context when propagating a failure. It sets the original error as `cause` instead of concatenating messages:
 
 ```typescript
 const configResult = await loadConfig();
 if (isErr(configResult)) {
-  return wrapError(configResult, "Failed to initialize app", { component: "bootstrap" });
+  // Inherits key from original error
+  return wrapError(configResult, "Failed to initialize app");
+  // Or provide a new key
+  return wrapError(configResult, "init-failed", "Failed to initialize app");
 }
 ```
 

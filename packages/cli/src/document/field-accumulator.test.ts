@@ -44,7 +44,7 @@ describe("field-accumulator", () => {
         createError(
           "field-conflict",
           `Conflicting values for field '${expected.fieldPath.join(".")}'`,
-          expected,
+          { data: expected },
         ),
       ),
     );

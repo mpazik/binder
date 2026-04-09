@@ -56,7 +56,7 @@ export const verifySync = async (
   if (isErr(versionResult))
     return err(
       createError("version-fetch-failed", "Failed to fetch database version", {
-        error: versionResult.error,
+        data: { error: versionResult.error },
       }),
     );
 
@@ -260,7 +260,7 @@ export const undoTransactions = async (
           createError(
             "log-db-mismatch",
             `Transaction log and database are out of sync — run \`binder tx repair\` to fix`,
-            { dbHash: dbTx.hash, logHash: logTx.hash, step: i + 1 },
+            { data: { dbHash: dbTx.hash, logHash: logTx.hash, step: i + 1 } },
           ),
         );
     }

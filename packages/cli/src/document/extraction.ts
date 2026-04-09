@@ -193,7 +193,7 @@ export const extractRaw = (
 
   return err(
     createError("unsupported_file_type", "Unsupported file type", {
-      path: filePath,
+      data: { path: filePath },
     }),
   );
 };

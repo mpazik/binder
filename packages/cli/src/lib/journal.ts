@@ -48,8 +48,7 @@ const readLinesFromEnd = async function* (
     const sliceResult = await fs.slice(path, readStart, position);
     if (isErr(sliceResult)) {
       yield fail("file-read-error", "Failed to read transaction log", {
-        path,
-        error: sliceResult.error,
+        data: { path, error: sliceResult.error },
       });
       return;
     }
@@ -102,8 +101,7 @@ const readLinesFromBeginning = async function* (
     const sliceResult = await fs.slice(path, position, readEnd);
     if (isErr(sliceResult)) {
       yield fail("file-read-error", "Failed to read transaction log", {
-        path,
-        error: sliceResult.error,
+        data: { path, error: sliceResult.error },
       });
       return;
     }
@@ -302,8 +300,7 @@ export const verifyLog = async (
         "parse-error",
         `Failed to parse transaction at line ${lineNumber}`,
         {
-          line: lineNumber,
-          error: result.error,
+          data: { line: lineNumber, error: result.error },
         },
       );
 
@@ -313,9 +310,11 @@ export const verifyLog = async (
         "chain-error",
         `Transaction chain broken at transaction ${lineNumber}`,
         {
-          transactionId: transaction.id,
-          expectedPrevious: previousHash,
-          actualPrevious: transaction.previous,
+          data: {
+            transactionId: transaction.id,
+            expectedPrevious: previousHash,
+            actualPrevious: transaction.previous,
+          },
         },
       );
 
@@ -336,9 +335,11 @@ export const verifyLog = async (
           "hash-mismatch",
           `Transaction hash mismatch at transaction ${lineNumber}`,
           {
-            transactionId: transaction.id,
-            expectedHash,
-            actualHash: transaction.hash,
+            data: {
+              transactionId: transaction.id,
+              expectedHash,
+              actualHash: transaction.hash,
+            },
           },
         );
     }
@@ -356,7 +357,7 @@ export const rehashLog = async (
 ): ResultAsync<{ transactionsRehashed: number; backupPath: string }> => {
   if (!(await fs.exists(path)))
     return fail("file-not-found", "Transaction log file does not exist", {
-      path,
+      data: { path },
     });
 
   const timestamp = getTimestampForFileName();

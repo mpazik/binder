@@ -20,10 +20,10 @@ export const err = <E>(error: E): Err<E> => ({ error });
 export const okVoid: Ok<void> = ok(undefined);
 
 export const isOk = <T, E>(result: Result<T, E>): result is Ok<T> => {
-  return "data" in result;
+  return result.error === undefined;
 };
 export const isErr = <T, E>(result: Result<T, E>): result is Err<E> => {
-  return "error" in result;
+  return result.error !== undefined;
 };
 
 export type ResultAsync<T, E = ErrorObject> = Promise<Result<T, E>>;

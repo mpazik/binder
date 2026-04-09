@@ -284,13 +284,14 @@ export const getDocumentContext = async (
 ): ResultAsync<DocumentContext> => {
   const uri = document.uri;
   const parsed = documentCache.getParsed(document);
-  if (!parsed) return fail("parse-failed", "Failed to parse document", { uri });
+  if (!parsed)
+    return fail("parse-failed", "Failed to parse document", { data: { uri } });
 
   const filePath = fileURLToPath(uri);
   const namespace = namespaceFromSnapshotPath(filePath, runtime.config.paths);
   if (!namespace)
     return fail("namespace-not-found", "Could not determine namespace", {
-      uri,
+      data: { uri },
     });
 
   const schemaResult = await runtime.kg.getSchema(namespace);
@@ -308,8 +309,7 @@ export const getDocumentContext = async (
   );
   if (navigationItem === undefined)
     return fail("navigation-not-found", "No navigation item for path", {
-      uri,
-      relativePath,
+      data: { uri, relativePath },
     });
 
   const typeDef = extractTypeFromNavigation(navigationItem, schema);
@@ -327,7 +327,9 @@ export const getDocumentContext = async (
 
   const documentType = getDocumentFileType(filePath);
   if (!documentType)
-    return fail("unknown-document-type", "Unknown document type", { uri });
+    return fail("unknown-document-type", "Unknown document type", {
+      data: { uri },
+    });
 
   const baseEntity = entityContextResult.data.entities[0] ?? {};
   const extractResult = extract(

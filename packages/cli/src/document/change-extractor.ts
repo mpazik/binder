@@ -137,7 +137,7 @@ const lookupSingleEntity = async (
     return fail(
       "invalid_record_count",
       "Path fields must resolve to exactly one record",
-      { pathFields, recordCount: kgResult.data.items.length },
+      { data: { pathFields, recordCount: kgResult.data.items.length } },
     );
   }
 
@@ -333,7 +333,7 @@ export const extractFileChanges = async <N extends NamespaceEditable>(
     return fail(
       "navigation_item_not_found",
       "Not found item in navigation config for the path",
-      { path: relativePath },
+      { data: { path: relativePath } },
     );
   }
 
@@ -461,9 +461,11 @@ const detectCrossFileConflicts = <N extends NamespaceEditable>(
         "field-conflict",
         `Conflicting changes for entity '${ref}': deletion cannot be combined with other updates from different files`,
         {
-          fieldPath: ["$delete"],
-          values: group.map((cs) => ({ value: cs })),
-          baseValue: null,
+          data: {
+            fieldPath: ["$delete"],
+            values: group.map((cs) => ({ value: cs })),
+            baseValue: null,
+          },
         },
       );
     }
@@ -480,9 +482,11 @@ const detectCrossFileConflicts = <N extends NamespaceEditable>(
             "field-conflict",
             `Conflicting values for field '${key}' on entity '${ref}' from different files`,
             {
-              fieldPath: [key],
-              values: [{ value: existing }, { value }],
-              baseValue: null,
+              data: {
+                fieldPath: [key],
+                values: [{ value: existing }, { value }],
+                baseValue: null,
+              },
             },
           );
         }

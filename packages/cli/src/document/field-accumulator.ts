@@ -34,7 +34,7 @@ export type FieldConflictData = {
   baseValue: FieldValue;
 };
 
-export type FieldConflictError = ErrorObject<FieldConflictData>;
+export type FieldConflictError = ErrorObject;
 
 type StoredField = {
   value: FieldValue;
@@ -85,12 +85,14 @@ export const createFieldAccumulator = (
 
       conflicts.push(
         createError("field-conflict", `Conflicting values for field '${key}'`, {
-          fieldPath,
-          values: [
-            { value: existing.value, source: existing.source },
-            { value, source },
-          ],
-          baseValue: baseValue as FieldValue,
+          data: {
+            fieldPath,
+            values: [
+              { value: existing.value, source: existing.source },
+              { value, source },
+            ],
+            baseValue: baseValue as FieldValue,
+          },
         }),
       );
     },

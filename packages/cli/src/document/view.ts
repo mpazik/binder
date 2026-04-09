@@ -209,7 +209,7 @@ const getDelimiterForSlotPosition = (
 
 const literalMismatch = (context?: string) =>
   createError("literal-mismatch", "View and snapshot content do not match", {
-    context,
+    data: { context },
   });
 
 const getSoleFieldSlotFromParagraph = (

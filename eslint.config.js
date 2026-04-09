@@ -8,6 +8,9 @@ import ts from "typescript-eslint";
 
 const gitignorePath = fileURLToPath(new URL("./.gitignore", import.meta.url));
 
+const staticErrorKeyMessage =
+  "Error key must be a static string literal, not a template literal. Interpolate runtime values into the message instead.";
+
 export default ts.config(
   includeIgnoreFile(gitignorePath),
   js.configs.recommended,
@@ -50,6 +53,26 @@ export default ts.config(
           selector: "ThrowStatement",
           message:
             "Throwing exceptions is not allowed. Use `Result` or ResultAsync utility from @binder/utils.",
+        },
+        {
+          selector:
+            "CallExpression[callee.name='fail'][arguments.0.type='TemplateLiteral']",
+          message: staticErrorKeyMessage,
+        },
+        {
+          selector:
+            "CallExpression[callee.name='createError'][arguments.0.type='TemplateLiteral']",
+          message: staticErrorKeyMessage,
+        },
+        {
+          selector:
+            "CallExpression[callee.name='wrapError'][arguments.2.type='Literal'][arguments.1.type='TemplateLiteral']",
+          message: staticErrorKeyMessage,
+        },
+        {
+          selector:
+            "CallExpression[callee.name='wrapError'][arguments.3][arguments.1.type='TemplateLiteral']",
+          message: staticErrorKeyMessage,
         },
       ],
     },

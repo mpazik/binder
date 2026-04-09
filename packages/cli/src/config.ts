@@ -67,7 +67,7 @@ const loadConfigFile = async <T extends z.ZodTypeAny>(
           "config-parse-failed",
           `Failed to parse config at ${path}`,
           {
-            error,
+            data: { error },
           },
         ),
     );
@@ -85,7 +85,7 @@ const loadConfigFile = async <T extends z.ZodTypeAny>(
     () => schema.parse(rawConfig),
     (error) =>
       createError("config-parse-failed", `Failed to parse config at ${path}`, {
-        error,
+        data: { error },
       }),
   );
 };

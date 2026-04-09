@@ -277,9 +277,7 @@ export const resolvePath = (
 
     if (value == null) {
       return fail("missing-path-field", "Path field is null or undefined", {
-        fieldName,
-        depth,
-        pathPattern,
+        data: { fieldName, depth, pathPattern },
       });
     }
 

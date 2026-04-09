@@ -141,12 +141,12 @@ const createPatchFormatError = (patch: string): ErrorObject => {
     return createError(
       "invalid-patch-format",
       "Invalid patch format. If your value contains spaces, quote the entire patch: 'field=value with spaces'",
-      { patch },
+      { data: { patch } },
     );
   }
 
   return createError("invalid-patch-format", "Invalid patch format", {
-    patch,
+    data: { patch },
   });
 };
 
@@ -158,8 +158,7 @@ const parseYamlValue = (
     () => YAML.parse(value) as FieldChangeInput,
     (error) =>
       createError("invalid-yaml-format", "Invalid YAML/JSON format", {
-        patch,
-        error,
+        data: { patch, error },
       }),
   );
 
@@ -234,7 +233,7 @@ export const parseFieldChange = (
         "missing-accessor",
         "Remove by position requires an accessor (e.g., :0, :first, :last)",
         {
-          patch: fieldChange,
+          data: { patch: fieldChange },
         },
       );
     }
@@ -242,8 +241,7 @@ export const parseFieldChange = (
   }
 
   return fail("invalid-operator", "Invalid operator", {
-    operator,
-    patch: fieldChange,
+    data: { operator, patch: fieldChange },
   });
 };
 
@@ -366,7 +364,7 @@ export const parsePatches = (
     const fieldDef = schema.fields[fieldKey];
     if (!fieldDef)
       return fail("field-not-found", `Unknown field: ${fieldKey}`, {
-        field: fieldKey,
+        data: { field: fieldKey },
       });
 
     const fieldChangeResult = parseFieldChange(patch, fieldDef);
@@ -383,7 +381,7 @@ export const parsePatches = (
         return fail(
           "duplicate-field-patch",
           `Field '${fieldKey}' has conflicting patches. Use a single patch per field, or combine mutations (+=, -=)`,
-          { field: fieldKey },
+          { data: { field: fieldKey } },
         );
       }
 

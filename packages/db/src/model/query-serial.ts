@@ -285,7 +285,7 @@ const parseIncludesInner = (input: string): Result<Includes> => {
       // Simple field: "title"
       if (!IDENTIFIER_FORMAT_PATTERN.test(seg)) {
         return fail("invalid-field-name", `Invalid field name: '${seg}'`, {
-          field: seg,
+          data: { field: seg },
         });
       }
       includes[seg] = true;
@@ -296,21 +296,21 @@ const parseIncludesInner = (input: string): Result<Includes> => {
         return fail(
           "invalid-field-name",
           `Invalid field name: '${fieldName}'`,
-          { field: fieldName },
+          { data: { field: fieldName } },
         );
       }
 
       const closeBracketIdx = seg.indexOf("]", bracketIdx);
       if (closeBracketIdx === -1) {
         return fail("unmatched-bracket", "Unmatched opening bracket", {
-          field: fieldName,
+          data: { field: fieldName },
         });
       }
 
       const filterStr = seg.slice(bracketIdx + 1, closeBracketIdx).trim();
       if (!filterStr) {
         return fail("empty-filter", "Empty filter in brackets", {
-          field: fieldName,
+          data: { field: fieldName },
         });
       }
 
@@ -326,7 +326,7 @@ const parseIncludesInner = (input: string): Result<Includes> => {
             "unmatched-paren",
             "Unmatched parenthesis after bracket",
             {
-              field: fieldName,
+              data: { field: fieldName },
             },
           );
         }
@@ -344,13 +344,13 @@ const parseIncludesInner = (input: string): Result<Includes> => {
         return fail(
           "invalid-field-name",
           `Invalid field name: '${fieldName}'`,
-          { field: fieldName },
+          { data: { field: fieldName } },
         );
       }
 
       if (!seg.endsWith(")")) {
         return fail("unmatched-paren", "Unmatched opening parenthesis", {
-          field: fieldName,
+          data: { field: fieldName },
         });
       }
 

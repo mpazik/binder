@@ -93,8 +93,7 @@ export const loadBlueprint = async (
   const contentResult = await fs.readFile(blueprintPath);
   if (isErr(contentResult))
     return fail("blueprint-read-error", "Failed to read blueprint file", {
-      path: blueprintPath,
-      error: contentResult.error,
+      data: { path: blueprintPath, error: contentResult.error },
     });
 
   const parseResult = parseTransactionInputContent(
@@ -104,8 +103,7 @@ export const loadBlueprint = async (
   );
   if (isErr(parseResult))
     return fail("blueprint-validation-error", parseResult.error.message, {
-      path: blueprintPath,
-      ...parseResult.error.data,
+      data: { path: blueprintPath, ...parseResult.error.data },
     });
 
   return ok(parseResult.data);

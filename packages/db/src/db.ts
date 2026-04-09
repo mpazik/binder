@@ -1,14 +1,7 @@
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
-import {
-  createError,
-  type Result,
-  ok,
-  isErr,
-  tryCatch,
-  serializeErrorData,
-} from "@binder/utils";
+import { createError, type Result, ok, isErr, tryCatch } from "@binder/utils";
 import { Database as SqliteDatabase, drizzle, migrate } from "./sqlite.bun.ts";
 import * as coreSchema from "./schema";
 
@@ -127,7 +120,7 @@ const applyBalancedSqlitePragmas = (
     },
     (error) =>
       createError("db-config-failed", "Failed to apply SQLite configuration", {
-        error: serializeErrorData(error),
+        data: error instanceof Error ? { stack: error.stack } : undefined,
       }),
   );
 
@@ -146,7 +139,7 @@ export const openDb = <TSchema extends DbSchema = typeof coreSchema>(
     () => new SqliteDatabase(dbPath),
     (error) =>
       createError("db-open-failed", `Failed to open database at ${dbPath}`, {
-        error,
+        data: error instanceof Error ? { stack: error.stack } : undefined,
       }),
   );
 
@@ -181,7 +174,7 @@ export const openDb = <TSchema extends DbSchema = typeof coreSchema>(
         () => migrate(db, { migrationsFolder }),
         (error) =>
           createError("db-migration-failed", "Failed to run migrations", {
-            error: serializeErrorData(error),
+            data: error instanceof Error ? { stack: error.stack } : undefined,
           }),
       );
 
@@ -201,7 +194,7 @@ export const openDb = <TSchema extends DbSchema = typeof coreSchema>(
             "db-migration-failed",
             "Failed to run custom migration logic",
             {
-              error: serializeErrorData(error),
+              data: error instanceof Error ? { stack: error.stack } : undefined,
             },
           ),
       );

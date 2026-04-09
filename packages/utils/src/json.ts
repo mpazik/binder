@@ -1,5 +1,5 @@
 import { type Result, tryCatch } from "./result.ts";
-import { createError, serializeErrorData } from "./error.ts";
+import { createError } from "./error.ts";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue =
@@ -15,7 +15,13 @@ export const parseJson = <T>(
 ): Result<T> =>
   tryCatch(
     () => JSON.parse(text) as T,
-    (error) => createError("invalid-json", message, serializeErrorData(error)),
+    (error) =>
+      createError("invalid-json", message, {
+        data:
+          error instanceof Error && error.stack
+            ? { stack: error.stack }
+            : undefined,
+      }),
   );
 
 export const stringifyJson = <T>(data: T): string => JSON.stringify(data);

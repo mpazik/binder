@@ -273,8 +273,8 @@ const createValidateDataType =
             fieldDef.dataType;
           return fail(
             "validation-error",
-            `"${preview}" (at index ${i}) is not a valid ${format}: ${result.error.message ?? result.error.key}`,
-            { originalError: result.error },
+            `"${preview}" (at index ${i}) is not a valid ${format}: ${result.error.message}`,
+            { data: { originalError: result.error } },
           );
         }
       }

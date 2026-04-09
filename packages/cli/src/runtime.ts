@@ -137,7 +137,7 @@ export const initializeMinimalRuntime = async (
   if (isErr(globalConfigResult)) {
     return err(
       createError("config-error", "Failed to load global config", {
-        cause: globalConfigResult.error,
+        data: { cause: globalConfigResult.error },
       }),
     );
   }
@@ -168,8 +168,7 @@ export const initializeRuntime = async (
   if (isErr(configResult)) {
     return err(
       createError("config-error", "Failed to load workspace config", {
-        root,
-        cause: configResult.error,
+        data: { root, cause: configResult.error },
       }),
     );
   }
@@ -332,7 +331,7 @@ export const runtime = <TArgs extends object = object>(
       if (isErr(rootResult)) {
         return err(
           createError("workspace-error", "Failed to find binder root", {
-            cause: rootResult.error,
+            data: { cause: rootResult.error },
           }),
         );
       }

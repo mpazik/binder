@@ -41,7 +41,7 @@ const parseJsonl = (content: string): Result<unknown[]> => {
     const result = parseJson(line);
     if (isErr(result))
       return wrapError(result, "parse-error", "Failed to parse JSONL line", {
-        line,
+        data: { line },
       });
     results.push(result.data);
   }

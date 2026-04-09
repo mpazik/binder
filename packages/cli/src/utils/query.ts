@@ -74,7 +74,7 @@ export const parseStringQuery = (
       return fail(
         "invalid-placeholder",
         `Invalid placeholder format: {${fieldName}}`,
-        { fieldName },
+        { data: { fieldName } },
       );
     }
     if (depth > parents.length) {
@@ -82,8 +82,7 @@ export const parseStringQuery = (
         "context-not-found",
         `Parent context at index ${depth} not found`,
         {
-          parentIndex: depth,
-          stackSize: parents.length,
+          data: { parentIndex: depth, stackSize: parents.length },
         },
       );
     }
