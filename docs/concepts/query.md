@@ -94,7 +94,7 @@ Computed fields are only included in the response when explicitly listed in `inc
 ### Serial Format
 
 A compact text representation for CLI, URLs, and views — a lossy subset of the full JSON format. Each query parameter has its own independent serial grammar:
-- **Filters**: `type=Task status=done priority>=3` or `deployment issues type=Task`. Plain text tokens (without an operator) are collected into a `$text` filter for full-text search across plaintext and richtext fields
+- **Filters**: `type=Task status=done priority>=3` or `deployment issues type=Task`. Plain text tokens (without an operator) are collected into a `$text` filter for full-text search across plaintext and richtext fields. When the same field appears multiple times, compatible values (equality and `in`) are merged into a single `in` filter (e.g. `status=active status=pending` → `status:in=active,pending`); incompatible operators are overwritten by the last occurrence
 - **Includes**: `title,status,project(title,owner(name,email))`. Parentheses for nesting
 - **OrderBy**: `!priority,createdAt`
 

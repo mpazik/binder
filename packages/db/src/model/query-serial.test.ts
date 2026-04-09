@@ -143,6 +143,46 @@ describe("query-serial", () => {
         ));
     });
 
+    describe("duplicate field merging", () => {
+      it("merges two equality values into in", () =>
+        check(["status=active", "status=pending"], {
+          status: { op: "in", value: ["active", "pending"] },
+        }));
+
+      it("merges three equality values into in", () =>
+        check(["status=active", "status=pending", "status=draft"], {
+          status: { op: "in", value: ["active", "pending", "draft"] },
+        }));
+
+      it("merges equality into existing in", () =>
+        check(["status:in=active,pending", "status=draft"], {
+          status: { op: "in", value: ["active", "pending", "draft"] },
+        }));
+
+      it("merges in into existing equality", () =>
+        check(["status=active", "status:in=pending,draft"], {
+          status: { op: "in", value: ["active", "pending", "draft"] },
+        }));
+
+      it("merges two in filters", () =>
+        check(["status:in=active,pending", "status:in=draft,complete"], {
+          status: {
+            op: "in",
+            value: ["active", "pending", "draft", "complete"],
+          },
+        }));
+
+      it("overwrites when operators are incompatible", () =>
+        check(["priority>3", "priority<7"], {
+          priority: { op: "lt", value: 7 },
+        }));
+
+      it("merges equality with numeric values", () =>
+        check(["priority=1", "priority=2", "priority=3"], {
+          priority: { op: "in", value: [1, 2, 3] },
+        }));
+    });
+
     describe("edge cases", () => {
       it("returns empty filters for empty input", () => check([], {}));
 
@@ -359,8 +399,8 @@ describe("query-serial", () => {
       it("parses field with underscore", () =>
         check("my_field", { my_field: true }));
 
-      it("parses field starting with underscore", () =>
-        check("_private", { _private: true }));
+      it("rejects field starting with underscore", () =>
+        checkError("_private", "invalid-field-name"));
 
       it("parses field with digits", () => check("field2", { field2: true }));
     });

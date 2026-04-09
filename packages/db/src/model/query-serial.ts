@@ -1,14 +1,15 @@
-import { fail, ok, type Result } from "@binder/utils";
-import type {
-  ComplexFilter,
-  Filter,
-  FilterOperator,
-  Filters,
-  Includes,
-  IncludesQuery,
-  OrderBy,
+import { fail, isErr, ok, type Result } from "@binder/utils";
+import {
+  isIncludesQuery,
+  type ComplexFilter,
+  type Filter,
+  type FilterOperator,
+  type Filters,
+  type Includes,
+  type IncludesQuery,
+  type OrderBy,
 } from "./query.ts";
-import { isIncludesQuery } from "./query.ts";
+import { IDENTIFIER_FORMAT_PATTERN } from "./text-format.ts";
 
 // ---------------------------------------------------------------------------
 // Value coercion
@@ -114,6 +115,26 @@ const buildFilter = (match: OperatorMatch): Filter => {
   return { op, value: coerceFilterValue(rawValue) } as ComplexFilter;
 };
 
+const getInValues = (filter: Filter): (string | number)[] | null => {
+  if (typeof filter === "string" || typeof filter === "number") return [filter];
+  if (
+    typeof filter === "object" &&
+    !Array.isArray(filter) &&
+    filter.op === "in" &&
+    Array.isArray(filter.value)
+  )
+    return filter.value;
+  return null;
+};
+
+const mergeFilter = (existing: Filter, incoming: Filter): Filter => {
+  const existingValues = getInValues(existing);
+  const incomingValues = getInValues(incoming);
+  if (existingValues && incomingValues)
+    return { op: "in", value: [...existingValues, ...incomingValues] };
+  return incoming;
+};
+
 /**
  * Parse an array of serial filter tokens into a Filters object.
  *
@@ -137,7 +158,10 @@ export const parseSerialFilters = (parts: string[]): Filters => {
       continue;
     }
 
-    filters[match.field] = buildFilter(match);
+    const newFilter = buildFilter(match);
+    const existing = filters[match.field];
+    filters[match.field] =
+      existing !== undefined ? mergeFilter(existing, newFilter) : newFilter;
   }
 
   if (plainTextParts.length > 0) {
@@ -259,7 +283,7 @@ const parseIncludesInner = (input: string): Result<Includes> => {
 
     if (bracketIdx === -1 && parenIdx === -1) {
       // Simple field: "title"
-      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(seg)) {
+      if (!IDENTIFIER_FORMAT_PATTERN.test(seg)) {
         return fail("invalid-field-name", `Invalid field name: '${seg}'`, {
           field: seg,
         });
@@ -268,7 +292,7 @@ const parseIncludesInner = (input: string): Result<Includes> => {
     } else if (bracketIdx !== -1) {
       // Filtered field: "field[filters]" or "field[filters](subfields)"
       const fieldName = seg.slice(0, bracketIdx).trim();
-      if (!fieldName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(fieldName)) {
+      if (!fieldName || !IDENTIFIER_FORMAT_PATTERN.test(fieldName)) {
         return fail(
           "invalid-field-name",
           `Invalid field name: '${fieldName}'`,
@@ -308,7 +332,7 @@ const parseIncludesInner = (input: string): Result<Includes> => {
         }
         const inner = afterBracket.slice(1, -1);
         const result = parseIncludesInner(inner);
-        if (result.error) return result;
+        if (isErr(result)) return result;
         query.includes = result.data;
       }
 
@@ -316,7 +340,7 @@ const parseIncludesInner = (input: string): Result<Includes> => {
     } else {
       // Nested field without filter: "field(subfields)"
       const fieldName = seg.slice(0, parenIdx).trim();
-      if (!fieldName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(fieldName)) {
+      if (!fieldName || !IDENTIFIER_FORMAT_PATTERN.test(fieldName)) {
         return fail(
           "invalid-field-name",
           `Invalid field name: '${fieldName}'`,
@@ -332,7 +356,7 @@ const parseIncludesInner = (input: string): Result<Includes> => {
 
       const inner = seg.slice(parenIdx + 1, -1);
       const result = parseIncludesInner(inner);
-      if (result.error) return result;
+      if (isErr(result)) return result;
       includes[fieldName] = result.data;
     }
   }
@@ -392,31 +416,6 @@ export const parseSerialIncludes = (input: string): Result<Includes> => {
 // Includes — serialize
 // ---------------------------------------------------------------------------
 
-const serializeIncludesInner = (includes: Includes): string => {
-  const parts: string[] = [];
-
-  for (const [field, value] of Object.entries(includes)) {
-    if (value === false) continue;
-    if (value === true) {
-      parts.push(field);
-    } else if (isIncludesQuery(value)) {
-      const query = value as IncludesQuery;
-      let part = field;
-      if (query.filters && Object.keys(query.filters).length > 0) {
-        part += `[${serializeFilters(query.filters).join(",")}]`;
-      }
-      if (query.includes && Object.keys(query.includes).length > 0) {
-        part += `(${serializeIncludesInner(query.includes)})`;
-      }
-      parts.push(part);
-    } else {
-      parts.push(`${field}(${serializeIncludesInner(value as Includes)})`);
-    }
-  }
-
-  return parts.join(",");
-};
-
 /**
  * Serialize an Includes object into the serial parenthesized format.
  *
@@ -424,8 +423,29 @@ const serializeIncludesInner = (includes: Includes): string => {
  * serializeIncludes({ project: { title: true }, tags: true })
  * // → "project(title),tags"
  */
-export const serializeIncludes = (includes: Includes): string =>
-  serializeIncludesInner(includes);
+export const serializeIncludes = (includes: Includes): string => {
+  const parts: string[] = [];
+
+  for (const [field, value] of Object.entries(includes)) {
+    if (value === false) continue;
+    if (value === true) {
+      parts.push(field);
+    } else if (isIncludesQuery(value)) {
+      let part = field;
+      if (value.filters && Object.keys(value.filters).length > 0) {
+        part += `[${serializeFilters(value.filters).join(",")}]`;
+      }
+      if (value.includes && Object.keys(value.includes).length > 0) {
+        part += `(${serializeIncludes(value.includes)})`;
+      }
+      parts.push(part);
+    } else {
+      parts.push(`${field}(${serializeIncludes(value as Includes)})`);
+    }
+  }
+
+  return parts.join(",");
+};
 
 // ---------------------------------------------------------------------------
 // OrderBy — parse / serialize
