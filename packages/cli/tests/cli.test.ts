@@ -26,8 +26,57 @@ describe("CLI", () => {
     expect(result.stdout).toContain("Commands:");
   });
 
-  it("schema inspection shows types and fields", async () => {
-    await check(["schema", "--types", "Task"], ["Task", "title", "status"]);
+  describe("schema", () => {
+    it("supports --types", async () => {
+      await check(["schema", "--types", "Task"], ["Task", "title", "status"]);
+    });
+
+    it("supports positional type filters", async () => {
+      const taskOnly = await run(["schema", "Task", "--format", "json"], {
+        cwd: dir,
+      });
+      expect(taskOnly.exitCode).toBe(0);
+      expect(Object.keys(JSON.parse(taskOnly.stdout).types)).toEqual(["Task"]);
+
+      const taskAndProject = await run(
+        ["schema", "Task", "Project", "--format", "json"],
+        {
+          cwd: dir,
+        },
+      );
+      expect(taskAndProject.exitCode).toBe(0);
+      expect(
+        Object.keys(JSON.parse(taskAndProject.stdout).types).sort(),
+      ).toEqual(["Project", "Task"]);
+    });
+
+    it("supports field filtering", async () => {
+      const byField = await run(
+        ["schema", "-f", "status", "--format", "json"],
+        {
+          cwd: dir,
+        },
+      );
+      expect(byField.exitCode).toBe(0);
+
+      const parsedByField = JSON.parse(byField.stdout);
+      expect(Object.keys(parsedByField.fields)).toEqual(["status"]);
+
+      const byTypeAndField = await run(
+        ["schema", "Task", "-f", "status", "--format", "json"],
+        { cwd: dir },
+      );
+      expect(byTypeAndField.exitCode).toBe(0);
+
+      const parsedByTypeAndField = JSON.parse(byTypeAndField.stdout);
+      expect(Object.keys(parsedByTypeAndField.types)).toEqual(["Task"]);
+      expect(Object.keys(parsedByTypeAndField.fields)).toEqual(["status"]);
+    });
+
+    it("reports unknown type and field keys with suggestions", async () => {
+      await checkError(["schema", "Taskk"], "Task");
+      await checkError(["schema", "-f", "statsu"], "status");
+    });
   });
 
   it("search with filters and plain text", async () => {

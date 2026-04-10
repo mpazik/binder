@@ -13,6 +13,7 @@ import {
   mockProjectType,
   mockProjectTypeKey,
   mockStatusField,
+  mockStatusFieldKey,
   mockTasksField,
   mockTaskType,
   mockTaskTypeKey,
@@ -20,13 +21,14 @@ import {
   mockUserTypeKey,
 } from "@binder/db/mocks";
 import {
+  getTypeFieldKey,
   predefinedFields,
   type FieldDef,
   type RecordType,
   type TypeDef,
 } from "@binder/db";
 import { groupByToObject } from "@binder/utils";
-import { filterSchemaByTypes } from "./schema-filter.ts";
+import { filterSchema, filterSchemaByTypes } from "./schema-filter.ts";
 
 describe("filterSchemaByTypes", () => {
   const check = (
@@ -43,21 +45,21 @@ describe("filterSchemaByTypes", () => {
     });
   };
 
-  it("should return empty schema for empty type list", () => {
+  it("returns empty schema for empty type list", () => {
     check([], {
       types: [],
       fields: [],
     });
   });
 
-  it("should include simple type", () => {
+  it("includes simple type", () => {
     check([mockUserTypeKey], {
       types: [mockUserType],
       fields: [predefinedFields.name, mockEmailField, mockPartnerField],
     });
   });
 
-  it("should include type with all its fields", () => {
+  it("includes type with all its fields", () => {
     check([mockTaskTypeKey], {
       types: [mockTaskType],
       fields: [
@@ -74,7 +76,7 @@ describe("filterSchemaByTypes", () => {
     });
   });
 
-  it("should include multiple types with their fields", () => {
+  it("includes multiple types with their fields", () => {
     check([mockTaskTypeKey, mockProjectTypeKey], {
       types: [mockTaskType, mockProjectType],
       fields: [
@@ -92,17 +94,63 @@ describe("filterSchemaByTypes", () => {
     });
   });
 
-  it("should return empty schema for non-existent type", () => {
+  it("returns empty schema for non-existent type", () => {
     check([mockNotExistingRecordTypeKey], {
       types: [],
       fields: [],
     });
   });
 
-  it("should ignore non-existent types", () => {
+  it("ignores non-existent types", () => {
     check([mockUserTypeKey, mockNotExistingRecordTypeKey], {
       types: [mockUserType],
       fields: [predefinedFields.name, mockEmailField, mockPartnerField],
+    });
+  });
+});
+
+describe("filterSchema", () => {
+  it("filters by field across all matching types", () => {
+    const filtered = filterSchema(mockRecordSchema, {
+      fieldKeys: [mockStatusFieldKey],
+    });
+
+    const taskStatusOnly = {
+      ...mockTaskType,
+      fields: mockTaskType.fields.filter(
+        (fieldRef) => getTypeFieldKey(fieldRef) === mockStatusFieldKey,
+      ),
+    };
+
+    const projectStatusOnly = {
+      ...mockProjectType,
+      fields: mockProjectType.fields.filter(
+        (fieldRef) => getTypeFieldKey(fieldRef) === mockStatusFieldKey,
+      ),
+    };
+
+    expect(filtered).toEqual({
+      types: groupByToObject([taskStatusOnly, projectStatusOnly], (t) => t.key),
+      fields: groupByToObject([mockStatusField], (f) => f.key),
+    });
+  });
+
+  it("filters by type and field", () => {
+    const filtered = filterSchema(mockRecordSchema, {
+      typeKeys: [mockTaskTypeKey],
+      fieldKeys: [mockStatusFieldKey],
+    });
+
+    const taskStatusOnly = {
+      ...mockTaskType,
+      fields: mockTaskType.fields.filter(
+        (fieldRef) => getTypeFieldKey(fieldRef) === mockStatusFieldKey,
+      ),
+    };
+
+    expect(filtered).toEqual({
+      types: groupByToObject([taskStatusOnly], (t) => t.key),
+      fields: groupByToObject([mockStatusField], (f) => f.key),
     });
   });
 });
