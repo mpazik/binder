@@ -1,3 +1,4 @@
+import { basename, join } from "path";
 import {
   applyConfigChangesetToSchema,
   coreRecordSchema,
@@ -168,8 +169,8 @@ export const logTransaction = (
   const { records, configs, ...rest } = transaction;
   const entry = {
     ...rest,
-    ...(Object.keys(records).length > 0 && { records }),
-    ...(Object.keys(configs).length > 0 && { configs }),
+    ...(isObjectNonEmpty(records) && { records }),
+    ...(isObjectNonEmpty(configs) && { configs }),
   };
   return fs.appendFile(path, JSON.stringify(entry) + "\n");
 };
@@ -354,6 +355,7 @@ export const verifyLog = async (
 export const rehashLog = async (
   fs: FileSystem,
   path: string,
+  options?: { backupDir?: string },
 ): ResultAsync<{ transactionsRehashed: number; backupPath: string }> => {
   if (!(await fs.exists(path)))
     return fail("file-not-found", "Transaction log file does not exist", {
@@ -361,7 +363,13 @@ export const rehashLog = async (
     });
 
   const timestamp = getTimestampForFileName();
-  const backupPath = path.replace(/\.jsonl$/, `-${timestamp}.jsonl.bac`);
+  const backupFileName = basename(path).replace(
+    /\.jsonl$/,
+    `-${timestamp}.jsonl.bac`,
+  );
+  const backupPath = options?.backupDir
+    ? join(options.backupDir, backupFileName)
+    : path.replace(/\.jsonl$/, `-${timestamp}.jsonl.bac`);
 
   const renameResult = await fs.renameFile(path, backupPath);
   if (isErr(renameResult)) return renameResult;
@@ -377,7 +385,7 @@ export const rehashLog = async (
     if (isErr(result)) return result;
 
     const tx = { ...result.data, previous: previousHash };
-    if (Object.keys(tx.configs).length > 0) {
+    if (isObjectNonEmpty(tx.configs)) {
       schema = applyConfigChangesetToSchema(schema, tx.configs);
     }
     const rehashedTx = await withHashTransaction(

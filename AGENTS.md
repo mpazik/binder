@@ -44,7 +44,7 @@ Dev instance commands:
 - `bun run dev init -q --blueprint personal` -- init with PARA schema (Area, Project, Task, Note, Resource) and sample data
 - `bun run dev read <key> --format yaml` -- inspect dev data
 - `bun run dev search <query>` -- search dev data
-- `sqlite3 .binder-dev/binder.db` -- direct SQL queries on dev instance
+- `sqlite3 .binder-dev/data/binder.db` -- direct SQL queries on dev instance
 
 ### Temporary Files
 

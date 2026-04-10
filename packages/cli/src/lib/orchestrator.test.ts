@@ -38,9 +38,9 @@ import {
 import type { FileSystem } from "./filesystem.ts";
 
 describe("orchestrator", () => {
-  const binderPath = mockConfig.paths.binder;
-  const transactionLogPath = `${mockConfig.paths.binder}/${TRANSACTION_LOG_FILE}`;
-  const undoLogPath = `${mockConfig.paths.binder}/${UNDO_LOG_FILE}`;
+  const dataPath = mockConfig.paths.data;
+  const transactionLogPath = `${mockConfig.paths.data}/${TRANSACTION_LOG_FILE}`;
+  const undoLogPath = `${mockConfig.paths.data}/${UNDO_LOG_FILE}`;
   let fs: FileSystem;
   let db: Database;
   let kg: KnowledgeGraph;
@@ -73,7 +73,7 @@ describe("orchestrator", () => {
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
       throwIfError(await logTransactions(fs, transactionLogPath, logTxs));
 
-      const result = await verifySync(fs, kg, binderPath);
+      const result = await verifySync(fs, kg, dataPath);
       const sync = throwIfError(result);
       expect(sync).toEqual(expected);
     };

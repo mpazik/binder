@@ -15,6 +15,8 @@ export const mockConfig: AppConfig = {
   paths: {
     root: "/test",
     binder: `/test/${BINDER_DIR}`,
+    data: `/test/${BINDER_DIR}/data`,
+    backups: `/test/${BINDER_DIR}/data/backups`,
     docs: "/test/docs",
   },
 };
@@ -59,6 +61,8 @@ export const createMockCommandContext = async (): Promise<RuntimeContext> => {
   const fs = createInMemoryFileSystem();
   await fs.mkdir(mockConfig.paths.root);
   await fs.mkdir(mockConfig.paths.binder);
+  await fs.mkdir(mockConfig.paths.data, { recursive: true });
+  await fs.mkdir(mockConfig.paths.backups, { recursive: true });
   await fs.mkdir(mockConfig.paths.docs);
   return {
     config: mockConfig,

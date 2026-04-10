@@ -1,10 +1,9 @@
 import { join, resolve } from "path";
 import process from "node:process";
 import {
-  createError,
   type Err,
-  err,
   type ErrorObject,
+  fail,
   includes,
   isObjectEmpty,
   isErr,
@@ -40,6 +39,7 @@ import {
 } from "./document/navigation.ts";
 import { serializeFormats } from "./utils/serialize.ts";
 import { createViewCache, type ViewLoader } from "./document/view-entity.ts";
+import { migrateLegacyDataLayout } from "./migration.ts";
 
 type RuntimeOptions = {
   logLevel?: LogLevel;
@@ -134,13 +134,10 @@ export const initializeMinimalRuntime = async (
   });
 
   const globalConfigResult = await loadGlobalConfig();
-  if (isErr(globalConfigResult)) {
-    return err(
-      createError("config-error", "Failed to load global config", {
-        data: { cause: globalConfigResult.error },
-      }),
-    );
-  }
+  if (isErr(globalConfigResult))
+    return fail("config-error", "Failed to load global config", {
+      data: { cause: globalConfigResult.error },
+    });
 
   return ok({
     runtime: {
@@ -165,13 +162,10 @@ export const initializeRuntime = async (
   const { globalConfig, fs } = runtime;
 
   const configResult = await loadWorkspaceConfig(root, globalConfig);
-  if (isErr(configResult)) {
-    return err(
-      createError("config-error", "Failed to load workspace config", {
-        data: { root, cause: configResult.error },
-      }),
-    );
-  }
+  if (isErr(configResult))
+    return fail("config-error", "Failed to load workspace config", {
+      data: { root, cause: configResult.error },
+    });
 
   const config = configResult.data;
   const logResult = await createLogger(fs, {
@@ -198,7 +192,16 @@ export const initializeDbRuntime = async (
   close: () => void;
 }> => {
   const { config, log, fs } = context;
-  const dbPath = join(config.paths.binder, DB_FILE);
+
+  const migrateResult = await migrateLegacyDataLayout(context);
+  if (isErr(migrateResult)) {
+    log.error("Failed to migrate workspace data layout", {
+      error: migrateResult.error,
+    });
+    return migrateResult;
+  }
+
+  const dbPath = join(config.paths.data, DB_FILE);
   const dbResult = openCliDb({ path: dbPath, migrate: true });
   if (isErr(dbResult)) {
     log.error("Failed to open database", { error: dbResult.error });
@@ -328,23 +331,17 @@ export const runtime = <TArgs extends object = object>(
       const { fs } = contextInit;
 
       const rootResult = await findBinderRoot(fs);
-      if (isErr(rootResult)) {
-        return err(
-          createError("workspace-error", "Failed to find binder root", {
-            data: { cause: rootResult.error },
-          }),
-        );
-      }
+      if (isErr(rootResult))
+        return fail("workspace-error", "Failed to find binder root", {
+          data: { cause: rootResult.error },
+        });
 
       const root = rootResult.data;
-      if (!root) {
-        return err(
-          createError(
-            "workspace-not-found",
-            "Not in a binder workspace. Use 'binder init' to initialize a new workspace.",
-          ),
+      if (!root)
+        return fail(
+          "workspace-not-found",
+          "Not in a binder workspace. Use 'binder init' to initialize a new workspace.",
         );
-      }
 
       const contextResult = await initializeRuntime(
         { ...contextInit, ...options },
@@ -389,7 +386,7 @@ export const runtimeWithDb = <TArgs extends object = object>(
     const dirResult = await fs.mkdir(paths.binder, { recursive: true });
     if (isErr(dirResult)) return dirResult;
 
-    setupCleanupHandlers(fs, paths.binder);
+    setupCleanupHandlers(fs, paths.data);
 
     const dbResult = await initializeDbRuntime(context);
     if (isErr(dbResult)) return dbResult;

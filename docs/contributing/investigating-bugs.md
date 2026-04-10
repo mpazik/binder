@@ -48,19 +48,19 @@ binder search Task --print-logs --log-level debug
 
 ### SQLite
 
-In dev mode the database is at `.binder-dev/binder.db`. Querying it directly is often the fastest way to check data-layer state:
+In dev mode the database is at `.binder-dev/data/binder.db`. Querying it directly is often the fastest way to check data-layer state:
 
 ```
-sqlite3 .binder-dev/binder.db "SELECT * FROM entities WHERE key = '...'"
-sqlite3 .binder-dev/binder.db ".tables"
+sqlite3 .binder-dev/data/binder.db "SELECT * FROM entities WHERE key = '...'"
+sqlite3 .binder-dev/data/binder.db ".tables"
 ```
 
 ### Transaction log
 
-The file `.binder-dev/transactions.jsonl` is a human-readable append-only log of every transaction. Each line is a JSON object. Useful for checking what actually happened:
+The file `.binder-dev/data/transactions.jsonl` is a human-readable append-only log of every transaction. Each line is a JSON object. Useful for checking what actually happened:
 
 ```
-tail -5 .binder-dev/transactions.jsonl | jq .
+tail -5 .binder-dev/data/transactions.jsonl | jq .
 ```
 
 ## Built-in diagnostic commands
@@ -87,7 +87,7 @@ Document sync is the bidirectional pipeline between Markdown/YAML files on disk 
 Binder tracks file hashes and modification times in the `cli_snapshot_metadata` table. This is how it detects which files changed since the last sync. When sync behaves unexpectedly, check whether the snapshot is stale or missing:
 
 ```
-sqlite3 .binder-dev/binder.db "SELECT path, hash, mtime FROM cli_snapshot_metadata WHERE path LIKE '%your-file%'"
+sqlite3 .binder-dev/data/binder.db "SELECT path, hash, mtime FROM cli_snapshot_metadata WHERE path LIKE '%your-file%'"
 ```
 
 A file modified outside binder (e.g. by git checkout or a text editor without the LSP) will have a stale mtime/hash, causing sync to treat it as modified.
@@ -230,14 +230,14 @@ Sometimes you need to look at the production `.binder/` data without modifying i
 The safest option is to query the database directly with sqlite3 in read-only mode:
 
 ```
-sqlite3 -readonly .binder/binder.db "SELECT * FROM entities WHERE type = '...'"
-sqlite3 -readonly .binder/binder.db ".tables"
+sqlite3 -readonly .binder/data/binder.db "SELECT * FROM entities WHERE type = '...'"
+sqlite3 -readonly .binder/data/binder.db ".tables"
 ```
 
 Or inspect the transaction log, which is plain JSONL:
 
 ```
-tail -5 .binder/transactions.jsonl | jq .
+tail -5 .binder/data/transactions.jsonl | jq .
 ```
 
 **Be cautious with CLI commands against production.** Even read-only commands like `binder search` or `binder tx verify` open the database with `migrate: true`, which may apply pending schema migrations. This is usually harmless but could be surprising if a new version added migrations.

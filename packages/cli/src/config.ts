@@ -28,6 +28,8 @@ export const DB_FILE = "binder.db";
 export const TRANSACTION_LOG_FILE = "transactions.jsonl";
 export const UNDO_LOG_FILE = "undo.jsonl";
 export const LOCK_FILE = "lock";
+export const DATA_DIR = "data";
+export const BACKUPS_DIR = "backups";
 export const LOCK_RETRY_DELAY_MS = 200;
 export const LOCK_MAX_RETRIES = 3;
 
@@ -119,6 +121,8 @@ export const findBinderRoot = async (
 export type ConfigPaths = {
   root: string;
   binder: string;
+  data: string;
+  backups: string;
   docs: string;
 };
 
@@ -181,6 +185,8 @@ export const loadWorkspaceConfig = async (
     paths: {
       root,
       binder: join(root, BINDER_DIR),
+      data: join(root, BINDER_DIR, DATA_DIR),
+      backups: join(root, BINDER_DIR, DATA_DIR, BACKUPS_DIR),
       docs: join(root, docsPath),
     },
     include,

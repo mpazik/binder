@@ -1,7 +1,3 @@
-/**
- * Coordinates changes across database and log files
- */
-
 import { join } from "path";
 import {
   type KnowledgeGraph,
@@ -12,8 +8,7 @@ import {
   type TransactionId,
 } from "@binder/db";
 import {
-  createError,
-  err,
+  fail,
   getTimestampForFileName,
   isErr,
   ok,
@@ -46,19 +41,17 @@ export type VerifySync = {
 export const verifySync = async (
   fs: FileSystem,
   kg: KnowledgeGraph,
-  binderPath: string,
+  dataPath: string,
 ): ResultAsync<VerifySync> => {
-  const logPath = join(binderPath, TRANSACTION_LOG_FILE);
+  const logPath = join(dataPath, TRANSACTION_LOG_FILE);
   const logVerifyResult = await verifyLog(fs, logPath);
   if (isErr(logVerifyResult)) return logVerifyResult;
 
   const versionResult = await kg.version();
   if (isErr(versionResult))
-    return err(
-      createError("version-fetch-failed", "Failed to fetch database version", {
-        data: { error: versionResult.error },
-      }),
-    );
+    return fail("version-fetch-failed", "Failed to fetch database version", {
+      data: { error: versionResult.error },
+    });
 
   const logTransactionCount = logVerifyResult.data.count;
   const dbTransactionCount = versionResult.data.id;
@@ -121,13 +114,13 @@ const withLockedKg = async <T>(
   const { db, fs, log, config } = services;
   const { paths } = config;
 
-  const lockResult = await acquireLock(fs, paths.binder);
+  const lockResult = await acquireLock(fs, paths.data);
   if (isErr(lockResult)) return lockResult;
 
   const kg = openKnowledgeGraph(db, { configSchema: cliConfigSchema });
   const result = await operation(kg);
 
-  await releaseLock(fs, paths.binder);
+  await releaseLock(fs, paths.data);
 
   if (!isErr(result)) {
     const renderResult = await renderDocs({ ...services, kg });
@@ -148,7 +141,7 @@ export const repairDbFromLog = async (
   } = services;
 
   return withLockedKg(services, async (kg) => {
-    const verifyResult = await verifySync(fs, kg, paths.binder);
+    const verifyResult = await verifySync(fs, kg, paths.data);
     if (isErr(verifyResult)) return verifyResult;
 
     const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
@@ -160,7 +153,7 @@ export const repairDbFromLog = async (
 
     if (dbOnlyTransactions.length > 0) {
       const filename = `repair-db-transactions-${getTimestampForFileName()}.jsonl.bac`;
-      dbTransactionsPath = join(paths.binder, filename);
+      dbTransactionsPath = join(paths.backups, filename);
 
       const snapshotResult = await logTransactions(
         fs,
@@ -215,16 +208,12 @@ export const undoTransactions = async (
 
     const currentId = versionResult.data.id;
     if (currentId === 0)
-      return err(
-        createError("invalid-undo", "Cannot undo the genesis transaction"),
-      );
+      return fail("invalid-undo", "Cannot undo the genesis transaction");
 
     if (steps > currentId)
-      return err(
-        createError(
-          "invalid-undo",
-          `Cannot undo ${steps} transactions, only ${currentId} available`,
-        ),
+      return fail(
+        "invalid-undo",
+        `Cannot undo ${steps} transactions, only ${currentId} available`,
       );
 
     const transactionsToUndo: Transaction[] = [];
@@ -235,7 +224,7 @@ export const undoTransactions = async (
       transactionsToUndo.push(txResult.data);
     }
 
-    const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
+    const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
     const logTailResult = await readLastTransactions(
       fs,
       transactionLogPath,
@@ -245,30 +234,26 @@ export const undoTransactions = async (
 
     const logTail = logTailResult.data;
     if (logTail.length !== steps)
-      return err(
-        createError(
-          "log-db-mismatch",
-          `Log has ${logTail.length} transaction(s) but expected ${steps} to undo`,
-        ),
+      return fail(
+        "log-db-mismatch",
+        `Log has ${logTail.length} transaction(s) but expected ${steps} to undo`,
       );
 
     for (let i = 0; i < steps; i++) {
       const dbTx = transactionsToUndo[i]!;
       const logTx = logTail[steps - 1 - i]!;
       if (dbTx.hash !== logTx.hash)
-        return err(
-          createError(
-            "log-db-mismatch",
-            `Transaction log and database are out of sync — run \`binder tx repair\` to fix`,
-            { data: { dbHash: dbTx.hash, logHash: logTx.hash, step: i + 1 } },
-          ),
+        return fail(
+          "log-db-mismatch",
+          `Transaction log and database are out of sync — run \`binder tx repair\` to fix`,
+          { data: { dbHash: dbTx.hash, logHash: logTx.hash, step: i + 1 } },
         );
     }
 
     const rollbackResult = await kg.rollback(steps, currentId);
     if (isErr(rollbackResult)) return rollbackResult;
 
-    const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
+    const undoLogPath = join(paths.data, UNDO_LOG_FILE);
     for (const tx of transactionsToUndo) {
       const logResult = await logTransaction(fs, undoLogPath, tx);
       if (isErr(logResult)) return logResult;
@@ -291,22 +276,18 @@ export const redoTransactions = async (
   } = services;
 
   return withLockedKg(services, async (kg) => {
-    const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
+    const undoLogPath = join(paths.data, UNDO_LOG_FILE);
     const undoLogResult = await readLastTransactions(fs, undoLogPath, steps);
     if (isErr(undoLogResult)) return undoLogResult;
 
     const undoLog = undoLogResult.data;
     if (undoLog.length === 0)
-      return err(
-        createError("empty-undo-log", "Nothing to redo: undo log is empty"),
-      );
+      return fail("empty-undo-log", "Nothing to redo: undo log is empty");
 
     if (steps > undoLog.length)
-      return err(
-        createError(
-          "invalid-redo",
-          `Cannot redo ${steps} transactions, only ${undoLog.length} available in undo log`,
-        ),
+      return fail(
+        "invalid-redo",
+        `Cannot redo ${steps} transactions, only ${undoLog.length} available in undo log`,
       );
 
     const originalTransactions = undoLog.reverse();
@@ -318,14 +299,12 @@ export const redoTransactions = async (
     const firstOriginalTx = originalTransactions[0]!;
 
     if (currentVersion.hash !== firstOriginalTx.previous)
-      return err(
-        createError(
-          "version-mismatch",
-          "Cannot redo: repository state has changed since undo",
-        ),
+      return fail(
+        "version-mismatch",
+        "Cannot redo: repository state has changed since undo",
       );
 
-    const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
+    const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
 
     for (const tx of originalTransactions) {
       const applyResult = await kg.apply(tx);
@@ -382,7 +361,7 @@ export const setupKnowledgeGraph = (
     configSchema: cliConfigSchema,
     callbacks: {
       beforeTransaction: async () => {
-        const lockResult = await acquireLock(fs, paths.binder);
+        const lockResult = await acquireLock(fs, paths.data);
         if (isErr(lockResult)) {
           log.error("Failed to acquire lock", { error: lockResult.error });
           return lockResult;
@@ -391,26 +370,26 @@ export const setupKnowledgeGraph = (
         log.debug("Lock acquired for transaction");
 
         return ok(async () => {
-          await releaseLock(fs, paths.binder);
+          await releaseLock(fs, paths.data);
           log.debug("Lock released (rollback)");
           return okVoid;
         });
       },
       beforeCommit: async (transaction: Transaction) => {
-        const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
+        const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
         const logResult = await logTransaction(
           fs,
           transactionLogPath,
           transaction,
         );
         if (isErr(logResult)) return logResult;
-        const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
+        const undoLogPath = join(paths.data, UNDO_LOG_FILE);
         const clearResult = await clearLog(fs, undoLogPath);
         if (isErr(clearResult)) return clearResult;
         return okVoid;
       },
       afterCommit: async (transaction) => {
-        await releaseLock(fs, paths.binder);
+        await releaseLock(fs, paths.data);
         log.debug("Lock released after commit");
 
         // Invalidate caches before rendering (e.g., view cache)
@@ -436,11 +415,9 @@ export const squashTransactions = async (
   } = services;
 
   if (count < 2)
-    return err(
-      createError(
-        "invalid-count",
-        `Count must be at least 2 to squash, got ${count}`,
-      ),
+    return fail(
+      "invalid-count",
+      `Count must be at least 2 to squash, got ${count}`,
     );
 
   return withLockedKg(services, async (kg) => {
@@ -449,30 +426,24 @@ export const squashTransactions = async (
 
     const currentId = versionResult.data.id;
     if (currentId === 0)
-      return err(
-        createError("invalid-squash", "Cannot squash the genesis transaction"),
-      );
+      return fail("invalid-squash", "Cannot squash the genesis transaction");
 
     if (count > currentId)
-      return err(
-        createError(
-          "invalid-squash",
-          `Cannot squash ${count} transactions, only ${currentId} available`,
-        ),
+      return fail(
+        "invalid-squash",
+        `Cannot squash ${count} transactions, only ${currentId} available`,
       );
 
-    const transactionLogPath = join(paths.binder, TRANSACTION_LOG_FILE);
+    const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
     const logResult = await readLastTransactions(fs, transactionLogPath, count);
     if (isErr(logResult)) return logResult;
 
     const logEntries = logResult.data;
 
     if (logEntries.length !== count)
-      return err(
-        createError(
-          "log-inconsistency",
-          `Log contains ${logEntries.length} transactions but expected ${count}`,
-        ),
+      return fail(
+        "log-inconsistency",
+        `Log contains ${logEntries.length} transactions but expected ${count}`,
       );
 
     const dbTransactions: Transaction[] = [];
@@ -485,11 +456,9 @@ export const squashTransactions = async (
 
     for (let i = 0; i < count; i++) {
       if (logEntries[i]!.hash !== dbTransactions[i]!.hash)
-        return err(
-          createError(
-            "log-db-mismatch",
-            `Transaction #${dbTransactions[i]!.id} hash mismatch between log and database`,
-          ),
+        return fail(
+          "log-db-mismatch",
+          `Transaction #${dbTransactions[i]!.id} hash mismatch between log and database`,
         );
     }
 
@@ -518,7 +487,7 @@ export const squashTransactions = async (
     );
     if (isErr(logTransactionResult)) return logTransactionResult;
 
-    const undoLogPath = join(paths.binder, UNDO_LOG_FILE);
+    const undoLogPath = join(paths.data, UNDO_LOG_FILE);
     const clearResult = await clearLog(fs, undoLogPath);
     if (isErr(clearResult)) return clearResult;
 

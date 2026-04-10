@@ -1,6 +1,6 @@
 import { join } from "path";
 import type { Argv } from "yargs";
-import { fail, includes, isErr, ok, wrapError } from "@binder/utils";
+import { fail, includes, isErr, okVoid, wrapError } from "@binder/utils";
 import {
   normalizeEntityRef,
   normalizeTransactionInput,
@@ -46,16 +46,13 @@ import {
 import { applySelection, type SelectionArgs } from "../utils/selection.ts";
 import { withPager } from "../cli/pager.ts";
 
-const transactionInputSummary = (input: TransactionInput): string => {
-  const recordCount = input.records?.length ?? 0;
-  const configCount = input.configs?.length ?? 0;
-  return [
-    recordCount > 0 && `${recordCount} record(s)`,
-    configCount > 0 && `${configCount} config(s)`,
+const transactionInputSummary = (input: TransactionInput): string =>
+  [
+    input.records?.length && `${input.records.length} record(s)`,
+    input.configs?.length && `${input.configs.length} config(s)`,
   ]
     .filter(Boolean)
     .join(", ");
-};
 
 export const transactionImportHandler: CommandHandlerWithDb<
   {
@@ -125,7 +122,7 @@ export const transactionImportHandler: CommandHandlerWithDb<
     ui.block(() => {
       ui.info("Dry run complete - no changes made");
     });
-    return ok(undefined);
+    return okVoid;
   }
 
   const results: Transaction[] = [];
@@ -155,7 +152,7 @@ export const transactionImportHandler: CommandHandlerWithDb<
       ui.printRawTransaction(tx, "oneline");
     }
   });
-  return ok(undefined);
+  return okVoid;
 };
 
 export const transactionReadHandler: CommandHandlerWithDb<{
@@ -166,7 +163,7 @@ export const transactionReadHandler: CommandHandlerWithDb<{
   if (isErr(result)) return result;
 
   ui.printData(result.data, args.format);
-  return ok(undefined);
+  return okVoid;
 };
 
 export const transactionRollbackHandler: CommandHandlerWithDb<{
@@ -206,7 +203,7 @@ export const transactionRollbackHandler: CommandHandlerWithDb<{
   if (isErr(confirmResult)) return confirmResult;
   if (!confirmResult.data) {
     ui.info("Rollback cancelled");
-    return ok(undefined);
+    return okVoid;
   }
 
   const rollbackResult = await kg.rollback(args.count, currentId);
@@ -214,7 +211,7 @@ export const transactionRollbackHandler: CommandHandlerWithDb<{
 
   log.info("Rolled back successfully", { count: args.count });
   ui.success("Rolled back successfully");
-  return ok(undefined);
+  return okVoid;
 };
 
 export const transactionSquashHandler: CommandHandlerWithDb<{
@@ -222,7 +219,7 @@ export const transactionSquashHandler: CommandHandlerWithDb<{
   yes?: boolean;
 }> = async (context) => {
   const { kg, ui, log, config, fs, args } = context;
-  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
+  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
   const logResult = await readLastTransactions(
     fs,
     transactionLogPath,
@@ -255,7 +252,7 @@ export const transactionSquashHandler: CommandHandlerWithDb<{
   if (isErr(confirmResult)) return confirmResult;
   if (!confirmResult.data) {
     ui.info("Squash cancelled");
-    return ok(undefined);
+    return okVoid;
   }
 
   const squashResult = await squashTransactions(context, args.count);
@@ -275,7 +272,7 @@ export const transactionSquashHandler: CommandHandlerWithDb<{
       `Transactions ${transactionsToSquash[0]!.id}-${transactionsToSquash[args.count - 1]!.id} merged into transaction #${squashedTransaction.id}`,
     );
   });
-  return ok(undefined);
+  return okVoid;
 };
 
 const printChainError = (ui: Parameters<CommandHandlerWithDb>[0]["ui"]) => {
@@ -303,7 +300,7 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
   ui,
   fs,
 }) => {
-  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
+  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
 
   const logIntegrityResult = await verifyLog(fs, transactionLogPath, {
     verifyIntegrity: true,
@@ -332,7 +329,7 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
     return logIntegrityResult;
   }
 
-  const verifyResult = await verifySync(fs, kg, config.paths.binder);
+  const verifyResult = await verifySync(fs, kg, config.paths.data);
   if (isErr(verifyResult)) {
     if (verifyResult.error.key === "chain-error") {
       printChainError(ui);
@@ -346,7 +343,7 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
     ui.block(() => {
       ui.success("Database and log are in sync");
     });
-    return ok(undefined);
+    return okVoid;
   }
 
   ui.block(() => {
@@ -381,7 +378,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
   rehash?: boolean;
 }> = async (ctx) => {
   const { kg, config, ui, log, fs, args } = ctx;
-  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
+  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
 
   if (args.rehash) {
     ui.heading("Rehash transactions");
@@ -395,7 +392,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
         "Rewrites the entire transaction chain",
         "Updates all transactions with new hashes",
         "Syncs database with rehashed log",
-        "Creates backup in .binder/",
+        "Creates backup in .binder/data/backups/",
       ],
       2,
     );
@@ -412,12 +409,14 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     if (isErr(confirmResult)) return confirmResult;
     if (!confirmResult.data) {
       ui.info("Rehash cancelled");
-      return ok(undefined);
+      return okVoid;
     }
 
     ui.info("Reading transaction log...");
 
-    const rehashResult = await rehashLog(fs, transactionLogPath);
+    const rehashResult = await rehashLog(fs, transactionLogPath, {
+      backupDir: config.paths.backups,
+    });
     if (isErr(rehashResult)) {
       log.error("Failed to rehash log", { error: rehashResult.error });
       return rehashResult;
@@ -446,10 +445,10 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
       }
     });
 
-    return ok(undefined);
+    return okVoid;
   }
 
-  const verifyResult = await verifySync(fs, kg, config.paths.binder);
+  const verifyResult = await verifySync(fs, kg, config.paths.data);
   if (isErr(verifyResult)) {
     if (verifyResult.error.key === "chain-error") {
       printChainError(ui);
@@ -463,7 +462,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     ui.block(() => {
       ui.success("Database and log are in sync");
     });
-    return ok(undefined);
+    return okVoid;
   }
 
   ui.block(() => {
@@ -471,7 +470,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
       ui.warning(
         `Will rollback ${dbOnlyTransactions.length} transaction(s) from database`,
       );
-      ui.info("Backup will be created in .binder");
+      ui.info("Backup will be created in .binder/data/backups");
     } else if (
       logOnlyTransactions.length > 0 &&
       dbOnlyTransactions.length === 0
@@ -487,7 +486,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
       ui.info(
         `Will apply ${logOnlyTransactions.length} transaction(s) from log`,
       );
-      ui.info("Backup will be created in .binder");
+      ui.info("Backup will be created in .binder/data/backups");
     }
   });
 
@@ -505,7 +504,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     ui.block(() => {
       ui.info("Dry run complete - no changes made");
     });
-    return ok(undefined);
+    return okVoid;
   }
 
   if (dbOnlyTransactions.length > 0) {
@@ -517,7 +516,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     if (isErr(confirmResult)) return confirmResult;
     if (!confirmResult.data) {
       ui.info("Repair cancelled");
-      return ok(undefined);
+      return okVoid;
     }
   }
 
@@ -547,7 +546,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     }
   });
 
-  return ok(undefined);
+  return okVoid;
 };
 
 export const transactionLogHandler: CommandHandlerWithDb<{
@@ -557,7 +556,7 @@ export const transactionLogHandler: CommandHandlerWithDb<{
   author?: string;
   chronological?: boolean;
 }> = async ({ kg, config, ui, fs, args }) => {
-  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
+  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
 
   const logResult = await readTransactions(
     fs,
@@ -570,7 +569,7 @@ export const transactionLogHandler: CommandHandlerWithDb<{
 
   if (includes(serializeFormats, args.format)) {
     ui.printData(logResult.data, args.format);
-    return ok(undefined);
+    return okVoid;
   }
 
   const format = args.oneline
@@ -592,7 +591,7 @@ export const transactionLogHandler: CommandHandlerWithDb<{
       }
     }
   });
-  return ok(undefined);
+  return okVoid;
 };
 
 export const transactionExportHandler: CommandHandlerWithDb<{
@@ -601,7 +600,7 @@ export const transactionExportHandler: CommandHandlerWithDb<{
   from?: number;
   to?: number;
 }> = async ({ config, ui, fs, args }) => {
-  const transactionLogPath = join(config.paths.binder, TRANSACTION_LOG_FILE);
+  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
 
   const transactionsResult =
     args.from !== undefined || args.to !== undefined
@@ -622,7 +621,7 @@ export const transactionExportHandler: CommandHandlerWithDb<{
     ui.println(serialized);
   }
 
-  return ok(undefined);
+  return okVoid;
 };
 
 export const TransactionCommand = types({

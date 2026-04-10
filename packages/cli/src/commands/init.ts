@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import type { Argv } from "yargs";
 import * as YAML from "yaml";
 import { isCancel, select } from "@clack/prompts";
-import { fail, isErr, isOk, ok, tryCatch } from "@binder/utils";
+import { fail, isErr, isOk, ok, okVoid, tryCatch } from "@binder/utils";
 import {
   bootstrapMinimal,
   type CommandHandlerMinimal,
@@ -22,16 +22,17 @@ import { types } from "../cli/types.ts";
 const ui = createUi();
 
 const GITIGNORE_CONTENT = `*
-!transactions.jsonl
+!data/
+data/*
+!data/transactions.jsonl
 !config.yaml
 `;
 
 const getAuthorNameFromGit = (): string | undefined => {
-  const gitResult = tryCatch(() => {
-    return execSync("git config user.name", { encoding: "utf-8" }).trim();
-  });
-
-  if (isOk(gitResult)) return gitResult.data ?? undefined;
+  const result = tryCatch(() =>
+    execSync("git config user.name", { encoding: "utf-8" }).trim(),
+  );
+  if (isOk(result)) return result.data ?? undefined;
 };
 
 const NONE_BLUEPRINT: BlueprintInfo = {
@@ -189,7 +190,7 @@ const initSchemaHandler: CommandHandlerWithDb<InitSchemaArgs> = async ({
     "Install agent skills: " + textInfo("npx skills add mpazik/binder"),
   );
 
-  return ok(undefined);
+  return okVoid;
 };
 
 export const InitCommand = types({
