@@ -1235,7 +1235,7 @@ Excellent first week. Schema is minimal and consistent.
             {
               title: "Test Task",
               details: null,
-              steps: null,
+              steps: [],
               description: "Some text.",
             },
           );

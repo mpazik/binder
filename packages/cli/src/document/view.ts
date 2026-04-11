@@ -1076,6 +1076,7 @@ export const extractFieldsAst = (
     if (blockNodes.length === 0 && startIndex === state.snapIndex) {
       if (isMultiValueRelation(fieldDef))
         accumulateRelationValue(fieldPath, [], slot, true);
+      else if (isMultiValueField(fieldDef)) accumulator.set(fieldPath, []);
       else accumulator.set(fieldPath, null);
       state.viewIndex++;
       return true;
