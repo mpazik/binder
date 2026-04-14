@@ -37,7 +37,7 @@ import { visit } from "unist-util-visit";
 import type { Data, Node, Position as UnistPosition } from "unist";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
-import { type ViewFormat } from "../cli-config-schema.ts";
+import type { ViewFormat } from "../cli-config-schema.ts";
 import {
   extractFieldsetFromQuery,
   parseFiltersFromString,
@@ -73,6 +73,14 @@ import { createFieldAccumulator } from "./field-accumulator.ts";
 
 type SimplifiedViewChild = SimplifiedViewBlockChild | SimplifiedViewInlineChild;
 
+export type ViewRoot = Node & {
+  type: "root";
+  children: (FieldSlot | Text)[];
+  data?: Data;
+};
+
+export type ViewAST = Brand<ViewRoot, "ViewAST">;
+
 const renderBlocksToMarkdown = (blocks: Nodes[]): string =>
   renderSimplifiedAstToMarkdown({
     type: "root",
@@ -85,20 +93,18 @@ const fieldNotFoundError = (path: FieldPath) =>
     `Field '${path.join(".")}' was not found in schema`,
   );
 
-export type ViewRoot = Node & {
-  type: "root";
-  children: (FieldSlot | Text)[];
-  data?: Data;
-};
-
-export type ViewAST = Brand<ViewRoot, "ViewAST">;
-
 export type ViewFieldSlotProps = {
   view?: string;
   where?: string;
 };
 
 export type ViewFieldSlot = FieldSlot<ViewFieldSlotProps>;
+
+const getSlotPosition = (slot: ViewFieldSlot): SlotPosition =>
+  slot.slotPosition ?? "phrase";
+
+const isInlinePosition = (slotPosition: SlotPosition): boolean =>
+  slotPosition === "phrase" || slotPosition === "line";
 
 const parseWhereFilters = (slot: ViewFieldSlot): Filters | undefined => {
   const whereStr = slot.props?.where;
@@ -119,6 +125,16 @@ const injectWhereFields = (entities: FieldValue, slot: ViewFieldSlot): void => {
   }
 };
 
+const getSoleFieldSlotFromParagraph = (
+  node: SimplifiedViewChild | Nodes,
+): ViewFieldSlot | undefined => {
+  if (node.type !== "paragraph" || !("children" in node)) return undefined;
+  const children = node.children as (SimplifiedViewInlineChild | Nodes)[];
+  if (children.length !== 1 || children[0]?.type !== "fieldSlot")
+    return undefined;
+  return children[0] as ViewFieldSlot;
+};
+
 export const parseView = (content: string): ViewAST => {
   const processor = unified().use(remarkParse).use(fieldSlot);
   const ast = processor.parse(content);
@@ -131,20 +147,17 @@ const findViewByKey = (views: Views, key: ViewKey): Result<ViewEntity> => {
   return ok(entry);
 };
 
-const isSoleChildOfParagraph = (
-  parent: Parent | undefined,
-  index: number | undefined,
-): boolean =>
-  parent?.type === "paragraph" && parent.children.length === 1 && index === 0;
-
 const isRelation = (fieldDef: FieldDef): boolean =>
   fieldDef.dataType === "relation";
 
 const isMultiValueRelation = (fieldDef: FieldDef): boolean =>
   isRelation(fieldDef) && fieldDef.allowMultiple === true;
 
-const isMultiValueField = (fieldDef: FieldDef): boolean =>
-  fieldDef.allowMultiple === true;
+const isSoleChildOfParagraph = (
+  parent: Parent | undefined,
+  index: number | undefined,
+): boolean =>
+  parent?.type === "paragraph" && parent.children.length === 1 && index === 0;
 
 const validateNestedPath = (
   schema: EntitySchema,
@@ -164,7 +177,7 @@ const validateNestedPath = (
       firstFieldDef &&
       isMultiValueRelation(firstFieldDef) &&
       secondFieldDef &&
-      isMultiValueField(secondFieldDef)
+      secondFieldDef.allowMultiple === true
     )
       return fail(
         "nested-multi-value-not-supported",
@@ -193,12 +206,6 @@ const getItemView = (slot: ViewFieldSlot, views: Views): ViewEntity => {
   return assertDefinedPass(views.find((t) => t.key === defaultKey));
 };
 
-const getSlotPosition = (slot: ViewFieldSlot): SlotPosition =>
-  slot.slotPosition ?? "phrase";
-
-const isInlinePosition = (slotPosition: SlotPosition): boolean =>
-  slotPosition === "phrase" || slotPosition === "line";
-
 const getDelimiterForSlotPosition = (
   slotPosition: SlotPosition,
   viewFormat: ViewFormat | undefined,
@@ -211,16 +218,6 @@ const literalMismatch = (context?: string) =>
   createError("literal-mismatch", "View and snapshot content do not match", {
     data: { context },
   });
-
-const getSoleFieldSlotFromParagraph = (
-  node: SimplifiedViewChild | Nodes,
-): ViewFieldSlot | undefined => {
-  if (node.type !== "paragraph" || !("children" in node)) return undefined;
-  const children = node.children as (SimplifiedViewInlineChild | Nodes)[];
-  if (children.length !== 1 || children[0]?.type !== "fieldSlot")
-    return undefined;
-  return children[0] as ViewFieldSlot;
-};
 
 const FRONTMATTER_TYPES = ["yaml", "toml"];
 
@@ -1076,7 +1073,7 @@ export const extractFieldsAst = (
     if (blockNodes.length === 0 && startIndex === state.snapIndex) {
       if (isMultiValueRelation(fieldDef))
         accumulateRelationValue(fieldPath, [], slot, true);
-      else if (isMultiValueField(fieldDef)) accumulator.set(fieldPath, []);
+      else if (fieldDef.allowMultiple === true) accumulator.set(fieldPath, []);
       else accumulator.set(fieldPath, null);
       state.viewIndex++;
       return true;
@@ -1344,13 +1341,10 @@ const findInlineFieldPosition = (
 
   if (allSnapTextNodes.length === 0) return undefined;
 
-  if (hasPrecedingContent) {
-    const lastTextNode = allSnapTextNodes[allSnapTextNodes.length - 1]!;
-    return lastTextNode.position;
-  }
-
-  const firstTextNode = allSnapTextNodes[0]!;
-  return firstTextNode.position;
+  const textNode = hasPrecedingContent
+    ? allSnapTextNodes[allSnapTextNodes.length - 1]!
+    : allSnapTextNodes[0]!;
+  return textNode.position;
 };
 
 export const extractFieldMappings = (

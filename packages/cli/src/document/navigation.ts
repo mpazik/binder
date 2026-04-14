@@ -20,6 +20,7 @@ import {
 } from "@binder/db";
 import {
   assertDefinedPass,
+  type ErrorObject,
   fail,
   isErr,
   ok,
@@ -86,12 +87,15 @@ export type RenderResult = {
   renderedPaths: string[];
   modifiedPaths: string[];
   divergedPaths: string[];
+  /** Errors from navigation items that failed to render. Successful items still contribute to renderedPaths. */
+  errors: ErrorObject[];
 };
 
 const emptyRenderResult = (): RenderResult => ({
   renderedPaths: [],
   modifiedPaths: [],
   divergedPaths: [],
+  errors: [],
 });
 
 const appendRenderResult = (
@@ -101,6 +105,7 @@ const appendRenderResult = (
   target.renderedPaths.push(...next.renderedPaths);
   target.modifiedPaths.push(...next.modifiedPaths);
   target.divergedPaths.push(...next.divergedPaths);
+  target.errors.push(...next.errors);
   return target;
 };
 
@@ -261,7 +266,6 @@ export const findNavigationItemByPath = (
   }
 };
 
-// Returns `missing-path-field` error when a placeholder (including ancestral ones) is null/undefined.
 export const resolvePath = (
   schema: EntitySchema,
   navItem: NavigationItem,
@@ -290,12 +294,11 @@ export const resolvePath = (
 const getExcludedFields = (
   namespace: NamespaceEditable,
   filters: Filters | undefined,
-): string[] => {
-  const excluded: string[] = ["id"];
-  if (namespace === "config") excluded.push("uid");
-  if (filters?.type && typeof filters.type !== "object") excluded.push("type");
-  return excluded;
-};
+): string[] => [
+  "id",
+  ...(namespace === "config" ? ["uid"] : []),
+  ...(filters?.type && typeof filters.type !== "object" ? ["type"] : []),
+];
 
 export const findView = (views: Views, key: string | undefined): ViewEntity =>
   views.find((t) => t.key === key) ??
@@ -404,15 +407,12 @@ export const renderNavigationItem = async (
     );
     if (isErr(interpolatedQuery)) return interpolatedQuery;
 
-    if (item.view) {
-      const viewEntity = findView(views, item.view);
+    if (item.view || interpolatedQuery.data.includes) {
+      const viewIncludes = item.view
+        ? findView(views, item.view).viewIncludes
+        : undefined;
       interpolatedQuery.data.includes = mergeIncludes(
-        mergeIncludes(interpolatedQuery.data.includes, viewEntity.viewIncludes),
-        { key: true, uid: true },
-      );
-    } else if (interpolatedQuery.data.includes) {
-      interpolatedQuery.data.includes = mergeIncludes(
-        interpolatedQuery.data.includes,
+        mergeIncludes(interpolatedQuery.data.includes, viewIncludes),
         { key: true, uid: true },
       );
     }
@@ -450,27 +450,26 @@ export const renderNavigationItem = async (
       parentEntities,
     );
     if (isErr(resolvedPath)) {
-      if (resolvedPath.error.key === "missing-path-field") {
-        const entityId =
-          (entity.key as string | undefined) ??
-          (entity.uid as string | undefined) ??
-          "<unknown>";
-        const missingFieldName = (
-          resolvedPath.error.data as { fieldName?: unknown } | undefined
-        )?.fieldName;
+      if (resolvedPath.error.key !== "missing-path-field") return resolvedPath;
 
-        log.warn(
-          `Skipping render for entity '${entityId}' in navigation '${getPathPattern(item)}': missing value for path field '${String(missingFieldName ?? "unknown")}'.`,
-        );
-        continue;
-      }
-      return resolvedPath;
+      const entityId =
+        (entity.key as string | undefined) ??
+        (entity.uid as string | undefined) ??
+        "<unknown>";
+      const missingFieldName =
+        (resolvedPath.error.data as { fieldName?: unknown } | undefined)
+          ?.fieldName ?? "unknown";
+
+      log.warn(
+        `Skipping render for entity '${entityId}' in navigation '${getPathPattern(item)}': missing value for path field '${String(missingFieldName)}'.`,
+      );
+      continue;
     }
     const filePath = join(parentPath, resolvedPath.data);
 
     const renderEntity =
       fieldsToStrip.length > 0
-        ? (omit(entity, [...fieldsToStrip]) as FieldsetNested)
+        ? (omit(entity, fieldsToStrip) as FieldsetNested)
         : entity;
 
     const renderContentResult = await renderContent(
@@ -549,7 +548,14 @@ export const renderNavigation = async (
 
   for (const item of navigationItems) {
     const itemResult = await renderNavigationItem(renderCtx, item, "", []);
-    if (isErr(itemResult)) return itemResult;
+    if (isErr(itemResult)) {
+      const pathPattern = getPathPattern(item);
+      ctx.log.warn(
+        `Navigation '${pathPattern}' failed to render: ${itemResult.error.message}`,
+      );
+      result.errors.push(itemResult.error);
+      continue;
+    }
     appendRenderResult(result, itemResult.data);
   }
 

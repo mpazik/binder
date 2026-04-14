@@ -74,6 +74,9 @@ The full rendering flow:
 4. **Render content**: apply the view (markdown) or serialise fields (YAML)
 5. **Save snapshot**: write the file with version tracking metadata
 6. **Recurse children**: process child navigation items with parent entity as context
+7. **Cleanup orphans**: remove snapshot files that were not rendered in this pass
+
+If a navigation item fails to render, the error is logged and collected but rendering continues with the remaining items. Orphan cleanup runs against the successfully rendered paths, so stale files from items that did render are still removed. When any errors were collected, the overall result is a partial failure containing both the rendered output and the accumulated errors.
 
 ### Create by File
 

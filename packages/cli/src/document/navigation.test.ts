@@ -338,6 +338,7 @@ describe("navigation", () => {
         renderedPaths: ["README.md"],
         modifiedPaths: ["README.md"],
         divergedPaths: [],
+        errors: [],
       });
     });
 
@@ -354,6 +355,7 @@ describe("navigation", () => {
         renderedPaths: ["README.md"],
         modifiedPaths: [],
         divergedPaths: [],
+        errors: [],
       });
     });
   });
@@ -444,262 +446,270 @@ describe("navigation", () => {
       expect(content).toBe(expectedContent);
     };
 
-    it("renders markdown with local fields only", async () => {
-      await addView("local-view", "# {title}\n\n{description}\n");
-      await check(
-        {
-          path: "tasks/{title}",
-          where: { type: "Task" },
-          view: "local-view",
-        },
-        `tasks/${mockTask1Record.title}.md`,
-        `# ${mockTask1Record.title}\n\n${mockTask1Record.description}\n`,
-      );
-    });
+    describe("markdown rendering", () => {
+      it("renders with local fields only", async () => {
+        await addView("local-view", "# {title}\n\n{description}\n");
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task" },
+            view: "local-view",
+          },
+          `tasks/${mockTask1Record.title}.md`,
+          `# ${mockTask1Record.title}\n\n${mockTask1Record.description}\n`,
+        );
+      });
 
-    it("renders markdown with nested relationship field", async () => {
-      await addView("nested-view", "# {title}\n\nProject: {project.title}\n");
-      await check(
-        {
-          path: "tasks/{title}",
-          where: { type: "Task" },
-          view: "nested-view",
-        },
-        `tasks/${mockTask2Record.title}.md`,
-        `# ${mockTask2Record.title}\n\nProject: ${mockProjectRecord.title}\n`,
-      );
-    });
+      it("renders with nested relationship field", async () => {
+        await addView("nested-view", "# {title}\n\nProject: {project.title}\n");
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task" },
+            view: "nested-view",
+          },
+          `tasks/${mockTask2Record.title}.md`,
+          `# ${mockTask2Record.title}\n\nProject: ${mockProjectRecord.title}\n`,
+        );
+      });
 
-    it("renders yaml entity", async () => {
-      await check(
-        {
-          path: "projects/{title}",
-          where: { type: "Project" },
-        },
-        `projects/${mockProjectRecord.title}.yaml`,
-        renderYamlEntity(omit(mockProjectRecord, ["id", "type"])),
-      );
-    });
-
-    it("renders yaml query", async () => {
-      await check(
-        {
-          path: "all-tasks",
-          query: { filters: { type: "Task" } },
-        },
-        "all-tasks.yaml",
-        renderYamlList([
-          reorderTagsField(omit(mockTask1Record, ["id", "type", "uid"])),
-          reorderTagsField(
-            omit({ ...mockTask2Record, project: mockProjectKey }, [
-              "id",
-              "type",
-              "uid",
-            ]),
-          ),
-        ]),
-      );
-    });
-
-    it("renders yaml query with nested relationship field", async () => {
-      await check(
-        {
-          path: "tasks-with-project",
-          query: {
-            filters: { type: "Task", project: mockProjectRecord.uid },
+      it("renders with includes and nested field in view", async () => {
+        await addView(
+          "task-with-project",
+          "# {title}\n\nProject: {project.title}\n",
+        );
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task" },
             includes: { project: true },
+            view: "task-with-project",
           },
-        },
-        "tasks-with-project.yaml",
-        renderYamlList([{ project: mockProjectKey }]),
-      );
+          `tasks/${mockTask2Record.title}.md`,
+          `# ${mockTask2Record.title}\n\nProject: ${mockProjectRecord.title}\n`,
+        );
+      });
+
+      it("renders with frontmatter when view has preamble", async () => {
+        await addView("task-preamble", "# {title}\n\n{description}\n", {
+          preamble: ["status"],
+        });
+
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task" },
+            view: "task-preamble",
+          },
+          `tasks/${mockTask1Record.title}.md`,
+          `---\nstatus: ${mockTask1Record.status}\n---\n\n# ${mockTask1Record.title}\n\n${mockTask1Record.description}\n`,
+        );
+      });
+
+      it("renders without frontmatter when preamble fields are all null", async () => {
+        await addView("task-no-fm", "# {title}\n", {
+          preamble: ["nonExistentField"],
+        });
+
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task" },
+            view: "task-no-fm",
+          },
+          `tasks/${mockTask1Record.title}.md`,
+          `# ${mockTask1Record.title}\n`,
+        );
+      });
+
+      it("renders frontmatter with key instead of UID for relation fields", async () => {
+        await addView("task-ref-preamble", "# {title}\n", {
+          preamble: ["project"],
+        });
+
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task", project: mockProjectUid },
+            view: "task-ref-preamble",
+          },
+          `tasks/${mockTask2Record.title}.md`,
+          `---\nproject: ${mockProjectKey}\n---\n\n# ${mockTask2Record.title}\n`,
+        );
+      });
+
+      it("renders view body with key instead of UID for relation fields", async () => {
+        await addView("task-ref-body", "# {title}\n\nProject: {project}\n");
+
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task", project: mockProjectUid },
+            view: "task-ref-body",
+          },
+          `tasks/${mockTask2Record.title}.md`,
+          `# ${mockTask2Record.title}\n\nProject: ${mockProjectKey}\n`,
+        );
+      });
+
+      it("renders with ancestral field in path", async () => {
+        await addView("task-detail", "# {title}\n");
+        await check(
+          {
+            path: "tasks/{title}",
+            where: { type: "Task", project: "{parent.uid}" },
+            view: "task-detail",
+          },
+          `projects/${mockProjectRecord.title}/tasks/${mockTask2Record.title}.md`,
+          `# ${mockTask2Record.title}\n`,
+          {
+            parentPath: `projects/${mockProjectRecord.title}/`,
+            parentEntities: [mockProjectRecord],
+          },
+        );
+      });
     });
 
-    it("renders markdown with includes in navigation item and nested field in view", async () => {
-      await addView(
-        "task-with-project",
-        "# {title}\n\nProject: {project.title}\n",
-      );
-      await check(
-        {
+    describe("yaml rendering", () => {
+      it("renders entity", async () => {
+        await check(
+          {
+            path: "projects/{title}",
+            where: { type: "Project" },
+          },
+          `projects/${mockProjectRecord.title}.yaml`,
+          renderYamlEntity(omit(mockProjectRecord, ["id", "type"])),
+        );
+      });
+
+      it("renders query", async () => {
+        await check(
+          {
+            path: "all-tasks",
+            query: { filters: { type: "Task" } },
+          },
+          "all-tasks.yaml",
+          renderYamlList([
+            reorderTagsField(omit(mockTask1Record, ["id", "type", "uid"])),
+            reorderTagsField(
+              omit({ ...mockTask2Record, project: mockProjectKey }, [
+                "id",
+                "type",
+                "uid",
+              ]),
+            ),
+          ]),
+        );
+      });
+
+      it("renders query with nested relationship field", async () => {
+        await check(
+          {
+            path: "tasks-with-project",
+            query: {
+              filters: { type: "Task", project: mockProjectRecord.uid },
+              includes: { project: true },
+            },
+          },
+          "tasks-with-project.yaml",
+          renderYamlList([{ project: mockProjectKey }]),
+        );
+      });
+    });
+
+    describe("path field handling", () => {
+      it("skips entity when a path field value is null and logs warning", async () => {
+        const warnings: string[] = [];
+        const result = await renderItem(
+          { path: "tasks/{project}", where: { type: "Task" } },
+          {
+            log: {
+              ...mockLog,
+              warn: (msg: string) => warnings.push(msg),
+            },
+          },
+        );
+
+        expect(result.renderedPaths).toEqual([`tasks/${mockProjectUid}.yaml`]);
+        expect(warnings).toEqual([
+          expect.stringContaining("missing value for path field 'project'"),
+        ]);
+
+        const generatedFiles = Array.from(fs.files.keys()).filter((f) =>
+          f.endsWith(".yaml"),
+        );
+        expect(generatedFiles).toEqual([
+          `${docsPath}/tasks/${mockProjectUid}.yaml`,
+        ]);
+      });
+
+      it("skips entity when any field in a multi-field path is null", async () => {
+        const result = await renderItem({
+          path: "tasks/{project}/{key}",
+          where: { type: "Task" },
+        });
+
+        expect(result.renderedPaths).toEqual([
+          `tasks/${mockProjectUid}/${mockTask2Record.key}.yaml`,
+        ]);
+      });
+    });
+
+    describe("result limits", () => {
+      it("renders all results when limit is not specified", async () => {
+        const result = await renderItem({
           path: "tasks/{title}",
           where: { type: "Task" },
-          includes: { project: true },
-          view: "task-with-project",
-        },
-        `tasks/${mockTask2Record.title}.md`,
-        `# ${mockTask2Record.title}\n\nProject: ${mockProjectRecord.title}\n`,
-      );
-    });
-
-    it("renders markdown with frontmatter when view has preamble", async () => {
-      await addView("task-preamble", "# {title}\n\n{description}\n", {
-        preamble: ["status"],
+        });
+        expect(result.renderedPaths).toEqual([
+          `tasks/${mockTask1Record.title}.yaml`,
+          `tasks/${mockTask2Record.title}.yaml`,
+        ]);
       });
 
-      await check(
-        {
+      it("renders all results when count exceeds old default limit of 50", async () => {
+        const totalTasks = 55;
+        const records = Array.from({ length: totalTasks }, (_, i) => ({
+          type: mockTaskTypeKey,
+          key: `bulk-task-${String(i).padStart(3, "0")}` as EntityKey,
+          title: `Bulk Task ${String(i).padStart(3, "0")}`,
+          status: "pending",
+        }));
+        throwIfError(await kg.update({ author: "test", records }));
+
+        const result = await renderItem({
           path: "tasks/{title}",
           where: { type: "Task" },
-          view: "task-preamble",
-        },
-        `tasks/${mockTask1Record.title}.md`,
-        `---\nstatus: ${mockTask1Record.status}\n---\n\n# ${mockTask1Record.title}\n\n${mockTask1Record.description}\n`,
-      );
-    });
+        });
 
-    it("renders markdown without frontmatter when preamble fields are all null", async () => {
-      await addView("task-no-fm", "# {title}\n", {
-        preamble: ["nonExistentField"],
+        expect(result.renderedPaths.length).toBe(2 + totalTasks);
       });
 
-      await check(
-        {
+      it("renders only limited number of results when limit is set", async () => {
+        const result = await renderItem({
           path: "tasks/{title}",
           where: { type: "Task" },
-          view: "task-no-fm",
-        },
-        `tasks/${mockTask1Record.title}.md`,
-        `# ${mockTask1Record.title}\n`,
-      );
-    });
-
-    it("renders markdown frontmatter with key instead of UID for relation fields", async () => {
-      await addView("task-ref-preamble", "# {title}\n", {
-        preamble: ["project"],
+          limit: 1,
+        });
+        expect(result.renderedPaths).toEqual([
+          `tasks/${mockTask1Record.title}.yaml`,
+        ]);
       });
 
-      await check(
-        {
-          path: "tasks/{title}",
-          where: { type: "Task", project: mockProjectUid },
-          view: "task-ref-preamble",
-        },
-        `tasks/${mockTask2Record.title}.md`,
-        `---\nproject: ${mockProjectKey}\n---\n\n# ${mockTask2Record.title}\n`,
-      );
-    });
-
-    it("renders markdown view body with key instead of UID for relation fields", async () => {
-      await addView("task-ref-body", "# {title}\n\nProject: {project}\n");
-
-      await check(
-        {
-          path: "tasks/{title}",
-          where: { type: "Task", project: mockProjectUid },
-          view: "task-ref-body",
-        },
-        `tasks/${mockTask2Record.title}.md`,
-        `# ${mockTask2Record.title}\n\nProject: ${mockProjectKey}\n`,
-      );
-    });
-
-    it("renders markdown with ancestral field in path", async () => {
-      await addView("task-detail", "# {title}\n");
-      await check(
-        {
-          path: "tasks/{title}",
-          where: { type: "Task", project: "{parent.uid}" },
-          view: "task-detail",
-        },
-        `projects/${mockProjectRecord.title}/tasks/${mockTask2Record.title}.md`,
-        `# ${mockTask2Record.title}\n`,
-        {
-          parentPath: `projects/${mockProjectRecord.title}/`,
-          parentEntities: [mockProjectRecord],
-        },
-      );
-    });
-
-    it("renders all results when limit is not specified", async () => {
-      const result = await renderItem({
-        path: "tasks/{title}",
-        where: { type: "Task" },
-      });
-      expect(result.renderedPaths).toEqual([
-        `tasks/${mockTask1Record.title}.yaml`,
-        `tasks/${mockTask2Record.title}.yaml`,
-      ]);
-    });
-
-    it("skips entity when a path field value is null and logs warning", async () => {
-      const warnings: string[] = [];
-      const result = await renderItem(
-        { path: "tasks/{project}", where: { type: "Task" } },
-        {
-          log: {
-            ...mockLog,
-            warn: (msg: string) => warnings.push(msg),
+      it("does not log warning when all results fit within default limit", async () => {
+        const warnings: string[] = [];
+        await renderItem(
+          { path: "tasks/{title}", where: { type: "Task" } },
+          {
+            log: {
+              ...mockLog,
+              warn: (msg: string) => warnings.push(msg),
+            },
           },
-        },
-      );
+        );
 
-      expect(result.renderedPaths).toEqual([`tasks/${mockProjectUid}.yaml`]);
-      expect(warnings).toEqual([
-        expect.stringContaining("missing value for path field 'project'"),
-      ]);
-
-      const generatedFiles = Array.from(fs.files.keys()).filter((f) =>
-        f.endsWith(".yaml"),
-      );
-      expect(generatedFiles).toEqual([
-        `${docsPath}/tasks/${mockProjectUid}.yaml`,
-      ]);
-    });
-
-    it("skips entity when any field in a multi-field path is null", async () => {
-      const result = await renderItem({
-        path: "tasks/{project}/{key}",
-        where: { type: "Task" },
+        expect(warnings).toEqual([]);
       });
-
-      expect(result.renderedPaths).toEqual([
-        `tasks/${mockProjectUid}/${mockTask2Record.key}.yaml`,
-      ]);
-    });
-
-    it("renders all results when count exceeds old default limit of 50", async () => {
-      const totalTasks = 55;
-      const records = Array.from({ length: totalTasks }, (_, i) => ({
-        type: mockTaskTypeKey,
-        key: `bulk-task-${String(i).padStart(3, "0")}` as EntityKey,
-        title: `Bulk Task ${String(i).padStart(3, "0")}`,
-        status: "pending",
-      }));
-      throwIfError(await kg.update({ author: "test", records }));
-
-      const result = await renderItem({
-        path: "tasks/{title}",
-        where: { type: "Task" },
-      });
-
-      expect(result.renderedPaths.length).toBe(2 + totalTasks);
-    });
-
-    it("renders only limited number of results when limit is set", async () => {
-      const result = await renderItem({
-        path: "tasks/{title}",
-        where: { type: "Task" },
-        limit: 1,
-      });
-      expect(result.renderedPaths).toEqual([
-        `tasks/${mockTask1Record.title}.yaml`,
-      ]);
-    });
-
-    it("does not log warning when all results fit within default limit", async () => {
-      const warnings: string[] = [];
-      await renderItem(
-        { path: "tasks/{title}", where: { type: "Task" } },
-        {
-          log: {
-            ...mockLog,
-            warn: (msg: string) => warnings.push(msg),
-          },
-        },
-      );
-
-      expect(warnings).toEqual([]);
     });
   });
 

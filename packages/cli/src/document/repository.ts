@@ -1,5 +1,11 @@
-import { type KnowledgeGraph } from "@binder/db";
-import { isErr, ok, type ResultAsync } from "@binder/utils";
+import type { KnowledgeGraph } from "@binder/db";
+import {
+  type ErrorObject,
+  fail,
+  isErr,
+  ok,
+  type ResultAsync,
+} from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import type { DatabaseCli } from "../db";
@@ -46,11 +52,14 @@ export const renderDocs = async (services: {
 
   const baseCtx = { db, kg, fs, paths, log, views: viewsResult.data, mode };
 
+  const errors: ErrorObject[] = [];
+
   const renderRecordResult = await renderNavigation(
     { ...baseCtx, namespace: "record" },
     navigationResult.data,
   );
   if (isErr(renderRecordResult)) return renderRecordResult;
+  errors.push(...renderRecordResult.data.errors);
 
   const cleanupRecordResult = await cleanupOrphanSnapshots(
     db,
@@ -66,6 +75,7 @@ export const renderDocs = async (services: {
     CONFIG_NAVIGATION_ITEMS,
   );
   if (isErr(renderConfigResult)) return renderConfigResult;
+  errors.push(...renderConfigResult.data.errors);
 
   const cleanupConfigResult = await cleanupOrphanSnapshots(
     db,
@@ -75,6 +85,14 @@ export const renderDocs = async (services: {
     "config",
   );
   if (isErr(cleanupConfigResult)) return cleanupConfigResult;
+
+  if (errors.length > 0) {
+    return fail(
+      "render-partial",
+      `Render completed with ${errors.length} error(s)`,
+      { data: { errors } },
+    );
+  }
 
   log.debug("renderDocs: complete");
   return ok({

@@ -85,3 +85,61 @@ export const mockNavigationConfigInput = [
   changesetInputForNewEntity<"config">(mockNav5Entity),
   changesetInputForNewEntity<"config">(mockNav6Entity),
 ];
+
+// -- Status-based navigation for testing entity moves between locations --
+
+export const mockTaskStatusViewKey = "task-status-view" as ConfigKey;
+
+export const mockTaskStatusViewEntity = {
+  id: newConfigAppId(30),
+  uid: "_viewStatVw" as ConfigUid,
+  key: mockTaskStatusViewKey,
+  type: typeViewKey,
+  viewContent: "# {title}\n\n{description}\n",
+  preamble: ["status", "priority"],
+} as const satisfies Fieldset;
+
+export const mockNavPendingTasksEntity = {
+  id: newConfigAppId(31),
+  uid: "_navPndTsk0" as ConfigUid,
+  key: "nav-pending-tasks" as ConfigKey,
+  type: typeNavigationKey,
+  path: "tasks/{priority} {key}",
+  where: { type: "Task", status: ["pending", "active"] },
+  view: mockTaskStatusViewKey,
+} as const satisfies Fieldset;
+
+export const mockNavArchivedTasksEntity = {
+  id: newConfigAppId(32),
+  uid: "_navArcTsk0" as ConfigUid,
+  key: "nav-archived-tasks" as ConfigKey,
+  type: typeNavigationKey,
+  path: "tasks/backlog/{priority} {key}",
+  where: { type: "Task", status: "archived" },
+  view: mockTaskStatusViewKey,
+} as const satisfies Fieldset;
+
+export const mockNavCompletedTasksEntity = {
+  id: newConfigAppId(33),
+  uid: "_navCmpTsk0" as ConfigUid,
+  key: "nav-completed-tasks" as ConfigKey,
+  type: typeNavigationKey,
+  path: "archive/tasks/{key}",
+  where: { type: "Task", status: "complete" },
+  view: mockTaskStatusViewKey,
+} as const satisfies Fieldset;
+
+export const mockNavProjectsByKeyEntity = {
+  id: newConfigAppId(34),
+  uid: "_navPrjKey0" as ConfigUid,
+  key: "nav-projects-by-key" as ConfigKey,
+  type: typeNavigationKey,
+  path: "projects/{key}",
+  where: { type: "Project" },
+} as const satisfies Fieldset;
+
+export const mockStatusNavConfigInput = [
+  changesetInputForNewEntity<"config">(mockNavPendingTasksEntity),
+  changesetInputForNewEntity<"config">(mockNavArchivedTasksEntity),
+  changesetInputForNewEntity<"config">(mockNavCompletedTasksEntity),
+];
