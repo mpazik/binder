@@ -549,26 +549,32 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
   return okVoid;
 };
 
-export const transactionLogHandler: CommandHandlerWithDb<{
-  limit: number;
-  format: string;
-  oneline?: boolean;
-  author?: string;
-  chronological?: boolean;
-}> = async ({ kg, config, ui, fs, args }) => {
+export const transactionLogHandler: CommandHandlerWithDb<
+  {
+    format: string;
+    oneline?: boolean;
+    author?: string;
+    chronological?: boolean;
+  } & SelectionArgs
+> = async ({ kg, config, ui, fs, args }) => {
   const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
+
+  const count = args.last ?? args.limit ?? 10;
+  const readCount = count + (args.skip ?? 0);
 
   const logResult = await readTransactions(
     fs,
     transactionLogPath,
-    args.limit,
+    readCount,
     { author: args.author },
     args.chronological ? "asc" : "desc",
   );
   if (isErr(logResult)) return logResult;
 
+  const transactions = applySelection(logResult.data, args);
+
   if (includes(serializeFormats, args.format)) {
-    ui.printData(logResult.data, args.format);
+    ui.printData(transactions, args.format);
     return okVoid;
   }
 
@@ -578,7 +584,7 @@ export const transactionLogHandler: CommandHandlerWithDb<{
       ? "full"
       : "concise";
 
-  const resolved = await resolveTransactionDisplayKeys(kg, logResult.data);
+  const resolved = await resolveTransactionDisplayKeys(kg, transactions);
   const dividerWidth =
     format !== "oneline"
       ? 61 + Math.max(...resolved.map((tx) => tx.author.length))
@@ -759,12 +765,7 @@ export const TransactionCommand = types({
           describe: "show recent transactions from the log",
           builder: (yargs: Argv) => {
             return yargs
-              .option("limit", {
-                alias: "n",
-                describe: "number of transactions to show",
-                type: "number",
-                default: 10,
-              })
+              .options(selectionOptions)
               .option("format", {
                 describe: "output format",
                 type: "string",
