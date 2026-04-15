@@ -7,10 +7,7 @@ import { isErr, ok, tryCatch, type ResultAsync } from "@binder/utils";
 import { extractFileChanges } from "../../document/change-extractor.ts";
 import { loadNavigation } from "../../document/navigation.ts";
 import type { RuntimeContextWithDb } from "../../runtime.ts";
-import type {
-  WorkspaceContextDeps,
-  WorkspaceEntry,
-} from "../workspace-manager.ts";
+import type { WorkspaceCtx, WorkspaceEntry } from "../workspace-manager.ts";
 import {
   getRelativeSnapshotPath,
   getSnapshotEntityUid,
@@ -18,11 +15,11 @@ import {
 } from "../../lib/snapshot.ts";
 
 const notify = (
-  deps: WorkspaceContextDeps,
+  ctx: WorkspaceCtx,
   type: MessageType,
   message: string,
 ): void => {
-  deps.connection.sendNotification(ShowMessageNotification.type, {
+  ctx.connection.sendNotification(ShowMessageNotification.type, {
     type,
     message,
   });
@@ -74,9 +71,7 @@ const syncDocument = async (
   if (isErr(viewsResult)) return viewsResult;
 
   const syncResult = await extractFileChanges(
-    fs,
-    kg,
-    config,
+    { fs, kg, config },
     navResult.data,
     schemaResult.data,
     relativePath,
@@ -117,41 +112,44 @@ type UriState = { running: boolean; pending: boolean };
 const uriStates = new Map<string, UriState>();
 
 const executeSave = async (
+  ctx: WorkspaceCtx,
   context: RuntimeContextWithDb,
   uri: string,
   state: UriState,
-  deps: WorkspaceContextDeps,
 ): Promise<void> => {
   state.running = true;
   state.pending = false;
 
   const result = await tryCatch(() => syncDocument(context, uri));
-  if (isErr(result)) {
-    context.log.error("Save sync failed", { uri, error: result.error });
+  const syncError = isErr(result)
+    ? result.error
+    : isErr(result.data)
+      ? result.data.error
+      : undefined;
+
+  if (syncError) {
+    context.log.error("Sync failed", { uri, error: syncError });
     notify(
-      deps,
+      ctx,
       MessageType.Error,
-      `Sync failed: ${result.error.message ?? result.error.key}`,
+      `Sync failed: ${syncError.message ?? syncError.key}`,
     );
-  } else if (isErr(result.data)) {
-    context.log.error("Sync failed", { uri, error: result.data.error });
-    notify(
-      deps,
-      MessageType.Error,
-      `Sync failed: ${result.data.error.message ?? result.data.error.key}`,
-    );
-  } else if (result.data.data.fieldChangeCount > 0) {
-    const n = result.data.data.fieldChangeCount;
-    const message =
-      n === 1 ? "Change saved to Binder" : `Saved ${n} changes to Binder`;
-    notify(deps, MessageType.Info, message);
+  } else if (!isErr(result) && !isErr(result.data)) {
+    const { fieldChangeCount } = result.data.data;
+    if (fieldChangeCount > 0) {
+      const message =
+        fieldChangeCount === 1
+          ? "Change saved to Binder"
+          : `Saved ${fieldChangeCount} changes to Binder`;
+      notify(ctx, MessageType.Info, message);
+    }
   }
 
   state.running = false;
 
   if (state.pending) {
     context.log.info("Re-syncing after queued save", { uri });
-    void executeSave(context, uri, state, deps);
+    void executeSave(ctx, context, uri, state);
     return;
   }
 
@@ -161,9 +159,9 @@ const executeSave = async (
 // Doesn't use withDocumentContext/LspHandler because it runs its own
 // extraction pipeline via extractFileChanges.
 export const handleDocumentSave = async (
+  ctx: WorkspaceCtx,
   event: { document: { uri: string } },
   workspace: WorkspaceEntry,
-  deps: WorkspaceContextDeps,
 ): Promise<void> => {
   const uri = event.document.uri;
   let state = uriStates.get(uri);
@@ -181,5 +179,5 @@ export const handleDocumentSave = async (
     return;
   }
 
-  void executeSave(workspace.runtime, uri, state, deps);
+  void executeSave(ctx, workspace.runtime, uri, state);
 };

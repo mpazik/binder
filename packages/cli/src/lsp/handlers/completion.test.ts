@@ -59,11 +59,7 @@ describe("completion", () => {
       }),
     );
     documentCache = createDocumentCache(runtime.log);
-    entityContextCache = createEntityContextCache(
-      runtime.log,
-      runtime.kg,
-      runtime.db,
-    );
+    entityContextCache = createEntityContextCache(runtime);
   });
 
   const complete = async (
@@ -342,9 +338,7 @@ Some description
         ["key", "title", "status"],
       );
     });
-  });
 
-  describe("yaml parse errors", () => {
     it("provides field key completions when yaml has a syntax error", async () => {
       // tags: [unclosed is an invalid YAML syntax error that makes YAML.parse throw.
       // Completions should still work for the cursor on the partial key above it.

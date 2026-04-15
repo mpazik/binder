@@ -29,7 +29,6 @@ import {
   removeLastFromLog,
   verifyLog,
 } from "./journal.ts";
-import type { FileSystem } from "./filesystem.ts";
 import { acquireLock, releaseLock } from "./lock.ts";
 
 export type VerifySync = {
@@ -38,11 +37,13 @@ export type VerifySync = {
   lastSyncedId: TransactionId;
 };
 
+export type VerifySyncCtx = Pick<RuntimeContextWithDb, "fs" | "kg">;
+
 export const verifySync = async (
-  fs: FileSystem,
-  kg: KnowledgeGraph,
+  ctx: VerifySyncCtx,
   dataPath: string,
 ): ResultAsync<VerifySync> => {
+  const { fs, kg } = ctx;
   const logPath = join(dataPath, TRANSACTION_LOG_FILE);
   const logVerifyResult = await verifyLog(fs, logPath);
   if (isErr(logVerifyResult)) return logVerifyResult;
@@ -102,16 +103,16 @@ export const verifySync = async (
   });
 };
 
-type Services = Pick<
+type OrchestratorCtx = Pick<
   RuntimeContextWithDb,
   "db" | "fs" | "log" | "config" | "views"
 >;
 
 const withLockedKg = async <T>(
-  services: Services,
+  ctx: OrchestratorCtx,
   operation: (kg: KnowledgeGraph) => ResultAsync<T>,
 ): ResultAsync<T> => {
-  const { db, fs, log, config } = services;
+  const { db, fs, log, config } = ctx;
   const { paths } = config;
 
   const lockResult = await acquireLock(fs, paths.data);
@@ -123,7 +124,7 @@ const withLockedKg = async <T>(
   await releaseLock(fs, paths.data);
 
   if (!isErr(result)) {
-    const renderResult = await renderDocs({ ...services, kg });
+    const renderResult = await renderDocs({ ...ctx, kg });
     if (isErr(renderResult)) {
       log.error("Failed to re-render docs", { error: renderResult.error });
     }
@@ -133,15 +134,15 @@ const withLockedKg = async <T>(
 };
 
 export const repairDbFromLog = async (
-  services: Services,
+  ctx: OrchestratorCtx,
 ): ResultAsync<{ dbTransactionsPath?: string }> => {
   const {
     fs,
     config: { paths },
-  } = services;
+  } = ctx;
 
-  return withLockedKg(services, async (kg) => {
-    const verifyResult = await verifySync(fs, kg, paths.data);
+  return withLockedKg(ctx, async (kg) => {
+    const verifyResult = await verifySync({ fs, kg }, paths.data);
     if (isErr(verifyResult)) return verifyResult;
 
     const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
@@ -194,15 +195,15 @@ export const applyTransactions = async (
 };
 
 export const undoTransactions = async (
-  services: Services,
+  ctx: OrchestratorCtx,
   steps: number,
 ): ResultAsync<Transaction[]> => {
   const {
     fs,
     config: { paths },
-  } = services;
+  } = ctx;
 
-  return withLockedKg(services, async (kg) => {
+  return withLockedKg(ctx, async (kg) => {
     const versionResult = await kg.version();
     if (isErr(versionResult)) return versionResult;
 
@@ -267,15 +268,15 @@ export const undoTransactions = async (
 };
 
 export const redoTransactions = async (
-  services: Services,
+  ctx: OrchestratorCtx,
   steps: number,
 ): ResultAsync<Transaction[]> => {
   const {
     fs,
     config: { paths },
-  } = services;
+  } = ctx;
 
-  return withLockedKg(services, async (kg) => {
+  return withLockedKg(ctx, async (kg) => {
     const undoLogPath = join(paths.data, UNDO_LOG_FILE);
     const undoLogResult = await readLastTransactions(fs, undoLogPath, steps);
     if (isErr(undoLogResult)) return undoLogResult;
@@ -326,7 +327,7 @@ export type OrchestratorCallbacks = KnowledgeGraphCallbacks & {
 };
 
 export const setupKnowledgeGraph = (
-  services: Services,
+  ctx: OrchestratorCtx,
   callbacks: OrchestratorCallbacks,
 ): KnowledgeGraph => {
   const {
@@ -334,11 +335,11 @@ export const setupKnowledgeGraph = (
     fs,
     log,
     config: { paths },
-  } = services;
+  } = ctx;
 
   const renderAndNotify = async (context: string) => {
     const renderResult = await renderDocs({
-      ...services,
+      ...ctx,
       kg: knowledgeGraph,
     });
     if (isErr(renderResult)) {
@@ -406,13 +407,13 @@ export const setupKnowledgeGraph = (
 };
 
 export const squashTransactions = async (
-  services: Services,
+  ctx: OrchestratorCtx,
   count: number,
 ): ResultAsync<Transaction> => {
   const {
     fs,
     config: { paths },
-  } = services;
+  } = ctx;
 
   if (count < 2)
     return fail(
@@ -420,7 +421,7 @@ export const squashTransactions = async (
       `Count must be at least 2 to squash, got ${count}`,
     );
 
-  return withLockedKg(services, async (kg) => {
+  return withLockedKg(ctx, async (kg) => {
     const versionResult = await kg.version();
     if (isErr(versionResult)) return versionResult;
 

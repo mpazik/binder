@@ -122,6 +122,44 @@ const useAlternative = checkA && checkB && !checkC;
 return fetchFrom(useAlternative ? alternativeSource : defaultSource);
 ```
 
+### Dependency Injection
+
+Dependencies are passed via a `ctx` object as the first parameter. Rules:
+
+- `ctx` is always the first parameter, domain arguments follow.
+- Narrow the type to only the fields the function needs via `Pick<RuntimeContextWithDb, ...>`.
+- Name the type `*Ctx` -- module-specific, not generic (`VerifySyncCtx`, not `Services` or `Deps`).
+- When fields come from different context layers, merge into a flat type via intersection.
+- Call sites may pass a broader object if it is structurally compatible.
+- Enforced by `local/require-ctx-for-services` ESLint rule for exported functions with 2+ service parameters.
+
+```typescript
+// Standalone function -- called directly, no shared state.
+type VerifySyncCtx = Pick<RuntimeContextWithDb, "fs" | "kg">;
+
+export const verifySync = async (
+  ctx: VerifySyncCtx,
+  dataPath: string,
+): ResultAsync<VerifySync> => { /* ... */ };
+
+// Factory object -- multiple methods sharing state (caches, resources).
+type EntityCacheCtx = Pick<RuntimeContextWithDb, "log" | "kg" | "db">;
+
+export const createEntityCache = (ctx: EntityCacheCtx): EntityCache => {
+  const cache = new Map();
+  return {
+    get: async (id) => { /* uses ctx.kg, cache */ },
+    invalidate: (id) => { cache.delete(id); },
+  };
+};
+
+// Function factory -- returned function passed to .map(), callbacks, etc.
+type MapperCtx = Pick<RuntimeContextWithDb, "kg" | "config">;
+
+export const createEntityMapper = (ctx: MapperCtx) =>
+  (entity: RawEntity): MappedEntity => { /* uses ctx from closure */ };
+```
+
 ## Naming Conventions
 
 **Files**: `kebab-case` -- `user-store.ts`, `oauth-client.ts`

@@ -5,6 +5,7 @@ import { includeIgnoreFile } from "@eslint/compat";
 import globals from "globals";
 import { fileURLToPath } from "node:url";
 import ts from "typescript-eslint";
+import { rule as requireCtxForServices } from "./tools/eslint-rules/require-ctx-for-services.js";
 
 const gitignorePath = fileURLToPath(new URL("./.gitignore", import.meta.url));
 
@@ -21,10 +22,19 @@ export default ts.config(
         ...globals.browser,
         ...globals.node,
       },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: fileURLToPath(new URL(".", import.meta.url)),
+      },
     },
     plugins: {
       "import-x": importPlugin,
       "unused-imports": unusedImports,
+      local: {
+        rules: {
+          "require-ctx-for-services": requireCtxForServices,
+        },
+      },
     },
     rules: {
       "no-console": [
@@ -42,6 +52,7 @@ export default ts.config(
       "unused-imports/no-unused-imports": "error",
       "import-x/order": "error",
       "import-x/no-duplicates": "error",
+      "local/require-ctx-for-services": "error",
       "no-restricted-syntax": [
         "error",
         {

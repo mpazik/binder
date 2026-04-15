@@ -37,7 +37,7 @@ import {
   selectionOptions,
   yesOption,
 } from "../cli/options.ts";
-import { resolveTransactionDisplayKeys } from "../cli/ui.ts";
+import { resolveTransactionDisplayKeys, type Ui } from "../cli/ui.ts";
 import {
   serialize,
   serializeFormats,
@@ -275,7 +275,7 @@ export const transactionSquashHandler: CommandHandlerWithDb<{
   return okVoid;
 };
 
-const printChainError = (ui: Parameters<CommandHandlerWithDb>[0]["ui"]) => {
+const printChainError = (ui: Ui) => {
   ui.block(() => {
     ui.danger("Transaction chain broken");
     ui.info("The transaction log has a broken previous-hash link.");
@@ -329,7 +329,7 @@ export const transactionVerifyHandler: CommandHandlerWithDb = async ({
     return logIntegrityResult;
   }
 
-  const verifyResult = await verifySync(fs, kg, config.paths.data);
+  const verifyResult = await verifySync({ fs, kg }, config.paths.data);
   if (isErr(verifyResult)) {
     if (verifyResult.error.key === "chain-error") {
       printChainError(ui);
@@ -448,7 +448,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
     return okVoid;
   }
 
-  const verifyResult = await verifySync(fs, kg, config.paths.data);
+  const verifyResult = await verifySync({ fs, kg }, config.paths.data);
   if (isErr(verifyResult)) {
     if (verifyResult.error.key === "chain-error") {
       printChainError(ui);

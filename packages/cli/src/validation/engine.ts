@@ -6,18 +6,13 @@ import {
   ok,
   type ResultAsync,
 } from "@binder/utils";
-import type {
-  KnowledgeGraph,
-  Namespace,
-  NamespaceEditable,
-  NamespaceSchema,
-} from "@binder/db";
+import type { Namespace, NamespaceEditable, NamespaceSchema } from "@binder/db";
 import {
   findNavigationItemByPath,
   type NavigationItem,
 } from "../document/navigation.ts";
-import type { FileSystem } from "../lib/filesystem.ts";
 import type { ConfigPaths } from "../config.ts";
+import type { RuntimeContextWithDb } from "../runtime.ts";
 import type { ParsedYaml } from "../document/yaml-cst.ts";
 import type { ParsedMarkdown } from "../document/markdown.ts";
 import {
@@ -73,13 +68,13 @@ export const validateDocument = async <N extends Namespace>(
     );
   }
 
-  const filteredErrors = applyRuleConfig(errors, context.ruleConfig);
-  return createValidationResult(filteredErrors);
+  return createValidationResult(applyRuleConfig(errors, context.ruleConfig));
 };
 
+export type ValidateFileCtx = Pick<RuntimeContextWithDb, "fs" | "kg">;
+
 export const validateFile = async <N extends NamespaceEditable>(
-  fs: FileSystem,
-  kg: KnowledgeGraph,
+  ctx: ValidateFileCtx,
   filePath: string,
   navigationItems: NavigationItem[],
   namespace: N,
@@ -87,6 +82,7 @@ export const validateFile = async <N extends NamespaceEditable>(
   paths: ConfigPaths,
   ruleConfig: ValidationRuleConfig,
 ): ResultAsync<ValidationResult> => {
+  const { fs, kg } = ctx;
   const contentResult = await fs.readFile(filePath);
   if (isErr(contentResult)) return contentResult;
 

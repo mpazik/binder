@@ -73,7 +73,7 @@ describe("orchestrator", () => {
       for (const tx of dbTxs) throwIfError(await kg.apply(tx));
       throwIfError(await logTransactions(fs, transactionLogPath, logTxs));
 
-      const result = await verifySync(fs, kg, dataPath);
+      const result = await verifySync({ fs, kg }, dataPath);
       const sync = throwIfError(result);
       expect(sync).toEqual(expected);
     };

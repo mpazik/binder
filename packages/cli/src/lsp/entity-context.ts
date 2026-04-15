@@ -13,7 +13,7 @@ import { getTypeFromFilters, interpolateQueryParams } from "../utils/query.ts";
 import type { NavigationItem } from "../document/navigation.ts";
 import type { DatabaseCli } from "../db";
 import { getSnapshotEntityUid } from "../lib/snapshot.ts";
-import type { Logger } from "../log.ts";
+import type { RuntimeContextWithDb } from "../runtime.ts";
 
 export type DocumentEntityContext =
   | { kind: "single"; entities: FieldsetNested[] }
@@ -29,26 +29,13 @@ const searchEntities = async (
   return ok(searchResult.data.items);
 };
 
-/**
- * Extracts a `uid` value from document content by matching the first line
- * that starts with `uid:` (e.g. in YAML frontmatter or a YAML entity body).
- */
 export const extractUidFromContent = (content: string): string | undefined => {
   const match = content.match(/^uid:\s*(\S+)/m);
   return match?.[1];
 };
 
-/**
- * Resolves which entities a document maps to using a three-tier strategy:
- *
- * 1. **Snapshot uid** — looks up the file in the snapshot table.
- * 2. **Path field extraction** — derives field values from the file path pattern.
- * 3. **Content uid fallback** — when the above two produce no match, parses
- *    the `uid` field from the document content as a last resort.
- *
- * For list-style navigation items (those with a `query`), the query is
- * executed directly and the content uid fallback is not used.
- */
+// Three-tier entity resolution: snapshot uid → path field extraction → content uid fallback.
+// List-style navigation items (with `query`) use the query directly; content uid fallback is skipped.
 export const fetchEntityContext = async (
   kg: KnowledgeGraph,
   db: DatabaseCli,
@@ -86,8 +73,6 @@ export const fetchEntityContext = async (
   });
   if (isErr(entities)) return entities;
 
-  // Content uid fallback: when snapshot and path extraction didn't identify
-  // an entity, try reading the uid from the document content as a last resort.
   if (entities.data.length === 0 && !snapshotUid && content) {
     const contentUid = extractUidFromContent(content);
     if (contentUid) {
@@ -116,11 +101,15 @@ export type EntityContextCache = {
   getStats: () => { size: number; hits: number; misses: number };
 };
 
+export type EntityContextCacheCtx = Pick<
+  RuntimeContextWithDb,
+  "log" | "kg" | "db"
+>;
+
 export const createEntityContextCache = (
-  log: Logger,
-  kg: KnowledgeGraph,
-  db: DatabaseCli,
+  ctx: EntityContextCacheCtx,
 ): EntityContextCache => {
+  const { log, kg, db } = ctx;
   const cache = new Map<string, DocumentEntityContext>();
   let hits = 0;
   let misses = 0;

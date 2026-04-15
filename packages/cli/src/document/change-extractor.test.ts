@@ -100,9 +100,7 @@ describe("change-extractor", () => {
     throwIfError(await ctx.fs.writeFile(fullPath, content));
     const result = throwIfError(
       await extractFileChanges(
-        ctx.fs,
-        kg,
-        ctx.config,
+        { ...ctx, kg },
         navigationItems,
         mockRecordSchema,
         filePath,
@@ -186,9 +184,7 @@ describe("change-extractor", () => {
       throwIfError(await ctx.fs.writeFile(fullPath, content));
       const result = throwIfError(
         await extractFileChanges(
-          ctx.fs,
-          kg,
-          ctx.config,
+          { ...ctx, kg },
           projNavItems,
           mockRecordSchema,
           filePath,
@@ -252,9 +248,7 @@ status: active
       throwIfError(await ctx.fs.mkdir(dirname(fullPath), { recursive: true }));
       throwIfError(await ctx.fs.writeFile(fullPath, markdown));
       const result = await extractFileChanges(
-        ctx.fs,
-        kg,
-        ctx.config,
+        { ...ctx, kg },
         preambleNavItems,
         mockRecordSchema,
         filePath,
@@ -292,9 +286,7 @@ ${mockTask2Record.description}
       throwIfError(await ctx.fs.writeFile(fullPath, markdown));
       const result = throwIfError(
         await extractFileChanges(
-          ctx.fs,
-          kg,
-          ctx.config,
+          { ...ctx, kg },
           preambleNavItems,
           mockRecordSchema,
           filePath,
@@ -411,9 +403,7 @@ ${mockTask2Record.description}
       throwIfError(await ctx.fs.writeFile(fullPath, content));
       const result = throwIfError(
         await extractFileChanges(
-          ctx.fs,
-          kg,
-          ctx.config,
+          { ...ctx, kg },
           reqNavItems,
           schema,
           filePath,
@@ -525,9 +515,7 @@ ${mockTask2Record.description}
       throwIfError(await ctx.fs.writeFile(fullPath, content));
       const result = throwIfError(
         await extractFileChanges(
-          ctx.fs,
-          kg,
-          ctx.config,
+          { ...ctx, kg },
           navItemsWithWhere,
           mockRecordSchema,
           filePath,
@@ -594,9 +582,7 @@ ${mockTask2Record.description}
         ),
       );
       const result = await extractFileChanges(
-        ctx.fs,
-        kg,
-        ctx.config,
+        { ...ctx, kg },
         noWhereNavItems,
         mockRecordSchema,
         filePath,
@@ -963,9 +949,7 @@ Updated description
       throwIfError(await ctx.fs.mkdir(dirname(fullPath), { recursive: true }));
       throwIfError(await ctx.fs.writeFile(fullPath, fileContent));
       const result = await extractFileChanges(
-        ctx.fs,
-        kg,
-        ctx.config,
+        { ...ctx, kg },
         navItems,
         mockRecordSchema,
         filePath,

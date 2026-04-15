@@ -109,11 +109,7 @@ export const createWorkspaceManager = (
 
       const { runtime, close } = runtimeResult.data;
       const documentCache = createDocumentCache(runtime.log);
-      const entityContextCache = createEntityContextCache(
-        runtime.log,
-        runtime.kg,
-        runtime.db,
-      );
+      const entityContextCache = createEntityContextCache(runtime);
 
       const entry: WorkspaceEntry = {
         runtime,
@@ -152,41 +148,38 @@ export const createWorkspaceManager = (
   };
 };
 
-export type WorkspaceContextDeps = {
+export type WorkspaceCtx = {
   connection: Connection;
   workspaceManager: WorkspaceManager;
   log: Logger;
 };
 
-/** Find workspace for a document URI. Logs a debug message if not found. */
 export const resolveWorkspace = (
+  ctx: WorkspaceCtx,
   uri: string,
   eventName: string,
-  deps: WorkspaceContextDeps,
 ): WorkspaceEntry | undefined => {
-  const workspace = deps.workspaceManager.findWorkspaceForDocument(uri);
+  const workspace = ctx.workspaceManager.findWorkspaceForDocument(uri);
   if (!workspace) {
-    deps.log.debug(`${eventName}: not in any Binder workspace`, { uri });
+    ctx.log.debug(`${eventName}: not in any Binder workspace`, { uri });
   }
   return workspace;
 };
 
 type HasDocumentUri = { document: { uri: string } };
 
-/** Wrap a document event handler with workspace resolution. Skips
- *  non-workspace documents with a debug log. */
 export const withWorkspaceContext =
   <T extends HasDocumentUri>(
+    ctx: WorkspaceCtx,
     eventName: string,
-    deps: WorkspaceContextDeps,
     handler: (
+      ctx: WorkspaceCtx,
       event: T,
       workspace: WorkspaceEntry,
-      deps: WorkspaceContextDeps,
     ) => Promise<void>,
   ) =>
   async (event: T): Promise<void> => {
-    const workspace = resolveWorkspace(event.document.uri, eventName, deps);
+    const workspace = resolveWorkspace(ctx, event.document.uri, eventName);
     if (!workspace) return;
-    await handler(event, workspace, deps);
+    await handler(ctx, event, workspace);
   };

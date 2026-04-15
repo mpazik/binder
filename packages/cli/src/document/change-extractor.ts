@@ -26,7 +26,6 @@ import {
 import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { interpolateQueryParams } from "../utils/query.ts";
 import { diffEntities, diffQueryResults } from "../diff";
-import type { FileSystem } from "../lib/filesystem.ts";
 import {
   modifiedSnapshots,
   namespaceFromSnapshotPath,
@@ -34,7 +33,7 @@ import {
   type SnapshotChangeMetadata,
   snapshotRootForNamespace,
 } from "../lib/snapshot.ts";
-import { type AppConfig, BINDER_DIR } from "../config.ts";
+import { BINDER_DIR } from "../config.ts";
 import type { MatchOptions } from "../utils/file.ts";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
@@ -55,7 +54,6 @@ import {
 import { normalizeReferences, normalizeReferencesList } from "./reference.ts";
 import { type Views } from "./view-entity.ts";
 
-/** Extract the entity ref from a changeset input (handles both raw and normalized forms). */
 const getChangesetRef = (cs: Record<string, unknown>): string | undefined => {
   if ("$ref" in cs) return cs.$ref as string;
   if ("type" in cs) return undefined; // create, not a ref
@@ -64,7 +62,6 @@ const getChangesetRef = (cs: Record<string, unknown>): string | undefined => {
   return undefined;
 };
 
-/** Field keys that are ref identifiers, not data fields. */
 const refFieldKeys = new Set(["$ref", "uid", "key", "type"]);
 
 const isSingleValueFilter = (filter: Filter): filter is string | number =>
@@ -99,9 +96,6 @@ type SingleEntityLookup =
   | { status: "found"; kgEntity: Fieldset }
   | { status: "create"; changeset: ChangesetsInput };
 
-// Searches for exactly one entity by pathFields. Returns the found entity, a
-// create changeset when there are zero results and `where` is provided, or an
-// error when the result count is not exactly one.
 const lookupSingleEntity = async (
   kg: KnowledgeGraph,
   namespace: NamespaceEditable,
@@ -316,10 +310,13 @@ const diffExtracted = (
 // Do not write to the database here — extractFileChanges runs outside the
 // file lock scope. DB writes cause "database is locked" errors under
 // concurrent access (LSP + CLI, or parallel CLI processes).
+export type ExtractFileChangesCtx = Pick<
+  RuntimeContextWithDb,
+  "fs" | "kg" | "config"
+>;
+
 export const extractFileChanges = async <N extends NamespaceEditable>(
-  fs: FileSystem,
-  kg: KnowledgeGraph,
-  config: AppConfig,
+  ctx: ExtractFileChangesCtx,
   navigationItems: NavigationItem[],
   schema: EntitySchema,
   relativePath: string,
@@ -328,6 +325,7 @@ export const extractFileChanges = async <N extends NamespaceEditable>(
   sourceContent?: string,
   entityUid?: EntityUid,
 ): ResultAsync<ChangesetsInput<N>> => {
+  const { fs, kg, config } = ctx;
   const navItem = findNavigationItemByPath(navigationItems, relativePath);
   if (!navItem) {
     return fail(
@@ -421,9 +419,7 @@ const extractNamespaceChanges = async <N extends NamespaceEditable>(
     const entityUid =
       file.type !== "untracked" ? (file.entityUid ?? undefined) : undefined;
     const syncResult = await extractFileChanges(
-      fs,
-      kg,
-      config,
+      { fs, config, kg },
       navigationItemsResult.data,
       schemaResult.data,
       file.path,

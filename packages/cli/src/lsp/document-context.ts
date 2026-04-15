@@ -43,10 +43,7 @@ import {
   computeEntityMappings,
   type EntityMappings,
 } from "./entity-mapping.ts";
-import {
-  resolveWorkspace,
-  type WorkspaceContextDeps,
-} from "./workspace-manager.ts";
+import { resolveWorkspace, type WorkspaceCtx } from "./workspace-manager.ts";
 import type { EntityContextCache } from "./entity-context.ts";
 
 type BaseDocumentContext = {
@@ -81,7 +78,7 @@ export type DocumentContext = YamlDocumentContext | MarkdownDocumentContext;
 
 type LspParams = { textDocument: TextDocumentIdentifier };
 
-type LspHandlerDeps = {
+type LspHandlerCtx = {
   document: TextDocument;
   context: DocumentContext;
   runtime: RuntimeContextWithDb;
@@ -89,10 +86,10 @@ type LspHandlerDeps = {
 
 export type LspHandler<TParams extends LspParams, TResult> = (
   params: TParams,
-  deps: LspHandlerDeps,
+  ctx: LspHandlerCtx,
 ) => TResult | Promise<TResult>;
 
-export type WithDocumentContextDeps = WorkspaceContextDeps & {
+export type WithDocumentCtx = WorkspaceCtx & {
   lspDocuments: TextDocuments<TextDocument>;
 };
 
@@ -102,14 +99,14 @@ const getContextErrorLevel = (key: string) =>
 
 export const withDocumentContext =
   <TParams extends LspParams, TResult>(
+    ctx: WithDocumentCtx,
     requestName: string,
-    deps: WithDocumentContextDeps,
     handler: LspHandler<TParams, TResult>,
   ) =>
   async (params: TParams): Promise<TResult | null> => {
     const uri = params.textDocument.uri;
 
-    const workspace = resolveWorkspace(uri, requestName, deps);
+    const workspace = resolveWorkspace(ctx, uri, requestName);
     if (!workspace) return null;
 
     const { runtime, documentCache, entityContextCache } = workspace;
@@ -117,7 +114,7 @@ export const withDocumentContext =
 
     wsLog.debug(`${requestName} request received`, { uri });
 
-    const document = deps.lspDocuments.get(uri);
+    const document = ctx.lspDocuments.get(uri);
     if (!document) {
       wsLog.warn("Document not found", { uri });
       return null;

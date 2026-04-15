@@ -54,7 +54,7 @@ export const createLspServer = (
     // Sending both a disk write and applyEdit races and causes conflict dialogs.
     async () => {},
   );
-  const deps = { connection, lspDocuments, workspaceManager, log };
+  const ctx = { connection, lspDocuments, workspaceManager, log };
 
   let hasWorkspaceFolderCapability = false;
 
@@ -154,19 +154,19 @@ export const createLspServer = (
   });
 
   lspDocuments.onDidOpen(
-    withWorkspaceContext("didOpen", deps, async (event, { runtime }) => {
+    withWorkspaceContext(ctx, "didOpen", async (_ctx, event, { runtime }) => {
       runtime.log.debug("Document opened", { uri: event.document.uri });
     }),
   );
 
   lspDocuments.onDidChangeContent(
-    withWorkspaceContext("didChange", deps, async (event, { runtime }) => {
+    withWorkspaceContext(ctx, "didChange", async (_ctx, event, { runtime }) => {
       runtime.log.debug("Document changed", { uri: event.document.uri });
     }),
   );
 
   lspDocuments.onDidClose(
-    withWorkspaceContext("didClose", deps, async (event, workspace) => {
+    withWorkspaceContext(ctx, "didClose", async (_ctx, event, workspace) => {
       const uri = event.document.uri;
       workspace.runtime.log.info("Document closed", { uri });
       workspace.documentCache.invalidate(uri);
@@ -174,27 +174,27 @@ export const createLspServer = (
   );
 
   lspDocuments.onDidSave(
-    withWorkspaceContext("didSave", deps, handleDocumentSave),
+    withWorkspaceContext(ctx, "didSave", handleDocumentSave),
   );
 
   connection.onCompletion(
-    withDocumentContext("Completion", deps, handleCompletion),
+    withDocumentContext(ctx, "Completion", handleCompletion),
   );
-  connection.onHover(withDocumentContext("Hover", deps, handleHover));
+  connection.onHover(withDocumentContext(ctx, "Hover", handleHover));
   connection.onDefinition(
-    withDocumentContext("Definition", deps, handleDefinition),
+    withDocumentContext(ctx, "Definition", handleDefinition),
   );
   connection.onCodeAction(
-    withDocumentContext("Code action", deps, handleCodeAction),
+    withDocumentContext(ctx, "Code action", handleCodeAction),
   );
   connection.languages.inlayHint.on(
-    withDocumentContext("Inlay hints", deps, handleInlayHints),
+    withDocumentContext(ctx, "Inlay hints", handleInlayHints),
   );
 
   connection.languages.diagnostics.on(async (params) => {
     const result = await withDocumentContext(
+      ctx,
       "Diagnostics",
-      deps,
       handleDiagnostics,
     )(params);
     return result ?? { kind: "full", items: [] };
@@ -202,8 +202,8 @@ export const createLspServer = (
 
   connection.languages.semanticTokens.on(async (params) => {
     const result = await withDocumentContext(
+      ctx,
       "Semantic tokens",
-      deps,
       handleSemanticTokens,
     )(params);
     return result ?? { data: [] };

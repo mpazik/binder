@@ -528,8 +528,10 @@ export const renderNavigationItem = async (
   return ok(result);
 };
 
+export type RenderNavigationCtx = Omit<RenderContext, "schema" | "version">;
+
 export const renderNavigation = async (
-  ctx: Omit<RenderContext, "schema" | "version">,
+  ctx: RenderNavigationCtx,
   navigationItems: NavigationItem[],
 ): ResultAsync<RenderResult> => {
   const schemaResult = await ctx.kg.getSchema(ctx.namespace);
