@@ -185,14 +185,12 @@ export const buildNavigationTree = (
   items: FieldsetNested[],
 ): NavigationItem[] => {
   const childrenByParentKey = new Map<string, FieldsetNested[]>();
-
   for (const item of items) {
     const parentKey = item.parent as string | undefined;
-    if (parentKey) {
-      const siblings = childrenByParentKey.get(parentKey) ?? [];
-      siblings.push(item);
-      childrenByParentKey.set(parentKey, siblings);
-    }
+    if (!parentKey) continue;
+    const siblings = childrenByParentKey.get(parentKey) ?? [];
+    siblings.push(item);
+    childrenByParentKey.set(parentKey, siblings);
   }
 
   const buildTree = (item: FieldsetNested): NavigationItem => {

@@ -396,9 +396,7 @@ export const transactionRepairHandler: CommandHandlerWithDb<{
       ],
       2,
     );
-    ui.info(
-      "This should only be used only for disaster recovery after corruption",
-    );
+    ui.info("This should only be used for disaster recovery after corruption");
     ui.println("");
 
     const confirmResult = await confirmProtected(

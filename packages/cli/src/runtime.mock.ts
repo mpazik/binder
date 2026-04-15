@@ -7,6 +7,7 @@ import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
 import { BINDER_DIR } from "./config.ts";
 import type { AppConfig } from "./config.ts";
 import type { RuntimeContextWithDb, RuntimeContext } from "./runtime.ts";
+import type { TelemetryState } from "./telemetry.ts";
 import { createNavigationCache } from "./document/navigation.ts";
 import { createViewCache } from "./document/view-entity.ts";
 
@@ -57,6 +58,13 @@ export const mockLog: Logger = {
   }),
 };
 
+export const mockTelemetry: TelemetryState = {
+  enabled: false,
+  isInternal: false,
+  reason: "disabled-missing-key",
+  host: "https://us.i.posthog.com",
+};
+
 export const createMockCommandContext = async (): Promise<RuntimeContext> => {
   const fs = createInMemoryFileSystem();
   await fs.mkdir(mockConfig.paths.root);
@@ -66,6 +74,7 @@ export const createMockCommandContext = async (): Promise<RuntimeContext> => {
   await fs.mkdir(mockConfig.paths.docs);
   return {
     config: mockConfig,
+    telemetry: mockTelemetry,
     log: mockLog,
     ui: mockUi,
     fs,

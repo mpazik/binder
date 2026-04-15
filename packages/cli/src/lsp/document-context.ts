@@ -32,6 +32,7 @@ import {
   namespaceFromSnapshotPath,
 } from "../lib/snapshot.ts";
 import { getTypeFromFilters } from "../utils/query.ts";
+import { track } from "../telemetry.ts";
 import { extract, type ExtractedFileData } from "../document/extraction.ts";
 import {
   getDocumentFileType,
@@ -102,8 +103,12 @@ export const withDocumentContext =
     ctx: WithDocumentCtx,
     requestName: string,
     handler: LspHandler<TParams, TResult>,
+    options?: { telemetry?: string },
   ) =>
   async (params: TParams): Promise<TResult | null> => {
+    if (options?.telemetry) {
+      track(ctx.telemetry, { event: "lsp_action", action: options.telemetry });
+    }
     const uri = params.textDocument.uri;
 
     const workspace = resolveWorkspace(ctx, uri, requestName);
@@ -304,7 +309,7 @@ export const getDocumentContext = async (
     navigationResult.data,
     relativePath,
   );
-  if (navigationItem === undefined)
+  if (!navigationItem)
     return fail("navigation-not-found", "No navigation item for path", {
       data: { uri, relativePath },
     });

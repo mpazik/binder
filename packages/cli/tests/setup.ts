@@ -56,9 +56,16 @@ const CMD = getCommand();
 /** `.binder` when testing a bundled binary, `.binder-dev` when running unbundled via Bun. */
 export const binderDir = process.env.BINDER_CLI ? ".binder" : ".binder-dev";
 
-export const run = async (args: string[], opts?: { cwd?: string }) => {
+export const run = async (
+  args: string[],
+  opts?: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+  },
+) => {
   const result = await $`${CMD} ${args}`
     .cwd(opts?.cwd ?? process.cwd())
+    .env({ ...process.env, ...(opts?.env ?? {}) })
     .nothrow()
     .quiet();
   return {
@@ -83,15 +90,16 @@ const assertStream = (output: string, contains: StreamAssertion) => {
   }
 };
 
+const isStreamPair = (
+  v: OutputAssertion,
+): v is { stdout?: StreamAssertion; stderr?: StreamAssertion } =>
+  typeof v === "object" && !Array.isArray(v) && typeof v !== "function";
+
 const assertOutput = (
   result: { stdout: string; stderr: string },
   contains: OutputAssertion,
 ) => {
-  if (
-    typeof contains === "object" &&
-    !Array.isArray(contains) &&
-    typeof contains !== "function"
-  ) {
+  if (isStreamPair(contains)) {
     if (contains.stdout) assertStream(result.stdout, contains.stdout);
     if (contains.stderr) assertStream(result.stderr, contains.stderr);
   } else {
@@ -116,18 +124,16 @@ export const createRunHelpers = (getDir: () => string) => {
   return { check, checkError };
 };
 
-/**
- * Spawn a background `binder <command>` process with stdio pipes.
- * The caller is responsible for killing the process.
- */
+/** The caller is responsible for killing the returned process. */
 export const spawnBinder = (
   command: string,
-  opts?: { cwd?: string },
+  opts?: { cwd?: string; env?: Record<string, string | undefined> },
 ): ChildProcess => {
   const [bin, ...baseArgs] = CMD;
   return spawn(bin, [...baseArgs, command], {
     cwd: opts?.cwd,
     stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, ...(opts?.env ?? {}) },
   });
 };
 

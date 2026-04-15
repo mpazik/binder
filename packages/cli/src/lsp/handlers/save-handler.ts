@@ -51,7 +51,7 @@ const syncDocument = async (
   const absolutePath = fileURLToPath(uri);
 
   const namespace = namespaceFromSnapshotPath(absolutePath, config.paths);
-  if (namespace === undefined) {
+  if (!namespace) {
     log.debug("File outside workspace, skipping sync", {
       path: absolutePath,
       config: config.paths,

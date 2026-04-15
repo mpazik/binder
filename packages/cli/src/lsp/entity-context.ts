@@ -29,13 +29,17 @@ const searchEntities = async (
   return ok(searchResult.data.items);
 };
 
+/** Extracts a `uid` value from document content (e.g. YAML frontmatter). */
 export const extractUidFromContent = (content: string): string | undefined => {
   const match = content.match(/^uid:\s*(\S+)/m);
   return match?.[1];
 };
 
-// Three-tier entity resolution: snapshot uid → path field extraction → content uid fallback.
-// List-style navigation items (with `query`) use the query directly; content uid fallback is skipped.
+/**
+ * Resolves which entities a document maps to:
+ * 1. Snapshot uid lookup → 2. Path field extraction → 3. Content uid fallback.
+ * List-style nav items (with `query`) execute the query directly.
+ */
 export const fetchEntityContext = async (
   kg: KnowledgeGraph,
   db: DatabaseCli,
@@ -73,6 +77,8 @@ export const fetchEntityContext = async (
   });
   if (isErr(entities)) return entities;
 
+  // Content uid fallback: when snapshot and path extraction didn't identify
+  // an entity, try reading the uid from the document content as a last resort.
   if (entities.data.length === 0 && !snapshotUid && content) {
     const contentUid = extractUidFromContent(content);
     if (contentUid) {

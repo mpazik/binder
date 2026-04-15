@@ -13,13 +13,21 @@ import {
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { BINDER_VERSION } from "../environment.ts";
 import { processMcpRequest } from "../mcp";
+import { track, forceFlush } from "../telemetry.ts";
 import { types } from "../cli/types.ts";
 
 const respond = (response: JsonRpcResponse) => {
   process.stdout.write(JSON.stringify(response) + "\n");
 };
 
-const mcpHandler: CommandHandlerWithDb = async ({ kg, log, config, fs }) => {
+const mcpHandler: CommandHandlerWithDb = async ({
+  kg,
+  log,
+  config,
+  fs,
+  telemetry,
+}) => {
+  const startedAt = Date.now();
   process.env.NO_COLOR = "1";
 
   log.info("MCP server starting", {
@@ -40,25 +48,27 @@ const mcpHandler: CommandHandlerWithDb = async ({ kg, log, config, fs }) => {
     const parseResult = tryCatch(() => JSON.parse(trimmed));
 
     if (isErr(parseResult)) {
-      const errorResponse = createJsonRpcErrorResponse(
-        createJsonRpcError(JSONRPC_ERRORS.PARSE_ERROR, "Parse error"),
-        null,
+      respond(
+        createJsonRpcErrorResponse(
+          createJsonRpcError(JSONRPC_ERRORS.PARSE_ERROR, "Parse error"),
+          null,
+        ),
       );
-      respond(errorResponse);
       return;
     }
 
     const request = parseResult.data;
 
     if (!isJsonRpcRequest(request)) {
-      const errorResponse = createJsonRpcErrorResponse(
-        createJsonRpcError(
-          JSONRPC_ERRORS.INVALID_REQUEST,
-          "Invalid JSON-RPC request",
+      respond(
+        createJsonRpcErrorResponse(
+          createJsonRpcError(
+            JSONRPC_ERRORS.INVALID_REQUEST,
+            "Invalid JSON-RPC request",
+          ),
+          null,
         ),
-        null,
       );
-      respond(errorResponse);
       return;
     }
 
@@ -68,11 +78,33 @@ const mcpHandler: CommandHandlerWithDb = async ({ kg, log, config, fs }) => {
     }
 
     const response = await processMcpRequest({ kg, log, config, fs }, request);
+
+    if (request.method === "tools/call") {
+      const params = request.params as { name?: unknown } | null;
+      const tool = typeof params?.name === "string" ? params.name : null;
+
+      if (tool === "search" || tool === "schema" || tool === "transact") {
+        track(telemetry, {
+          event: "mcp_tool",
+          tool,
+          success: !("error" in response),
+        });
+      }
+    }
+
     respond(response);
   });
 
   rl.on("close", () => {
     log.info("MCP server stopping");
+
+    track(telemetry, {
+      event: "mcp_session",
+      duration_ms: Date.now() - startedAt,
+    });
+
+    forceFlush(telemetry, { projectRoot: config.paths.root });
+
     process.exit(0);
   });
 
@@ -119,5 +151,9 @@ AVAILABLE TOOLS:
   - get-schema: Retrieve record schema definitions
     `);
   },
-  handler: runtimeWithDb(mcpHandler, { logFile: "mcp.log", silent: true }),
+  handler: runtimeWithDb(mcpHandler, {
+    logFile: "mcp.log",
+    silent: true,
+    telemetryInterface: "mcp",
+  }),
 });

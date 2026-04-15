@@ -7,6 +7,17 @@ import type { BunPlugin } from "bun";
 const isProd = process.argv.includes("--prod");
 const isLocal = process.argv.includes("--local");
 
+const DEFAULT_TELEMETRY_KEY =
+  "phc_skSi2u7J7SVkYXs2NeqvXugUFKtvZeP2NGcaKmNCRHkv";
+const DEFAULT_TELEMETRY_HOST = "https://us.i.posthog.com";
+
+const telemetryKey = process.env.BINDER_TELEMETRY_KEY ?? DEFAULT_TELEMETRY_KEY;
+const telemetryHost =
+  process.env.BINDER_TELEMETRY_HOST ?? DEFAULT_TELEMETRY_HOST;
+
+const defineLiteral = (value: string | undefined): string =>
+  value === undefined ? "undefined" : JSON.stringify(value);
+
 const packageJson = JSON.parse(
   readFileSync(join(import.meta.dir, "package.json"), "utf-8"),
 );
@@ -22,17 +33,7 @@ console.log(
   `Building Binder CLI v${version}${isProd ? " (production)" : " (development)"}...`,
 );
 
-/**
- * Build plugin that swaps *.bun.ts imports for *.node.ts counterparts.
- *
- * Convention: when a module needs different implementations for Bun and Node,
- * create two files side by side -- `foo.bun.ts` (used during dev/test under
- * Bun) and `foo.node.ts` (bundled into the production Node build). Source
- * code always imports the `.bun.ts` variant; this plugin rewires it at
- * build time.
- *
- * See docs/contributing/node-compatibility.md for details.
- */
+/** Swaps *.bun.ts imports for *.node.ts counterparts in the production Node build. */
 const nodeCompatPlugin: BunPlugin = {
   name: "node-compat",
   setup(build) {
@@ -46,13 +47,15 @@ const nodeCompatPlugin: BunPlugin = {
 };
 
 const result = await Bun.build({
-  entrypoints: ["./src/index.ts"],
+  entrypoints: ["./src/index.ts", "./src/telemetry-flush.ts"],
   outdir: "./dist",
   target: "node",
   packages: "bundle",
   external: ["better-sqlite3"],
   define: {
     __BINDER_VERSION__: JSON.stringify(version),
+    __BINDER_TELEMETRY_KEY__: defineLiteral(telemetryKey),
+    __BINDER_TELEMETRY_HOST__: defineLiteral(telemetryHost),
   },
   plugins: [nodeCompatPlugin],
 });

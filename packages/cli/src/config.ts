@@ -1,5 +1,5 @@
 import { dirname, join, resolve } from "path";
-import { readFile, access } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "os";
 import { z } from "zod";
 import * as YAML from "yaml";
@@ -33,13 +33,17 @@ export const BACKUPS_DIR = "backups";
 export const LOCK_RETRY_DELAY_MS = 200;
 export const LOCK_MAX_RETRIES = 3;
 
-export const GlobalConfigSchema = z.object({
+const SharedConfigSchema = z.object({
   author: z.string().optional(),
   logLevel: z.enum(LOG_LEVELS).optional(),
 });
+
+export const GlobalConfigSchema = SharedConfigSchema.extend({
+  telemetry: z.boolean().nullable().optional(),
+});
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 
-export const UserConfigSchema = GlobalConfigSchema.extend({
+export const UserConfigSchema = SharedConfigSchema.extend({
   docsPath: z.string().default(DEFAULT_DOCS_PATH),
   include: z.array(z.string()).optional(),
   exclude: z.array(z.string()).optional(),
@@ -57,39 +61,24 @@ const loadConfigFile = async <T extends z.ZodTypeAny>(
   path: string,
   schema: T,
 ): ResultAsync<z.infer<T>> => {
+  const parseError = (error: unknown) =>
+    createError("config-parse-failed", `Failed to parse config at ${path}`, {
+      data: { error },
+    });
+
   const exists = await access(path).then(
     () => true,
     () => false,
   );
-  if (!exists)
-    return tryCatch(
-      () => schema.parse({}),
-      (error) =>
-        createError(
-          "config-parse-failed",
-          `Failed to parse config at ${path}`,
-          {
-            data: { error },
-          },
-        ),
-    );
+  if (!exists) return tryCatch(() => schema.parse({}), parseError);
 
   const fileResult = await tryCatch(async () => {
     const text = await readFile(path, "utf-8");
     return YAML.parse(text);
   });
-
   if (isErr(fileResult)) return fileResult;
 
-  const rawConfig = fileResult.data ?? {};
-
-  return tryCatch(
-    () => schema.parse(rawConfig),
-    (error) =>
-      createError("config-parse-failed", `Failed to parse config at ${path}`, {
-        data: { error },
-      }),
-  );
+  return tryCatch(() => schema.parse(fileResult.data ?? {}), parseError);
 };
 
 export const findBinderRoot = async (
@@ -130,10 +119,8 @@ export const resolveRelativePath = (
   relativePath: string,
   paths: ConfigPaths,
 ): string => {
-  const isConfigPath = relativePath.startsWith(BINDER_DIR);
-  return isConfigPath
-    ? join(paths.root, relativePath)
-    : join(paths.docs, relativePath);
+  const base = relativePath.startsWith(BINDER_DIR) ? paths.root : paths.docs;
+  return join(base, relativePath);
 };
 
 export type AppConfig = {
@@ -158,11 +145,25 @@ export const getGlobalStatePath = (): string => {
   return join(stateHome, "binder");
 };
 
-export const loadGlobalConfig = async (): ResultAsync<GlobalConfig> => {
-  return loadConfigFile(
-    join(getGlobalConfigPath(), CONFIG_FILE),
-    GlobalConfigSchema,
-  );
+export const loadGlobalConfig = (): ResultAsync<GlobalConfig> =>
+  loadConfigFile(join(getGlobalConfigPath(), CONFIG_FILE), GlobalConfigSchema);
+
+/** Persist the global config to `$XDG_CONFIG_HOME/binder/config.yaml`. */
+export const saveGlobalConfig = async (
+  config: GlobalConfig,
+): ResultAsync<void> => {
+  return tryCatch(async () => {
+    const dir = getGlobalConfigPath();
+    await mkdir(dir, { recursive: true });
+
+    const content = YAML.stringify(config, {
+      indent: 2,
+      lineWidth: 0,
+      defaultStringType: "PLAIN",
+    });
+
+    await writeFile(join(dir, CONFIG_FILE), content, "utf-8");
+  });
 };
 
 export const loadWorkspaceConfig = async (

@@ -2,6 +2,7 @@ import type { Argv } from "yargs";
 import { ok } from "@binder/utils";
 import { bootstrapMinimal, type CommandHandlerMinimal } from "../runtime.ts";
 import { createLspServer } from "../lsp";
+import { forceFlush } from "../telemetry.ts";
 import { types } from "../cli/types.ts";
 
 const lspHandler: CommandHandlerMinimal = async (context) => {
@@ -10,6 +11,7 @@ const lspHandler: CommandHandlerMinimal = async (context) => {
   const connection = createLspServer(context);
 
   const cleanup = () => {
+    forceFlush(context.telemetry, { projectRoot: process.cwd() });
     connection.dispose();
     process.exit(0);
   };
@@ -41,5 +43,9 @@ SETUP:
 Please read documentation to setup Binder with your editor
     `);
   },
-  handler: bootstrapMinimal(lspHandler, { logFile: "lsp.log", silent: true }),
+  handler: bootstrapMinimal(lspHandler, {
+    logFile: "lsp.log",
+    silent: true,
+    telemetryInterface: "lsp",
+  }),
 });

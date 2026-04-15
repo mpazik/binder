@@ -3,6 +3,8 @@ import process from "node:process";
 import {
   type Err,
   type ErrorObject,
+  err,
+  errorChain,
   fail,
   includes,
   isObjectEmpty,
@@ -13,7 +15,7 @@ import {
   tryCatch,
   wrapError,
 } from "@binder/utils";
-import { type KnowledgeGraph } from "@binder/db";
+import type { KnowledgeGraph } from "@binder/db";
 import { type DatabaseCli, openCliDb } from "./db";
 import {
   type AppConfig,
@@ -40,12 +42,25 @@ import {
 import { serializeFormats } from "./utils/serialize.ts";
 import { createViewCache, type ViewLoader } from "./document/view-entity.ts";
 import { migrateLegacyDataLayout } from "./migration.ts";
+import {
+  initializeTelemetry,
+  resolveCommandName,
+  track,
+  type TelemetryInterface,
+  type TelemetryState,
+} from "./telemetry.ts";
+
+/** Error keys that represent expected user errors — no telemetry emitted. */
+const SILENT_ERROR_KEYS = new Set(["entity-not-found", "workspace-not-found"]);
 
 type RuntimeOptions = {
   logLevel?: LogLevel;
   printLogs?: boolean;
   silent?: boolean;
+  telemetryInterface?: TelemetryInterface;
 };
+
+export type { TelemetryState };
 
 export type GlobalOptions = RuntimeOptions & {
   cwd?: string;
@@ -54,6 +69,7 @@ export type GlobalOptions = RuntimeOptions & {
 
 export type RuntimeContextInit = RuntimeOptions & {
   globalConfig: GlobalConfig;
+  telemetry: TelemetryState;
   log: Logger;
   fs: FileSystem;
   logFile?: string;
@@ -61,6 +77,7 @@ export type RuntimeContextInit = RuntimeOptions & {
 
 export type RuntimeContext = {
   config: AppConfig;
+  telemetry: TelemetryState;
   log: Logger;
   ui: Ui;
   fs: FileSystem;
@@ -123,28 +140,29 @@ export const initializeMinimalRuntime = async (
 
   const { log, close: closeLogger } = logResult.data;
 
-  process.on("uncaughtException", (exception) => {
-    log.error("Uncaught exception", { error: exception });
-  });
-
-  process.on("unhandledRejection", (reason) => {
-    log.error("Unhandled rejection", {
-      error: reason instanceof Error ? reason : String(reason),
-    });
-  });
-
   const globalConfigResult = await loadGlobalConfig();
   if (isErr(globalConfigResult))
     return fail("config-error", "Failed to load global config", {
       data: { cause: globalConfigResult.error },
     });
 
+  const { telemetry, globalConfig } = await initializeTelemetry(
+    globalConfigResult.data,
+    {
+      silent: options?.silent,
+      interface: options?.telemetryInterface,
+      log,
+      showNotice: (msg) => defaultUi.info(msg),
+    },
+  );
+
   return ok({
     runtime: {
       logLevel,
       printLogs: options?.printLogs || false,
       silent: options?.silent || false,
-      globalConfig: globalConfigResult.data,
+      globalConfig,
+      telemetry,
       log,
       fs,
     },
@@ -179,7 +197,7 @@ export const initializeRuntime = async (
   const { log, close } = logResult.data;
 
   return ok({
-    runtime: { config, log, ui: createUi(), fs },
+    runtime: { config, telemetry: runtime.telemetry, log, ui: createUi(), fs },
     close,
   });
 };
@@ -268,6 +286,7 @@ export const initializeFullRuntime = async (
 type CommandOptions = {
   logFile?: string;
   silent?: boolean;
+  telemetryInterface?: TelemetryInterface;
 };
 
 export const bootstrapMinimal = <TArgs extends object = object>(
@@ -285,10 +304,18 @@ export const bootstrapMinimal = <TArgs extends object = object>(
       process.chdir(resolve(args.cwd));
     }
 
+    const rawArgv = (args as { _?: unknown })._;
+    const command = resolveCommandName(
+      Array.isArray(rawArgv) ? rawArgv : undefined,
+    );
+    const startedAt = Date.now();
+    const telemetryInterface = opts.telemetryInterface ?? "cli";
+
     const runtimeResult = await initializeMinimalRuntime({
       logLevel: args.logLevel,
       printLogs: isDevMode() || args.printLogs || false,
       silent: opts.silent,
+      telemetryInterface,
     });
 
     if (isErr(runtimeResult)) {
@@ -304,9 +331,30 @@ export const bootstrapMinimal = <TArgs extends object = object>(
     const result = await tryCatch(() => handler({ ...minimalRuntime, args }));
 
     if (isErr(result) || isErr(result.data)) {
-      const error = isErr(result) ? result.error : result.data.error!;
+      const error = normalizeError(
+        isErr(result) ? result.error : result.data.error,
+      );
+
+      if (!SILENT_ERROR_KEYS.has(error.key)) {
+        track(minimalRuntime.telemetry, {
+          event: "cli_command",
+          command,
+          success: false,
+          duration_ms: Date.now() - startedAt,
+          error_chain: errorChain(error),
+        });
+      }
+
+      close();
       return fatalError(error, minimalRuntime.log, opts.silent);
     }
+
+    track(minimalRuntime.telemetry, {
+      event: "cli_command",
+      command,
+      success: true,
+      duration_ms: Date.now() - startedAt,
+    });
 
     const data = result.data.data;
     if (data && !opts.silent) {
@@ -361,11 +409,14 @@ export const runtime = <TArgs extends object = object>(
       );
 
       if (isErr(result) || isErr(result.data)) {
-        const error = isErr(result) ? result.error : result.data.error!;
-        return fatalError(error, context.log, options?.silent);
+        const error = normalizeError(
+          isErr(result) ? result.error : result.data.error,
+        );
+        close();
+        return err(error);
       }
-      close();
 
+      close();
       return result.data;
     },
     {

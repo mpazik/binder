@@ -54,19 +54,15 @@ export const validateDocument = async <N extends Namespace>(
 ): Promise<ValidationResult> => {
   const fileType = getDocumentFileType(context.filePath);
 
-  let errors: ValidationError[] = [];
-
-  if (fileType === "yaml") {
-    errors = await createYamlValidator().validate(
-      content as ParsedYaml,
-      context,
-    );
-  } else if (fileType === "markdown") {
-    errors = await createMarkdownValidator().validate(
-      content as ParsedMarkdown,
-      context,
-    );
-  }
+  const errors =
+    fileType === "yaml"
+      ? await createYamlValidator().validate(content as ParsedYaml, context)
+      : fileType === "markdown"
+        ? await createMarkdownValidator().validate(
+            content as ParsedMarkdown,
+            context,
+          )
+        : [];
 
   return createValidationResult(applyRuleConfig(errors, context.ruleConfig));
 };

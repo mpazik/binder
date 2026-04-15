@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
 import {
@@ -10,7 +10,7 @@ import {
 } from "./config.ts";
 import { migrateLegacyDataLayout } from "./migration.ts";
 import type { RuntimeContext } from "./runtime.ts";
-import { mockLog, mockUi } from "./runtime.mock.ts";
+import { mockLog, mockTelemetry, mockUi } from "./runtime.mock.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 
 describe("migrateLegacyDataLayout", () => {
@@ -31,6 +31,7 @@ describe("migrateLegacyDataLayout", () => {
 
   const context: RuntimeContext = {
     config,
+    telemetry: mockTelemetry,
     fs,
     log: mockLog,
     ui: mockUi,

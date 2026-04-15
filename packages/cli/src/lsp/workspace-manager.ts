@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import type { Connection } from "vscode-languageserver/node";
 import { isErr } from "@binder/utils";
+import { track, type TelemetryState } from "../telemetry.ts";
 import {
   initializeFullRuntime,
   type RuntimeContextInit,
@@ -152,6 +153,7 @@ export type WorkspaceCtx = {
   connection: Connection;
   workspaceManager: WorkspaceManager;
   log: Logger;
+  telemetry: TelemetryState;
 };
 
 export const resolveWorkspace = (
@@ -177,9 +179,13 @@ export const withWorkspaceContext =
       event: T,
       workspace: WorkspaceEntry,
     ) => Promise<void>,
+    options?: { telemetry?: string },
   ) =>
   async (event: T): Promise<void> => {
     const workspace = resolveWorkspace(ctx, event.document.uri, eventName);
     if (!workspace) return;
+    if (options?.telemetry) {
+      track(ctx.telemetry, { event: "lsp_action", action: options.telemetry });
+    }
     await handler(ctx, event, workspace);
   };

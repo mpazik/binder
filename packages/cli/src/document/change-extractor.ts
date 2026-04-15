@@ -52,7 +52,7 @@ import {
   type ExtractedProjection,
 } from "./extraction.ts";
 import { normalizeReferences, normalizeReferencesList } from "./reference.ts";
-import { type Views } from "./view-entity.ts";
+import type { Views } from "./view-entity.ts";
 
 const getChangesetRef = (cs: Record<string, unknown>): string | undefined => {
   if ("$ref" in cs) return cs.$ref as string;

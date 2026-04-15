@@ -72,7 +72,8 @@
     }
   },
   "dependencies": {
-    "better-sqlite3": "^12.8.0"
+    "better-sqlite3": "^12.8.0",
+    "posthog-node": "^5.10.0"
   },
   "devDependencies": {
     "@binder/db": "workspace:*",
