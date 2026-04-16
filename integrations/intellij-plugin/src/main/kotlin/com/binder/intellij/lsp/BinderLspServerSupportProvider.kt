@@ -7,10 +7,13 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.LspServer
 import com.intellij.platform.lsp.api.LspServerSupportProvider
 import com.intellij.platform.lsp.api.lsWidget.LspServerWidgetItem
+import java.io.File
 import javax.swing.Icon
 
 class BinderLspServerSupportProvider : LspServerSupportProvider {
-    
+
+    private val scanSkipDirs = setOf("node_modules", "dist", "build", "out", "target", ".git")
+
     override fun fileOpened(
         project: Project,
         file: VirtualFile,
@@ -37,9 +40,30 @@ class BinderLspServerSupportProvider : LspServerSupportProvider {
         }
 
         val basePath = project.basePath ?: return false
-        val binderDir = java.io.File(basePath, ".binder")
+        return hasBinderWorkspace(basePath)
+    }
+
+    private fun hasBinderWorkspace(folderPath: String): Boolean {
+        if (hasBinderDir(folderPath)) return true
+
+        return try {
+            File(folderPath)
+                .listFiles()
+                ?.any { entry ->
+                    entry.isDirectory && !shouldSkipDir(entry.name) && hasBinderDir(entry.absolutePath)
+                } == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun hasBinderDir(dirPath: String): Boolean {
+        val binderDir = File(dirPath, ".binder")
         return binderDir.exists() && binderDir.isDirectory
     }
+
+    private fun shouldSkipDir(name: String): Boolean =
+        name.startsWith(".") || scanSkipDirs.contains(name)
 }
 
 private object BinderIcons {

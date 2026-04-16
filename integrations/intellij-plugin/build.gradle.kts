@@ -25,7 +25,9 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            untilBuild = providers.gradleProperty("pluginUntilBuild")
+            providers.gradleProperty("pluginUntilBuild").orNull?.let {
+                untilBuild = it
+            }
         }
     }
 

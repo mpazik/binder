@@ -21,7 +21,7 @@
     <h3>Requirements</h3>
     <ul>
         <li>Binder CLI installed and available in PATH</li>
-        <li>A Binder workspace (contains a <code>.binder</code> directory)</li>
+        <li>A Binder workspace at project root or in an immediate subdirectory (contains a <code>.binder</code> directory)</li>
     </ul>
 
     Configure the CLI path at <b>Settings &gt; Tools &gt; Binder</b>.

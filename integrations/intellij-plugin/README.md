@@ -63,7 +63,7 @@ Go to **Settings > Tools > Binder** to configure:
 
 ## Usage
 
-1. Open a folder that contains a `.binder` directory (a Binder workspace)
+1. Open a folder that contains a `.binder` directory, or a parent folder with Binder workspaces in immediate subdirectories
 2. The plugin activates automatically
 3. Edit any `.md` or `.yaml` file — completions, diagnostics, and hints are live immediately
 4. Save the file to sync changes to the knowledge graph
@@ -76,7 +76,7 @@ Go to **Settings > Tools > Binder** to configure:
 2. **Check plugin settings**: **Settings > Tools > Binder**
 3. **Test connection**: use the "Test Connection" button in settings
 4. **Check IDE logs**: **Help > Show Log in Finder/Explorer**, look for errors containing `com.intellij.platform.lsp` or `binder`
-5. **Verify workspace**: ensure your project has a `.binder` directory at the root
+5. **Verify workspace**: ensure your project has a `.binder` directory at the root or in an immediate subdirectory
 
 ### View LSP communication
 

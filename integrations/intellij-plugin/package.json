@@ -1,0 +1,12 @@
+{
+  "name": "binder-intellij",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "build": "./gradlew buildPlugin",
+    "clean": "./gradlew clean",
+    "package": "./gradlew buildPlugin",
+    "publish": "PUBLISH_TOKEN=$(security find-generic-password -s jetbrains-token -a $USER -w) ./gradlew publishPlugin",
+    "dev": "./gradlew runIde"
+  }
+}
