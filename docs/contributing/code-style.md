@@ -125,7 +125,6 @@ return fetchFrom(useAlternative ? alternativeSource : defaultSource);
 ### Dependency Injection
 
 Dependencies are passed via a `ctx` object as the first parameter. Rules:
-
 - `ctx` is always the first parameter, domain arguments follow.
 - Narrow the type to only the fields the function needs via `Pick<RuntimeContextWithDb, ...>`.
 - Name the type `*Ctx` -- module-specific, not generic (`VerifySyncCtx`, not `Services` or `Deps`).
