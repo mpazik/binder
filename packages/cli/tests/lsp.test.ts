@@ -1,4 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { execSync } from "node:child_process";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
@@ -288,5 +290,90 @@ describe("LSP", () => {
         expect(JSON.parse(result.stdout)).toMatchObject({ title: lastTitle });
       });
     }, 10_000);
+  });
+});
+
+describe("LSP multi-root", () => {
+  let parentDir: string;
+  let subA: string;
+  let subB: string;
+  let client: LspClient;
+
+  beforeAll(async () => {
+    const tmpA = await setupWorkspace({ docs: true });
+    const tmpB = await setupWorkspace({ docs: true });
+    parentDir = await mkdtemp(join(tmpdir(), "binder-multi-"));
+    subA = join(parentDir, "project-a");
+    subB = join(parentDir, "project-b");
+    execSync(`mv ${tmpA} ${subA}`);
+    execSync(`mv ${tmpB} ${subB}`);
+
+    client = createLspClient(spawnBinder("lsp"));
+    await client.initialize(parentDir);
+  }, 30_000);
+
+  afterAll(async () => {
+    await client.shutdown();
+    await teardownWorkspace(parentDir);
+  });
+
+  const mFileUri = (base: string, rel: string) =>
+    pathToFileURL(join(base, "docs", rel)).toString();
+
+  it("discovers both subdirectory workspaces", async () => {
+    const file = "tasks-yaml/task-create-api.yaml";
+    for (const base of [subA, subB]) {
+      const uri = mFileUri(base, file);
+      const text = await readFile(join(base, "docs", file), "utf-8");
+      client.openDocument(uri, text);
+      const items = await client.completion(uri, 0, 0);
+      expect(items.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("LSP multi-root explicit workspaces", () => {
+  let parentDir: string;
+  let subA: string;
+  let subB: string;
+  let client: LspClient;
+
+  beforeAll(async () => {
+    const tmpA = await setupWorkspace({ docs: true });
+    const tmpB = await setupWorkspace({ docs: true });
+    parentDir = await mkdtemp(join(tmpdir(), "binder-multi-"));
+    subA = join(parentDir, "project-a");
+    subB = join(parentDir, "project-b");
+    execSync(`mv ${tmpA} ${subA}`);
+    execSync(`mv ${tmpB} ${subB}`);
+
+    client = createLspClient(spawnBinder("lsp"));
+    await client.initialize(parentDir, { workspaces: ["project-a"] });
+  }, 30_000);
+
+  afterAll(async () => {
+    await client.shutdown();
+    await teardownWorkspace(parentDir);
+  });
+
+  const mFileUri = (base: string, rel: string) =>
+    pathToFileURL(join(base, "docs", rel)).toString();
+
+  it("only activates listed workspace", async () => {
+    const file = "tasks-yaml/task-create-api.yaml";
+
+    const uriA = mFileUri(subA, file);
+    client.openDocument(
+      uriA,
+      await readFile(join(subA, "docs", file), "utf-8"),
+    );
+    expect((await client.completion(uriA, 0, 0)).length).toBeGreaterThan(0);
+
+    const uriB = mFileUri(subB, file);
+    client.openDocument(
+      uriB,
+      await readFile(join(subB, "docs", file), "utf-8"),
+    );
+    expect(await client.completion(uriB, 0, 0)).toEqual([]);
   });
 });

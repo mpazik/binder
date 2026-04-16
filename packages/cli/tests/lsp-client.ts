@@ -20,11 +20,6 @@ import { tryCatch } from "@binder/utils";
 
 export type LspClient = ReturnType<typeof createLspClient>;
 
-/**
- * Create an LSP client over a child process's stdio streams.
- * Sends JSON-RPC messages to the LSP server and returns typed responses.
- * The caller is responsible for spawning the process and killing it after use.
- */
 export const createLspClient = (child: ChildProcess) => {
   const connection = createMessageConnection(
     new StreamMessageReader(child.stdout!),
@@ -68,7 +63,11 @@ export const createLspClient = (child: ChildProcess) => {
     connection,
     process: child,
 
-    initialize: async (workspaceDir: string): Promise<InitializeResult> => {
+    initialize: async (
+      workspaceDir: string | string[],
+      initializationOptions?: Record<string, unknown>,
+    ): Promise<InitializeResult> => {
+      const dirs = Array.isArray(workspaceDir) ? workspaceDir : [workspaceDir];
       const result = await connection.sendRequest("initialize", {
         processId: process.pid,
         capabilities: {
@@ -79,12 +78,11 @@ export const createLspClient = (child: ChildProcess) => {
           },
           workspace: { workspaceFolders: true },
         },
-        workspaceFolders: [
-          {
-            uri: pathToFileURL(workspaceDir).toString(),
-            name: "test",
-          },
-        ],
+        workspaceFolders: dirs.map((d, i) => ({
+          uri: pathToFileURL(d).toString(),
+          name: `workspace-${i}`,
+        })),
+        ...(initializationOptions ? { initializationOptions } : {}),
       });
       connection.sendNotification("initialized", {});
       await new Promise((r) => setTimeout(r, 500));

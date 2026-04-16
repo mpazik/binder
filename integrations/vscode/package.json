@@ -2,7 +2,7 @@
   "name": "binder-vscode",
   "displayName": "Binder",
   "description": "Language support for Binder - Git-inspired knowledge graph for Markdown",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "Binder",
   "license": "MIT",
   "homepage": "https://binder.do",
@@ -32,7 +32,8 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "workspaceContains:.binder"
+    "workspaceContains:.binder",
+    "workspaceContains:*/.binder"
   ],
   "contributes": {
     "configurationDefaults": {
@@ -64,6 +65,15 @@
           "description": "Log level for the Binder language server",
           "scope": "window"
         },
+        "binder.workspaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Explicit list of subdirectory paths containing binder workspaces. Bypasses automatic scanning when set.",
+          "scope": "resource"
+        },
         "binderLsp.trace.server": {
           "type": "string",
           "enum": [
@@ -86,6 +96,7 @@
     "prepackage": "npm run build",
     "package": "vsce package --out out",
     "publish:ovsx": "ovsx publish out/binder-vscode-*.vsix --pat $(security find-generic-password -s ovsx-token -a $USER -w)",
+    "publish:vsce": "vsce publish --pat $(security find-generic-password -s vsce-token -a $USER -w)",
     "release": "release-it"
   },
   "release-it": {

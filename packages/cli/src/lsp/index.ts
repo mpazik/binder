@@ -22,19 +22,11 @@ import { handleSemanticTokens } from "./handlers/semantic-tokens.ts";
 import { withDocumentContext } from "./document-context.ts";
 import {
   createWorkspaceManager,
-  type WorkspaceManager,
   withWorkspaceContext,
 } from "./workspace-manager.ts";
 
-const initializeBinderWorkspaces = async (
-  workspaceManager: WorkspaceManager,
-  folderUris: string[],
-): Promise<void> => {
-  for (const uri of folderUris) {
-    if (await workspaceManager.isBinderWorkspace(uri)) {
-      await workspaceManager.initializeWorkspace(uri);
-    }
-  }
+type InitializationOptions = {
+  workspaces?: string[];
 };
 
 export const createLspServer = (
@@ -51,11 +43,11 @@ export const createLspServer = (
   let sessionTracked = false;
   let trackLspSession = () => {};
 
+  // No-op: let the editor's file watcher detect disk changes and reload
+  // silently. Sending both a disk write and applyEdit races and causes conflict dialogs.
   const workspaceManager = createWorkspaceManager(
     minimalContext,
     log,
-    // Let the editor's file watcher detect disk changes and reload silently.
-    // Sending both a disk write and applyEdit races and causes conflict dialogs.
     async () => {},
   );
   const ctx = { connection, lspDocuments, workspaceManager, log, telemetry };
@@ -94,10 +86,12 @@ export const createLspServer = (
     hasWorkspaceFolderCapability =
       params.capabilities.workspace?.workspaceFolders === true;
 
-    await initializeBinderWorkspaces(
-      workspaceManager,
-      (params.workspaceFolders ?? []).map((f) => f.uri),
-    );
+    const { workspaces: explicitPaths } = (params.initializationOptions ??
+      {}) as InitializationOptions;
+
+    for (const folder of params.workspaceFolders ?? []) {
+      await workspaceManager.discoverWorkspaces(folder.uri, explicitPaths);
+    }
 
     log.info("Workspaces loaded", {
       version: BINDER_VERSION,
@@ -145,13 +139,12 @@ export const createLspServer = (
         });
 
         for (const removed of event.removed) {
-          await workspaceManager.disposeWorkspace(removed.uri);
+          await workspaceManager.disposeWorkspacesUnder(removed.uri);
         }
 
-        await initializeBinderWorkspaces(
-          workspaceManager,
-          event.added.map((f) => f.uri),
-        );
+        for (const added of event.added) {
+          await workspaceManager.discoverWorkspaces(added.uri);
+        }
       });
     }
   });

@@ -49,14 +49,27 @@ binder init
 
 - `binder.command`: Command to run the Binder CLI (default: `"binder"`)
 - `binder.logLevel`: Log level for the Binder language server — `"info"` or `"debug"` (default: `"info"`)
+- `binder.workspaces`: Explicit list of subdirectory paths containing binder workspaces. Bypasses automatic scanning when set (default: `[]`)
 - `binderLsp.trace.server`: Traces the communication between VS Code and the language server — `"off"`, `"messages"`, or `"verbose"` (default: `"off"`)
 
 ## Usage
 
-1. Open a folder that contains a `.binder` directory (a Binder workspace)
+1. Open a folder that contains a `.binder` directory (or has subdirectories with `.binder`)
 2. The extension activates automatically
 3. Edit any `.md` or `.yaml` file — completions, diagnostics, and hints are live immediately
 4. Save the file to sync changes to the knowledge graph
+
+### Multi-Root Workspaces
+
+The extension automatically discovers binder workspaces in the root and immediate subdirectories of each VS Code workspace folder. This means you can open a parent folder containing multiple binder projects and all of them will be active simultaneously.
+
+To limit which subdirectories are scanned, set `binder.workspaces` to an explicit list of relative paths:
+
+```json
+{
+  "binder.workspaces": ["project-a", "project-b"]
+}
+```
 
 ## Troubleshooting
 
@@ -76,7 +89,7 @@ If Binder CLI is not in your PATH:
 
 ### Extension not activating
 
-The extension only activates when a `.binder` directory is present in the workspace root.
+The extension activates when a `.binder` directory is present in the workspace root or in an immediate subdirectory.
 
 ## More Information
 

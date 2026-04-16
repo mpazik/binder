@@ -1,13 +1,37 @@
-import * as path from "path";
 import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
 
-const isBinderWorkspace = (workspaceRoot: string): boolean => {
-  const binderDir = path.join(workspaceRoot, ".binder");
-  return fs.existsSync(binderDir);
+const SCAN_SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "target",
+]);
+
+const shouldSkipDir = (name: string): boolean =>
+  name.startsWith(".") || SCAN_SKIP_DIRS.has(name);
+
+const hasBinderDir = (dirPath: string): boolean =>
+  fs.existsSync(path.join(dirPath, ".binder"));
+
+const hasBinderWorkspace = (folderPath: string): boolean => {
+  if (hasBinderDir(folderPath)) return true;
+
+  try {
+    const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || shouldSkipDir(entry.name)) continue;
+      if (hasBinderDir(path.join(folderPath, entry.name))) return true;
+    }
+  } catch {
+    // ignore read errors
+  }
+  return false;
 };
 
 export const activate = (context: vscode.ExtensionContext): void => {
@@ -22,15 +46,19 @@ export const activate = (context: vscode.ExtensionContext): void => {
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
   outputChannel.appendLine(`Workspace root: ${workspaceRoot}`);
 
-  if (!isBinderWorkspace(workspaceRoot)) {
+  const hasWorkspace = workspaceFolders.some((f) =>
+    hasBinderWorkspace(f.uri.fsPath),
+  );
+  if (!hasWorkspace) {
     outputChannel.appendLine(
-      `No .binder directory found in ${workspaceRoot}, skipping activation`,
+      "No .binder workspace found in any folder, skipping LSP",
     );
     return;
   }
 
   const config = vscode.workspace.getConfiguration("binder");
   const binderCmd = config.get<string>("command", "binder");
+  const explicitWorkspaces = config.get<string[]>("workspaces", []);
   const traceConfig = vscode.workspace.getConfiguration("binderLsp");
   const traceLevel = traceConfig.get<string>("trace.server", "off");
 
@@ -41,6 +69,14 @@ export const activate = (context: vscode.ExtensionContext): void => {
 
   outputChannel.appendLine(`Starting LSP: ${command} ${args.join(" ")}`);
   outputChannel.appendLine(`Working directory: ${workspaceRoot}`);
+
+  const initializationOptions: Record<string, unknown> = {};
+  if (explicitWorkspaces.length > 0) {
+    initializationOptions.workspaces = explicitWorkspaces;
+    outputChannel.appendLine(
+      `Explicit workspaces: ${explicitWorkspaces.join(", ")}`,
+    );
+  }
 
   client = new LanguageClient(
     "binderLsp",
@@ -60,6 +96,7 @@ export const activate = (context: vscode.ExtensionContext): void => {
       synchronize: {
         fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{md,yaml}"),
       },
+      initializationOptions,
       outputChannel,
     },
   );
