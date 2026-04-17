@@ -227,7 +227,11 @@ const appendUsageLine = (event: TelemetryEvent): void => {
   const statePath = getGlobalStatePath();
   mkdirSync(statePath, { recursive: true });
 
-  const line = JSON.stringify({ timestamp: Date.now(), ...event });
+  const line = JSON.stringify({
+    timestamp: Date.now(),
+    tty: process.stdout.isTTY === true,
+    ...event,
+  });
   appendFileSync(getUsagePath(), `${line}\n`, "utf-8");
 };
 
@@ -271,7 +275,11 @@ export const mapExceptionList = (
   return exceptions;
 };
 
-/** Track an exception as a `$exception` telemetry event with structured cause chain. */
+/**
+ * Track an exception as a `$exception` telemetry event with structured cause chain.
+ * Guarded so that a failure inside telemetry can never replace the original error
+ * when called from a process-level exception handler.
+ */
 export const trackException = (
   telemetry: TelemetryState,
   options: {
@@ -282,15 +290,17 @@ export const trackException = (
     action?: string;
   },
 ): void => {
-  const error = normalizeError(options.error);
+  tryCatch(() => {
+    const error = normalizeError(options.error);
 
-  track(telemetry, {
-    event: "$exception",
-    $exception_list: mapExceptionList(error, options.handled),
-    $exception_level: "error",
-    interface: options.interface,
-    ...(options.command ? { command: options.command } : {}),
-    ...(options.action ? { action: options.action } : {}),
+    track(telemetry, {
+      event: "$exception",
+      $exception_list: mapExceptionList(error, options.handled),
+      $exception_level: "error",
+      interface: options.interface,
+      ...(options.command ? { command: options.command } : {}),
+      ...(options.action ? { action: options.action } : {}),
+    });
   });
 };
 
@@ -355,7 +365,17 @@ const triggerFlush = (
         stdio: "inherit",
       }),
     );
-    if (isErr(syncResult)) return;
+    if (isErr(syncResult)) {
+      process.stderr.write(
+        `[telemetry] failed to spawn flush: ${syncResult.error.message}\n`,
+      );
+      return;
+    }
+    if (syncResult.data.status !== 0) {
+      process.stderr.write(
+        `[telemetry] flush exited with status ${syncResult.data.status}\n`,
+      );
+    }
   } else {
     const childResult = tryCatch(() =>
       spawn(process.execPath, [script], {

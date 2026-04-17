@@ -76,8 +76,7 @@ describe("telemetry", () => {
           host: "https://us.i.posthog.com",
         },
         {
-          event: "cli_command",
-          command: "search",
+          event: "cli.search",
           success: true,
           duration_ms: 12,
         },
@@ -90,12 +89,12 @@ describe("telemetry", () => {
 
       const payload = JSON.parse(lines[0] as string);
       expect(payload).toMatchObject({
-        event: "cli_command",
-        command: "search",
+        event: "cli.search",
         success: true,
         duration_ms: 12,
       });
       expect(typeof payload.timestamp).toBe("number");
+      expect(typeof payload.tty).toBe("boolean");
     });
   });
 });

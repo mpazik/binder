@@ -61,7 +61,7 @@ export const docsSyncHandler: CommandHandlerWithDb<{
 
   if (syncResult.data === null) {
     ui.println("No changes detected");
-    return okVoid;
+    return ok({ telemetry: { record_count: 0, config_count: 0 } });
   }
 
   const updateResult = await kg.update(syncResult.data);
@@ -72,7 +72,12 @@ export const docsSyncHandler: CommandHandlerWithDb<{
     ui.printRawTransaction(resolved);
   });
   ui.success("Synchronized successfully");
-  return okVoid;
+  return ok({
+    telemetry: {
+      record_count: syncResult.data.records?.length ?? 0,
+      config_count: syncResult.data.configs?.length ?? 0,
+    },
+  });
 };
 
 const lintNamespace = async <N extends NamespaceEditable>(

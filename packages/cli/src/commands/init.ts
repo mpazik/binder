@@ -142,11 +142,12 @@ const initSetupHandler: CommandHandlerMinimal<{
     selectedBlueprint = selection as BlueprintInfo;
   }
 
-  return ok(
-    await runtimeWithDb<InitSchemaArgs>(initSchemaHandler)({
-      blueprint: selectedBlueprint,
-    }),
-  );
+  await runtimeWithDb<InitSchemaArgs>(initSchemaHandler)({
+    blueprint: selectedBlueprint,
+  });
+  return ok({
+    telemetry: { blueprint: selectedBlueprint.name.toLowerCase() },
+  });
 };
 
 type InitSchemaArgs = {

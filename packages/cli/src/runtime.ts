@@ -2,13 +2,13 @@ import { join, resolve } from "path";
 import process from "node:process";
 import {
   type Err,
-  type ErrorObject,
   err,
   errorChain,
+  type ErrorObject,
   fail,
   includes,
-  isObjectEmpty,
   isErr,
+  isObjectEmpty,
   normalizeError,
   ok,
   type ResultAsync,
@@ -45,9 +45,9 @@ import { migrateLegacyDataLayout } from "./migration.ts";
 import {
   initializeTelemetry,
   resolveCommandName,
-  track,
   type TelemetryInterface,
   type TelemetryState,
+  track,
 } from "./telemetry.ts";
 
 /** Error keys that represent expected user errors — no telemetry emitted. */
@@ -94,17 +94,56 @@ export type RuntimeDbCallbacks = {
   onFilesUpdated?: (paths: string[]) => void;
 };
 
+/**
+ * A command handler may return a plain string (printed on success) or
+ * a `CommandOutcome` carrying optional output plus telemetry extras to
+ * merge into the emitted `cli.*` event.
+ */
+export type CommandOutcome = {
+  output?: string;
+  telemetry?: Record<string, unknown>;
+};
+
+export type CommandResult = string | void | CommandOutcome;
+
 export type CommandHandlerMinimal<TArgs = object> = (
   context: RuntimeContextInit & { args: TArgs & GlobalOptions },
-) => ResultAsync<string | void>;
+) => ResultAsync<CommandResult>;
 
 export type CommandHandler<TArgs = object> = (
   context: RuntimeContext & { args: TArgs & GlobalOptions },
-) => ResultAsync<string | void>;
+) => ResultAsync<CommandResult>;
 
 export type CommandHandlerWithDb<TArgs = object> = (
   context: RuntimeContextWithDb & { args: TArgs & GlobalOptions },
-) => ResultAsync<string | void>;
+) => ResultAsync<CommandResult>;
+
+const unpackCommandResult = (
+  value: CommandResult,
+): { output?: string; telemetry?: Record<string, unknown> } => {
+  if (typeof value === "string") return { output: value };
+  if (value && typeof value === "object") {
+    return { output: value.output, telemetry: value.telemetry };
+  }
+  return {};
+};
+
+/**
+ * Extract telemetry-safe flag values from parsed argv. Only enum-valued,
+ * non-identifying flags are emitted. Never return paths, queries, keys,
+ * or user-defined strings.
+ */
+const genericTelemetryFlags = (
+  args: Record<string, unknown>,
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (typeof args.format === "string") out.format = args.format;
+  if (typeof args.namespace === "string") out.namespace = args.namespace;
+  return out;
+};
+
+const isDryRun = (args: Record<string, unknown>): boolean =>
+  args.dryRun === true;
 
 const defaultUi = createUi();
 
@@ -329,19 +368,21 @@ export const bootstrapMinimal = <TArgs extends object = object>(
     const { runtime: minimalRuntime, close } = runtimeResult.data;
 
     const result = await tryCatch(() => handler({ ...minimalRuntime, args }));
+    const argsRecord = args as Record<string, unknown>;
 
     if (isErr(result) || isErr(result.data)) {
       const error = normalizeError(
         isErr(result) ? result.error : result.data.error,
       );
 
-      if (!SILENT_ERROR_KEYS.has(error.key)) {
+      // skip telemetry on dry run to avoid miscounting
+      if (!isDryRun(argsRecord) && !SILENT_ERROR_KEYS.has(error.key)) {
         track(minimalRuntime.telemetry, {
-          event: "cli_command",
-          command,
+          event: `cli.${command.replace(/ /g, ".")}`,
           success: false,
           duration_ms: Date.now() - startedAt,
           error_chain: errorChain(error),
+          ...genericTelemetryFlags(argsRecord),
         });
       }
 
@@ -349,16 +390,22 @@ export const bootstrapMinimal = <TArgs extends object = object>(
       return fatalError(error, minimalRuntime.log, opts.silent);
     }
 
-    track(minimalRuntime.telemetry, {
-      event: "cli_command",
-      command,
-      success: true,
-      duration_ms: Date.now() - startedAt,
-    });
+    const { output, telemetry: handlerExtras } = unpackCommandResult(
+      result.data.data,
+    );
 
-    const data = result.data.data;
-    if (data && !opts.silent) {
-      defaultUi.success(data);
+    if (!isDryRun(argsRecord)) {
+      track(minimalRuntime.telemetry, {
+        event: `cli.${command.replace(/ /g, ".")}`,
+        success: true,
+        duration_ms: Date.now() - startedAt,
+        ...genericTelemetryFlags(argsRecord),
+        ...handlerExtras,
+      });
+    }
+
+    if (output && !opts.silent) {
+      defaultUi.success(output);
     }
     close();
   };

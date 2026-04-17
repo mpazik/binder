@@ -21,6 +21,7 @@ import { handleDiagnostics } from "./handlers/diagnostics.ts";
 import { handleSemanticTokens } from "./handlers/semantic-tokens.ts";
 import { withDocumentContext } from "./document-context.ts";
 import {
+  createLspCounters,
   createWorkspaceManager,
   withWorkspaceContext,
 } from "./workspace-manager.ts";
@@ -50,16 +51,25 @@ export const createLspServer = (
     log,
     async () => {},
   );
-  const ctx = { connection, lspDocuments, workspaceManager, log, telemetry };
+  const counters = createLspCounters();
+  const ctx = {
+    connection,
+    lspDocuments,
+    workspaceManager,
+    log,
+    telemetry,
+    counters,
+  };
 
   trackLspSession = () => {
     if (sessionTracked) return;
     sessionTracked = true;
 
     track(telemetry, {
-      event: "lsp_session",
+      event: "lsp.session",
       duration_ms: Date.now() - startedAt,
       workspaces: workspaceManager.getStats().workspaceCount,
+      ...counters,
     });
 
     forceFlush(telemetry, { projectRoot: process.cwd() });
@@ -192,29 +202,31 @@ export const createLspServer = (
       async (c, event, workspace) => {
         await handleDocumentSave(c, event, workspace);
       },
-      { telemetry: "save_sync" },
+      { telemetry: "save_sync_count" },
     ),
   );
 
   connection.onCompletion(
     withDocumentContext(ctx, "Completion", handleCompletion, {
-      telemetry: "completion",
+      telemetry: "completion_count",
     }),
   );
 
   connection.onHover(
-    withDocumentContext(ctx, "Hover", handleHover, { telemetry: "hover" }),
+    withDocumentContext(ctx, "Hover", handleHover, {
+      telemetry: "hover_count",
+    }),
   );
 
   connection.onDefinition(
     withDocumentContext(ctx, "Definition", handleDefinition, {
-      telemetry: "definition",
+      telemetry: "definition_count",
     }),
   );
 
   connection.onCodeAction(
     withDocumentContext(ctx, "Code action", handleCodeAction, {
-      telemetry: "code_action",
+      telemetry: "code_action_count",
     }),
   );
 
@@ -227,7 +239,7 @@ export const createLspServer = (
       ctx,
       "Diagnostics",
       handleDiagnostics,
-      { telemetry: "diagnostics" },
+      { telemetry: "diagnostics_count" },
     )(params);
     return result ?? { kind: "full", items: [] };
   });

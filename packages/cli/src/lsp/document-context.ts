@@ -32,7 +32,7 @@ import {
   namespaceFromSnapshotPath,
 } from "../lib/snapshot.ts";
 import { getTypeFromFilters } from "../utils/query.ts";
-import { track } from "../telemetry.ts";
+
 import { extract, type ExtractedFileData } from "../document/extraction.ts";
 import {
   getDocumentFileType,
@@ -44,7 +44,11 @@ import {
   computeEntityMappings,
   type EntityMappings,
 } from "./entity-mapping.ts";
-import { resolveWorkspace, type WorkspaceCtx } from "./workspace-manager.ts";
+import {
+  resolveWorkspace,
+  type LspCounterKey,
+  type WorkspaceCtx,
+} from "./workspace-manager.ts";
 import type { EntityContextCache } from "./entity-context.ts";
 
 type BaseDocumentContext = {
@@ -103,11 +107,11 @@ export const withDocumentContext =
     ctx: WithDocumentCtx,
     requestName: string,
     handler: LspHandler<TParams, TResult>,
-    options?: { telemetry?: string },
+    options?: { telemetry?: LspCounterKey },
   ) =>
   async (params: TParams): Promise<TResult | null> => {
     if (options?.telemetry) {
-      track(ctx.telemetry, { event: "lsp_action", action: options.telemetry });
+      ctx.counters[options.telemetry] += 1;
     }
     const uri = params.textDocument.uri;
 

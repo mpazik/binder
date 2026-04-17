@@ -85,8 +85,7 @@ const mcpHandler: CommandHandlerWithDb = async ({
 
       if (tool === "search" || tool === "schema" || tool === "transact") {
         track(telemetry, {
-          event: "mcp_tool",
-          tool,
+          event: `mcp.${tool}`,
           success: !("error" in response),
         });
       }
@@ -99,7 +98,7 @@ const mcpHandler: CommandHandlerWithDb = async ({
     log.info("MCP server stopping");
 
     track(telemetry, {
-      event: "mcp_session",
+      event: "mcp.session",
       duration_ms: Date.now() - startedAt,
     });
 

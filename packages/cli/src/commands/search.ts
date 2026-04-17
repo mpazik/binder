@@ -85,7 +85,13 @@ const searchHandler: CommandHandlerWithDb<{
     ? formatted.data
     : { ...result.data, items: formatted.data };
   ui.printData(data, args.format);
-  return ok(undefined);
+
+  // query_length only reported for argv queries; stdin payloads are opaque by design.
+  const telemetry: Record<string, unknown> = { result_count: items.length };
+  if (!isStdinPiped() && args.query.length > 0) {
+    telemetry.query_length = args.query.join(" ").length;
+  }
+  return ok({ telemetry });
 };
 
 export const SearchCommand = types({

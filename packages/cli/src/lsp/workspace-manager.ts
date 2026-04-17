@@ -2,7 +2,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 import type { Connection } from "vscode-languageserver/node";
 import { isErr } from "@binder/utils";
-import { track, type TelemetryState } from "../telemetry.ts";
+import type { TelemetryState } from "../telemetry.ts";
 import {
   initializeFullRuntime,
   type RuntimeContextInit,
@@ -253,11 +253,38 @@ export const createWorkspaceManager = (
   };
 };
 
+/**
+ * In-process counters for high-frequency LSP actions. Aggregated here
+ * instead of emitted per-invocation because code actions, hovers, completion
+ * requests and diagnostic pulls fire dozens of times per minute during normal
+ * editing. Counts are attached to the `lsp.session` event at shutdown.
+ */
+export type LspCounters = {
+  hover_count: number;
+  completion_count: number;
+  code_action_count: number;
+  diagnostics_count: number;
+  definition_count: number;
+  save_sync_count: number;
+};
+
+export type LspCounterKey = keyof LspCounters;
+
+export const createLspCounters = (): LspCounters => ({
+  hover_count: 0,
+  completion_count: 0,
+  code_action_count: 0,
+  diagnostics_count: 0,
+  definition_count: 0,
+  save_sync_count: 0,
+});
+
 export type WorkspaceCtx = {
   connection: Connection;
   workspaceManager: WorkspaceManager;
   log: Logger;
   telemetry: TelemetryState;
+  counters: LspCounters;
 };
 
 export const resolveWorkspace = (
@@ -283,13 +310,13 @@ export const withWorkspaceContext =
       event: T,
       workspace: WorkspaceEntry,
     ) => Promise<void>,
-    options?: { telemetry?: string },
+    options?: { telemetry?: LspCounterKey },
   ) =>
   async (event: T): Promise<void> => {
     const workspace = resolveWorkspace(ctx, event.document.uri, eventName);
     if (!workspace) return;
     if (options?.telemetry) {
-      track(ctx.telemetry, { event: "lsp_action", action: options.telemetry });
+      ctx.counters[options.telemetry] += 1;
     }
     await handler(ctx, event, workspace);
   };

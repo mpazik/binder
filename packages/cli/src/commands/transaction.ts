@@ -1,6 +1,6 @@
 import { join } from "path";
 import type { Argv } from "yargs";
-import { fail, includes, isErr, okVoid, wrapError } from "@binder/utils";
+import { fail, includes, isErr, ok, okVoid, wrapError } from "@binder/utils";
 import {
   normalizeEntityRef,
   normalizeTransactionInput,
@@ -152,7 +152,22 @@ export const transactionImportHandler: CommandHandlerWithDb<
       ui.printRawTransaction(tx, "oneline");
     }
   });
-  return okVoid;
+
+  const recordCount = allInputs.reduce(
+    (sum, input) => sum + (input.records?.length ?? 0),
+    0,
+  );
+  const configCount = allInputs.reduce(
+    (sum, input) => sum + (input.configs?.length ?? 0),
+    0,
+  );
+  return ok({
+    telemetry: {
+      transaction_count: results.length,
+      record_count: recordCount,
+      config_count: configCount,
+    },
+  });
 };
 
 export const transactionReadHandler: CommandHandlerWithDb<{
