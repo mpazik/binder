@@ -22,7 +22,7 @@
 > **Data loss is possible.** Do not use for critical data without independent backups.
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/c1b9e21f-1e56-4b9e-967b-17fe6a30ab13" alt="Binder demo" width="720">
+  <img src="https://assets.binder.do/binder-demo.gif" alt="Binder demo" width="720">
 </div>
 
 Binder is a local-first knowledge base built on Markdown files. Define types and fields in a schema. Write entities as Markdown. Query and update via CLI or MCP. Every change syncs automatically.
@@ -102,4 +102,4 @@ Full docs, concepts, and examples: [github.com/mpazik/binder](https://github.com
 
 ## License
 
-[MIT](LICENSE) · © 2025 Marek Pazik
+[MIT](https://github.com/mpazik/binder/blob/main/LICENSE) · © 2025 Marek Pazik

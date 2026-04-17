@@ -24,7 +24,8 @@
     "check": "bun typecheck && bun test && bun lint &&  bun format",
     "check:verify": "prettier --check . && eslint packages/ && bun typecheck && bun run test",
     "mcp:inspect": "bunx @modelcontextprotocol/inspector bun run dev mcp",
-    "release": "cd packages/cli && bun run release"
+    "release": "cd packages/cli && bun run release -- --only-version",
+    "release:preview": "cd packages/cli && bun run release -- --only-version --dry-run"
   },
   "private": true,
   "devDependencies": {

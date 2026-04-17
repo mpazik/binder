@@ -39,8 +39,7 @@
   "scripts": {
     "build": "NODE_ENV=development bun run build.ts",
     "build:prod": "NODE_ENV=production bun run build.ts --prod",
-    "prepublishOnly": "rm -rf dist && cp ../../README.md . && bun run build.ts --prod",
-    "postpublish": "rm -f README.md",
+    "prepublishOnly": "rm -rf dist && bun run build.ts --prod",
     "format": "bun prettier --write --ignore-path ../../.prettierignore .",
     "lint": "bun eslint . --fix",
     "typecheck": "tsc --noEmit",
