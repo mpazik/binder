@@ -34,7 +34,8 @@ import {
   type RecordKey,
   type RecordUid,
 } from "./model";
-import { createEntity } from "./entity-store.ts";
+import { createEntity, fetchEntityFieldset } from "./entity-store.ts";
+import { applyChangeset as applyChangesetToDb } from "./changeset-applier.ts";
 import { saveTransaction } from "./transaction-store.ts";
 import { mockTransactionInit } from "./model/transaction.mock.ts";
 import { mockRecordSchema } from "./model/schema.mock.ts";
@@ -334,6 +335,41 @@ describe("changeset processor relations", () => {
       expect(result).toEqual(expected);
     };
 
+    const applyAndCommit = async (changeset: EntitiesChangeset<"record">) => {
+      await db.transaction(async (tx) => {
+        for (const [ref, fieldChangeset] of Object.entries(changeset)) {
+          throwIfError(
+            await applyChangesetToDb(
+              tx,
+              "record",
+              ref as RecordUid,
+              fieldChangeset,
+            ),
+          );
+        }
+        await saveTransaction(tx, mockTransactionInit);
+      });
+    };
+
+    const getField = async (uid: RecordUid, field: string) =>
+      db.transaction(async (tx) => {
+        const result = throwIfError(
+          await fetchEntityFieldset(tx, "record", uid, [field]),
+        );
+        return result[field];
+      });
+
+    const findChangeset = (
+      result: EntitiesChangeset<"record">,
+      predicate: (changeset: Record<string, unknown>) => boolean,
+    ) => {
+      const changeset = Object.values(result).find(predicate)!;
+      const uid = Object.keys(result).find(
+        (recordUid) => result[recordUid as RecordUid] === changeset,
+      ) as RecordUid;
+      return { changeset, uid };
+    };
+
     describe("one-to-many", () => {
       const task2Unlinked = omit(mockTask2Record, ["project"]);
       const task3Unlinked = omit(mockTask3Record, ["project"]);
@@ -453,15 +489,12 @@ describe("changeset processor relations", () => {
           ]),
         );
 
-        const projectChangeset = Object.values(result).find(
-          (cs) => cs.title === "New Project",
+        const { changeset: projectChangeset, uid: projectUid } = findChangeset(
+          result,
+          (changeset) => changeset.title === "New Project",
         );
-        const projectUid = Object.keys(result).find(
-          (uid) => result[uid as RecordUid] === projectChangeset,
-        ) as RecordUid;
 
-        expect(projectChangeset).toBeDefined();
-        expect(projectChangeset![mockTasksFieldKey]).toBeUndefined();
+        expect(projectChangeset[mockTasksFieldKey]).toBeUndefined();
         expect(result[mockTask2Uid]).toEqual({
           [mockProjectFieldKey]: ["set", projectUid],
         });
@@ -469,6 +502,8 @@ describe("changeset processor relations", () => {
     });
 
     describe("one-to-one", () => {
+      const user3Uid = "_userBirdP0" as RecordUid;
+      const user4Uid = "_userSqunch" as RecordUid;
       const userWithPartner = {
         ...mockUserRecord,
         [mockPartnerFieldKey]: mockUser2Uid,
@@ -477,6 +512,32 @@ describe("changeset processor relations", () => {
         ...mockUser2Record,
         [mockPartnerFieldKey]: mockUserUid,
       } as Fieldset;
+
+      const createUser = (
+        id: EntityId,
+        uid: RecordUid,
+        name: string,
+        partner?: RecordUid,
+      ) =>
+        ({
+          ...mockUser2Record,
+          id,
+          uid,
+          name,
+          ...(partner ? { [mockPartnerFieldKey]: partner } : {}),
+        }) as Fieldset;
+
+      const checkDisplacement = (
+        result: EntitiesChangeset<"record">,
+        sourceUid: RecordUid,
+      ) => {
+        expect(result[mockUser2Uid]).toEqual({
+          [mockPartnerFieldKey]: ["set", sourceUid, mockUserUid],
+        });
+        expect(result[mockUserUid]).toEqual({
+          [mockPartnerFieldKey]: ["set", null, mockUser2Uid],
+        });
+      };
 
       it("setting field generates inverse set on target", () =>
         checkInverseExpansion(
@@ -513,15 +574,11 @@ describe("changeset processor relations", () => {
         ));
 
       it("replacing field updates both old and new targets", async () => {
-        const user3Uid = "_userBirdP0" as RecordUid;
-        const user3Record = {
-          ...mockUser2Record,
-          id: 7 as EntityId,
-          uid: user3Uid,
-          name: "Birdperson",
-        } as Fieldset;
-
-        await setup(userWithPartner, user2WithPartner, user3Record);
+        await setup(
+          userWithPartner,
+          user2WithPartner,
+          createUser(7 as EntityId, user3Uid, "Birdperson"),
+        );
         const result = throwIfError(
           await process([
             { uid: mockUserUid, [mockPartnerFieldKey]: user3Uid },
@@ -538,6 +595,138 @@ describe("changeset processor relations", () => {
           [mockUser2Uid]: {
             [mockPartnerFieldKey]: ["set", null, mockUserUid],
           },
+        });
+      });
+
+      describe("displacement", () => {
+        it("creating entity that displaces existing inverse clears displaced entity", async () => {
+          await setup(userWithPartner, user2WithPartner);
+
+          const result = throwIfError(
+            await process([
+              {
+                type: mockUserTypeKey,
+                uid: user3Uid,
+                name: "Birdperson",
+                [mockPartnerFieldKey]: mockUser2Uid,
+              },
+            ]),
+          );
+
+          checkDisplacement(result, user3Uid);
+        });
+
+        it("updating field that displaces target inverse clears displaced entity", async () => {
+          await setup(
+            userWithPartner,
+            user2WithPartner,
+            createUser(7 as EntityId, user3Uid, "Birdperson"),
+          );
+
+          const result = throwIfError(
+            await process([
+              { uid: user3Uid, [mockPartnerFieldKey]: mockUser2Uid },
+            ]),
+          );
+
+          checkDisplacement(result, user3Uid);
+        });
+
+        it("displacement changeset applies and produces consistent state", async () => {
+          await setup(
+            userWithPartner,
+            user2WithPartner,
+            createUser(7 as EntityId, user3Uid, "Birdperson"),
+          );
+
+          const result = throwIfError(
+            await process([
+              { uid: user3Uid, [mockPartnerFieldKey]: mockUser2Uid },
+            ]),
+          );
+          await applyAndCommit(result);
+
+          expect(await getField(user3Uid, mockPartnerFieldKey)).toBe(
+            mockUser2Uid,
+          );
+          expect(await getField(mockUser2Uid, mockPartnerFieldKey)).toBe(
+            user3Uid,
+          );
+          expect(
+            await getField(mockUserUid, mockPartnerFieldKey),
+          ).toBeUndefined();
+        });
+      });
+
+      describe("inconsistent state recovery", () => {
+        it("clearing field on entity with inconsistent inverse succeeds", async () => {
+          await setup(
+            {
+              ...mockUserRecord,
+              [mockPartnerFieldKey]: mockUser2Uid,
+            } as Fieldset,
+            {
+              ...mockUser2Record,
+              [mockPartnerFieldKey]: user3Uid,
+            } as Fieldset,
+            createUser(7 as EntityId, user3Uid, "Birdperson", mockUser2Uid),
+          );
+
+          const result = throwIfError(
+            await process([{ uid: mockUserUid, [mockPartnerFieldKey]: null }]),
+          );
+
+          expect(result).toEqual({
+            [mockUserUid]: {
+              [mockPartnerFieldKey]: ["set", null, mockUser2Uid],
+            },
+          });
+
+          await applyAndCommit(result);
+          expect(
+            await getField(mockUserUid, mockPartnerFieldKey),
+          ).toBeUndefined();
+          expect(await getField(mockUser2Uid, mockPartnerFieldKey)).toBe(
+            user3Uid,
+          );
+          expect(await getField(user3Uid, mockPartnerFieldKey)).toBe(
+            mockUser2Uid,
+          );
+        });
+
+        it("replacing field on entity with inconsistent inverse succeeds", async () => {
+          await setup(
+            {
+              ...mockUserRecord,
+              [mockPartnerFieldKey]: mockUser2Uid,
+            } as Fieldset,
+            {
+              ...mockUser2Record,
+              [mockPartnerFieldKey]: user3Uid,
+            } as Fieldset,
+            createUser(7 as EntityId, user3Uid, "Birdperson", mockUser2Uid),
+            createUser(8 as EntityId, user4Uid, "Squanchy"),
+          );
+
+          const result = throwIfError(
+            await process([
+              { uid: mockUserUid, [mockPartnerFieldKey]: user4Uid },
+            ]),
+          );
+
+          await applyAndCommit(result);
+          expect(await getField(mockUserUid, mockPartnerFieldKey)).toBe(
+            user4Uid,
+          );
+          expect(await getField(user4Uid, mockPartnerFieldKey)).toBe(
+            mockUserUid,
+          );
+          expect(await getField(mockUser2Uid, mockPartnerFieldKey)).toBe(
+            user3Uid,
+          );
+          expect(await getField(user3Uid, mockPartnerFieldKey)).toBe(
+            mockUser2Uid,
+          );
         });
       });
     });
@@ -617,17 +806,6 @@ describe("changeset processor relations", () => {
     });
 
     describe("intra-batch", () => {
-      const findChangesetByKey = (
-        result: EntitiesChangeset<"record">,
-        key: string,
-      ) => {
-        const changeset = Object.values(result).find((cs) => cs.key === key)!;
-        const uid = Object.keys(result).find(
-          (uid) => result[uid as RecordUid] === changeset,
-        ) as RecordUid;
-        return { changeset, uid };
-      };
-
       it("1:M - insert referencing new entity in same batch", async () => {
         const result = throwIfError(
           await process([
@@ -644,13 +822,14 @@ describe("changeset processor relations", () => {
           ]),
         );
 
-        const { uid: taskUid } = findChangesetByKey(result, "new-task");
-        const projectChangeset = Object.values(result).find(
-          (cs) => cs.title === "New Project",
-        )!;
-        const projectUid = Object.keys(result).find(
-          (uid) => result[uid as RecordUid] === projectChangeset,
-        ) as RecordUid;
+        const { uid: taskUid } = findChangeset(
+          result,
+          (changeset) => changeset.key === "new-task",
+        );
+        const { changeset: projectChangeset, uid: projectUid } = findChangeset(
+          result,
+          (changeset) => changeset.title === "New Project",
+        );
 
         expect(projectChangeset[mockTasksFieldKey]).toBeUndefined();
         expect(result[taskUid]).toMatchObject({
@@ -675,10 +854,13 @@ describe("changeset processor relations", () => {
           ]),
         );
 
-        const { uid: userAUid } = findChangesetByKey(result, "user-a");
-        const { changeset: userBChangeset, uid: userBUid } = findChangesetByKey(
+        const { uid: userAUid } = findChangeset(
           result,
-          "user-b",
+          (changeset) => changeset.key === "user-a",
+        );
+        const { changeset: userBChangeset, uid: userBUid } = findChangeset(
+          result,
+          (changeset) => changeset.key === "user-b",
         );
 
         expect(userBChangeset[mockPartnerFieldKey]).toBe(userAUid);
@@ -704,10 +886,13 @@ describe("changeset processor relations", () => {
           ]),
         );
 
-        const { uid: taskAUid } = findChangesetByKey(result, "task-a");
-        const { changeset: taskBChangeset, uid: taskBUid } = findChangesetByKey(
+        const { uid: taskAUid } = findChangeset(
           result,
-          "task-b",
+          (changeset) => changeset.key === "task-a",
+        );
+        const { changeset: taskBChangeset, uid: taskBUid } = findChangeset(
+          result,
+          (changeset) => changeset.key === "task-b",
         );
 
         expect(taskBChangeset[mockRelatedToFieldKey]).toEqual([
@@ -722,9 +907,11 @@ describe("changeset processor relations", () => {
 
   describe("validation", () => {
     describe("patch", () => {
-      it("validates patch attrs against field attributes", async () => {
+      beforeEach(async () => {
         await insertRecord(db, mockTaskWithOwnersRecord);
+      });
 
+      it("validates patch attrs against field attributes", async () => {
         await checkErrors(
           [
             {
@@ -744,8 +931,6 @@ describe("changeset processor relations", () => {
       });
 
       it("accepts valid patch attrs", async () => {
-        await insertRecord(db, mockTaskWithOwnersRecord);
-
         await checkSuccess([
           {
             uid: mockTaskWithOwnersRecord.uid,
@@ -755,8 +940,6 @@ describe("changeset processor relations", () => {
       });
 
       it("ignores patch attrs not in field attributes", async () => {
-        await insertRecord(db, mockTaskWithOwnersRecord);
-
         await checkSuccess([
           {
             uid: mockTaskWithOwnersRecord.uid,
@@ -766,8 +949,6 @@ describe("changeset processor relations", () => {
       });
 
       it("validates single patch mutation", async () => {
-        await insertRecord(db, mockTaskWithOwnersRecord);
-
         await checkErrors(
           [
             {

@@ -39,7 +39,7 @@ The `inverseOf` property on a relation field enables automatic bidirectional syn
 
 #### One-to-One
 
-`partner` (inverseOf `partner`). Both sides store data. Setting field A on entity X to Y generates a set of field B on entity Y to X. The old target's inverse is cleared. Displacement is handled — if Y already pointed to Z, Z's inverse is cleared.
+`partner` (inverseOf `partner`). Both sides store data. Setting field A on entity X to Y generates a set of field B on entity Y to X. The old target's inverse is cleared only if it still points back to X, which lets normal updates repair previously inconsistent data instead of failing on stale assumptions. Displacement is handled — if Y already pointed to Z, Z's declaring field is cleared so the final graph converges to a consistent 1:1 link.
 
 #### Many-to-Many
 

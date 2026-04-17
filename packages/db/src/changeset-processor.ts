@@ -90,6 +90,8 @@ const fieldsToExcludeFromValidation = [
   "txIds",
 ] as const;
 
+const relationInputFieldsToSkip = ["$ref", "type"] as const;
+
 type ValidationError = {
   field?: string;
   message: string;
@@ -99,6 +101,12 @@ export type ChangesetValidationError = ValidationError & {
   namespace: NamespaceEditable;
   index: number;
 };
+
+const shouldSkipRelationInputField = (
+  fieldKey: string,
+  value: unknown,
+): boolean =>
+  includes(relationInputFieldsToSkip, fieldKey) || value === undefined;
 
 const getMandatoryFields = (
   schema: EntitySchema,
@@ -583,6 +591,30 @@ const validationError = <R>(
 
 type RefToUidMap = Map<string, EntityUid>;
 
+const toSeqChange = (value: FieldValue): FieldChangeset[FieldKey] => {
+  if (isListMutationArray(value)) return ["seq", value];
+  if (isListMutation(value)) return ["seq", [value]];
+  return value;
+};
+
+const fetchOptionalFieldValue = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
+  ref: EntityChangesetRef<N>,
+  fieldKey: FieldKey,
+  newEntityRefs: Set<string>,
+  valueForNewEntity?: EntityChangesetRef<N>,
+): ResultAsync<EntityChangesetRef<N> | undefined> => {
+  if (newEntityRefs.has(String(ref))) return ok(valueForNewEntity);
+
+  const existingResult = await fetchEntityFieldset(tx, namespace, ref, [
+    fieldKey,
+  ]);
+  if (isErr(existingResult)) return existingResult;
+
+  return ok(existingResult.data[fieldKey] as EntityChangesetRef<N> | undefined);
+};
+
 const collectRelationKeys = <N extends NamespaceEditable>(
   normalizedInputs: EntityChangesetInput<N>[],
   schema: NamespaceSchema<N>,
@@ -611,8 +643,7 @@ const collectRelationKeys = <N extends NamespaceEditable>(
 
   for (const input of normalizedInputs) {
     for (const [fieldKey, value] of objEntries(input)) {
-      if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
-        continue;
+      if (shouldSkipRelationInputField(fieldKey, value)) continue;
       const fieldDef = schema.fields[fieldKey];
       if (fieldDef?.dataType !== "relation") continue;
 
@@ -727,10 +758,10 @@ const resolveRelations = <N extends NamespaceEditable>(
 ): EntityChangesetInput<N> => {
   if (isEntityDelete(input)) return input;
   const resolved: EntityChangesetInput<N> = { ...input };
+  const resolvedFields = resolved as Record<string, FieldValue>;
 
   for (const [fieldKey, value] of objEntries(input)) {
-    if (fieldKey === "$ref" || fieldKey === "type" || value === undefined)
-      continue;
+    if (shouldSkipRelationInputField(fieldKey, value)) continue;
 
     const fieldDef = schema.fields[fieldKey];
     if (fieldDef?.dataType !== "relation") continue;
@@ -738,21 +769,21 @@ const resolveRelations = <N extends NamespaceEditable>(
     const fieldValue = value as FieldValue;
 
     if (isListMutationArray(fieldValue)) {
-      resolved[fieldKey] = (fieldValue as ListMutation[]).map((m) =>
-        resolveRelationMutation(fieldDef, m, refToUid),
-      ) as typeof value;
+      resolvedFields[fieldKey] = (fieldValue as ListMutation[]).map(
+        (mutation) => resolveRelationMutation(fieldDef, mutation, refToUid),
+      ) as FieldValue;
     } else if (isListMutation(fieldValue)) {
-      resolved[fieldKey] = resolveRelationMutation(
+      resolvedFields[fieldKey] = resolveRelationMutation(
         fieldDef,
         fieldValue as ListMutation,
         refToUid,
-      ) as typeof value;
+      ) as FieldValue;
     } else {
-      resolved[fieldKey] = resolveRelationFieldValue(
+      resolvedFields[fieldKey] = resolveRelationFieldValue(
         fieldDef,
         fieldValue,
         refToUid,
-      ) as typeof value;
+      );
     }
   }
 
@@ -789,26 +820,18 @@ const expandOneToManyInverse = async <N extends NamespaceEditable>(
   for (const mutation of mutations) {
     if (isInsertMutation(mutation)) {
       const childRef = mutation[1] as EntityChangesetRef<N>;
-
-      let currentValue: EntityChangesetRef<N> | undefined;
-      if (newEntityRefs.has(String(childRef))) {
-        currentValue = undefined;
-      } else {
-        const existingResult = await fetchEntityFieldset(
-          tx,
-          namespace,
-          childRef,
-          [directFieldKey],
-        );
-        if (isErr(existingResult)) return existingResult;
-        currentValue = existingResult.data[directFieldKey] as
-          | EntityChangesetRef<N>
-          | undefined;
-      }
+      const currentValueResult = await fetchOptionalFieldValue(
+        tx,
+        namespace,
+        childRef,
+        directFieldKey,
+        newEntityRefs,
+      );
+      if (isErr(currentValueResult)) return currentValueResult;
 
       const childChange: ValueChangeSet =
-        currentValue != null
-          ? ["set", parentRef, currentValue]
+        currentValueResult.data != null
+          ? ["set", parentRef, currentValueResult.data]
           : ["set", parentRef];
 
       mergeFieldInto(result, childRef, directFieldKey, childChange);
@@ -828,6 +851,7 @@ const expandOneToOneInverse = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
   parentRef: EntityChangesetRef<N>,
+  fieldKey: FieldKey,
   inverseFieldKey: FieldKey,
   change: FieldChangeset[FieldKey],
   result: EntitiesChangeset<N>,
@@ -843,37 +867,65 @@ const expandOneToOneInverse = async <N extends NamespaceEditable>(
 
   // If we're setting a new target, update its inverse field to point back
   if (newTargetRef != null) {
-    let currentInverseValue: EntityChangesetRef<N> | undefined;
-    if (newEntityRefs.has(String(newTargetRef))) {
-      currentInverseValue = undefined;
-    } else {
-      const existingResult = await fetchEntityFieldset(
-        tx,
-        namespace,
-        newTargetRef,
-        [inverseFieldKey],
-      );
-      if (isErr(existingResult)) return existingResult;
-      currentInverseValue = existingResult.data[inverseFieldKey] as
-        | EntityChangesetRef<N>
-        | undefined;
-    }
+    const currentInverseValueResult = await fetchOptionalFieldValue(
+      tx,
+      namespace,
+      newTargetRef,
+      inverseFieldKey,
+      newEntityRefs,
+    );
+    if (isErr(currentInverseValueResult)) return currentInverseValueResult;
 
+    const currentInverseValue = currentInverseValueResult.data;
     const targetChange: ValueChangeSet =
       currentInverseValue != null
         ? ["set", parentRef, currentInverseValue]
         : ["set", parentRef];
 
     mergeFieldInto(result, newTargetRef, inverseFieldKey, targetChange);
+
+    // The target's inverse was pointing to a different entity — clear that
+    // entity's declaring field so it doesn't dangle.
+    if (currentInverseValue != null && currentInverseValue !== parentRef) {
+      const displacedFieldValueResult = await fetchOptionalFieldValue(
+        tx,
+        namespace,
+        currentInverseValue,
+        fieldKey,
+        newEntityRefs,
+        newTargetRef,
+      );
+      if (isErr(displacedFieldValueResult)) return displacedFieldValueResult;
+
+      if (displacedFieldValueResult.data != null) {
+        mergeFieldInto(result, currentInverseValue, fieldKey, [
+          "set",
+          null,
+          displacedFieldValueResult.data,
+        ]);
+      }
+    }
   }
 
   // If we're clearing/replacing, clear the inverse on the old target
   if (oldTargetRef != null && oldTargetRef !== newTargetRef) {
-    mergeFieldInto(result, oldTargetRef, inverseFieldKey, [
-      "set",
-      null,
+    const oldTargetInverseValueResult = await fetchOptionalFieldValue(
+      tx,
+      namespace,
+      oldTargetRef,
+      inverseFieldKey,
+      newEntityRefs,
       parentRef,
-    ]);
+    );
+    if (isErr(oldTargetInverseValueResult)) return oldTargetInverseValueResult;
+
+    if (oldTargetInverseValueResult.data === parentRef) {
+      mergeFieldInto(result, oldTargetRef, inverseFieldKey, [
+        "set",
+        null,
+        oldTargetInverseValueResult.data,
+      ]);
+    }
   }
 
   return okVoid;
@@ -955,6 +1007,7 @@ const expandInverseRelations = async <N extends NamespaceEditable>(
           tx,
           namespace,
           parentRef,
+          fieldKey,
           inverseFieldKey,
           change,
           result,
@@ -1157,17 +1210,14 @@ const buildChangeset = async <N extends NamespaceEditable>(
 
     for (const key of keys) {
       const currentValue = currentValues[key];
-      const inputValue = input[key];
-      if (isListMutationArray(inputValue)) {
-        changeset[key] = ["seq", inputValue];
-      } else if (isListMutation(inputValue)) {
-        changeset[key] = ["seq", [inputValue]];
-      } else {
-        changeset[key] =
-          currentValue == null
+      const inputValue = input[key] as FieldValue;
+      const sequenceChange = toSeqChange(inputValue);
+      changeset[key] =
+        sequenceChange !== inputValue
+          ? sequenceChange
+          : currentValue == null
             ? ["set", inputValue]
             : ["set", inputValue, currentValue];
-      }
     }
     changesetRef = (
       namespace === "record"
@@ -1283,6 +1333,11 @@ const buildChangeset = async <N extends NamespaceEditable>(
   return ok([changesetRef, changeset]);
 };
 
+/**
+ * Normalizes entity mutation inputs into per-entity field changesets, resolving
+ * relation refs, validating constraints, expanding inverse relation side effects,
+ * and adding reference cleanup for deletes before the transaction is applied.
+ */
 export const processChangesetInput = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
