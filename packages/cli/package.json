@@ -1,6 +1,6 @@
 {
   "name": "@binder.do/cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local-first knowledge base with bidirectional Markdown sync, LSP, MCP, and CLI",
   "license": "MIT",
   "author": "Marek Pazik",
