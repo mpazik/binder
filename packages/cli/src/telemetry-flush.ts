@@ -158,12 +158,15 @@ const flush = async (): Promise<void> => {
   const { PostHog } = await import("posthog-node");
   const client = new PostHog(key, { host });
 
-  if (isInternal) {
-    client.identify({
-      distinctId,
-      properties: { is_internal: true },
-    });
-  }
+  // Mirror distinct_id into the `name` property so PostHog's Persons UI shows
+  // our id (e.g. `brd_5E2vpPsrwWU`) instead of its internal person UUID.
+  client.identify({
+    distinctId,
+    properties: {
+      name: distinctId,
+      ...(isInternal ? { is_internal: true } : {}),
+    },
+  });
 
   // Buffer all events into the client, then flush once via shutdown.
   // Only delete source files after shutdown succeeds — otherwise we'd
