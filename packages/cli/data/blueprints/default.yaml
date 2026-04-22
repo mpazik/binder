@@ -1,0 +1,88 @@
+# Default blueprint — minimal freeform capture
+# Provides: Note type
+
+# ====================
+# SCHEMA
+# ====================
+
+- author: system
+  configs:
+    - key: Note
+      type: Type
+      description: Freeform capture — notes, quotes, links, anything.
+      fields:
+        - title: { required: true }
+        - details
+        - tags
+        - url
+        - source
+        - relatesTo
+
+# ====================
+# VIEWS
+# ====================
+
+- author: system
+  configs:
+    - key: note-view
+      type: View
+      name: Note
+      preamble: [key, title, tags, url, source, relatesTo]
+      viewContent: |
+        # {title}
+
+        {details}
+
+# ====================
+# NAVIGATION
+# ====================
+
+- author: system
+  configs:
+    # Flat list of all notes
+    - key: nav-notes-index
+      type: Navigation
+      path: notes/index
+      query:
+        filters: { type: Note }
+
+    # Untagged notes live at the top level
+    - key: nav-note-untagged
+      type: Navigation
+      path: notes/{title}
+      where: { type: Note, tags: { op: empty, value: true } }
+      view: note-view
+
+    # Tagged notes live under each of their tags (fanned out)
+    - key: nav-note-by-tag
+      type: Navigation
+      path: notes/{tags}/{title}
+      where: { type: Note, tags: { op: empty, value: false } }
+      view: note-view
+
+# ====================
+# SAMPLE DATA
+# ====================
+
+- author: system
+  records:
+    - type: Note
+      key: welcome
+      title: Welcome to Binder
+      source: blueprint
+      details: |
+        This is your first note. Edit it, delete it, or add more.
+
+        Notes live at `notes/{title}.md`. Add tags to group them
+        under `notes/<tag>/`. A note with multiple tags appears
+        under each.
+
+    - type: Note
+      key: markdown-guide
+      title: Markdown Guide
+      tags: [bookmark, reference]
+      url: https://www.markdownguide.org
+      source: markdownguide.org
+      details: |
+        Comprehensive reference for Markdown syntax — basics,
+        extended features, and tool compatibility.

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { isOk, throwIfError } from "@binder/utils";
+import type { EntityKey } from "@binder/repo";
 import {
   createInMemoryFileSystem,
   type MockFileSystem,
@@ -96,5 +97,28 @@ describe("blueprint", () => {
       expect(bp.name).toBeDefined();
       expect(bp.types.length).toBeGreaterThan(0);
     }
+  });
+
+  it("default blueprint provides a Note type and sample notes", async () => {
+    const realFs = createRealFileSystem();
+    const blueprintsResult = await listBlueprints(realFs);
+    const blueprints = throwIfError(blueprintsResult);
+
+    const defaultBp = blueprints.find((bp) => bp.name === "Default");
+    expect(defaultBp).toBeDefined();
+    expect(defaultBp!.types).toEqual(["Note"] as EntityKey[]);
+
+    const txResult = await loadBlueprint(realFs, defaultBp!.path, "system");
+    const transactions = throwIfError(txResult);
+
+    const records = transactions
+      .flatMap((tx) => tx.records ?? [])
+      .filter((r): r is Extract<typeof r, { type: unknown }> => "type" in r);
+    expect(records.length).toBe(2);
+    for (const r of records) expect(r.type).toBe("Note" as EntityKey);
+
+    const keys = records.map((r) => r.key);
+    expect(keys).toContain("welcome" as EntityKey);
+    expect(keys).toContain("markdown-guide" as EntityKey);
   });
 });

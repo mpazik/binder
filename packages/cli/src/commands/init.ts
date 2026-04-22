@@ -48,6 +48,17 @@ const findBlueprint = (
 ): BlueprintInfo | undefined =>
   blueprints.find((bp) => bp.name.toLowerCase() === blueprintArg.toLowerCase());
 
+const DEFAULT_BLUEPRINT_NAME = "Default";
+
+// Order: Default first (bare-bones starting point), others alphabetical, None last.
+const orderBlueprints = (available: BlueprintInfo[]): BlueprintInfo[] => {
+  const defaultBp = available.find((bp) => bp.name === DEFAULT_BLUEPRINT_NAME);
+  const rest = available
+    .filter((bp) => bp.name !== DEFAULT_BLUEPRINT_NAME)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return [...(defaultBp ? [defaultBp] : []), ...rest, NONE_BLUEPRINT];
+};
+
 const initSetupHandler: CommandHandlerMinimal<{
   docsPath?: string;
   author?: string;
@@ -72,7 +83,7 @@ const initSetupHandler: CommandHandlerMinimal<{
   const availableBlueprints = isOk(blueprintsResult)
     ? blueprintsResult.data
     : [];
-  const allBlueprints = [NONE_BLUEPRINT, ...availableBlueprints];
+  const allBlueprints = orderBlueprints(availableBlueprints);
 
   if (args.blueprint && !findBlueprint(args.blueprint, allBlueprints)) {
     const available = allBlueprints.map((bp) => bp.name.toLowerCase());
