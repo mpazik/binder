@@ -16,7 +16,7 @@ import type {
   FieldKey,
   PlaintextFormat,
   RichtextFormat,
-} from "@binder/db";
+} from "@binder/repo";
 
 export type FieldClassification = {
   m: number;

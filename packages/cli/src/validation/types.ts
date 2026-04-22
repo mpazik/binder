@@ -1,4 +1,4 @@
-import type { KnowledgeGraph, Namespace, NamespaceSchema } from "@binder/db";
+import type { KnowledgeGraph, Namespace, NamespaceSchema } from "@binder/repo";
 import type { NavigationItem } from "../document/navigation.ts";
 import type { ParsedDocument } from "../document/document.ts";
 

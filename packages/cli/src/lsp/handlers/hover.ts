@@ -5,7 +5,7 @@ import type {
 } from "vscode-languageserver/node";
 import { MarkupKind } from "vscode-languageserver/node";
 import { isErr } from "@binder/utils";
-import type { EntityRef, FieldAttrDef, FieldDef } from "@binder/db";
+import type { EntityRef, FieldAttrDef, FieldDef } from "@binder/repo";
 import { type LspHandler } from "../document-context.ts";
 import { getCursorContext } from "../cursor-context.ts";
 import { findView } from "../../document/navigation.ts";

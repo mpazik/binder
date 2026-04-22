@@ -6,10 +6,10 @@ status: active
 description: The versioned collection of entities within a workspace, stored as an append-only sequence of immutable transactions. Combines Git-like change tracking with flexible, reusable fields shared across types and direct links between entities.
 alternativeNames: [ knowledge graph, database, data store ]
 sourceFiles:
-  - packages/db/src/db.ts
-  - packages/db/src/knowledge-graph.ts
-  - packages/db/src/entity-store.ts
-  - packages/db/src/transaction-store.ts
+  - packages/repo/src/db.ts
+  - packages/repo/src/knowledge-graph.ts
+  - packages/repo/src/entity-store.ts
+  - packages/repo/src/transaction-store.ts
 relatesTo:
   - entity
   - namespace

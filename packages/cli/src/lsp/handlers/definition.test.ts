@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import type { EntityKey, EntityUid } from "@binder/db";
+import type { EntityKey, EntityUid } from "@binder/repo";
 import {
   mockEmailField,
   mockProjectField,
   mockTaskTypeKey,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import type { CursorContext, CursorEntityContext } from "../cursor-context.ts";
 import { getEntityRef, type EntityStringRef } from "./definition.ts";
 

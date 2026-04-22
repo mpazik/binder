@@ -24,8 +24,8 @@ The build step (`packages/cli/build.ts`) uses `Bun.build()` with `target: "node"
 When a module needs different implementations for Bun and Node, use the `*.bun.ts` / `*.node.ts` naming convention:
 
 ```
-packages/db/src/sqlite.bun.ts    # bun:sqlite + drizzle-orm/bun-sqlite
-packages/db/src/sqlite.node.ts   # better-sqlite3 + drizzle-orm/better-sqlite3
+packages/repo/src/sqlite.bun.ts    # bun:sqlite + drizzle-orm/bun-sqlite
+packages/repo/src/sqlite.node.ts   # better-sqlite3 + drizzle-orm/better-sqlite3
 ```
 
 **Source code always imports the `.bun.ts` variant.** The build plugin automatically rewires `*.bun.ts` imports to `*.node.ts` at bundle time. No runtime detection, no conditional imports.

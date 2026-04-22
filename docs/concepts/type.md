@@ -5,7 +5,7 @@ tags: [ data-model ]
 status: active
 description: A flexible entity class that provides identity, organisation, and field configuration without enforcing structure at the storage level. Types compose fields with constraints but don't own them.
 alternativeNames: [ entity type, record type ]
-sourceFiles: [ packages/db/src/model/schema.ts, packages/db/src/schema.ts ]
+sourceFiles: [ packages/repo/src/model/schema.ts, packages/repo/src/schema.ts ]
 relatesTo:
   - field
   - entity

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { type FieldsetNested } from "@binder/db";
+import { type FieldsetNested } from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectRecord,
   mockTask1Record,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { omit, pick } from "@binder/utils";
 import { computeMatchScore, type ScorerConfig } from "./similarity-scorer.ts";
 import { classifyFields } from "./field-classifier.ts";

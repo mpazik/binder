@@ -9,7 +9,7 @@ import {
   type KnowledgeGraph,
   type NamespaceEditable,
   normalizeEntityRef,
-} from "@binder/db";
+} from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { types } from "../cli/types.ts";
 import {

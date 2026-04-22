@@ -24,7 +24,7 @@ import {
   type NamespaceSchema,
   type TypeDef,
   validateDataType,
-} from "@binder/db";
+} from "@binder/repo";
 import { isErr } from "@binder/utils";
 import { isMap, isPair, isScalar } from "yaml";
 import {

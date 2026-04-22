@@ -7,7 +7,7 @@ import {
   type AncestralFieldsetChain,
   type QueryParams,
   serializeFilters,
-} from "@binder/db";
+} from "@binder/repo";
 import { fail, isErr, ok, type Result } from "@binder/utils";
 import {
   extractFieldNames,

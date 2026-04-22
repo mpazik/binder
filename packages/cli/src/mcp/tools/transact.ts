@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isErr, ok } from "@binder/utils";
-import { TransactionInputSchema } from "@binder/db";
+import { TransactionInputSchema } from "@binder/repo";
 import { defineTool } from "./types.ts";
 
 export const transactToolName = "transact";

@@ -1,4 +1,4 @@
-import type { FieldPath } from "@binder/db";
+import type { FieldPath } from "@binder/repo";
 import { type Result, ok, fail } from "@binder/utils";
 
 export type PropValue = string | number | boolean;

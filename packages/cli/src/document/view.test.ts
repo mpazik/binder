@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { pick, throwIfError } from "@binder/utils";
-import { type FieldsetNested } from "@binder/db";
+import { type FieldsetNested } from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectRecord,
   mockTask1Record,
   mockTask2Record,
   mockTask3Record,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import {
   extractFieldMappings,
   extractFieldPathsFromAst,

@@ -6,7 +6,7 @@ import {
   squashTransactions as mergeTransactions,
   type Transaction,
   type TransactionId,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   fail,
   getTimestampForFileName,

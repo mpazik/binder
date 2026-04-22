@@ -19,14 +19,14 @@ import {
   mockTaskTypeKey,
   mockUserType,
   mockUserTypeKey,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import {
   getTypeFieldKey,
   predefinedFields,
   type FieldDef,
   type RecordType,
   type TypeDef,
-} from "@binder/db";
+} from "@binder/repo";
 import { groupByToObject } from "@binder/utils";
 import { filterSchema, filterSchemaByTypes } from "./schema-filter.ts";
 

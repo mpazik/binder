@@ -4,7 +4,7 @@ import {
   type ConfigUid,
   type Fieldset,
   newConfigAppId,
-} from "@binder/db";
+} from "@binder/repo";
 import { typeNavigationKey, typeViewKey } from "../cli-config-schema.ts";
 
 export const mockNav1Key = "nav-projects" as ConfigKey;

@@ -10,8 +10,8 @@ import type {
   NamespaceEditable,
   RecordType,
   TypeDef,
-} from "@binder/db";
-import { getAllFieldsForType } from "@binder/db";
+} from "@binder/repo";
+import { getAllFieldsForType } from "@binder/repo";
 import { fail, isErr, ok, type ResultAsync } from "@binder/utils";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";

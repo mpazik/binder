@@ -7,7 +7,7 @@ import type {
   FieldKey,
   FieldsetNested,
   RecordUid,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectRecord,
@@ -21,7 +21,7 @@ import {
   mockTask3Record,
   mockTask3Uid,
   mockTaskTypeKey,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { isErr, omit, throwIfError } from "@binder/utils";
 import {
   diffEntities,

@@ -6,11 +6,11 @@ status: active
 description: An atomic, immutable, content-addressable collection of entity changesets that forms the append-only change log of the repository. Like a Git commit for structured data.
 alternativeNames: [ revision, checkpoint, commit ]
 sourceFiles:
-  - packages/db/src/model/transaction.ts
-  - packages/db/src/model/transaction-input.ts
-  - packages/db/src/transaction-processor.ts
-  - packages/db/src/transaction-applier.ts
-  - packages/db/src/transaction-store.ts
+  - packages/repo/src/model/transaction.ts
+  - packages/repo/src/model/transaction-input.ts
+  - packages/repo/src/transaction-processor.ts
+  - packages/repo/src/transaction-applier.ts
+  - packages/repo/src/transaction-store.ts
 relatesTo:
   - changeset
   - repository

@@ -9,7 +9,7 @@ import {
   type TransactionHash,
   transactionToCanonical,
   withHashTransaction,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   fail,
   getTimestampForFileName,

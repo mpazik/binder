@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { Result } from "@binder/utils";
-import { mockRecordSchema } from "@binder/db/mocks";
+import { mockRecordSchema } from "@binder/repo/mocks";
 import {
   renderYamlEntity,
   renderYamlList,

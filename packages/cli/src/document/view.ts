@@ -31,7 +31,7 @@ import {
   type RichtextFormat,
   richtextFormats,
   splitByDelimiter,
-} from "@binder/db";
+} from "@binder/repo";
 import type { Nodes, Parent, Root, Text } from "mdast";
 import { visit } from "unist-util-visit";
 import type { Data, Node, Position as UnistPosition } from "unist";

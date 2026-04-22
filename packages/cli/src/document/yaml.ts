@@ -21,7 +21,7 @@ import {
   type EntitySchema,
   type FieldsetNested,
   getMultiValueDelimiter,
-} from "@binder/db";
+} from "@binder/repo";
 import { parseYamlDocument } from "./yaml-cst.ts";
 
 const getBlockFields = (schema?: EntitySchema): Set<string> | undefined => {

@@ -1,5 +1,5 @@
 import { newIsoTimestamp } from "@binder/utils";
-import type { RecordUid, TransactionInput } from "@binder/db";
+import type { RecordUid, TransactionInput } from "@binder/repo";
 
 export const mockDocumentUid = "_Nupvr3JwPl" as RecordUid;
 export const mockSection1Uid = "_1G4RYLpqCy" as RecordUid;

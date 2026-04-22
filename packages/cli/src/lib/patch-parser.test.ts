@@ -4,7 +4,7 @@ import {
   predefinedFields,
   type FieldChangeInput,
   type FieldDef,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   mockAliasesField,
   mockFavoriteField,
@@ -12,7 +12,7 @@ import {
   mockNotesField,
   mockPriceField,
   mockStepsField,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { isErr } from "@binder/utils";
 import {
   parseFieldChange,

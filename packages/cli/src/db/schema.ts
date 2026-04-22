@@ -1,6 +1,6 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import type { EntityUid, TransactionId } from "@binder/db";
-import * as dbSchema from "@binder/db/schema";
+import type { EntityUid, TransactionId } from "@binder/repo";
+import * as dbSchema from "@binder/repo/schema";
 
 export const cliSnapshotMetadataTable = sqliteTable(
   "cli_snapshot_metadata",

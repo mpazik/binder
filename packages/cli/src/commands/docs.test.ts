@@ -2,7 +2,7 @@ import { dirname, join, relative } from "path";
 import { beforeEach, describe, expect, it } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import { mockTask1Uid, mockTransactionInitInput } from "@binder/db/mocks";
+import { mockTask1Uid, mockTransactionInitInput } from "@binder/repo/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { mockDocumentTransactionInput } from "../document/document.mock.ts";

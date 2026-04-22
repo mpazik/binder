@@ -12,7 +12,7 @@ import {
   type FieldDef,
   type FieldPath,
   serializeFieldValue,
-} from "@binder/db";
+} from "@binder/repo";
 import { findSimilar } from "@binder/utils";
 import {
   type DocumentContext,

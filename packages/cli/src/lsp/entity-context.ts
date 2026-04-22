@@ -6,7 +6,7 @@ import type {
   Filters,
   KnowledgeGraph,
   QueryParams,
-} from "@binder/db";
+} from "@binder/repo";
 import { isErr, ok, resultFallback, type ResultAsync } from "@binder/utils";
 import { extractFieldValues } from "../utils/interpolate-fields.ts";
 import { getTypeFromFilters, interpolateQueryParams } from "../utils/query.ts";

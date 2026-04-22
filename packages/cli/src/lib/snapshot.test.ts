@@ -6,8 +6,8 @@ import {
   type GraphVersion,
   type TransactionId,
   versionFromTransaction,
-} from "@binder/db";
-import { mockTransactionInit } from "@binder/db/mocks";
+} from "@binder/repo";
+import { mockTransactionInit } from "@binder/repo/mocks";
 import { getTestDatabaseCli } from "../db/db.mock.ts";
 import type { DatabaseCli } from "../db";
 import { BINDER_DIR } from "../config.ts";

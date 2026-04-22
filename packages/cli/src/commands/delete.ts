@@ -5,7 +5,7 @@ import {
   type EntityRef,
   type NamespaceEditable,
   normalizeEntityRef,
-} from "@binder/db";
+} from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 
 import { namespaceOption } from "../cli/options.ts";

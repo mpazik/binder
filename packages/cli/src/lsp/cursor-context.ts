@@ -23,7 +23,7 @@ import {
   getTypeFieldAttrs,
   getTypeFieldKey,
   type TypeDef,
-} from "@binder/db";
+} from "@binder/repo";
 import type { Position as UnistPosition } from "unist";
 import { findYamlContext, type YamlPath } from "../document/yaml-cst.ts";
 import type { FieldSlotMapping } from "../document/view.ts";

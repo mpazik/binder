@@ -4,9 +4,9 @@ import {
   mockRecordSchema,
   mockProjectRecord,
   mockUserRecord,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { throwIfError } from "@binder/utils";
-import type { AncestralFieldsetChain } from "@binder/db";
+import type { AncestralFieldsetChain } from "@binder/repo";
 import {
   extractFieldsetFromQuery,
   parseFiltersFromString,

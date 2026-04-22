@@ -1,4 +1,4 @@
-import type { EntitySchema, FieldKey, FieldsetNested } from "@binder/db";
+import type { EntitySchema, FieldKey, FieldsetNested } from "@binder/repo";
 import { auctionMatch } from "./auction-match.ts";
 import { computeMatchScore, type ScorerConfig } from "./similarity-scorer.ts";
 import { type FieldClassifications } from "./field-classifier.ts";

@@ -5,7 +5,7 @@ import type {
   FieldsetNested,
   RecordType,
   RecordUid,
-} from "@binder/db";
+} from "@binder/repo";
 import { classifyFields } from "../diff/field-classifier.ts";
 import { matchEntities } from "../diff/entity-matcher.ts";
 import type { ExtractedFileData } from "../document/extraction.ts";

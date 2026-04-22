@@ -5,7 +5,7 @@ import type {
   FieldsetNested,
   FieldValue,
   KnowledgeGraph,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   isErr,
   isObjTuple,

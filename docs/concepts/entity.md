@@ -6,10 +6,10 @@ status: active
 description: A flexible collection of field-value pairs with a layered identification strategy. Any entity can hold any field defined in the repository, regardless of its type.
 alternativeNames: [ record, item, entry, card, object ]
 sourceFiles:
-  - packages/db/src/model/entity.ts
-  - packages/db/src/model/record.ts
-  - packages/db/src/model/config.ts
-  - packages/db/src/utils/uid.ts
+  - packages/repo/src/model/entity.ts
+  - packages/repo/src/model/record.ts
+  - packages/repo/src/model/config.ts
+  - packages/repo/src/utils/uid.ts
 relatesTo:
   - field
   - type

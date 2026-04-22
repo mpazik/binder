@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isErr, ok } from "@binder/utils";
-import { FiltersSchema } from "@binder/db";
+import { FiltersSchema } from "@binder/repo";
 import { formatReferencesList } from "../../document/reference.ts";
 import { defineTool } from "./types.ts";
 

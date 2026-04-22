@@ -20,7 +20,7 @@ import {
   richtextFormats,
   type FieldPath,
   type RichtextFormat,
-} from "@binder/db";
+} from "@binder/repo";
 import type { ErrorObject } from "@binder/utils";
 import { isErr } from "@binder/utils";
 import { parseFieldExpression, type Props } from "./field-expression-parser.ts";

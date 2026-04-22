@@ -16,7 +16,7 @@ import { frontmatterToMarkdown } from "mdast-util-frontmatter";
 import { type Brand, includes } from "@binder/utils";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import type { Data, Literal, Node } from "unist";
-import { type FieldPath } from "@binder/db";
+import { type FieldPath } from "@binder/repo";
 import { type FieldSlot } from "./field-slot.ts";
 import type { ViewAST } from "./view.ts";
 

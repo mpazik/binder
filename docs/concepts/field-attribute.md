@@ -5,7 +5,7 @@ tags: [ data-model ]
 status: active
 description: Structured metadata attached to a field value. Extends values with properties like role, percentage, or confidence while keeping storage flat and the base value indexable.
 alternativeNames: [ attribute, value metadata, relation attribute ]
-sourceFiles: [ packages/db/src/model/field.ts, packages/db/src/model/data-type.ts ]
+sourceFiles: [ packages/repo/src/model/field.ts, packages/repo/src/model/data-type.ts ]
 relatesTo:
   - field
   - data-type

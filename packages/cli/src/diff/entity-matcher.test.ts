@@ -1,11 +1,11 @@
 import { describe, it, expect } from "bun:test";
-import { type FieldsetNested } from "@binder/db";
+import { type FieldsetNested } from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectRecord,
   mockTask1Record,
   mockTask2Record,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { omit } from "@binder/utils";
 import { matchEntities } from "./entity-matcher.ts";
 import { classifyFields } from "./field-classifier.ts";

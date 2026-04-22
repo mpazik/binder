@@ -9,7 +9,7 @@ import {
   tryCatch,
   wrapError,
 } from "@binder/utils";
-import { type TransactionInput, TransactionInputSchema } from "@binder/db";
+import { type TransactionInput, TransactionInputSchema } from "@binder/repo";
 
 export type InputFormat = "yaml" | "json" | "jsonl";
 

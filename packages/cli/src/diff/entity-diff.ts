@@ -12,7 +12,7 @@ import type {
   ListMutation,
   RecordUid,
   QueryParams,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   coreIdentityFieldKeys,
   createUid,
@@ -20,7 +20,7 @@ import {
   getTypeFieldAttrs,
   getTypeFieldKey,
   isFieldsetNested,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   assert,
   assertDefined,

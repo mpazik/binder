@@ -6,7 +6,11 @@ import {
   ok,
   type ResultAsync,
 } from "@binder/utils";
-import type { Namespace, NamespaceEditable, NamespaceSchema } from "@binder/db";
+import type {
+  Namespace,
+  NamespaceEditable,
+  NamespaceSchema,
+} from "@binder/repo";
 import {
   findNavigationItemByPath,
   type NavigationItem,

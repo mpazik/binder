@@ -6,7 +6,7 @@ import {
   mockTransaction4,
   mockTransactionInit,
   mockTransactionUpdate,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import {
   coreConfigSchema,
   type Database,
@@ -16,7 +16,7 @@ import {
   type Transaction,
   type TransactionId,
   withHashTransaction,
-} from "@binder/db";
+} from "@binder/repo";
 import { throwIfError } from "@binder/utils";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
 import { createMockRuntimeContextWithDb, mockConfig } from "../runtime.mock.ts";

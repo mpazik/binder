@@ -10,7 +10,7 @@ import {
   mockStatusField,
   mockStatusFieldKey,
   mockTransactionInit,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { BINDER_DIR } from "../../config.ts";
 import type { RuntimeContextWithDb } from "../../runtime.ts";
 import { createMockRuntimeContextWithDb } from "../../runtime.mock.ts";

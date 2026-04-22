@@ -30,7 +30,7 @@
         "posthog-node": "^5.10.0",
       },
       "devDependencies": {
-        "@binder/db": "workspace:*",
+        "@binder/repo": "workspace:*",
         "@binder/utils": "workspace:*",
         "@clack/prompts": "^1.1.0",
         "@modelcontextprotocol/sdk": "^1.28.0",
@@ -61,8 +61,8 @@
         "zod": "^4.3.6",
       },
     },
-    "packages/db": {
-      "name": "@binder/db",
+    "packages/repo": {
+      "name": "@binder/repo",
       "version": "0.0.0",
       "dependencies": {
         "@binder/utils": "workspace:*",
@@ -88,7 +88,7 @@
   "packages": {
     "@binder.do/cli": ["@binder.do/cli@workspace:packages/cli"],
 
-    "@binder/db": ["@binder/db@workspace:packages/db"],
+    "@binder/repo": ["@binder/repo@workspace:packages/repo"],
 
     "@binder/utils": ["@binder/utils@workspace:packages/utils"],
 

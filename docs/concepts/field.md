@@ -6,9 +6,9 @@ status: active
 description: A reusable schema element that defines what an entity can hold. Fields are themselves entities in the config namespace. Unlike columns in relational databases, fields exist independently and can be shared across any number of types.
 alternativeNames: [ attribute, property ]
 sourceFiles:
-  - packages/db/src/model/field.ts
-  - packages/db/src/model/ref.ts
-  - packages/db/src/relationship-resolver.ts
+  - packages/repo/src/model/field.ts
+  - packages/repo/src/model/ref.ts
+  - packages/repo/src/relationship-resolver.ts
 relatesTo:
   - data-type
   - reference

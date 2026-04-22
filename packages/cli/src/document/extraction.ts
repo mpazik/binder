@@ -5,7 +5,7 @@ import {
   type Includes,
   isFieldsetNested,
   type QueryParams,
-} from "@binder/db";
+} from "@binder/repo";
 import { createError, err, isErr, ok, type Result } from "@binder/utils";
 import { findView, type NavigationItem } from "./navigation.ts";
 import { parseMarkdown } from "./markdown.ts";

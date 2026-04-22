@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { createError, err } from "@binder/utils";
-import type { FieldsetNested, FieldValue } from "@binder/db";
+import type { FieldsetNested, FieldValue } from "@binder/repo";
 import { createFieldAccumulator } from "./field-accumulator.ts";
 import type { FieldConflictSource } from "./field-accumulator.ts";
 

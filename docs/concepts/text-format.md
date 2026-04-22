@@ -5,7 +5,7 @@ tags: [ data-model ]
 status: active
 description: Structural constraints on text field values that control what content is valid and how values are delimited. Tighter formats enable wider reuse in views and sync.
 alternativeNames: [ format, field format ]
-sourceFiles: [ packages/db/src/model/text-format.ts ]
+sourceFiles: [ packages/repo/src/model/text-format.ts ]
 relatesTo:
   - prob-document-schema-model
 ---

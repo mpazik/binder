@@ -12,8 +12,8 @@ import type {
   NamespaceEditable,
   QueryParams,
   TransactionInput,
-} from "@binder/db";
-import { includesWithUid } from "@binder/db";
+} from "@binder/repo";
+import { includesWithUid } from "@binder/repo";
 import {
   fail,
   isEqual,

@@ -6,12 +6,12 @@ import type {
   Fieldset,
   FieldsetNested,
   NestedFieldValueProvider,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectRecord,
   mockUserRecord,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { resolvePath } from "../document/navigation.ts";
 import { DOCUMENT_VIEW_KEY } from "../document/view-entity.ts";
 import {

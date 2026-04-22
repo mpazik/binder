@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { KnowledgeGraph } from "@binder/db";
-import { mockRecordSchema } from "@binder/db/mocks";
+import type { KnowledgeGraph } from "@binder/repo";
+import { mockRecordSchema } from "@binder/repo/mocks";
 import { parseMarkdownDocument } from "../../document/markdown.ts";
 import { createMarkdownValidator } from "./markdown.ts";
 

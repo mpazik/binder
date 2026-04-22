@@ -11,7 +11,7 @@ import {
   type NestedFieldValueProvider,
   parseFieldPath,
   serializeFieldValue,
-} from "@binder/db";
+} from "@binder/repo";
 
 export type StringifyProvider = (placeholder: string) => Result<string>;
 

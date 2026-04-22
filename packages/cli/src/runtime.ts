@@ -15,7 +15,7 @@ import {
   tryCatch,
   wrapError,
 } from "@binder/utils";
-import type { KnowledgeGraph } from "@binder/db";
+import type { KnowledgeGraph } from "@binder/repo";
 import { type DatabaseCli, openCliDb } from "./db";
 import {
   type AppConfig,

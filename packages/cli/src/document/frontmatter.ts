@@ -3,7 +3,7 @@ import type {
   FieldKey,
   FieldsetNested,
   FieldValue,
-} from "@binder/db";
+} from "@binder/repo";
 import { isErr, ok, type Result } from "@binder/utils";
 import { Document, isMap } from "yaml";
 import { applyInlineFormatting, parseYamlEntity } from "./yaml.ts";

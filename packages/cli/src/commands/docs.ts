@@ -1,5 +1,5 @@
 import type { Argv } from "yargs";
-import type { NamespaceEditable } from "@binder/db";
+import type { NamespaceEditable } from "@binder/repo";
 import { fail, isErr, ok, okVoid, type ResultAsync } from "@binder/utils";
 import {
   type CommandHandlerWithDb,

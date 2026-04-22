@@ -5,7 +5,7 @@ tags: [ data-access ]
 status: active
 description: A structured request for entities from the repository. Supports filters, nested includes, ordering, cursor-based pagination, computed fields, and full-text/vector search.
 alternativeNames: [ search, filter ]
-sourceFiles: [ packages/db/src/model/query.ts, packages/db/src/model/query-serial.ts ]
+sourceFiles: [ packages/repo/src/model/query.ts, packages/repo/src/model/query-serial.ts ]
 relatesTo:
   - entity
   - repository

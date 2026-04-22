@@ -9,7 +9,7 @@ import {
   type TransactionRef,
   transactionToInput,
   TransactionInputSchema,
-} from "@binder/db";
+} from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import {
   repairDbFromLog,

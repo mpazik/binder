@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
 import { throwIfError } from "@binder/utils";
-import type { FieldsetNested } from "@binder/db";
+import type { FieldsetNested } from "@binder/repo";
 import {
   extractFrontmatterFromAst,
   prependFrontmatter,

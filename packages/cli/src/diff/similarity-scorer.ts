@@ -12,7 +12,7 @@ import {
   getAllFieldsForType,
   isFieldsetNested,
   type RecordDataType,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   assertDefined,
   assertIsArray,

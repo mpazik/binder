@@ -6,7 +6,7 @@ import type {
   GraphVersion,
   NamespaceEditable,
   TransactionId,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   isErr,
   ok,

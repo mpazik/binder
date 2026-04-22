@@ -10,7 +10,7 @@ import {
   titleFieldKey,
   type TypeDef,
   typeSystemType,
-} from "@binder/db";
+} from "@binder/repo";
 
 export const typeDocumentBlockUid = "_8Uw1vAbAdE" as ConfigUid;
 export const typeDocumentBlockKey = "DocumentBlock" as RecordType;

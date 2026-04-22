@@ -5,7 +5,7 @@ tags: [ data-model ]
 status: active
 description: The complete set of user-defined types, fields, and relations that give structure to repository data. Vocabulary is stored as entities in the config namespace and evolves dynamically through transactions without breaking existing records.
 alternativeNames: [ schema ]
-sourceFiles: [ packages/db/src/model/schema.ts, packages/db/src/schema.ts ]
+sourceFiles: [ packages/repo/src/model/schema.ts, packages/repo/src/schema.ts ]
 relatesTo:
   - type
   - field

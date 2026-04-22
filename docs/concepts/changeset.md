@@ -6,10 +6,10 @@ status: active
 description: A collection of value changes for a single entity's fields within a transaction. Four core operations, apply, squash, inverse, and rebase, enable undo, history compaction, and conflict resolution.
 alternativeNames: [ diff, entity change, field changeset ]
 sourceFiles:
-  - packages/db/src/model/changeset.ts
-  - packages/db/src/model/changeset-input.ts
-  - packages/db/src/changeset-processor.ts
-  - packages/db/src/changeset-applier.ts
+  - packages/repo/src/model/changeset.ts
+  - packages/repo/src/model/changeset-input.ts
+  - packages/repo/src/changeset-processor.ts
+  - packages/repo/src/changeset-applier.ts
 relatesTo:
   - transaction
   - entity

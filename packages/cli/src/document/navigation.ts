@@ -17,7 +17,7 @@ import {
   pickByIncludes,
   type QueryParams,
   serializeFieldValue,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   assertDefinedPass,
   type ErrorObject,

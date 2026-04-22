@@ -1,5 +1,5 @@
 import type { JsonRpcResultAsync } from "@binder/utils";
-import type { KnowledgeGraph } from "@binder/db";
+import type { KnowledgeGraph } from "@binder/repo";
 import type { Logger } from "../log.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import type { AppConfig } from "../config.ts";

@@ -32,7 +32,7 @@ import {
   mockProjectRecord,
   mockUserRecord,
   mockUser2Record,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../..");
 const CLI_ENTRY = resolve(REPO_ROOT, "packages/cli/src/index.ts");

@@ -4,7 +4,7 @@ import {
   type EntityRef,
   type NamespaceEditable,
   normalizeEntityRef,
-} from "@binder/db";
+} from "@binder/repo";
 import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
 import { findEntityLocation, loadNavigation } from "../document/navigation.ts";
 import { types } from "../cli/types.ts";

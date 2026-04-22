@@ -6,9 +6,9 @@ status: active
 description: A direct link between entities stored as a field value. References use different identifier strategies per namespace and support automatic bidirectional sync via inverse relations.
 alternativeNames: [ relation, link, entity link ]
 sourceFiles:
-  - packages/db/src/model/ref.ts
-  - packages/db/src/relationship-resolver.ts
-  - packages/db/src/filter-entities.ts
+  - packages/repo/src/model/ref.ts
+  - packages/repo/src/relationship-resolver.ts
+  - packages/repo/src/filter-entities.ts
 relatesTo:
   - field
   - data-type

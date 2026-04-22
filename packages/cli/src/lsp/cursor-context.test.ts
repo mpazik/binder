@@ -7,8 +7,8 @@ import {
   mockTaskTypeKey,
   mockProjectFieldKey,
   mockStatusFieldKey,
-} from "@binder/db/mocks";
-import { tagsFieldKey } from "@binder/db";
+} from "@binder/repo/mocks";
+import { tagsFieldKey } from "@binder/repo";
 import { LineCounter } from "yaml";
 import { parseYamlDocument } from "../document/yaml-cst.ts";
 import { parseMarkdownDocument } from "../document/markdown.ts";

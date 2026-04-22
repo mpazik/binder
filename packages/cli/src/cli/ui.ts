@@ -16,7 +16,7 @@ import {
   shortTransactionHash,
   type Transaction,
   type ValueChange,
-} from "@binder/db";
+} from "@binder/repo";
 import { type ErrorObject, formatError, isErr, noop } from "@binder/utils";
 import {
   serialize,

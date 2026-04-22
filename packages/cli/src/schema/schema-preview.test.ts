@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mockRecordSchema } from "@binder/db/mocks";
+import { mockRecordSchema } from "@binder/repo/mocks";
 import {
   type ConfigId,
   type ConfigKey,
@@ -7,7 +7,7 @@ import {
   fieldSystemType,
   type RecordFieldDef,
   type RecordSchema,
-} from "@binder/db";
+} from "@binder/repo";
 import { renderSchemaPreview } from "./schema-preview.ts";
 
 describe("renderSchemaPreview", () => {

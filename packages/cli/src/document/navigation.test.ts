@@ -10,7 +10,7 @@ import {
   type FieldsetNested,
   type GraphVersion,
   type KnowledgeGraph,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectKey,
@@ -20,7 +20,7 @@ import {
   mockTask2Record,
   mockTaskTypeKey,
   mockTransactionInit,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import type { DatabaseCli } from "../db";
 import { getTestDatabaseCli } from "../db/db.mock.ts";
 import {

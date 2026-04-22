@@ -15,7 +15,7 @@ import {
   type RichtextFormat,
   type TypeDef,
   typeSystemType,
-} from "@binder/db";
+} from "@binder/repo";
 
 export type ViewFormat = Exclude<RichtextFormat, "word">;
 

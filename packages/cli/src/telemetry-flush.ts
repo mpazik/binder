@@ -7,7 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { createUid } from "@binder/db";
+import { createUid } from "@binder/repo";
 import { isErr, tryCatch } from "@binder/utils";
 import { BINDER_VERSION } from "./environment.ts";
 import { getGlobalStatePath } from "./config.ts";

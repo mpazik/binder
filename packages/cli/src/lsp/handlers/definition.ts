@@ -5,7 +5,7 @@ import type {
   EntityUid,
   Fieldset,
   NamespaceEditable,
-} from "@binder/db";
+} from "@binder/repo";
 import type { RuntimeContextWithDb } from "../../runtime.ts";
 import {
   findEntityLocation,

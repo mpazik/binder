@@ -2,7 +2,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
-import { openDb } from "@binder/db";
+import { openDb } from "@binder/repo";
 import { isErr, ok, type Result } from "@binder/utils";
 import { isBundled } from "../environment.ts";
 import { schema } from "./schema.ts";

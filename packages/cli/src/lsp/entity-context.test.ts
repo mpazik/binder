@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { pick, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import type { KnowledgeGraph } from "@binder/db";
+import type { KnowledgeGraph } from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectRecord,
@@ -12,7 +12,7 @@ import {
   mockTask2Uid,
   mockTaskTypeKey,
   mockTransactionInitInput,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { mockDocumentTransactionInput } from "../document/document.mock.ts";

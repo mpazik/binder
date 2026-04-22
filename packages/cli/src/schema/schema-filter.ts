@@ -3,7 +3,7 @@ import {
   type EntityKey,
   type EntitySchema,
   type EntityType,
-} from "@binder/db";
+} from "@binder/repo";
 import { filterObjectValues } from "@binder/utils";
 
 export type SchemaFilter = {

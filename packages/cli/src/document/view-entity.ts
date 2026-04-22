@@ -5,7 +5,7 @@ import {
   type KnowledgeGraph,
   mergeIncludes,
   richtextFormats,
-} from "@binder/db";
+} from "@binder/repo";
 import { isErr, ok, type ResultAsync } from "@binder/utils";
 import { visit } from "unist-util-visit";
 import { type ViewFormat } from "../cli-config-schema.ts";

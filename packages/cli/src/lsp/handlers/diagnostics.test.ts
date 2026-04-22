@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { FieldDef, FieldValue, FieldsetNested } from "@binder/db";
+import type { FieldDef, FieldValue, FieldsetNested } from "@binder/repo";
 import {
   mockDueDateField,
   mockRecordSchema,
@@ -9,7 +9,7 @@ import {
   mockStatusField,
   mockFavoriteField,
   mockTasksField,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import type { Position as UnistPosition } from "unist";
 import type { FieldSlotMapping } from "../../document/view.ts";
 import {

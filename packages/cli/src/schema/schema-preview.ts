@@ -4,8 +4,8 @@ import {
   type EntitySchema,
   type FieldAttrDef,
   type FieldDef,
-} from "@binder/db";
-import { serializeFieldValue } from "@binder/db";
+} from "@binder/repo";
+import { serializeFieldValue } from "@binder/repo";
 import { formatWhenCondition } from "../utils/query.ts";
 import {
   textBold,

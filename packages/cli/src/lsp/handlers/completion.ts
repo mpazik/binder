@@ -13,7 +13,7 @@ import {
   type NamespaceEditable,
   type RecordFieldDef,
   type RecordType,
-} from "@binder/db";
+} from "@binder/repo";
 import { isErr } from "@binder/utils";
 import {
   findYamlContext,

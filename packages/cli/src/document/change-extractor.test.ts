@@ -7,7 +7,7 @@ import {
   type EntityKey,
   type EntitySchema,
   type KnowledgeGraph,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   mockRecordSchema,
   mockProjectRecord,
@@ -25,7 +25,7 @@ import {
   mockTeamTypeKey,
   mockTransactionInitInput,
   mockUserType,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import { mockDocumentTransactionInput } from "./document.mock.ts";

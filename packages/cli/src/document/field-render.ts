@@ -5,7 +5,7 @@ import {
   getMultiValueDelimiter,
   isMultilineFormat,
   serializeFieldValue,
-} from "@binder/db";
+} from "@binder/repo";
 import type {
   Nodes,
   Paragraph,

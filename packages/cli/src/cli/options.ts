@@ -4,7 +4,7 @@ import {
   namespacesEditable,
   parseSerialIncludes,
   parseSerialOrderBy,
-} from "@binder/db";
+} from "@binder/repo";
 import { fail, ok, throwIfError, type Result } from "@binder/utils";
 import { serializeFormats, serializeItemFormats } from "../utils/serialize.ts";
 import { isInteractive } from "./stdin.ts";

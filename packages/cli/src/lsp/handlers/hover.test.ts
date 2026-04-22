@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { FieldAttrDef, FieldDef } from "@binder/db";
+import type { FieldAttrDef, FieldDef } from "@binder/repo";
 import {
   mockAssignedToField,
   mockCompletedAtField,
@@ -8,7 +8,7 @@ import {
   mockOwnersField,
   mockProjectField,
   mockStatusField,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import {
   type EntityHoverInput,
   type FieldHoverInput,

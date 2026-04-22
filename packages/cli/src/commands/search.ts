@@ -9,7 +9,7 @@ import {
   type QueryParams,
   QueryParamsSchema,
   parseSerialFilters,
-} from "@binder/db";
+} from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { types } from "../cli/types.ts";
 import {

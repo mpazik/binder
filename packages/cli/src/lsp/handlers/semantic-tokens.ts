@@ -3,7 +3,7 @@ import {
   type SemanticTokens,
   type SemanticTokensParams,
 } from "vscode-languageserver/node";
-import { type FieldDef, getFieldDefNested } from "@binder/db";
+import { type FieldDef, getFieldDefNested } from "@binder/repo";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   LspHandler,

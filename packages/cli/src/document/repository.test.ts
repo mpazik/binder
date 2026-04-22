@@ -6,7 +6,7 @@ import {
   type KnowledgeGraph,
   changesetInputForNewEntity,
   openKnowledgeGraph,
-} from "@binder/db";
+} from "@binder/repo";
 import {
   mockTransactionInitInput,
   mockTask1Uid,
@@ -14,7 +14,7 @@ import {
   mockTask2Uid,
   mockTask2Key,
   mockProjectKey,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import type { DatabaseCli } from "../db";
 import { getTestDatabaseCli } from "../db/db.mock.ts";
 import {

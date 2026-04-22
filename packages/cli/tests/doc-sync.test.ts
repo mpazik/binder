@@ -10,7 +10,7 @@ import {
   mockTask1Key,
   mockTask1Record,
   mockTaskTypeKey,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import {
   binderDir,
   createRunHelpers,

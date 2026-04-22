@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { mockRecordSchema } from "@binder/db/mocks";
-import type { KnowledgeGraph } from "@binder/db";
+import { mockRecordSchema } from "@binder/repo/mocks";
+import type { KnowledgeGraph } from "@binder/repo";
 import { parseYamlDocument } from "../../document/yaml-cst.ts";
 import { createYamlValidator } from "./yaml.ts";
 

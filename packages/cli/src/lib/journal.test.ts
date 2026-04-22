@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import "@binder/utils/tests";
-import { type Transaction, type TransactionHash } from "@binder/db";
+import { type Transaction, type TransactionHash } from "@binder/repo";
 import {
   mockAuthor2,
   mockTransaction3,
   mockTransaction4,
   mockTransactionInit,
   mockTransactionUpdate,
-} from "@binder/db/mocks";
+} from "@binder/repo/mocks";
 import { throwIfError } from "@binder/utils";
 import {
   clearLog,

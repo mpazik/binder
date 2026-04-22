@@ -4,7 +4,7 @@ import {
   type EntityKey,
   type EntityType,
   type NamespaceEditable,
-} from "@binder/db";
+} from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchema } from "../schema/schema-filter.ts";

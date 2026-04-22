@@ -22,7 +22,7 @@ import {
   type Namespace,
   normalizeInputValue,
   validateDataType,
-} from "@binder/db";
+} from "@binder/repo";
 import type { ParsedYaml } from "../../document/yaml-cst.ts";
 import {
   createValidationError,
