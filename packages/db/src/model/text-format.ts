@@ -18,10 +18,13 @@ export type TextFormatValidator = (
   context: TextFormatValidatorContext,
 ) => string | undefined;
 
+export type TextChangeType = "set" | "diff";
+
 export type TextFormatDef = DataTypeDef & {
   validate: TextFormatValidator;
   isMultiline?: boolean;
   delimiter?: MultiValueDelimiter;
+  changeType?: TextChangeType;
 };
 
 export type TextFormatDefs = Record<string, TextFormatDef>;
@@ -71,6 +74,7 @@ export const plaintextFormats = {
       "Value must start with a letter and contain only letters, digits, hyphens, and underscores",
     ),
     delimiter: "comma",
+    changeType: "set",
   },
   word: {
     name: "Word",
@@ -80,6 +84,7 @@ export const plaintextFormats = {
       "Value must be a single word without whitespace",
     ),
     delimiter: "comma",
+    changeType: "set",
   },
   phrase: {
     name: "Phrase",
@@ -89,6 +94,7 @@ export const plaintextFormats = {
       "Value must not contain commas, semicolons, pipes, or line breaks",
     ),
     delimiter: "comma",
+    changeType: "set",
   },
   line: {
     name: "Line",
@@ -98,6 +104,7 @@ export const plaintextFormats = {
       "Value must be a single line without line breaks",
     ),
     delimiter: "newline",
+    changeType: "set",
   },
   paragraph: {
     name: "Paragraph",
@@ -109,6 +116,7 @@ export const plaintextFormats = {
     ),
     isMultiline: true,
     delimiter: "blankline",
+    changeType: "diff",
   },
   uri: {
     name: "URI",
@@ -119,6 +127,7 @@ export const plaintextFormats = {
       "Value must be a valid URI with scheme (e.g., https://...)",
     ),
     delimiter: "newline",
+    changeType: "set",
   },
   filepath: {
     name: "File Path",
@@ -129,6 +138,7 @@ export const plaintextFormats = {
       "Value must be a valid POSIX file path",
     ),
     delimiter: "newline",
+    changeType: "set",
   },
   semver: {
     name: "Semantic Version",
@@ -139,6 +149,7 @@ export const plaintextFormats = {
       "Value must follow semantic versioning (MAJOR.MINOR.PATCH)",
     ),
     delimiter: "comma",
+    changeType: "set",
   },
 } as const satisfies TextFormatDefs;
 
@@ -151,6 +162,7 @@ export const richtextFormats = {
       "Value must be a single word without whitespace",
     ),
     delimiter: "comma",
+    changeType: "set",
   },
   phrase: {
     name: "Phrase",
@@ -160,6 +172,7 @@ export const richtextFormats = {
       "Value must not contain commas, semicolons, pipes, or line breaks",
     ),
     delimiter: "comma",
+    changeType: "set",
   },
   line: {
     name: "Line",
@@ -170,6 +183,7 @@ export const richtextFormats = {
       "Value must be a single line without line breaks",
     ),
     delimiter: "newline",
+    changeType: "set",
   },
   block: {
     name: "Block",
@@ -185,6 +199,7 @@ export const richtextFormats = {
     },
     isMultiline: true,
     delimiter: "blankline",
+    changeType: "diff",
   },
   section: {
     name: "Section",
@@ -201,6 +216,7 @@ export const richtextFormats = {
     },
     isMultiline: true,
     delimiter: "header",
+    changeType: "diff",
   },
   document: {
     name: "Document",
@@ -213,6 +229,7 @@ export const richtextFormats = {
     },
     isMultiline: true,
     delimiter: "hrule",
+    changeType: "diff",
   },
 } as const satisfies TextFormatDefs;
 
@@ -323,4 +340,18 @@ export const isMultilineFormat = (fieldDef: FieldDef): boolean => {
   if (fieldDef.dataType === "richtext")
     return getRichtextFormat(fieldDef.richtextFormat).isMultiline ?? false;
   return false;
+};
+
+/**
+ * Resolve the effective change encoding for a text field:
+ * field-level `changeType` overrides the format default.
+ * Non-text fields always use `"set"`.
+ */
+export const getTextChangeType = (fieldDef: FieldDef): TextChangeType => {
+  if (fieldDef.changeType) return fieldDef.changeType;
+  if (fieldDef.dataType === "plaintext")
+    return getPlaintextFormat(fieldDef.plaintextFormat).changeType ?? "set";
+  if (fieldDef.dataType === "richtext")
+    return getRichtextFormat(fieldDef.richtextFormat).changeType ?? "set";
+  return "set";
 };

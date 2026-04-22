@@ -5,8 +5,10 @@ import {
   mockTask1Record,
   mockTask1Uid,
   mockTask2Record,
+  mockTaskRecord1Updated,
 } from "./record.mock.ts";
 import { mockRecordSchemaRaw } from "./schema.mock.ts";
+import { computeTextDiff } from "./text-diff.ts";
 import {
   mockAuthor,
   mockCreatedTime,
@@ -38,6 +40,13 @@ export const mockTransactionInputUpdate: TransactionInput = {
     {
       $ref: mockTask1Uid,
       title: "Implement user authentication system",
+      description: [
+        "diff",
+        computeTextDiff(
+          mockTask1Record.description,
+          mockTaskRecord1Updated.description,
+        ),
+      ],
       tags: [["insert", "completed", 1]],
     },
   ],

@@ -40,6 +40,7 @@ export const mockTaskWithOwnersRecord = {
 export const mockTaskRecord1Updated = {
   ...mockTask1Record,
   title: "Implement user authentication system",
+  description: "Add login and signup functionality with JWT tokens",
   tags: ["urgent", "completed", "important"],
 } as const satisfies Fieldset;
 

@@ -21,7 +21,7 @@
     },
     "packages/cli": {
       "name": "@binder.do/cli",
-      "version": "0.1.2",
+      "version": "0.2.1",
       "bin": {
         "binder": "./dist/index.js",
       },
@@ -67,6 +67,7 @@
       "dependencies": {
         "@binder/utils": "workspace:*",
         "better-sqlite3": "^12.8.0",
+        "diff-match-patch-es": "1.0.1",
         "drizzle-kit": "^0.31.10",
         "drizzle-orm": "^0.45.1",
         "zod": "^4.3.6",
@@ -526,6 +527,8 @@
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
     "devlop": ["devlop@1.1.0", "", { "dependencies": { "dequal": "^2.0.0" } }, "sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA=="],
+
+    "diff-match-patch-es": ["diff-match-patch-es@1.0.1", "", {}, "sha512-KhSofrZDERg/NE6Nd+TK53knp2qz0o2Ix8rhkXd3Chfm7Wlo58Eq/juNmkyS6bS+3xS26L3Pstz3BdY/q+e9UQ=="],
 
     "dot-prop": ["dot-prop@5.3.0", "", { "dependencies": { "is-obj": "^2.0.0" } }, "sha512-QM8q3zDe58hqUqjraQOmzZ1LIH9SWQJTlEKCH4kJ2oQvLZk7RbQXvtDM2XEq3fwkV9CCvvH4LA0AV+ogFsBM2Q=="],
 

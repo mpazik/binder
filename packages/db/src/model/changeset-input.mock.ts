@@ -4,6 +4,7 @@ import {
   mockTask1Uid,
   mockTaskRecord1Updated,
 } from "./record.mock.ts";
+import { computeTextDiff } from "./text-diff.ts";
 
 export const mockChangesetInputCreateTask1: EntityChangesetInput<"record"> = {
   uid: mockTask1Uid,
@@ -18,5 +19,12 @@ export const mockChangesetInputCreateTask1: EntityChangesetInput<"record"> = {
 export const mockChangesetInputUpdateTask1: EntityChangesetInput<"record"> = {
   uid: mockTask1Uid,
   title: mockTaskRecord1Updated.title,
+  description: [
+    "diff",
+    computeTextDiff(
+      mockTask1Record.description,
+      mockTaskRecord1Updated.description,
+    ),
+  ],
   tags: [["insert", "completed", 1]],
 };

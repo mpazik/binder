@@ -8,11 +8,7 @@ import {
   mockTransactionInit,
   mockTransactionUpdate,
 } from "./transaction.mock.ts";
-import {
-  mockTask1Record,
-  mockTask1Uid,
-  mockTaskRecord1Updated,
-} from "./record.mock.ts";
+import { mockTask1Uid, mockTaskRecord1Updated } from "./record.mock.ts";
 import { inverseChangeset } from "./changeset.ts";
 import { mockRecordSchema } from "./schema.mock.ts";
 
@@ -34,9 +30,7 @@ describe("squashTransactions", () => {
       records: {
         ...mockTransactionInit.records,
         [mockTask1Uid]: {
-          ...mockTask1Record,
-          title: mockTaskRecord1Updated.title,
-          tags: mockTaskRecord1Updated.tags,
+          ...mockTaskRecord1Updated,
         },
       },
     });
@@ -91,9 +85,8 @@ describe("squashTransactions", () => {
       records: {
         ...mockTransactionInit.records,
         [mockTask1Uid]: {
-          ...mockTask1Record,
+          ...mockTaskRecord1Updated,
           title: "Third",
-          tags: mockTaskRecord1Updated.tags,
         },
       },
     });

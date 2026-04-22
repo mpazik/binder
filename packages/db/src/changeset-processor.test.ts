@@ -7,6 +7,7 @@ import {
   mockUserRecord,
 } from "./model/record.mock.ts";
 import { mockChangesetUpdateTask1 } from "./model/changeset.mock.ts";
+import { computeTextDiff } from "./model/text-diff.ts";
 import { getTestDatabase, insertConfig, insertRecord } from "./db.mock.ts";
 import { type Database } from "./db.ts";
 import { processChangesetInput } from "./changeset-processor";
@@ -15,6 +16,7 @@ import {
   type ConfigType,
   coreConfigSchema,
   type EntityChangesetInput,
+  type FieldChangeset,
   fieldSystemType,
   GENESIS_ENTITY_ID,
   type NamespaceEditable,
@@ -90,24 +92,96 @@ describe("changeset processor", () => {
     };
 
     describe("changeset creation", () => {
+      const checkChangeset = async (
+        input: EntityChangesetInput<NamespaceEditable>,
+        expected: FieldChangeset,
+        namespace?: NamespaceEditable,
+      ) => {
+        const result = throwIfError(await process([input], namespace));
+        expect(Object.values(result)[0]).toEqual(expected);
+      };
+
       it("creates changeset for updated entity", async () => {
         await insertTask1();
-
-        const result = await db.transaction(async (tx) =>
-          throwIfError(
-            await processChangesetInput(
-              tx,
-              "record",
-              [mockChangesetInputUpdateTask1],
-              mockRecordSchema,
-              mockTask1Record.id,
-            ),
-          ),
+        await checkChangeset(
+          mockChangesetInputUpdateTask1,
+          mockChangesetUpdateTask1,
         );
+      });
 
-        expect(result).toEqual({
-          [mockTask1Record.uid]: mockChangesetUpdateTask1,
-        });
+      it("auto-converts raw string input to diff on diff-encoded text field", async () => {
+        await insertTask1();
+        const newDescription =
+          "Add login and signup functionality with JWT tokens";
+        await checkChangeset(
+          { uid: mockTask1Uid, description: newDescription },
+          {
+            description: [
+              "diff",
+              computeTextDiff(mockTask1Record.description, newDescription),
+            ],
+          },
+        );
+      });
+
+      it("passes diff-encoded input through verbatim on diff-encoded field", async () => {
+        await insertTask1();
+        const ops = computeTextDiff(
+          mockTask1Record.description,
+          "Add login and signup functionality with JWT tokens",
+        );
+        await checkChangeset(
+          { uid: mockTask1Uid, description: ["diff", ops] },
+          { description: ["diff", ops] },
+        );
+      });
+
+      it("drops no-op diff changes from the changeset", async () => {
+        await insertTask1();
+        await checkChangeset(
+          {
+            uid: mockTask1Uid,
+            description: mockTask1Record.description,
+            title: "Updated title",
+          },
+          { title: ["set", "Updated title", mockTask1Record.title] },
+        );
+      });
+
+      it("drops no-op explicit diff input (only retain ops)", async () => {
+        await insertTask1();
+        const noopOps = [
+          ["retain", mockTask1Record.description.length],
+        ] as const;
+        await checkChangeset(
+          {
+            uid: mockTask1Uid,
+            description: ["diff", noopOps] as unknown as string,
+            title: "Another title",
+          },
+          { title: ["set", "Another title", mockTask1Record.title] },
+        );
+      });
+
+      it("rejects diff-encoded input on a field that does not support diff changes", async () => {
+        await insertTask1();
+
+        await checkErrors(
+          [
+            {
+              uid: mockTask1Uid,
+              title: ["diff", [["retain", 5]]] as unknown as string,
+            },
+          ],
+          [
+            {
+              index: 0,
+              namespace: "record",
+              field: "title",
+              message: "field does not support diff-encoded changes",
+            },
+          ],
+        );
       });
 
       it("creates changeset for new config entity with uid field", async () => {

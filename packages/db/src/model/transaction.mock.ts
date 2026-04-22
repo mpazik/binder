@@ -50,7 +50,7 @@ export const mockTransactionInit: Transaction = {
 
 export const mockTransactionUpdateId = 2 as TransactionId;
 export const mockTransactionUpdateHash =
-  "6-vkYUZx5fAqk5vZ0rQuAplB2ayD82QJor1E5ubeK-k" as TransactionHash;
+  "7P-pQ8Bkgm_PajT2N689s0T3KqeEShMXuZeqU-J1LJE" as TransactionHash;
 export const mockTransactionUpdate: Transaction = {
   id: mockTransactionUpdateId,
   hash: mockTransactionUpdateHash,

@@ -18,6 +18,14 @@ import type { RecordUid } from "./record.ts";
 import type { ConfigKey } from "./config.ts";
 import { type FieldKey, type Fieldset, type FieldValue } from "./field.ts";
 import { type EntitySchema } from "./schema.ts";
+import {
+  applyTextDiff,
+  canonicalizeOps,
+  composeTextDiffs,
+  inverseTextDiff,
+  type TextDiffOp,
+  transformTextDiffs,
+} from "./text-diff.ts";
 
 export type ListMutationInsert = [
   kind: "insert",
@@ -46,12 +54,14 @@ export type ValueChangeSet =
 export type ValueChangeClear = [kind: "clear", previous: FieldValue];
 export type ValueChangeSeq = [kind: "seq", mutations: ListMutation[]];
 export type ValueChangePatch = [kind: "patch", attrChangeset: FieldChangeset];
+export type ValueChangeDiff = [kind: "diff", ops: TextDiffOp[]];
 
 export type ValueChange =
   | ValueChangeSet
   | ValueChangeClear
   | ValueChangeSeq
-  | ValueChangePatch;
+  | ValueChangePatch
+  | ValueChangeDiff;
 
 export type FieldChangeset = Record<FieldKey, ValueChange | FieldValue>;
 export const emptyChangeset: FieldChangeset = {};
@@ -72,7 +82,8 @@ export const isValueChange = (
   (value[0] === "set" ||
     value[0] === "clear" ||
     value[0] === "seq" ||
-    value[0] === "patch");
+    value[0] === "patch" ||
+    value[0] === "diff");
 
 export const isSetChange = (change: ValueChange): change is ValueChangeSet =>
   change[0] === "set";
@@ -84,6 +95,8 @@ export const isSeqChange = (change: ValueChange): change is ValueChangeSeq =>
 export const isPatchChange = (
   change: ValueChange,
 ): change is ValueChangePatch => change[0] === "patch";
+export const isDiffChange = (change: ValueChange): change is ValueChangeDiff =>
+  change[0] === "diff";
 
 const getSetPrevious = (change: ValueChangeSet): FieldValue | undefined =>
   change.length === 3 ? change[2] : undefined;
@@ -129,6 +142,9 @@ export const inverseChange = (change: ValueChange): ValueChange => {
   }
   if (isPatchChange(change)) {
     return ["patch", inverseChangeset(change[1])];
+  }
+  if (isDiffChange(change)) {
+    return ["diff", inverseTextDiff(change[1])];
   }
   assertFailed("Unknown change kind");
 };
@@ -197,6 +213,19 @@ const rebaseChange = (
   baseChange: ValueChange,
   change: ValueChange,
 ): ValueChange => {
+  // Mixed diff × set/clear on the same field is a conflict: the two sides
+  // disagree on how to resolve the field, and there is no well-defined merge.
+  if (
+    (isDiffChange(baseChange) &&
+      (isSetChange(change) || isClearChange(change))) ||
+    ((isSetChange(baseChange) || isClearChange(baseChange)) &&
+      isDiffChange(change))
+  ) {
+    assertFailed(
+      "Cannot rebase: concurrent diff and set/clear changes on the same field",
+    );
+  }
+
   if (isSetChange(baseChange) || isClearChange(baseChange)) {
     if (!isSetChange(change) && !isClearChange(change)) {
       return change;
@@ -238,6 +267,10 @@ const rebaseChange = (
 
   if (isPatchChange(baseChange) && isPatchChange(change)) {
     return ["patch", rebaseChangeset(baseChange[1], change[1])];
+  }
+
+  if (isDiffChange(baseChange) && isDiffChange(change)) {
+    return ["diff", transformTextDiffs(baseChange[1], change[1])];
   }
 
   return change;
@@ -364,6 +397,20 @@ export const applyChange = (
     const currentAttrs = isRelationTuple(current) ? current[1] : {};
     const newAttrs = applyChangeset(currentAttrs, change[1]);
     return [ref, newAttrs];
+  }
+  if (isDiffChange(change)) {
+    if (
+      current !== null &&
+      current !== undefined &&
+      typeof current !== "string"
+    ) {
+      assertFailed(
+        `Diff change requires string field value, got ${typeof current}`,
+      );
+    }
+    const base = typeof current === "string" ? current : "";
+    const result = applyTextDiff(base, change[1]);
+    return result === "" ? null : result;
   }
   assertFailed("Unknown change kind");
 };
@@ -543,6 +590,40 @@ export const squashChange = (
     return makeSetOrClear(resultValue, basePrevious ?? undefined);
   }
 
+  if (
+    (isSetChange(baseChange) || isClearChange(baseChange)) &&
+    isDiffChange(change)
+  ) {
+    const baseValue = getValueOrNull(baseChange);
+    const basePrevious = getPreviousOrNull(baseChange);
+    const resultValue = applyChange(baseValue, change);
+    return makeSetOrClear(resultValue, basePrevious ?? undefined);
+  }
+
+  if (isDiffChange(baseChange) && isDiffChange(change)) {
+    const composed = composeTextDiffs(baseChange[1], change[1]);
+    if (composed.length === 0) return null;
+    return ["diff", composed];
+  }
+
+  // diff ⇨ set/clear: the diff has no stored pre-value, but the follow-up
+  // set/clear carries the post-diff state as its `previous`. We can recover
+  // the pre-diff value by applying the inverse diff to that post-diff state,
+  // then fold everything into a single set/clear.
+  if (
+    isDiffChange(baseChange) &&
+    (isSetChange(change) || isClearChange(change))
+  ) {
+    const postDiffValue = getPreviousOrNull(change);
+    const preDiffValue = applyChange(postDiffValue, [
+      "diff",
+      inverseTextDiff(baseChange[1]),
+    ]);
+    const changeValue = getValueOrNull(change);
+    if (changeValue === null && preDiffValue === null) return null;
+    return makeSetOrClear(changeValue, preDiffValue ?? undefined);
+  }
+
   assertFailed(`Cannot squash ${baseChange[0]} and ${change[0]} operations`);
 };
 
@@ -612,6 +693,9 @@ const compareListMutations = (a: ListMutation, b: ListMutation): number => {
 const canonicalizeValueChange = (change: ValueChange): ValueChange => {
   if (isSeqChange(change)) {
     return ["seq", [...change[1]].sort(compareListMutations)];
+  }
+  if (isDiffChange(change)) {
+    return ["diff", canonicalizeOps(change[1])];
   }
   return change;
 };

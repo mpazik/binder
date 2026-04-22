@@ -20,6 +20,8 @@ export * from "./record-schema.ts";
 export type * from "./record-schema.ts";
 export * from "./changeset.ts";
 export type * from "./changeset.ts";
+export * from "./text-diff.ts";
+export type * from "./text-diff.ts";
 export * from "./changeset-input.ts";
 export type * from "./changeset-input.ts";
 export * from "./transaction.ts";

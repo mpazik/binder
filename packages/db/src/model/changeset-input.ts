@@ -24,9 +24,11 @@ import {
   isValueChange,
   type ListMutation,
   type ValueChange,
+  type ValueChangeDiff,
 } from "./changeset.ts";
 import type { OptionDef } from "./data-type.ts";
 import type { FieldDef } from "./schema.ts";
+import type { TextDiffOp } from "./text-diff.ts";
 
 export type ListMutationInputValue = FieldValue | ObjTuple<string, Fieldset>;
 
@@ -51,6 +53,14 @@ export type ListMutationInput =
   | ListMutationInputRemove
   | ListMutationInputPatch;
 
+/**
+ * Diff-encoded text change for richtext fields configured with
+ * `changeType: "diff"`. The processor stores it verbatim as a
+ * `ValueChangeDiff`, and `transactionToInput` round-trips it back to this
+ * form so callers that consume transactions as input see the same shape.
+ */
+export type FieldChangeInputDiff = [kind: "diff", ops: TextDiffOp[]];
+
 export const isListMutationInput = (
   input: FieldChangeInput,
 ): input is ListMutationInput =>
@@ -70,10 +80,19 @@ export const isListMutationInputArray = (
       isListMutationInput(item as unknown as FieldChangeInput),
   );
 
+export const isDiffInput = (
+  input: FieldChangeInput,
+): input is FieldChangeInputDiff =>
+  Array.isArray(input) &&
+  input.length === 2 &&
+  input[0] === "diff" &&
+  Array.isArray(input[1]);
+
 export type FieldChangeInput =
   | FieldValue
   | ListMutationInput
-  | ListMutationInput[];
+  | ListMutationInput[]
+  | FieldChangeInputDiff;
 export type FieldChangesetInput = Record<FieldKey, FieldChangeInput>;
 type EntityRefFields<N extends NamespaceEditable> =
   | { $ref: EntityNsRef[N] }
@@ -151,7 +170,9 @@ export const normalizeFieldChangesetInput = (
 ): FieldChangeset => {
   const result: FieldChangeset = {};
   for (const [key, value] of objEntries(input)) {
-    if (isListMutationInputArray(value)) {
+    if (isDiffInput(value)) {
+      result[key] = ["diff", value[1]] satisfies ValueChangeDiff;
+    } else if (isListMutationInputArray(value)) {
       result[key] = ["seq", value.map(normalizeListMutationInput)];
     } else if (isListMutationInput(value)) {
       result[key] = ["seq", [normalizeListMutationInput(value)]];
@@ -173,7 +194,10 @@ export const normalizeOptionSet = (options: OptionDefInput[]): OptionDef[] =>
 const normalizeFieldValue = (
   fieldDef: FieldDef | undefined,
   value: FieldValue,
-): FieldValue | ListMutation | ListMutation[] => {
+): FieldValue | ListMutation | ListMutation[] | FieldChangeInputDiff => {
+  if (isDiffInput(value as unknown as FieldChangeInput)) {
+    return value as unknown as FieldChangeInputDiff;
+  }
   if (isListMutationInputArray(value)) {
     return value.map(normalizeListMutationInput);
   }
@@ -256,6 +280,7 @@ const valueChangeToInput = (change: ValueChange): FieldChangeInput => {
         : m,
     );
   if (change[0] === "patch") return changesetToInput(change[1]) as FieldValue;
+  if (change[0] === "diff") return ["diff", change[1]];
   assertFailed("Unknown change kind");
 };
 

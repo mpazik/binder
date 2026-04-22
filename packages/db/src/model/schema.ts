@@ -6,7 +6,11 @@ import {
   type OptionDef,
 } from "./data-type.ts";
 import type { PeriodFormat } from "./period-format.ts";
-import type { PlaintextFormat, RichtextFormat } from "./text-format.ts";
+import type {
+  PlaintextFormat,
+  RichtextFormat,
+  TextChangeType,
+} from "./text-format.ts";
 import { type FieldKey, type FieldPath } from "./field.ts";
 import type { Filters } from "./query.ts";
 
@@ -46,6 +50,11 @@ export type FieldDef<D extends string = string> = {
   richtextFormat?: RichtextFormat;
   sectionDepth?: number;
   periodFormat?: PeriodFormat;
+  /**
+   * Override the change encoding for this text field.
+   * When omitted, derived from the field's format (see `getTextChangeType`).
+   */
+  changeType?: TextChangeType;
 };
 
 export const newId = <T extends EntityId>(seq: number, offset: number) =>

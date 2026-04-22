@@ -46,6 +46,7 @@ import {
   getTypeFieldKey,
   incrementEntityId,
   isClearChange,
+  isDiffInput,
   isEntityDelete,
   isEntityUpdate,
   getEntityInputRef,
@@ -71,6 +72,9 @@ import {
   typeSystemType,
   CONFIG_APP_ID_OFFSET,
   type ValueChangeSet,
+  computeTextDiff,
+  isTextDiffNoop,
+  getTextChangeType,
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 import {
@@ -464,6 +468,16 @@ const validateChangesetInput = <N extends NamespaceEditable>(
       ...fieldDef,
       options: getOptionDefsForFieldRef(fieldDef, attrs),
     } as FieldDef<DataTypeNs[N]>;
+
+    if (isDiffInput(value as FieldValue)) {
+      if (getTextChangeType(effectiveFieldDef) !== "diff") {
+        errors.push({
+          field: fieldKey,
+          message: "field does not support diff-encoded changes",
+        });
+      }
+      continue;
+    }
 
     const mutations = collectMutationsFromValue(value);
     if (mutations) {
@@ -1211,13 +1225,32 @@ const buildChangeset = async <N extends NamespaceEditable>(
     for (const key of keys) {
       const currentValue = currentValues[key];
       const inputValue = input[key] as FieldValue;
+      if (isDiffInput(inputValue)) {
+        if (isTextDiffNoop(inputValue[1])) continue;
+        changeset[key] = ["diff", inputValue[1]];
+        continue;
+      }
       const sequenceChange = toSeqChange(inputValue);
+      if (sequenceChange !== inputValue) {
+        changeset[key] = sequenceChange;
+        continue;
+      }
+      const fieldDef = schema.fields[key];
+      if (
+        fieldDef &&
+        typeof currentValue === "string" &&
+        typeof inputValue === "string" &&
+        getTextChangeType(fieldDef) === "diff"
+      ) {
+        const ops = computeTextDiff(currentValue, inputValue);
+        if (isTextDiffNoop(ops)) continue;
+        changeset[key] = ["diff", ops];
+        continue;
+      }
       changeset[key] =
-        sequenceChange !== inputValue
-          ? sequenceChange
-          : currentValue == null
-            ? ["set", inputValue]
-            : ["set", inputValue, currentValue];
+        currentValue == null
+          ? ["set", inputValue]
+          : ["set", inputValue, currentValue];
     }
     changesetRef = (
       namespace === "record"

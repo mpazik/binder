@@ -10,6 +10,7 @@ import {
 import {
   applyChange,
   applyChangeset,
+  canonicalizeFieldChangeset,
   emptyChangeset,
   type FieldChangeset,
   inverseChange,
@@ -21,6 +22,7 @@ import {
   squashChangesets,
   type ValueChange,
 } from "./changeset.ts";
+import { mockRecordSchema } from "./schema.mock.ts";
 import { mockTask1Record, mockTaskRecord1Updated } from "./record.mock.ts";
 import type { Fieldset, FieldValue } from "./field.ts";
 
@@ -64,7 +66,7 @@ describe("changeset", () => {
 
     it("inverts remove change to add", () => {
       expect(inverseChange(mockRemoveChange)).toEqual(
-        mockChangesetUpdateTask1.tags,
+        mockChangesetUpdateTask1.tags as ValueChange,
       );
     });
 
@@ -752,5 +754,285 @@ describe("changeset", () => {
         },
         { owners: ["seq", [["patch", "user-1", {}]]] },
       ));
+  });
+
+  describe("diff changes", () => {
+    const diff = (ops: ValueChange[1]): ValueChange => ["diff", ops as never];
+
+    it("applies diff to a string field", () => {
+      const change: ValueChange = [
+        "diff",
+        [
+          ["retain", 4],
+          ["delete", "cat"],
+          ["insert", "dog"],
+        ],
+      ];
+      expect(applyChange("the cat sat", change)).toBe("the dog sat");
+    });
+
+    it("applies diff to a null field", () => {
+      const change: ValueChange = ["diff", [["insert", "hello"]]];
+      expect(applyChange(null, change)).toBe("hello");
+    });
+
+    it("returns null when diff result is empty", () => {
+      const change: ValueChange = ["diff", [["delete", "hello"]]];
+      expect(applyChange("hello", change)).toBeNull();
+    });
+
+    it("inverts a diff change", () => {
+      const change: ValueChange = [
+        "diff",
+        [
+          ["retain", 4],
+          ["delete", "cat"],
+          ["insert", "dog"],
+        ],
+      ];
+      expect(inverseChange(change)).toEqual([
+        "diff",
+        [
+          ["retain", 4],
+          ["delete", "dog"],
+          ["insert", "cat"],
+        ],
+      ]);
+    });
+
+    it("round-trips diff via apply + inverse", () => {
+      const change: ValueChange = [
+        "diff",
+        [
+          ["retain", 4],
+          ["delete", "cat"],
+          ["insert", "dog"],
+        ],
+      ];
+      const after = applyChange("the cat sat", change);
+      expect(applyChange(after, inverseChange(change))).toBe("the cat sat");
+    });
+
+    it("squashes set followed by diff into a new set", () => {
+      const changeset = squashChangesets(
+        { description: ["set", "the cat sat"] },
+        {
+          description: [
+            "diff",
+            [
+              ["retain", 4],
+              ["delete", "cat"],
+              ["insert", "dog"],
+            ],
+          ],
+        },
+      );
+      expect(changeset).toEqual({ description: ["set", "the dog sat"] });
+    });
+
+    it("squashes two diffs by composing their ops", () => {
+      const first: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 5],
+            ["insert", " world"],
+          ],
+        ],
+      };
+      const second: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 11],
+            ["insert", "!"],
+          ],
+        ],
+      };
+      const squashed = squashChangesets(first, second);
+      expect(applyChangeset({ description: "hello" }, squashed)).toEqual({
+        description: "hello world!",
+      });
+    });
+
+    it("squashes diff followed by clear into a clear carrying the pre-diff value", () => {
+      // Pre-diff: "the cat sat". Diff rewrites cat → dog. Clear wipes the field.
+      const diffOps: ValueChange = [
+        "diff",
+        [
+          ["retain", 4],
+          ["delete", "cat"],
+          ["insert", "dog"],
+        ],
+      ];
+      const squashed = squashChangesets(
+        { description: diffOps },
+        { description: ["clear", "the dog sat"] },
+      );
+      // Squashed change must apply cleanly to the pre-diff value.
+      expect(squashed).toEqual({
+        description: ["clear", "the cat sat"],
+      });
+      expect(applyChangeset({ description: "the cat sat" }, squashed)).toEqual({
+        description: null,
+      });
+    });
+
+    it("squashes diff followed by set into a set carrying the pre-diff value", () => {
+      const diffOps: ValueChange = [
+        "diff",
+        [
+          ["retain", 4],
+          ["delete", "cat"],
+          ["insert", "dog"],
+        ],
+      ];
+      const squashed = squashChangesets(
+        { description: diffOps },
+        { description: ["set", "goodbye", "the dog sat"] },
+      );
+      expect(squashed).toEqual({
+        description: ["set", "goodbye", "the cat sat"],
+      });
+      expect(applyChangeset({ description: "the cat sat" }, squashed)).toEqual({
+        description: "goodbye",
+      });
+    });
+
+    it("rebase of concurrent diff and set on same field reports conflict", () => {
+      const base: FieldChangeset = {
+        description: ["set", "new", "the cat sat"],
+      };
+      const concurrent: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 4],
+            ["delete", "cat"],
+            ["insert", "dog"],
+          ],
+        ],
+      };
+      expect(() => rebaseChangeset(base, concurrent)).toThrow();
+      expect(() => rebaseChangeset(concurrent, base)).toThrow();
+    });
+
+    it("rebase of concurrent diff and clear on same field reports conflict", () => {
+      const base: FieldChangeset = {
+        description: ["clear", "the cat sat"],
+      };
+      const concurrent: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 4],
+            ["delete", "cat"],
+            ["insert", "dog"],
+          ],
+        ],
+      };
+      expect(() => rebaseChangeset(base, concurrent)).toThrow();
+      expect(() => rebaseChangeset(concurrent, base)).toThrow();
+    });
+
+    it("squash of diff and its inverse is empty", () => {
+      const change: ValueChange = [
+        "diff",
+        [
+          ["retain", 4],
+          ["delete", "cat"],
+          ["insert", "dog"],
+        ],
+      ];
+      expect(
+        squashChangesets(
+          { description: change },
+          { description: inverseChange(change) },
+        ),
+      ).toEqual(emptyChangeset);
+    });
+
+    it("rebases non-overlapping concurrent diffs", () => {
+      const base: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["insert", "HELLO"],
+            ["delete", "hello"],
+          ],
+        ],
+      };
+      const concurrent: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 6],
+            ["delete", "world"],
+            ["insert", "WORLD"],
+          ],
+        ],
+      };
+      const rebased = rebaseChangeset(base, concurrent);
+      const afterBase = applyChangeset({ description: "hello world" }, base);
+      expect(applyChangeset(afterBase, rebased)).toEqual({
+        description: "HELLO WORLD",
+      });
+    });
+
+    it("throws on rebasing overlapping deletes", () => {
+      const base: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 1],
+            ["delete", "ell"],
+          ],
+        ],
+      };
+      const concurrent: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 2],
+            ["delete", "llo"],
+          ],
+        ],
+      };
+      expect(() => rebaseChangeset(base, concurrent)).toThrow();
+    });
+
+    // Reference `diff` to keep the alias around for future tests without
+    // tripping the unused-binding lint.
+    it("normalizes a diff change as-is", () => {
+      const change = diff([["insert", "x"]]);
+      expect(normalizeValueChange(change)).toEqual(change);
+    });
+
+    it("canonicalizes diff ops inside a field changeset", () => {
+      const raw: FieldChangeset = {
+        description: [
+          "diff",
+          [
+            ["retain", 0],
+            ["retain", 4],
+            ["insert", "a"],
+            ["insert", "b"],
+            ["delete", "x"],
+            ["retain", 5],
+          ],
+        ],
+      };
+      const canonical = canonicalizeFieldChangeset(mockRecordSchema, raw);
+      expect(canonical).toEqual({
+        description: [
+          "diff",
+          [
+            ["retain", 4],
+            ["delete", "x"],
+            ["insert", "ab"],
+          ],
+        ],
+      });
+    });
   });
 });
