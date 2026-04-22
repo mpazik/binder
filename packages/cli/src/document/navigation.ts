@@ -32,6 +32,7 @@ import {
 import type { Logger } from "../log.ts";
 import { sanitizeFilename } from "../utils/file.ts";
 import {
+  extractFieldNames,
   extractFieldValues,
   interpolatePlain,
   parseAncestralPlaceholder,
@@ -98,15 +99,11 @@ const emptyRenderResult = (): RenderResult => ({
   errors: [],
 });
 
-const appendRenderResult = (
-  target: RenderResult,
-  next: RenderResult,
-): RenderResult => {
+const appendRenderResult = (target: RenderResult, next: RenderResult): void => {
   target.renderedPaths.push(...next.renderedPaths);
   target.modifiedPaths.push(...next.modifiedPaths);
   target.divergedPaths.push(...next.divergedPaths);
   target.errors.push(...next.errors);
-  return target;
 };
 
 const DEFAULT_RENDER_LIMIT = 1_000;
@@ -264,29 +261,99 @@ export const findNavigationItemByPath = (
   }
 };
 
+/**
+ * A path resolved from a navigation item's pattern. When the pattern
+ * references multi-value fields at depth 0 (current entity), resolvePath
+ * fans out to one entry per value, narrowing those fields on `narrowedEntity`.
+ */
+export type ResolvedPath = {
+  path: string;
+  /**
+   * Entity with depth-0 multi-value fan-out fields narrowed to the single
+   * value used for this path. Passed to children so `{parent.<field>}`
+   * resolves to the narrowed value in paths and query filters.
+   */
+  narrowedEntity: Fieldset;
+};
+
+const cartesian = <T>(arrays: T[][]): T[][] => {
+  if (arrays.length === 0) return [[]];
+  const [first, ...rest] = arrays;
+  const restProduct = cartesian(rest);
+  return first!.flatMap((v) => restProduct.map((combo) => [v, ...combo]));
+};
+
+/**
+ * Resolve a navigation item's path pattern against an entity, producing one
+ * or more {@link ResolvedPath} entries. Multi-value fields at depth 0 trigger
+ * fan-out: one entry per value (cartesian product when multiple such fields
+ * appear). Each entry carries a narrowed copy of the entity where fan-out
+ * fields are set to the single value used for that path.
+ */
 export const resolvePath = (
   schema: EntitySchema,
   navItem: NavigationItem,
   entity: Fieldset,
   parentEntities: AncestralFieldsetChain = [],
-): Result<string> => {
+): Result<ResolvedPath[]> => {
   const pathPattern = getPathPattern(navItem);
-  const entityContext = [entity, ...parentEntities];
 
-  return interpolatePlain(pathPattern, (placeholder) => {
+  // Find depth-0 placeholders that reference a multi-value field with an
+  // array value. Each one triggers fan-out. Multiple fields produce the
+  // cartesian product of their values.
+  const fanOutFields: string[] = [];
+  const fanOutValues: unknown[][] = [];
+  const seen = new Set<string>();
+  for (const placeholder of extractFieldNames(pathPattern)) {
     const { fieldName, depth } = parseAncestralPlaceholder(placeholder);
-    const value = entityContext[depth]?.[fieldName];
-
-    if (value == null) {
+    if (depth !== 0) continue;
+    if (seen.has(fieldName)) continue;
+    seen.add(fieldName);
+    const fieldDef = schema.fields[fieldName];
+    if (!fieldDef?.allowMultiple) continue;
+    const value = entity[fieldName];
+    if (!Array.isArray(value)) continue;
+    if (value.length === 0) {
       return fail("missing-path-field", "Path field is null or undefined", {
-        data: { fieldName, depth, pathPattern },
+        data: { fieldName, depth: 0, pathPattern },
       });
     }
+    fanOutFields.push(fieldName);
+    fanOutValues.push(value);
+  }
 
-    return ok(
-      sanitizeFilename(serializeFieldValue(value, schema.fields[fieldName])),
-    );
-  });
+  const narrowedEntities: Fieldset[] =
+    fanOutFields.length === 0
+      ? [entity]
+      : cartesian(fanOutValues).map((combo) => {
+          const narrowed: Fieldset = { ...entity };
+          for (let i = 0; i < fanOutFields.length; i++) {
+            narrowed[fanOutFields[i]!] = combo[i] as Fieldset[string];
+          }
+          return narrowed;
+        });
+
+  const results: ResolvedPath[] = [];
+  for (const narrowedEntity of narrowedEntities) {
+    const entityContext = [narrowedEntity, ...parentEntities];
+    const pathResult = interpolatePlain(pathPattern, (placeholder) => {
+      const { fieldName, depth } = parseAncestralPlaceholder(placeholder);
+      const value = entityContext[depth]?.[fieldName];
+
+      if (value == null) {
+        return fail("missing-path-field", "Path field is null or undefined", {
+          data: { fieldName, depth, pathPattern },
+        });
+      }
+
+      return ok(
+        sanitizeFilename(serializeFieldValue(value, schema.fields[fieldName])),
+      );
+    });
+    if (isErr(pathResult)) return pathResult;
+    results.push({ path: pathResult.data, narrowedEntity });
+  }
+  return ok(results);
 };
 
 const getExcludedFields = (
@@ -299,22 +366,26 @@ const getExcludedFields = (
 ];
 
 export const findView = (views: Views, key: string | undefined): ViewEntity =>
-  views.find((t) => t.key === key) ??
+  views.find((v) => v.key === key) ??
   assertDefinedPass(
-    views.find((t) => t.key === DOCUMENT_VIEW_KEY),
+    views.find((v) => v.key === DOCUMENT_VIEW_KEY),
     `DOCUMENT_VIEW_KEY "${DOCUMENT_VIEW_KEY}" in views`,
   );
 
+type RenderContentCtx = Pick<
+  RenderContext,
+  "kg" | "schema" | "namespace" | "views"
+>;
+
 const renderContent = async (
-  kg: KnowledgeGraph,
-  schema: EntitySchema,
+  ctx: RenderContentCtx,
   item: NavigationItem,
   entity: FieldsetNested,
   parentEntities: AncestralFieldsetChain,
   fileType: FileType,
-  namespace: NamespaceEditable,
-  views: Views,
 ): ResultAsync<string | null> => {
+  const { kg, schema, namespace, views } = ctx;
+
   if (fileType === "markdown") {
     const formattedEntity = await formatReferences(entity, schema, kg);
     if (isErr(formattedEntity)) return formattedEntity;
@@ -387,7 +458,7 @@ export const renderNavigationItem = async (
   parentPath: string,
   parentEntities: Fieldset[],
 ): ResultAsync<RenderResult> => {
-  const { db, kg, fs, paths, schema, version, namespace, views, log } = ctx;
+  const { db, fs, paths, schema, version, namespace, views, log } = ctx;
   const fileType = inferFileType(item);
   const result = emptyRenderResult();
 
@@ -415,7 +486,7 @@ export const renderNavigationItem = async (
       );
     }
 
-    const searchResult = await kg.search(interpolatedQuery.data, namespace);
+    const searchResult = await ctx.kg.search(interpolatedQuery.data, namespace);
     if (isErr(searchResult)) return searchResult;
 
     if (searchResult.data.pagination.hasNext && !item.limit) {
@@ -463,62 +534,62 @@ export const renderNavigationItem = async (
       );
       continue;
     }
-    const filePath = join(parentPath, resolvedPath.data);
 
-    const renderEntity =
-      fieldsToStrip.length > 0
-        ? (omit(entity, fieldsToStrip) as FieldsetNested)
-        : entity;
+    for (const { path: subPath, narrowedEntity } of resolvedPath.data) {
+      const filePath = join(parentPath, subPath);
 
-    const renderContentResult = await renderContent(
-      kg,
-      schema,
-      item,
-      renderEntity,
-      parentEntities,
-      fileType,
-      namespace,
-      views,
-    );
-    if (isErr(renderContentResult)) return renderContentResult;
+      const renderEntity =
+        fieldsToStrip.length > 0
+          ? (omit(entity, fieldsToStrip) as FieldsetNested)
+          : entity;
 
-    if (renderContentResult.data !== null) {
-      const saveResult = await saveSnapshot(
-        db,
-        fs,
-        paths,
-        filePath,
-        renderContentResult.data,
-        version,
-        entityUid,
-        { mode: ctx.mode },
+      const renderContentResult = await renderContent(
+        ctx,
+        item,
+        renderEntity,
+        parentEntities,
+        fileType,
       );
-      if (isErr(saveResult)) return saveResult;
+      if (isErr(renderContentResult)) return renderContentResult;
 
-      result.renderedPaths.push(filePath);
-      if (saveResult.data === "written") {
-        result.modifiedPaths.push(filePath);
-      } else if (saveResult.data === "skipped-diverged") {
-        result.divergedPaths.push(filePath);
-      }
-    }
-
-    if (item.children) {
-      const itemDir = getParentDir(filePath, fileType);
-      const childParentEntities = item.where
-        ? [entity as Fieldset, ...parentEntities]
-        : parentEntities;
-
-      for (const child of item.children) {
-        const childResult = await renderNavigationItem(
-          ctx,
-          child,
-          itemDir,
-          childParentEntities,
+      if (renderContentResult.data !== null) {
+        const saveResult = await saveSnapshot(
+          db,
+          fs,
+          paths,
+          filePath,
+          renderContentResult.data,
+          version,
+          entityUid,
+          { mode: ctx.mode },
         );
-        if (isErr(childResult)) return childResult;
+        if (isErr(saveResult)) return saveResult;
 
-        appendRenderResult(result, childResult.data);
+        result.renderedPaths.push(filePath);
+        if (saveResult.data === "written") {
+          result.modifiedPaths.push(filePath);
+        } else if (saveResult.data === "skipped-diverged") {
+          result.divergedPaths.push(filePath);
+        }
+      }
+
+      if (item.children) {
+        const itemDir = getParentDir(filePath, fileType);
+        const childParentEntities = item.where
+          ? [narrowedEntity, ...parentEntities]
+          : parentEntities;
+
+        for (const child of item.children) {
+          const childResult = await renderNavigationItem(
+            ctx,
+            child,
+            itemDir,
+            childParentEntities,
+          );
+          if (isErr(childResult)) return childResult;
+
+          appendRenderResult(result, childResult.data);
+        }
       }
     }
   }
@@ -633,7 +704,8 @@ export const findEntityLocation = async (
   const resolvedPathResult = resolvePath(schema, navItem, entity, []);
   if (isErr(resolvedPathResult)) return resolvedPathResult;
 
-  const filePath = join(paths.docs, resolvedPathResult.data);
+  // A fan-out produces multiple paths; pick the first for "go to definition".
+  const filePath = join(paths.docs, resolvedPathResult.data[0]!.path);
 
   if (!isListNavItem(navItem)) {
     return ok({ filePath, line: 0 });

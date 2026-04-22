@@ -711,6 +711,77 @@ describe("navigation", () => {
         expect(warnings).toEqual([]);
       });
     });
+
+    describe("multi-value path fan-out", () => {
+      type UpdateRecords = NonNullable<
+        Parameters<KnowledgeGraph["update"]>[0]["records"]
+      >;
+
+      const checkPaths = async (
+        item: NavigationItem,
+        expectedPaths: string[],
+        opts: {
+          records?: UpdateRecords;
+          expectedWarnings?: string[];
+        } = {},
+      ) => {
+        if (opts.records) {
+          throwIfError(
+            await kg.update({ author: "test", records: opts.records }),
+          );
+        }
+        const warnings: string[] = [];
+        const log = {
+          ...mockLog,
+          warn: (msg: string) => warnings.push(msg),
+        };
+        const result = await renderItem(item, { log });
+        expect(result.renderedPaths.sort()).toEqual([...expectedPaths].sort());
+        if (opts.expectedWarnings !== undefined) {
+          expect(warnings).toEqual(
+            opts.expectedWarnings.map((w) => expect.stringContaining(w)),
+          );
+        }
+      };
+
+      it("renders one path per value for a multi-value path field", async () => {
+        await checkPaths(
+          {
+            path: "by-tag/{tags}/{key}",
+            where: { type: "Task", key: mockTask1Record.key },
+          },
+          [
+            `by-tag/important/${mockTask1Record.key}.yaml`,
+            `by-tag/urgent/${mockTask1Record.key}.yaml`,
+          ],
+        );
+      });
+
+      it("skips entity with empty multi-value field and logs missing-field warn", async () => {
+        await checkPaths(
+          {
+            path: "by-tag/{tags}/{key}",
+            where: { type: "Task", key: mockTask1Record.key },
+          },
+          [],
+          {
+            records: [{ uid: mockTask1Record.uid, tags: [] }],
+            expectedWarnings: ["missing value for path field 'tags'"],
+          },
+        );
+      });
+
+      it("narrows multi-value field for child navigation paths", async () => {
+        await checkPaths(
+          {
+            path: "by-tag/{tags}/",
+            where: { type: "Task", key: mockTask1Record.key },
+            children: [{ path: "{parent.tags}" }],
+          },
+          ["by-tag/important/important.yaml", "by-tag/urgent/urgent.yaml"],
+        );
+      });
+    });
   });
 
   describe("loadNavigation", () => {

@@ -54,6 +54,23 @@ path: milestones/{key}     # → milestones/alpha-release.md
 path: projects/{key}/       # → projects/core-platform/ (directory for children)
 ```
 
+#### Multi-value field fan-out
+
+When a path pattern references a multi-value field (one with `allowMultiple`) at depth 0 (the current entity) and the entity holds an array value for that field, the system fans out — producing one file per value. If multiple multi-value fields appear in the same pattern, the cartesian product of their values is produced.
+
+```yaml
+# Entity: { key: fix-auth, tags: [backend, security] }
+path: by-tag/{tags}/{key}
+# → by-tag/backend/fix-auth.yaml
+# → by-tag/security/fix-auth.yaml
+```
+
+Each fan-out path receives a **narrowed entity** where the multi-value field is set to the single value used for that path. Child navigation items see this narrowed entity as their parent context, so `{parent.<field>}` resolves to the specific value rather than the full array.
+
+An empty array value is treated the same as a missing field — the entity is skipped and a warning is logged.
+
+#### Nested navigation
+
 For nested navigation, child items inherit parent entity context. A child can reference parent fields in its path and query:
 
 ```yaml
