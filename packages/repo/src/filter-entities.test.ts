@@ -118,6 +118,18 @@ describe("filter-entities", () => {
 
       it("matches non-empty value when checking for not empty", () =>
         check({ op: "empty", value: false }, "hello", true));
+
+      it("matches empty array when checking for empty", () =>
+        check({ op: "empty", value: true }, [], true));
+
+      it("does not match non-empty array when checking for empty", () =>
+        check({ op: "empty", value: true }, ["a"], false));
+
+      it("matches non-empty array when checking for not empty", () =>
+        check({ op: "empty", value: false }, ["a"], true));
+
+      it("does not match empty array when checking for not empty", () =>
+        check({ op: "empty", value: false }, [], false));
     });
   });
 

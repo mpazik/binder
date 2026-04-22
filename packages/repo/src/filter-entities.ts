@@ -99,10 +99,13 @@ const matchesNormalizedFilter = (
         (typeof value === "number" || typeof value === "string") &&
         value >= (filterValue as number | string)
       );
-    case "empty":
-      return filterValue === true
-        ? value == null || value === ""
-        : value != null && value !== "";
+    case "empty": {
+      const isEmpty =
+        value == null ||
+        value === "" ||
+        (Array.isArray(value) && value.length === 0);
+      return filterValue === true ? isEmpty : !isEmpty;
+    }
     default:
       return false;
   }
@@ -256,11 +259,15 @@ const buildFilterCondition = (
       return sql`${fieldSql} >= ${value}`;
 
     case "empty":
-      if (value === true) {
-        return sql`(${fieldSql} IS NULL OR ${fieldSql} = '')`;
-      } else {
-        return sql`(${fieldSql} IS NOT NULL AND ${fieldSql} != '')`;
+      if (isMultiValue) {
+        // Multi-value fields serialize to JSON arrays; '[]' is empty.
+        return value === true
+          ? sql`(${fieldSql} IS NULL OR ${fieldSql} = '' OR ${fieldSql} = '[]')`
+          : sql`(${fieldSql} IS NOT NULL AND ${fieldSql} != '' AND ${fieldSql} != '[]')`;
       }
+      return value === true
+        ? sql`(${fieldSql} IS NULL OR ${fieldSql} = '')`
+        : sql`(${fieldSql} IS NOT NULL AND ${fieldSql} != '')`;
 
     default:
       return undefined;
