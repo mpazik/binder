@@ -3,14 +3,17 @@ import { fail, isErr, ok } from "@binder/utils";
 import {
   type Fieldset,
   type Includes,
-  type KnowledgeGraph,
   type NamespaceEditable,
+  type ReadonlyKnowledgeGraph,
   type OrderBy,
   type QueryParams,
   QueryParamsSchema,
   parseSerialFilters,
 } from "@binder/repo";
-import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
+import {
+  type CommandHandlerReadonly,
+  runtimeWithReadonlyRepo,
+} from "../runtime.ts";
 import { types } from "../cli/types.ts";
 import {
   fieldsOption,
@@ -25,7 +28,7 @@ import { isStdinPiped, readStdinAs } from "../cli/stdin.ts";
 import { formatReferencesList } from "../document/reference.ts";
 
 const resolveFormattedItems = async (
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
   items: Fieldset[],
   namespace: NamespaceEditable,
 ) => {
@@ -34,7 +37,7 @@ const resolveFormattedItems = async (
   return formatReferencesList(items, schemaResult.data, kg);
 };
 
-const searchHandler: CommandHandlerWithDb<{
+const searchHandler: CommandHandlerReadonly<{
   query: string[];
   namespace: NamespaceEditable;
   format?: SerializeFormat;
@@ -112,5 +115,5 @@ export const SearchCommand = types({
         ...fieldsOption,
         ...orderByOption,
       }),
-  handler: runtimeWithDb(searchHandler),
+  handler: runtimeWithReadonlyRepo(searchHandler),
 });

@@ -81,6 +81,17 @@ export type KnowledgeGraph<
   ) => ResultAsync<NamespaceSchema<N>>;
 };
 
+/**
+ * Narrowed view of {@link KnowledgeGraph} exposing only read methods.
+ *
+ * Returned by read-only open paths (see `openReadonly` in `@binder/repo/local`).
+ * Helpers that only read (formatting, search utilities, etc.) can accept this
+ * type to accept both readonly and full graphs.
+ */
+export type ReadonlyKnowledgeGraph<
+  C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
+> = Omit<KnowledgeGraph<C>, "update" | "apply" | "rollback">;
+
 export type TransactionRollback = () => ResultAsync<void>;
 
 export type KnowledgeGraphCallbacks = {

@@ -33,6 +33,8 @@ type FileDbOptions<TSchema extends DbSchema> = {
   path: string;
   migrate: boolean | OpenDbMigrationOptions<TSchema>;
   schema?: TSchema;
+  /** Open SQLite in read-only mode. Incompatible with migrations. */
+  readonly?: boolean;
 };
 
 type MemoryDbOptions<TSchema extends DbSchema> = {
@@ -132,11 +134,20 @@ export const openDb = <TSchema extends DbSchema = typeof coreSchema>(
     ? ":memory:"
     : (options as FileDbOptions<TSchema>).path;
   const migrateOption = options.migrate;
-  const shouldMigrate =
-    migrateOption === undefined ? isMemory : migrateOption !== false;
+  const isReadonly =
+    !isMemory && (options as FileDbOptions<TSchema>).readonly === true;
+  // readonly connection can't migrate.
+  const shouldMigrate = isReadonly
+    ? false
+    : migrateOption === undefined
+      ? isMemory
+      : migrateOption !== false;
 
   const sqliteResult = tryCatch(
-    () => new SqliteDatabase(dbPath),
+    () =>
+      isReadonly
+        ? new SqliteDatabase(dbPath, { readonly: true } as never)
+        : new SqliteDatabase(dbPath),
     (error) =>
       createError("db-open-failed", `Failed to open database at ${dbPath}`, {
         data: error instanceof Error ? { stack: error.stack } : undefined,
@@ -148,10 +159,15 @@ export const openDb = <TSchema extends DbSchema = typeof coreSchema>(
   const sqlite = sqliteResult.data;
   patchTransactionForAsyncCompat(sqlite);
 
-  const pragmaResult = applyBalancedSqlitePragmas(sqlite);
-  if (isErr(pragmaResult)) {
-    sqlite.close();
-    return pragmaResult;
+  // Pragmas that write (journal_mode=WAL, foreign_keys) fail on readonly
+  // connections. Skip pragma setup entirely; readonly callers don't need
+  // WAL tuning.
+  if (!isReadonly) {
+    const pragmaResult = applyBalancedSqlitePragmas(sqlite);
+    if (isErr(pragmaResult)) {
+      sqlite.close();
+      return pragmaResult;
+    }
   }
 
   const dbSchema = (options.schema ?? coreSchema) as TSchema;

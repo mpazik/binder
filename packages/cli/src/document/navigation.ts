@@ -11,6 +11,7 @@ import {
   type GraphVersion,
   type Includes,
   type KnowledgeGraph,
+  type ReadonlyKnowledgeGraph,
   matchesFilters,
   mergeIncludes,
   type NamespaceEditable,
@@ -209,7 +210,7 @@ export const buildNavigationTree = (
 };
 
 export const loadNavigation = async (
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
   namespace: NamespaceEditable = "record",
 ): ResultAsync<NavigationItem[]> => {
   if (namespace === "config") return ok(CONFIG_NAVIGATION_ITEMS);
@@ -731,7 +732,9 @@ export type NavigationCache = {
   invalidate: () => void;
 };
 
-export const createNavigationCache = (kg: KnowledgeGraph): NavigationCache => {
+export const createNavigationCache = (
+  kg: ReadonlyKnowledgeGraph,
+): NavigationCache => {
   const cache: Record<NamespaceEditable, NavigationItem[] | null> = {
     record: null,
     config: null,

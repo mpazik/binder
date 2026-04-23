@@ -6,11 +6,14 @@ import {
   type Fieldset,
   type Includes,
   IncludesSchema,
-  type KnowledgeGraph,
   type NamespaceEditable,
+  type ReadonlyKnowledgeGraph,
   normalizeEntityRef,
 } from "@binder/repo";
-import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
+import {
+  type CommandHandlerReadonly,
+  runtimeWithReadonlyRepo,
+} from "../runtime.ts";
 import { types } from "../cli/types.ts";
 import {
   fieldsOption,
@@ -26,7 +29,7 @@ const ReadStdinSchema = z.object({
 });
 
 const formatEntity = async (
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
   entity: Fieldset,
   namespace: NamespaceEditable,
 ) => {
@@ -35,7 +38,7 @@ const formatEntity = async (
   return formatReferences(entity, schemaResult.data, kg);
 };
 
-const readHandler: CommandHandlerWithDb<{
+const readHandler: CommandHandlerReadonly<{
   ref: EntityRef;
   namespace: NamespaceEditable;
   format?: SerializeItemFormat;
@@ -78,5 +81,5 @@ export const ReadCommand = types({
         coerce: (value: string) => normalizeEntityRef(value),
       })
       .options({ ...namespaceOption, ...itemFormatOption, ...fieldsOption }),
-  handler: runtimeWithDb(readHandler),
+  handler: runtimeWithReadonlyRepo(readHandler),
 });

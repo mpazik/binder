@@ -4,7 +4,7 @@ import type {
   FieldKey,
   FieldsetNested,
   FieldValue,
-  KnowledgeGraph,
+  ReadonlyKnowledgeGraph,
 } from "@binder/repo";
 import {
   isErr,
@@ -61,7 +61,7 @@ const collectReferenceValues = (
 };
 
 const buildReferenceMap = async (
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
   refs: Set<string>,
 ): ResultAsync<ReferenceMap> => {
   if (refs.size === 0) return ok(new Map());
@@ -236,7 +236,7 @@ const transformEntity = (
 export const normalizeReferences = async (
   entity: FieldsetNested,
   schema: EntitySchema,
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
 ): ResultAsync<FieldsetNested> => {
   const refs = collectReferenceValues([entity], schema);
   const refMapResult = await buildReferenceMap(kg, refs);
@@ -248,7 +248,7 @@ export const normalizeReferences = async (
 export const formatReferences = async (
   entity: FieldsetNested,
   schema: EntitySchema,
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
 ): ResultAsync<FieldsetNested> => {
   const refs = collectReferenceValues([entity], schema);
   const refMapResult = await buildReferenceMap(kg, refs);
@@ -260,7 +260,7 @@ export const formatReferences = async (
 export const normalizeReferencesList = async (
   entities: FieldsetNested[],
   schema: EntitySchema,
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
 ): ResultAsync<FieldsetNested[]> => {
   const refs = collectReferenceValues(entities, schema);
   const refMapResult = await buildReferenceMap(kg, refs);
@@ -276,7 +276,7 @@ export const normalizeReferencesList = async (
 export const formatReferencesList = async (
   entities: FieldsetNested[],
   schema: EntitySchema,
-  kg: KnowledgeGraph,
+  kg: ReadonlyKnowledgeGraph,
 ): ResultAsync<FieldsetNested[]> => {
   const refs = collectReferenceValues(entities, schema);
   const refMapResult = await buildReferenceMap(kg, refs);

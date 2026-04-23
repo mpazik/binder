@@ -5,7 +5,10 @@ import {
   type EntityType,
   type NamespaceEditable,
 } from "@binder/repo";
-import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
+import {
+  type CommandHandlerReadonly,
+  runtimeWithReadonlyRepo,
+} from "../runtime.ts";
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchema } from "../schema/schema-filter.ts";
 import { types } from "../cli/types.ts";
@@ -33,7 +36,7 @@ const validateKeys = (
   return fail(errorKey, `Unknown ${kind} key: ${unknown}`, { suggestion });
 };
 
-export const schemaHandler: CommandHandlerWithDb<{
+export const schemaHandler: CommandHandlerReadonly<{
   namespace: NamespaceEditable;
   typeKeys?: EntityType[];
   types?: EntityType[];
@@ -120,5 +123,5 @@ export const SchemaCommand = types({
           choices: serializeItemFormats,
         },
       }),
-  handler: runtimeWithDb(schemaHandler),
+  handler: runtimeWithReadonlyRepo(schemaHandler),
 });

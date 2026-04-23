@@ -5,12 +5,15 @@ import {
   type NamespaceEditable,
   normalizeEntityRef,
 } from "@binder/repo";
-import { runtimeWithDb, type CommandHandlerWithDb } from "../runtime.ts";
+import {
+  runtimeWithReadonlyRepo,
+  type CommandHandlerReadonly,
+} from "../runtime.ts";
 import { findEntityLocation, loadNavigation } from "../document/navigation.ts";
 import { types } from "../cli/types.ts";
 import { namespaceOption } from "../cli/options.ts";
 
-const locateHandler: CommandHandlerWithDb<{
+const locateHandler: CommandHandlerReadonly<{
   ref: EntityRef;
   namespace: NamespaceEditable;
 }> = async ({ kg, fs, config, ui, args }) => {
@@ -55,5 +58,5 @@ export const LocateCommand = types({
         coerce: (value: string) => normalizeEntityRef(value),
       })
       .options(namespaceOption),
-  handler: runtimeWithDb(locateHandler),
+  handler: runtimeWithReadonlyRepo(locateHandler),
 });

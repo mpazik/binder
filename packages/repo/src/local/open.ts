@@ -15,6 +15,7 @@ import { type DrizzleDb, type OpenDbMigrationOptions, openDb } from "../db.ts";
 import {
   type KnowledgeGraph,
   type KnowledgeGraphCallbacks,
+  type ReadonlyKnowledgeGraph,
   openKnowledgeGraph,
 } from "../knowledge-graph.ts";
 import type * as coreSchema from "../schema.ts";
@@ -207,6 +208,111 @@ export const open = async <
       tryCatch(() => db.$client.close());
     },
   });
+
+  return ok(repo);
+};
+
+
+/**
+ * Read-only view of a repo: mutation methods and plugin/subscription surface
+ * removed. Returned by {@link openReadonly}.
+ */
+export type ReadonlyRepo<
+  TSchema extends DbSchema = typeof coreSchema,
+  C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
+  CS extends z.ZodTypeAny = typeof CoreConfigSchema,
+> = ReadonlyKnowledgeGraph<C> & {
+  readonly config: WorkspaceConfig<CS>;
+  readonly db: DrizzleDb<TSchema>;
+  close: () => void;
+};
+
+export type OpenReadonlyOptions<
+  TSchema extends DbSchema = typeof coreSchema,
+  C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
+  CS extends z.ZodTypeAny = typeof CoreConfigSchema,
+> = Pick<
+  OpenOptions<TSchema, C, CS>,
+  | "binderDir"
+  | "config"
+  | "defaultAuthor"
+  | "dbSchema"
+  | "configSchema"
+  | "providerSchema"
+  | "kgConfigSchema"
+  | "configLoadOptions"
+>;
+
+/**
+ * Open an initialized Binder workspace read-only.
+ *
+ * Skips plugin loading, skips migrations, opens SQLite in readonly mode.
+ * Use this for cheap reads (CLI queries, LSP read handlers, analysis
+ * scripts) that never mutate state.
+ *
+ * Fails with `workspace-not-found` if the workspace does not exist.
+ * Fails on write attempts at the SQLite driver level.
+ */
+export const openReadonly = async <
+  TSchema extends DbSchema = typeof coreSchema,
+  C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
+  CS extends z.ZodTypeAny = typeof CoreConfigSchema,
+>(
+  workspaceRoot: string,
+  options?: OpenReadonlyOptions<TSchema, C, CS>,
+): ResultAsync<ReadonlyRepo<TSchema, C, CS>> => {
+  const binderDir = options?.binderDir ?? BINDER_DIR;
+  const paths = resolveWorkspacePaths(workspaceRoot, binderDir);
+
+  const configPath = join(paths.binder, CONFIG_FILE);
+  if (!(await exists(configPath))) {
+    return fail(
+      "workspace-not-found",
+      `No Binder workspace at ${workspaceRoot} (missing ${configPath})`,
+      { data: { workspaceRoot, configPath } },
+    );
+  }
+
+  let config: WorkspaceConfig<CS>;
+  if (options?.config) {
+    config = options.config;
+  } else {
+    const configResult = await loadWorkspaceConfig<CS>(workspaceRoot, {
+      binderDir,
+      defaultAuthor: options?.defaultAuthor,
+      configSchema: options?.configSchema,
+      ...(options?.configLoadOptions ?? {}),
+    });
+    if (isErr(configResult)) return configResult;
+    config = configResult.data;
+  }
+
+  const dbPath = join(paths.data, DB_FILE);
+  const dbResult = openDb<TSchema>({
+    path: dbPath,
+    schema: options?.dbSchema,
+    migrate: false,
+    readonly: true,
+  });
+  if (isErr(dbResult)) return dbResult;
+  const db = dbResult.data;
+
+  // No callbacks, no plugins, no subscriptions. Purely read.
+  const kg = openKnowledgeGraph<C>(
+    db as unknown as DrizzleDb<typeof coreSchema>,
+    {
+      providerSchema: options?.providerSchema,
+      configSchema: options?.kgConfigSchema,
+    },
+  );
+
+  const repo: ReadonlyRepo<TSchema, C, CS> = Object.assign(kg, {
+    config,
+    db,
+    close: () => {
+      tryCatch(() => db.$client.close());
+    },
+  }) as ReadonlyRepo<TSchema, C, CS>;
 
   return ok(repo);
 };

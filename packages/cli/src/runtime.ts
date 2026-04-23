@@ -15,8 +15,12 @@ import {
   tryCatch,
   wrapError,
 } from "@binder/utils";
-import type { KnowledgeGraph } from "@binder/repo";
-import { open as openRepo } from "@binder/repo/local";
+import type { KnowledgeGraph, ReadonlyKnowledgeGraph } from "@binder/repo";
+import {
+  open as openRepo,
+  openReadonly as openRepoReadonly,
+  type ReadonlyRepo,
+} from "@binder/repo/local";
 import { cliMigrationRunner, cliSchema, type DatabaseCli } from "./db";
 import { documentProviderSchema } from "./document/document-schema.ts";
 import { cliConfigSchema } from "./cli-config-schema.ts";
@@ -93,6 +97,16 @@ export type RuntimeContextWithDb = RuntimeContext & {
   views: ViewLoader;
 };
 
+// Read-only runtime: no plugins, no caches, no lock, no migrations.
+// For `read`, `search`, `schema`, `locate` and similar cheap queries.
+//
+// kg is typed as ReadonlyKnowledgeGraph: write methods (update/apply/rollback)
+// are absent from the type AND rejected by the SQLite driver at runtime.
+export type RuntimeContextReadonly = RuntimeContext & {
+  db: DatabaseCli;
+  kg: ReadonlyKnowledgeGraph;
+};
+
 export type RuntimeDbCallbacks = {
   onFilesUpdated?: (paths: string[]) => void;
 };
@@ -114,6 +128,10 @@ export type CommandHandler<TArgs = object> = (
 
 export type CommandHandlerWithDb<TArgs = object> = (
   context: RuntimeContextWithDb & { args: TArgs & GlobalOptions },
+) => ResultAsync<CommandResult>;
+
+export type CommandHandlerReadonly<TArgs = object> = (
+  context: RuntimeContextReadonly & { args: TArgs & GlobalOptions },
 ) => ResultAsync<CommandResult>;
 
 const unpackCommandResult = (
@@ -507,6 +525,59 @@ export const runtimeWithDb = <TArgs extends object = object>(
     const { runtime: dbRuntime, close } = dbResult.data;
 
     const result = await handler({ args, ...dbRuntime });
+    close();
+    return result;
+  }, options);
+};
+
+/**
+ * Open workspace read-only: no plugins, no lock, no migrations, no caches.
+ * SQLite connection refuses writes at the driver level.
+ *
+ * Use for short query commands where plugin load cost and write machinery
+ * are pure overhead.
+ */
+export const initializeReadonlyRepoRuntime = async (
+  context: RuntimeContext,
+): ResultAsync<{
+  runtime: RuntimeContextReadonly;
+  close: () => void;
+}> => {
+  const { config, log } = context;
+
+  const repoResult = await openRepoReadonly(config.paths.root, {
+    binderDir: BINDER_DIR,
+    config,
+    dbSchema: cliSchema,
+    kgConfigSchema: cliConfigSchema,
+    providerSchema: documentProviderSchema,
+  });
+  if (isErr(repoResult)) {
+    log.error("Failed to open repo read-only", { error: repoResult.error });
+    return repoResult;
+  }
+
+  const repo = repoResult.data as ReadonlyRepo;
+  return ok({
+    runtime: {
+      ...context,
+      db: repo.db as DatabaseCli,
+      kg: repo as unknown as ReadonlyKnowledgeGraph,
+    },
+    close: () => repo.close(),
+  });
+};
+
+export const runtimeWithReadonlyRepo = <TArgs extends object = object>(
+  handler: CommandHandlerReadonly<TArgs>,
+  options?: CommandOptions,
+): ((args: TArgs & GlobalOptions) => Promise<void>) => {
+  return runtime<TArgs>(async (context) => {
+    const { args } = context;
+    const roResult = await initializeReadonlyRepoRuntime(context);
+    if (isErr(roResult)) return roResult;
+    const { runtime: roRuntime, close } = roResult.data;
+    const result = await handler({ args, ...roRuntime });
     close();
     return result;
   }, options);

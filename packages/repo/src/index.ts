@@ -1,6 +1,7 @@
 export {
   type KnowledgeGraph,
   type KnowledgeGraphCallbacks,
+  type ReadonlyKnowledgeGraph,
   type TransactionRollback,
   openKnowledgeGraph,
 } from "./knowledge-graph";

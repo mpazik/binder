@@ -28,9 +28,12 @@ export {
 export {
   init,
   open,
+  openReadonly,
   type InitOptions,
   type OpenCallbacksFactory,
   type OpenOptions,
+  type OpenReadonlyOptions,
+  type ReadonlyRepo,
   type Repo,
 } from "./open.ts";
 
