@@ -1,49 +1,51 @@
 import { dirname, join, resolve } from "path";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "os";
 import { z } from "zod";
-import * as YAML from "yaml";
+import { isErr, ok, type ResultAsync } from "@binder/utils";
 import {
-  createError,
-  isErr,
-  ok,
-  type ResultAsync,
-  tryCatch,
-} from "@binder/utils";
+  CoreConfigSchema,
+  getGlobalConfigPath,
+  getGlobalStatePath as repoGetGlobalStatePath,
+  loadGlobalConfig as repoLoadGlobalConfig,
+  loadWorkspaceConfig as repoLoadWorkspaceConfig,
+  saveGlobalConfig as repoSaveGlobalConfig,
+  BINDER_DIR as REPO_BINDER_DIR,
+  CONFIG_FILE as REPO_CONFIG_FILE,
+  DATA_DIR as REPO_DATA_DIR,
+  DB_FILE as REPO_DB_FILE,
+} from "@binder/repo/local";
 import type { FileSystem } from "./lib/filesystem.ts";
 import { LOG_LEVELS, type LogLevel } from "./log.ts";
 import { isDevMode } from "./environment.ts";
 
-const DEFAULT_AUTHOR = "cli-user";
 export const DEFAULT_DOCS_PATH = isDevMode() ? "docs-dev" : ".";
-export const CONFIG_FILE = "config.yaml";
-export const BINDER_DIR = isDevMode() ? ".binder-dev" : ".binder";
+export const CONFIG_FILE = REPO_CONFIG_FILE;
+export const BINDER_DIR = isDevMode() ? ".binder-dev" : REPO_BINDER_DIR;
 
 export const DEFAULT_EXCLUDE_PATTERNS = [
   "**/node_modules/**",
   "**/.*/**",
   "**/.DS_Store",
 ];
-export const DB_FILE = "binder.db";
+export const DB_FILE = REPO_DB_FILE;
 export const TRANSACTION_LOG_FILE = "transactions.jsonl";
 export const UNDO_LOG_FILE = "undo.jsonl";
 export const LOCK_FILE = "lock";
-export const DATA_DIR = "data";
+export const DATA_DIR = REPO_DATA_DIR;
 export const BACKUPS_DIR = "backups";
 export const LOCK_RETRY_DELAY_MS = 200;
 export const LOCK_MAX_RETRIES = 3;
 
-const SharedConfigSchema = z.object({
-  author: z.string().optional(),
+/** Complete schema for the CLI's global config file. Extends core. */
+export const cliGlobalConfigSchema = CoreConfigSchema.extend({
   logLevel: z.enum(LOG_LEVELS).optional(),
-});
-
-export const GlobalConfigSchema = SharedConfigSchema.extend({
   telemetry: z.boolean().nullable().optional(),
 });
-export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 
-export const UserConfigSchema = SharedConfigSchema.extend({
+export type GlobalConfig = z.infer<typeof cliGlobalConfigSchema>;
+
+/** Complete schema for the CLI's workspace config file. Extends core. */
+export const cliWorkspaceConfigSchema = CoreConfigSchema.extend({
+  logLevel: z.enum(LOG_LEVELS).optional(),
   docsPath: z.string().default(DEFAULT_DOCS_PATH),
   include: z.array(z.string()).optional(),
   exclude: z.array(z.string()).optional(),
@@ -55,31 +57,8 @@ export const UserConfigSchema = SharedConfigSchema.extend({
     })
     .optional(),
 });
-export type UserConfig = z.infer<typeof UserConfigSchema>;
 
-const loadConfigFile = async <T extends z.ZodTypeAny>(
-  path: string,
-  schema: T,
-): ResultAsync<z.infer<T>> => {
-  const parseError = (error: unknown) =>
-    createError("config-parse-failed", `Failed to parse config at ${path}`, {
-      data: { error },
-    });
-
-  const exists = await access(path).then(
-    () => true,
-    () => false,
-  );
-  if (!exists) return tryCatch(() => schema.parse({}), parseError);
-
-  const fileResult = await tryCatch(async () => {
-    const text = await readFile(path, "utf-8");
-    return YAML.parse(text);
-  });
-  if (isErr(fileResult)) return fileResult;
-
-  return tryCatch(() => schema.parse(fileResult.data ?? {}), parseError);
-};
+export type UserConfig = z.infer<typeof cliWorkspaceConfigSchema>;
 
 export const findBinderRoot = async (
   fs: FileSystem,
@@ -134,60 +113,38 @@ export type AppConfig = {
   };
 };
 
-const getGlobalConfigPath = (): string => {
-  const configHome = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
-  return join(configHome, "binder");
-};
-
-export const getGlobalStatePath = (): string => {
-  const stateHome =
-    process.env.XDG_STATE_HOME || join(homedir(), ".local/state");
-  return join(stateHome, "binder");
-};
+export { getGlobalConfigPath };
+export const getGlobalStatePath = repoGetGlobalStatePath;
 
 export const loadGlobalConfig = (): ResultAsync<GlobalConfig> =>
-  loadConfigFile(join(getGlobalConfigPath(), CONFIG_FILE), GlobalConfigSchema);
+  repoLoadGlobalConfig({ configSchema: cliGlobalConfigSchema });
 
-/** Persist the global config to `$XDG_CONFIG_HOME/binder/config.yaml`. */
-export const saveGlobalConfig = async (
-  config: GlobalConfig,
-): ResultAsync<void> => {
-  return tryCatch(async () => {
-    const dir = getGlobalConfigPath();
-    await mkdir(dir, { recursive: true });
-
-    const content = YAML.stringify(config, {
-      indent: 2,
-      lineWidth: 0,
-      defaultStringType: "PLAIN",
-    });
-
-    await writeFile(join(dir, CONFIG_FILE), content, "utf-8");
-  });
-};
+export const saveGlobalConfig = (config: GlobalConfig): ResultAsync<void> =>
+  repoSaveGlobalConfig(config);
 
 export const loadWorkspaceConfig = async (
   root: string,
   globalConfig: GlobalConfig,
 ): ResultAsync<AppConfig> => {
-  const configPath = join(root, BINDER_DIR, CONFIG_FILE);
-  const loadedConfig = await loadConfigFile(configPath, UserConfigSchema);
+  const result = await repoLoadWorkspaceConfig(root, {
+    binderDir: BINDER_DIR,
+    globalConfig,
+    configSchema: cliWorkspaceConfigSchema,
+  });
+  if (isErr(result)) return result;
 
-  if (isErr(loadedConfig)) return loadedConfig;
-
-  const { docsPath, author, logLevel, include, exclude, validation } =
-    loadedConfig.data;
-
+  const loaded = result.data;
+  const { docsPath, include, exclude, validation, author, logLevel } = loaded;
   const mergedExclude = [...DEFAULT_EXCLUDE_PATTERNS, ...(exclude ?? [])];
 
   return ok({
-    author: author || globalConfig.author || DEFAULT_AUTHOR,
-    logLevel: logLevel || globalConfig.logLevel,
+    author,
+    logLevel,
     paths: {
       root,
-      binder: join(root, BINDER_DIR),
-      data: join(root, BINDER_DIR, DATA_DIR),
-      backups: join(root, BINDER_DIR, DATA_DIR, BACKUPS_DIR),
+      binder: loaded.paths.binder,
+      data: loaded.paths.data,
+      backups: join(loaded.paths.data, BACKUPS_DIR),
       docs: join(root, docsPath),
     },
     include,

@@ -1,4 +1,4 @@
-import { join, resolve } from "path";
+import { resolve } from "path";
 import process from "node:process";
 import {
   type Err,
@@ -16,10 +16,13 @@ import {
   wrapError,
 } from "@binder/utils";
 import type { KnowledgeGraph } from "@binder/repo";
-import { type DatabaseCli, openCliDb } from "./db";
+import { open as openRepo } from "@binder/repo/local";
+import { cliMigrationRunner, cliSchema, type DatabaseCli } from "./db";
+import { documentProviderSchema } from "./document/document-schema.ts";
+import { cliConfigSchema } from "./cli-config-schema.ts";
 import {
   type AppConfig,
-  DB_FILE,
+  BINDER_DIR,
   findBinderRoot,
   getGlobalStatePath,
   type GlobalConfig,
@@ -30,8 +33,8 @@ import { createUi, type Ui } from "./cli/ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
 import { setupCleanupHandlers } from "./lib/lock.ts";
 import {
+  buildOrchestratorCallbacks,
   type OrchestratorCallbacks,
-  setupKnowledgeGraph,
 } from "./lib/orchestrator.ts";
 import { createLogger, type Logger, type LogLevel } from "./log.ts";
 import { isDevMode } from "./environment.ts";
@@ -94,11 +97,6 @@ export type RuntimeDbCallbacks = {
   onFilesUpdated?: (paths: string[]) => void;
 };
 
-/**
- * A command handler may return a plain string (printed on success) or
- * a `CommandOutcome` carrying optional output plus telemetry extras to
- * merge into the emitted `cli.*` event.
- */
 export type CommandOutcome = {
   output?: string;
   telemetry?: Record<string, unknown>;
@@ -128,11 +126,7 @@ const unpackCommandResult = (
   return {};
 };
 
-/**
- * Extract telemetry-safe flag values from parsed argv. Only enum-valued,
- * non-identifying flags are emitted. Never return paths, queries, keys,
- * or user-defined strings.
- */
+/** Extract telemetry-safe enum-valued flags from parsed argv. */
 const genericTelemetryFlags = (
   args: Record<string, unknown>,
 ): Record<string, unknown> => {
@@ -258,15 +252,6 @@ export const initializeDbRuntime = async (
     return migrateResult;
   }
 
-  const dbPath = join(config.paths.data, DB_FILE);
-  const dbResult = openCliDb({ path: dbPath, migrate: true });
-  if (isErr(dbResult)) {
-    log.error("Failed to open database", { error: dbResult.error });
-    return dbResult;
-  }
-
-  const { db, close: closeDb } = dbResult.data;
-
   const orchestratorCallbacks: OrchestratorCallbacks = {
     afterCommit: async (transaction) => {
       if (isObjectEmpty(transaction.configs)) return;
@@ -276,10 +261,41 @@ export const initializeDbRuntime = async (
     onFilesUpdated: callbacks?.onFilesUpdated,
   };
 
-  const kg = setupKnowledgeGraph(
-    { fs, log, config, db, views: () => viewCache.load() },
-    orchestratorCallbacks,
-  );
+  // Build orchestrator context — note that `views` references viewCache via
+  // closure; viewCache is declared below and is safe because views() is only
+  // invoked inside transaction callbacks, well after assignment.
+  const orchestratorCtx = {
+    fs,
+    log,
+    config,
+    // `db` is assigned below; we point to a lazy getter via a reference object.
+    get db() {
+      return db;
+    },
+    views: () => viewCache.load(),
+  };
+
+  const repoResult = await openRepo(config.paths.root, {
+    binderDir: BINDER_DIR,
+    config,
+    dbSchema: cliSchema,
+    migrate: { run: cliMigrationRunner },
+    kgConfigSchema: cliConfigSchema,
+    providerSchema: documentProviderSchema,
+    callbacks: buildOrchestratorCallbacks(
+      orchestratorCtx,
+      orchestratorCallbacks,
+    ),
+  });
+  if (isErr(repoResult)) {
+    log.error("Failed to open repo", { error: repoResult.error });
+    return repoResult;
+  }
+
+  const repo = repoResult.data;
+  const db: DatabaseCli = repo.db as DatabaseCli;
+  const kg: KnowledgeGraph = repo as KnowledgeGraph;
+
   const navigationCache = createNavigationCache(kg);
   const viewCache = createViewCache(kg);
 
@@ -291,7 +307,7 @@ export const initializeDbRuntime = async (
       nav: navigationCache.load,
       views: viewCache.load,
     },
-    close: closeDb,
+    close: () => repo.close(),
   });
 };
 

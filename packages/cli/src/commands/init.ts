@@ -1,16 +1,17 @@
 import { join } from "path";
 import { execSync } from "node:child_process";
 import type { Argv } from "yargs";
-import * as YAML from "yaml";
 import { isCancel, select } from "@clack/prompts";
 import { fail, isErr, isOk, ok, okVoid, tryCatch } from "@binder/utils";
+import { init as repoInit } from "@binder/repo/local";
 import {
   bootstrapMinimal,
   type CommandHandlerMinimal,
   type CommandHandlerWithDb,
   runtimeWithDb,
 } from "../runtime.ts";
-import { BINDER_DIR, CONFIG_FILE, findBinderRoot } from "../config.ts";
+import { cliMigrationRunner, cliSchema } from "../db";
+import { BINDER_DIR, findBinderRoot } from "../config.ts";
 import {
   type BlueprintInfo,
   listBlueprints,
@@ -32,7 +33,7 @@ const getAuthorNameFromGit = (): string | undefined => {
   const result = tryCatch(() =>
     execSync("git config user.name", { encoding: "utf-8" }).trim(),
   );
-  if (isOk(result)) return result.data ?? undefined;
+  if (isOk(result) && result.data) return result.data;
 };
 
 const NONE_BLUEPRINT: BlueprintInfo = {
@@ -104,23 +105,23 @@ const initSetupHandler: CommandHandlerMinimal<{
           )
         ).trim() || gitAuthor);
 
-  const config: Record<string, unknown> = {};
-  if (author) config.author = author;
-  if (args.docsPath) config.docsPath = args.docsPath;
+  const initialConfig: Record<string, unknown> = {};
+  if (author) initialConfig.author = author;
+  if (args.docsPath) initialConfig.docsPath = args.docsPath;
 
-  const mkdirResult = await fs.mkdir(binderDirPath, { recursive: true });
-  if (isErr(mkdirResult)) return mkdirResult;
-
-  const configPath = join(binderDirPath, CONFIG_FILE);
-  const configYaml = YAML.stringify(config, {
-    indent: 2,
-    lineWidth: 0,
-    defaultStringType: "PLAIN",
+  // Core workspace setup: creates .binder/data/, writes config.yaml, and
+  // opens+migrates the DB with CLI's merged migrations. We close immediately;
+  // runtimeWithDb reopens for blueprint application below.
+  const initResult = await repoInit(currentDir, {
+    binderDir: BINDER_DIR,
+    initialConfig,
+    dbSchema: cliSchema,
+    migrate: { run: cliMigrationRunner },
   });
+  if (isErr(initResult)) return initResult;
+  initResult.data.close();
 
-  const writeConfigResult = await fs.writeFile(configPath, configYaml);
-  if (isErr(writeConfigResult)) return writeConfigResult;
-
+  // CLI-specific: .gitignore
   const gitignorePath = join(binderDirPath, ".gitignore");
   const writeGitignoreResult = await fs.writeFile(
     gitignorePath,
@@ -130,10 +131,8 @@ const initSetupHandler: CommandHandlerMinimal<{
 
   let selectedBlueprint: BlueprintInfo;
   if (args.blueprint) {
-    const found = findBlueprint(args.blueprint, allBlueprints);
-    if (!found)
-      return fail("invalid-blueprint", `Unknown blueprint: ${args.blueprint}`);
-    selectedBlueprint = found;
+    // Already validated above; findBlueprint is guaranteed to succeed here.
+    selectedBlueprint = findBlueprint(args.blueprint, allBlueprints)!;
   } else if (args.quiet) {
     selectedBlueprint = NONE_BLUEPRINT;
   } else {

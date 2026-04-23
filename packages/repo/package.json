@@ -16,6 +16,10 @@
     "./schema": {
       "types": "./src/schema.ts",
       "default": "./src/schema.ts"
+    },
+    "./local": {
+      "types": "./src/local/index.ts",
+      "default": "./src/local/index.ts"
     }
   },
   "scripts": {
@@ -33,6 +37,7 @@
     "diff-match-patch-es": "1.0.1",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.1",
+    "yaml": "^2.8.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -72,7 +72,7 @@ console.log(`✓ Built successfully: dist/index.js`);
 
 const { mergeMigrationFolders } = await import("./src/db/merge-migrations.ts");
 
-const dbMigrationsSource = join(import.meta.dir, "../db/src/migrations");
+const dbMigrationsSource = join(import.meta.dir, "../repo/src/migrations");
 const cliMigrationsSource = join(import.meta.dir, "src/db/migrations");
 const migrationsTarget = join(import.meta.dir, "dist/migrations");
 

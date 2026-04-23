@@ -2,70 +2,49 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
+import type { DrizzleDb, OpenDbMigrationOptions } from "@binder/repo";
 import { openDb } from "@binder/repo";
 import { isErr, ok, type Result } from "@binder/utils";
 import { isBundled } from "../environment.ts";
 import { schema } from "./schema.ts";
 import { mergeMigrationFolders } from "./merge-migrations.ts";
 
-export type DatabaseCli =
-  ReturnType<typeof openDb<typeof schema>> extends Result<infer T> ? T : never;
+export { schema as cliSchema };
 
-type FileDbOptions = {
-  path: string;
-  migrate: boolean;
+export type DatabaseCli = DrizzleDb<typeof schema>;
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** Merges core + CLI migration folders and runs via the default Drizzle migrate helper. */
+export const cliMigrationRunner: NonNullable<
+  OpenDbMigrationOptions<typeof schema>["run"]
+> = ({ defaultMigrationsFolder, migrateDefault }) => {
+  const cliMigrationsPath = join(__dirname, "migrations");
+
+  if (isBundled()) return migrateDefault(cliMigrationsPath);
+
+  // Dev/test: merge core + CLI migrations on the fly into a temp folder
+  const mergedPath = mkdtempSync(join(tmpdir(), "binder-migrations-"));
+  mergeMigrationFolders(
+    [defaultMigrationsFolder, cliMigrationsPath],
+    mergedPath,
+  );
+  return migrateDefault(mergedPath);
 };
 
-type MemoryDbOptions = {
-  memory: true;
-};
-
-export type OpenCliDbOptions = FileDbOptions | MemoryDbOptions;
-
-export const openCliDb = (
-  options: OpenCliDbOptions,
-): Result<{
+/** Open an in-memory CLI database with merged migrations. Used by tests. */
+export const openMemoryCliDb = (): Result<{
   db: DatabaseCli;
   close: () => void;
 }> => {
-  const isMemory = "memory" in options && options.memory;
-  const dbPath = isMemory ? ":memory:" : (options as FileDbOptions).path;
-  const shouldMigrate = isMemory ? true : (options as FileDbOptions).migrate;
-
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-
   const dbResult = openDb({
-    ...(isMemory ? { memory: true as const } : { path: dbPath }),
+    memory: true as const,
     schema,
-    migrate: shouldMigrate
-      ? {
-          run: ({ defaultMigrationsFolder, migrateDefault }) => {
-            let migrationsPath: string;
-
-            if (isBundled()) {
-              // Build step already merged both folders into dist/migrations
-              migrationsPath = join(__dirname, "migrations");
-            } else {
-              // Dev/test: merge core + CLI migrations on the fly into a temp folder
-              const cliMigrationsPath = join(__dirname, "migrations");
-              migrationsPath = mkdtempSync(
-                join(tmpdir(), "binder-migrations-"),
-              );
-              mergeMigrationFolders(
-                [defaultMigrationsFolder, cliMigrationsPath],
-                migrationsPath,
-              );
-            }
-
-            return migrateDefault(migrationsPath);
-          },
-        }
-      : false,
+    migrate: { run: cliMigrationRunner },
   });
-
   if (isErr(dbResult)) return dbResult;
-
-  const db = dbResult.data;
-  return ok({ db, close: () => db.$client.close() });
+  return ok({
+    db: dbResult.data,
+    close: () => dbResult.data.$client.close(),
+  });
 };

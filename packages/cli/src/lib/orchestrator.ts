@@ -15,7 +15,6 @@ import {
   okVoid,
   type ResultAsync,
 } from "@binder/utils";
-import { documentProviderSchema } from "../document/document-schema.ts";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../config.ts";
 import { renderDocs } from "../document/repository.ts";
 import { cliConfigSchema } from "../cli-config-schema.ts";
@@ -326,41 +325,40 @@ export type OrchestratorCallbacks = KnowledgeGraphCallbacks & {
   onFilesUpdated?: (paths: string[]) => void;
 };
 
-export const setupKnowledgeGraph = (
-  ctx: OrchestratorCtx,
-  callbacks: OrchestratorCallbacks,
-): KnowledgeGraph => {
-  const {
-    db,
-    fs,
-    log,
-    config: { paths },
-  } = ctx;
+/**
+ * Returns a factory `(kg) => KnowledgeGraphCallbacks` so the render callback
+ * can close over the final knowledge graph. Transitional — will become plugins.
+ */
+export const buildOrchestratorCallbacks =
+  (
+    ctx: OrchestratorCtx,
+    callbacks: OrchestratorCallbacks,
+  ): ((kg: KnowledgeGraph) => KnowledgeGraphCallbacks) =>
+  (kg: KnowledgeGraph): KnowledgeGraphCallbacks => {
+    const {
+      fs,
+      log,
+      config: { paths },
+    } = ctx;
 
-  const renderAndNotify = async (context: string) => {
-    const renderResult = await renderDocs({
-      ...ctx,
-      kg: knowledgeGraph,
-    });
-    if (isErr(renderResult)) {
-      log.error(`Failed to re-render docs after ${context}`, {
-        error: renderResult.error,
-      });
-      return;
-    }
+    const renderAndNotify = async (context: string) => {
+      const renderResult = await renderDocs({ ...ctx, kg });
+      if (isErr(renderResult)) {
+        log.error(`Failed to re-render docs after ${context}`, {
+          error: renderResult.error,
+        });
+        return;
+      }
 
-    if (
-      callbacks.onFilesUpdated &&
-      renderResult.data.modifiedPaths.length > 0
-    ) {
-      await callbacks.onFilesUpdated(renderResult.data.modifiedPaths);
-    }
-  };
+      if (
+        callbacks.onFilesUpdated &&
+        renderResult.data.modifiedPaths.length > 0
+      ) {
+        await callbacks.onFilesUpdated(renderResult.data.modifiedPaths);
+      }
+    };
 
-  const knowledgeGraph = openKnowledgeGraph(db, {
-    providerSchema: documentProviderSchema,
-    configSchema: cliConfigSchema,
-    callbacks: {
+    return {
       beforeTransaction: async () => {
         const lockResult = await acquireLock(fs, paths.data);
         if (isErr(lockResult)) {
@@ -401,10 +399,8 @@ export const setupKnowledgeGraph = (
         await callbacks.afterRollback?.(transactions, count);
         await renderAndNotify("rollback");
       },
-    },
-  });
-  return knowledgeGraph;
-};
+    };
+  };
 
 export const squashTransactions = async (
   ctx: OrchestratorCtx,

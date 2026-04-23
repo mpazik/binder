@@ -1,9 +1,12 @@
 import { isObjectEmpty, noop } from "@binder/utils";
+import { openKnowledgeGraph, type KnowledgeGraph } from "@binder/repo";
 import { type Logger } from "./log.ts";
 import { createUi, type Ui } from "./cli/ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 import { getTestDatabaseCli } from "./db/db.mock.ts";
-import { setupKnowledgeGraph } from "./lib/orchestrator.ts";
+import { buildOrchestratorCallbacks } from "./lib/orchestrator.ts";
+import { documentProviderSchema } from "./document/document-schema.ts";
+import { cliConfigSchema } from "./cli-config-schema.ts";
 import { BINDER_DIR } from "./config.ts";
 import type { AppConfig } from "./config.ts";
 import type { RuntimeContextWithDb, RuntimeContext } from "./runtime.ts";
@@ -85,7 +88,10 @@ export const createMockRuntimeContextWithDb =
   async (): Promise<RuntimeContextWithDb> => {
     const context = await createMockCommandContext();
     const db = getTestDatabaseCli();
-    const kg = setupKnowledgeGraph(
+
+    // Build callbacks via the same factory used by initializeDbRuntime.
+    // kg is captured by reference inside the factory closure.
+    const callbackFactory = buildOrchestratorCallbacks(
       { ...context, db, views: () => viewCache.load() },
       {
         afterCommit: async (transaction) => {
@@ -95,6 +101,16 @@ export const createMockRuntimeContextWithDb =
         },
       },
     );
+    const kg: KnowledgeGraph = openKnowledgeGraph(db, {
+      providerSchema: documentProviderSchema,
+      configSchema: cliConfigSchema,
+      callbacks: callbackFactory(
+        // Lazy reference; kg is assigned before the callback runs.
+        new Proxy({} as KnowledgeGraph, {
+          get: (_target, prop) => (kg as never)[prop as never],
+        }),
+      ),
+    });
     const navigationCache = createNavigationCache(kg);
     const viewCache = createViewCache(kg);
     return {

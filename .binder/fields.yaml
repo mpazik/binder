@@ -164,9 +164,9 @@ items:
       - key: cli
         name: CLI
         description: "@binder/cli — CLI, LSP, MCP, Markdown sync, schema loading"
-      - key: db
-        name: DB
-        description: "@binder/db — knowledge graph engine, entity/relationship storage, transactions"
+      - key: repo
+        name: Repo
+        description: "@binder/repo — knowledge graph engine, entity/relationship storage, transactions"
       - key: utils
         name: Utils
         description: "@binder/utils — shared pure helpers"

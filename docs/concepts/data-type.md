@@ -5,7 +5,9 @@ tags: [ data-model ]
 status: active
 description: The value format assigned to a field. Defines what values are valid, what operations apply, and how values are stored and indexed.
 alternativeNames: [ field type, value type, format ]
-sourceFiles: [ packages/repo/src/model/data-type.ts, packages/repo/src/data-type-validators.ts ]
+sourceFiles:
+  - packages/repo/src/model/data-type.ts
+  - packages/repo/src/data-type-validators.ts
 relatesTo:
   - field
   - reference

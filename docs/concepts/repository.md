@@ -10,6 +10,7 @@ sourceFiles:
   - packages/repo/src/knowledge-graph.ts
   - packages/repo/src/entity-store.ts
   - packages/repo/src/transaction-store.ts
+  - packages/repo/src/local/open.ts
 relatesTo:
   - entity
   - namespace
