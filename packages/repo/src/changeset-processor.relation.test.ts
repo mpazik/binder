@@ -325,6 +325,17 @@ describe("changeset processor relations", () => {
   });
 
   describe("inverse relations", () => {
+    const task2Unlinked = omit(mockTask2Record, ["project"]);
+    const task3Unlinked = omit(mockTask3Record, ["project"]);
+    const task1WithRelated = {
+      ...mockTask1Record,
+      [mockRelatedToFieldKey]: [mockTask2Uid],
+    } as Fieldset;
+    const task2WithRelated = {
+      ...mockTask2Record,
+      [mockRelatedToFieldKey]: [mockTask1Uid],
+    } as Fieldset;
+
     const checkInverseExpansion = async (
       entities: Fieldset[],
       input: EntityChangesetInput<"record">,
@@ -371,8 +382,6 @@ describe("changeset processor relations", () => {
     };
 
     describe("one-to-many", () => {
-      const task2Unlinked = omit(mockTask2Record, ["project"]);
-      const task3Unlinked = omit(mockTask3Record, ["project"]);
       const otherProjectUid = "_projOther0" as RecordUid;
       const otherProject = {
         ...mockProjectRecord,
@@ -732,15 +741,6 @@ describe("changeset processor relations", () => {
     });
 
     describe("many-to-many", () => {
-      const task1WithRelated = {
-        ...mockTask1Record,
-        [mockRelatedToFieldKey]: [mockTask2Uid],
-      } as Fieldset;
-      const task2WithRelated = {
-        ...mockTask2Record,
-        [mockRelatedToFieldKey]: [mockTask1Uid],
-      } as Fieldset;
-
       it("insert generates insert on inverse side", () =>
         checkInverseExpansion(
           [mockTask1Record, mockTask3Record],
@@ -901,6 +901,208 @@ describe("changeset processor relations", () => {
         expect(result[taskAUid]).toMatchObject({
           [mockRelatedToFieldKey]: ["seq", [["insert", taskBUid]]],
         });
+      });
+    });
+
+    describe("set change on declaring side", () => {
+      describe("many-to-many self-inverse", () => {
+        it("creating entity with raw array populates target inverse", async () => {
+          await setup(mockTask1Record);
+          const result = throwIfError(
+            await process([
+              {
+                type: mockTaskTypeKey,
+                key: "task-new" as RecordKey,
+                title: "New",
+                [mockRelatedToFieldKey]: [mockTask1Uid],
+              },
+            ]),
+          );
+          const { uid: newUid } = findChangeset(
+            result,
+            (cs) => cs.key === "task-new",
+          );
+          expect(result[mockTask1Uid]).toEqual({
+            [mockRelatedToFieldKey]: ["seq", [["insert", newUid]]],
+          });
+        });
+
+        it("updating existing entity with raw array populates target inverse", async () => {
+          await setup(mockTask1Record, mockTask3Record);
+          const result = throwIfError(
+            await process([
+              {
+                uid: mockTask1Uid,
+                [mockRelatedToFieldKey]: [mockTask3Uid],
+              },
+            ]),
+          );
+          expect(result[mockTask3Uid]).toEqual({
+            [mockRelatedToFieldKey]: ["seq", [["insert", mockTask1Uid]]],
+          });
+        });
+
+        it("replacing array diffs additions and removals on targets", async () => {
+          await setup(task1WithRelated, task2WithRelated, mockTask3Record);
+
+          const result = throwIfError(
+            await process([
+              {
+                uid: mockTask1Uid,
+                [mockRelatedToFieldKey]: [mockTask3Uid],
+              },
+            ]),
+          );
+
+          expect(result[mockTask2Uid]).toEqual({
+            [mockRelatedToFieldKey]: ["seq", [["remove", mockTask1Uid]]],
+          });
+          expect(result[mockTask3Uid]).toEqual({
+            [mockRelatedToFieldKey]: ["seq", [["insert", mockTask1Uid]]],
+          });
+        });
+
+        it("applied changeset leaves both sides consistent", async () => {
+          await setup(mockTask1Record, mockTask3Record);
+          const result = throwIfError(
+            await process([
+              {
+                uid: mockTask1Uid,
+                [mockRelatedToFieldKey]: [mockTask3Uid],
+              },
+            ]),
+          );
+          await applyAndCommit(result);
+          expect(await getField(mockTask1Uid, mockRelatedToFieldKey)).toEqual([
+            mockTask3Uid,
+          ]);
+          expect(await getField(mockTask3Uid, mockRelatedToFieldKey)).toEqual([
+            mockTask1Uid,
+          ]);
+        });
+      });
+
+      describe("one-to-many", () => {
+        it("creating parent with raw array strips many-side and sets child direct field", async () => {
+          await setup(task2Unlinked);
+          const result = throwIfError(
+            await process([
+              {
+                type: mockProjectTypeKey,
+                title: "New Project",
+                [mockTasksFieldKey]: [mockTask2Uid],
+              },
+            ]),
+          );
+
+          const { changeset: projectChangeset, uid: projectUid } =
+            findChangeset(result, (cs) => cs.title === "New Project");
+
+          expect(projectChangeset[mockTasksFieldKey]).toBeUndefined();
+          expect(result[mockTask2Uid]).toEqual({
+            [mockProjectFieldKey]: ["set", projectUid],
+          });
+        });
+
+        it("updating parent with raw array diffs children and strips many-side", async () => {
+          await setup(mockProjectRecord, mockTask2Record, task3Unlinked);
+
+          const result = throwIfError(
+            await process([
+              {
+                uid: mockProjectUid,
+                [mockTasksFieldKey]: [mockTask3Uid],
+              },
+            ]),
+          );
+
+          expect(result[mockProjectUid]?.[mockTasksFieldKey]).toBeUndefined();
+          expect(result[mockTask3Uid]).toEqual({
+            [mockProjectFieldKey]: ["set", mockProjectUid],
+          });
+          expect(result[mockTask2Uid]).toEqual({
+            [mockProjectFieldKey]: ["set", null, mockProjectUid],
+          });
+        });
+      });
+    });
+
+    describe("delete with broken inverse", () => {
+      it("M:M: delete source with dangling forward ref succeeds without asserting", async () => {
+        // Broken state: task1.relatesTo=[task2] but task2 has no relatesTo.
+        // Deleting task1 must not emit a remove mutation on task2.
+        await setup(task1WithRelated, mockTask2Record);
+
+        const result = throwIfError(
+          await process([{ uid: mockTask1Uid, $delete: true }]),
+        );
+
+        expect(result[mockTask2Uid]).toBeUndefined();
+        await applyAndCommit(result);
+      });
+
+      it("M:M: delete target of dangling ref cleans up source-side ref", async () => {
+        // Broken state: task1.relatesTo=[task2], task2 has no relatesTo.
+        // Deleting task2 should leave task1.relatesTo empty.
+        await setup(task1WithRelated, mockTask2Record);
+
+        const result = throwIfError(
+          await process([{ uid: mockTask2Uid, $delete: true }]),
+        );
+        await applyAndCommit(result);
+
+        expect(
+          await getField(mockTask1Uid, mockRelatedToFieldKey),
+        ).toBeUndefined();
+      });
+
+      it("1:M: delete parent with wrongly-stored many-side succeeds without asserting", async () => {
+        // Broken state: project.tasks=[task2] stored (shouldn't be — tasks has
+        // inverseOf). task2.project=undefined. Deleting the project must not
+        // emit a phantom "set null" on task2.project.
+        const projectWithTasks = {
+          ...mockProjectRecord,
+          [mockTasksFieldKey]: [mockTask2Uid],
+        } as Fieldset;
+        await setup(projectWithTasks, task2Unlinked);
+
+        const result = throwIfError(
+          await process([{ uid: mockProjectUid, $delete: true }]),
+        );
+
+        expect(result[mockTask2Uid]).toBeUndefined();
+        await applyAndCommit(result);
+      });
+    });
+
+    describe("end-to-end (AC2)", () => {
+      it("M:M: create-then-delete round trips without asserting", async () => {
+        await setup(mockTask1Record, mockTask2Record);
+
+        // 1) Write declaring side with raw array — must populate target inverse
+        const createResult = throwIfError(
+          await process([
+            {
+              uid: mockTask1Uid,
+              [mockRelatedToFieldKey]: [mockTask2Uid],
+            },
+          ]),
+        );
+        await applyAndCommit(createResult);
+
+        expect(await getField(mockTask2Uid, mockRelatedToFieldKey)).toEqual([
+          mockTask1Uid,
+        ]);
+
+        // 2) Delete task1 — the cascade on task2's inverse side must succeed
+        const deleteResult = throwIfError(
+          await process([{ uid: mockTask1Uid, $delete: true }]),
+        );
+        await applyAndCommit(deleteResult);
+
+        expect(
+          await getField(mockTask2Uid, mockRelatedToFieldKey),
+        ).toBeUndefined();
       });
     });
   });

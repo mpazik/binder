@@ -415,13 +415,26 @@ export const applyChange = (
   assertFailed("Unknown change kind");
 };
 
+/**
+ * Compute a per-key patch by applying each change against its prior value.
+ * Every changeset key appears in the result, with `null` preserved for changes
+ * that cleared or emptied the field. Use this when you need a storage patch
+ * (e.g. to drive `json_patch`); use `applyChangeset` for the post-change
+ * entity state.
+ */
+export const applyChangesetAsPatch = (
+  fields: Fieldset,
+  changeset: FieldChangeset,
+): Fieldset =>
+  mapObjectValues(changeset, (change, key) =>
+    applyChange(fields[key], normalizeValueChange(change)),
+  );
+
 export const applyChangeset = (
   fields: Fieldset,
   changeset: FieldChangeset,
 ): Fieldset => {
-  const applied = mapObjectValues(changeset, (change, key) =>
-    applyChange(fields[key], normalizeValueChange(change)),
-  );
+  const applied = applyChangesetAsPatch(fields, changeset);
   return filterObjectValues({ ...fields, ...applied }, (value, key) => {
     if (key in applied) {
       if (value === null) {

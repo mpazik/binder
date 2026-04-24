@@ -12,6 +12,7 @@ import {
 } from "@binder/utils";
 import {
   applyChangeset as applyChangesetModel,
+  applyChangesetAsPatch,
   type EntitiesChangeset,
   emptyFieldset,
   type EntityNsRef,
@@ -74,8 +75,7 @@ export const applyChangeset = async <N extends NamespaceEditable>(
     );
     if (isErr(selectResult)) return selectResult;
 
-    const currentValues = selectResult.data;
-    const patch = applyChangesetModel(currentValues, changeset);
+    const patch = applyChangesetAsPatch(selectResult.data, changeset);
     return updateEntity(tx, namespace, entityRef, patch);
   }
 };

@@ -5,6 +5,7 @@ import {
   type ErrorObject,
   fail,
   includes,
+  isEqual,
   isErr,
   isTuple,
   objEntries,
@@ -42,6 +43,7 @@ import {
   fieldTypes,
   type FieldValue,
   getOptionDefsForFieldRef,
+  getRelationRef,
   getTypeFieldAttrs,
   getTypeFieldKey,
   incrementEntityId,
@@ -822,41 +824,185 @@ const extractMutations = (
   return null;
 };
 
+const toRelationArray = (value: FieldValue | undefined): FieldValue[] => {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value as FieldValue[];
+  return [value];
+};
+
+type RelationDeltas = { adds: FieldValue[]; removes: FieldValue[] };
+
+/**
+ * Normalize any relation-field change into per-item add/remove deltas.
+ * Handles explicit seq/mutation-array changes, `set`/`clear` changes, and raw
+ * array/value literals (the form `buildChangeset` emits for creates). For set
+ * changes on existing entities without an embedded previous value, fetches the
+ * stored value so we can diff against it.
+ */
+const deriveRelationDeltas = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
+  parentRef: EntityChangesetRef<N>,
+  fieldKey: FieldKey,
+  change: FieldChangeset[FieldKey],
+  newEntityRefs: Set<string>,
+): ResultAsync<RelationDeltas> => {
+  const explicit = extractMutations(change);
+  if (explicit) {
+    const adds: FieldValue[] = [];
+    const removes: FieldValue[] = [];
+    for (const mutation of explicit) {
+      if (isInsertMutation(mutation)) adds.push(mutation[1]);
+      else if (isRemoveMutation(mutation)) removes.push(mutation[1]);
+    }
+    return ok({ adds, removes });
+  }
+
+  const normalized = normalizeValueChange(change);
+  let newArray: FieldValue[] = [];
+  let oldArray: FieldValue[] = [];
+
+  if (isSetChange(normalized)) {
+    newArray = toRelationArray(normalized[1]);
+    if (normalized.length > 2) {
+      oldArray = toRelationArray(normalized[2]);
+    } else if (!newEntityRefs.has(String(parentRef))) {
+      const currentResult = await fetchOptionalFieldValue(
+        tx,
+        namespace,
+        parentRef,
+        fieldKey,
+        newEntityRefs,
+      );
+      if (isErr(currentResult)) return currentResult;
+      oldArray = toRelationArray(currentResult.data as FieldValue | undefined);
+    }
+  } else if (isClearChange(normalized)) {
+    oldArray = toRelationArray(normalized[1]);
+  }
+
+  const matches = (a: FieldValue, b: FieldValue): boolean => {
+    const aRef = getRelationRef(a);
+    const bRef = getRelationRef(b);
+    if (aRef !== undefined && bRef !== undefined) return aRef === bRef;
+    return isEqual(a, b);
+  };
+  const adds = newArray.filter((v) => !oldArray.some((o) => matches(o, v)));
+  const removes = oldArray.filter((v) => !newArray.some((n) => matches(n, v)));
+  return ok({ adds, removes });
+};
+
+/**
+ * Derive add/remove deltas for a 1:M change on the many side. Unlike the
+ * self-contained M:M case, the many side is virtual and its "previous"
+ * membership lives as back-refs on children's direct field — fetched here.
+ */
+const deriveOneToManyDeltas = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
+  parentRef: EntityChangesetRef<N>,
+  directFieldKey: FieldKey,
+  change: FieldChangeset[FieldKey],
+  newEntityRefs: Set<string>,
+): ResultAsync<RelationDeltas> => {
+  const explicit = extractMutations(change);
+  if (explicit) {
+    const adds: FieldValue[] = [];
+    const removes: FieldValue[] = [];
+    for (const mutation of explicit) {
+      if (isInsertMutation(mutation)) adds.push(mutation[1]);
+      else if (isRemoveMutation(mutation)) removes.push(mutation[1]);
+    }
+    return ok({ adds, removes });
+  }
+
+  const normalized = normalizeValueChange(change);
+  const newArray = isSetChange(normalized)
+    ? toRelationArray(normalized[1])
+    : [];
+
+  let currentChildren: string[] = [];
+  if (!newEntityRefs.has(String(parentRef))) {
+    const table = editableEntityTables[namespace];
+    const rowsResult = await tryCatch(
+      tx
+        .select({ uid: table.uid })
+        .from(table)
+        .where(
+          sql`json_extract(${table.fields}, ${"$." + directFieldKey}) = ${parentRef}`,
+        )
+        .then((rows) => rows),
+    );
+    if (isErr(rowsResult)) return rowsResult;
+    currentChildren = rowsResult.data.map((r) => r.uid as string);
+  }
+
+  const refOf = (v: FieldValue): string | undefined => {
+    const ref = getRelationRef(v);
+    if (ref !== undefined) return ref;
+    return typeof v === "string" ? v : undefined;
+  };
+  const newRefs = newArray
+    .map(refOf)
+    .filter((r): r is string => typeof r === "string");
+
+  const adds: FieldValue[] = newArray.filter((v) => {
+    const ref = refOf(v);
+    return ref !== undefined && !currentChildren.includes(ref);
+  });
+  const removes: FieldValue[] = currentChildren
+    .filter((uid) => !newRefs.includes(uid))
+    .map((uid) => uid as FieldValue);
+  return ok({ adds, removes });
+};
+
 const expandOneToManyInverse = async <N extends NamespaceEditable>(
   tx: DbTransaction,
   namespace: N,
   parentRef: EntityChangesetRef<N>,
   directFieldKey: FieldKey,
-  mutations: ListMutation[],
+  deltas: RelationDeltas,
   result: EntitiesChangeset<N>,
   newEntityRefs: Set<string>,
 ): ResultAsync<void> => {
-  for (const mutation of mutations) {
-    if (isInsertMutation(mutation)) {
-      const childRef = mutation[1] as EntityChangesetRef<N>;
-      const currentValueResult = await fetchOptionalFieldValue(
-        tx,
-        namespace,
-        childRef,
-        directFieldKey,
-        newEntityRefs,
-      );
-      if (isErr(currentValueResult)) return currentValueResult;
+  for (const added of deltas.adds) {
+    const childRef = (getRelationRef(added) ?? added) as EntityChangesetRef<N>;
+    const currentValueResult = await fetchOptionalFieldValue(
+      tx,
+      namespace,
+      childRef,
+      directFieldKey,
+      newEntityRefs,
+    );
+    if (isErr(currentValueResult)) return currentValueResult;
+    const current = currentValueResult.data;
+    // Idempotent: skip when child already points at this parent.
+    if (current != null && isEqual(current, parentRef)) continue;
 
-      const childChange: ValueChangeSet =
-        currentValueResult.data != null
-          ? ["set", parentRef, currentValueResult.data]
-          : ["set", parentRef];
+    const childChange: ValueChangeSet =
+      current != null ? ["set", parentRef, current] : ["set", parentRef];
+    mergeFieldInto(result, childRef, directFieldKey, childChange);
+  }
 
-      mergeFieldInto(result, childRef, directFieldKey, childChange);
-    } else if (isRemoveMutation(mutation)) {
-      const childRef = mutation[1] as EntityChangesetRef<N>;
-      mergeFieldInto(result, childRef, directFieldKey, [
-        "set",
-        null,
-        parentRef,
-      ]);
-    }
+  for (const removed of deltas.removes) {
+    const childRef = (getRelationRef(removed) ??
+      removed) as EntityChangesetRef<N>;
+    const currentValueResult = await fetchOptionalFieldValue(
+      tx,
+      namespace,
+      childRef,
+      directFieldKey,
+      newEntityRefs,
+      // For newly-created entities in the batch that reference this parent
+      // directly, treat their declared value as the current one.
+      parentRef,
+    );
+    if (isErr(currentValueResult)) return currentValueResult;
+    const current = currentValueResult.data;
+    // Tolerance: if the child's declaring side isn't pointing at this parent,
+    // there's nothing to clear. Skip to avoid an assertion at apply time.
+    if (current == null || !isEqual(current, parentRef)) continue;
+    mergeFieldInto(result, childRef, directFieldKey, ["set", null, parentRef]);
   }
   return okVoid;
 };
@@ -945,17 +1091,39 @@ const expandOneToOneInverse = async <N extends NamespaceEditable>(
   return okVoid;
 };
 
-const expandManyToManyInverse = <N extends NamespaceEditable>(
+const expandManyToManyInverse = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
   parentRef: EntityChangesetRef<N>,
   inverseFieldKey: FieldKey,
-  mutations: ListMutation[],
+  deltas: RelationDeltas,
   result: EntitiesChangeset<N>,
-): void => {
-  for (const mutation of mutations) {
-    if (!isInsertMutation(mutation) && !isRemoveMutation(mutation)) continue;
+  newEntityRefs: Set<string>,
+): ResultAsync<void> => {
+  const emit = async (
+    item: FieldValue,
+    kind: "insert" | "remove",
+  ): ResultAsync<void> => {
+    const targetRef = (getRelationRef(item) ?? item) as EntityChangesetRef<N>;
+    const currentValueResult = await fetchOptionalFieldValue(
+      tx,
+      namespace,
+      targetRef,
+      inverseFieldKey,
+      newEntityRefs,
+    );
+    if (isErr(currentValueResult)) return currentValueResult;
+    const current = toRelationArray(
+      currentValueResult.data as FieldValue | undefined,
+    );
+    const contains = current.some(
+      (v) => (getRelationRef(v) ?? v) === parentRef,
+    );
+    // Idempotent + tolerant: skip no-op cascades so pre-existing broken state
+    // doesn't trip assertions, and double-writes don't duplicate.
+    if (kind === "insert" && contains) return okVoid;
+    if (kind === "remove" && !contains) return okVoid;
 
-    const kind = mutation[0];
-    const targetRef = mutation[1] as EntityChangesetRef<N>;
     const existingSeq = (result[targetRef] ?? {})[inverseFieldKey];
     const existingMutations = existingSeq
       ? (extractMutations(existingSeq) ?? [])
@@ -964,7 +1132,18 @@ const expandManyToManyInverse = <N extends NamespaceEditable>(
       "seq",
       [...existingMutations, [kind, parentRef]],
     ]);
+    return okVoid;
+  };
+
+  for (const added of deltas.adds) {
+    const r = await emit(added, "insert");
+    if (isErr(r)) return r;
   }
+  for (const removed of deltas.removes) {
+    const r = await emit(removed, "remove");
+    if (isErr(r)) return r;
+  }
+  return okVoid;
 };
 
 const expandInverseRelations = async <N extends NamespaceEditable>(
@@ -998,18 +1177,23 @@ const expandInverseRelations = async <N extends NamespaceEditable>(
       const targetIsMultiple = !!inverseFieldDef?.allowMultiple;
 
       if (sourceIsMultiple && !targetIsMultiple) {
-        // 1:M — strip declaring side, emit set on target (existing behavior)
-        const mutations = extractMutations(change);
-        if (!mutations) {
-          filteredChangeset[fieldKey] = change;
-          continue;
-        }
+        // 1:M — strip declaring side (it is virtual; the single side on each
+        // child holds the truth). Emit per-child direct-field updates.
+        const deltasResult = await deriveOneToManyDeltas(
+          tx,
+          namespace,
+          parentRef,
+          inverseFieldKey,
+          change,
+          newEntityRefs,
+        );
+        if (isErr(deltasResult)) return deltasResult;
         const expandResult = await expandOneToManyInverse(
           tx,
           namespace,
           parentRef,
           inverseFieldKey,
-          mutations,
+          deltasResult.data,
           result,
           newEntityRefs,
         );
@@ -1029,11 +1213,27 @@ const expandInverseRelations = async <N extends NamespaceEditable>(
         );
         if (isErr(expandResult)) return expandResult;
       } else if (sourceIsMultiple && targetIsMultiple) {
-        // M:M — keep declaring side, emit seq mutations on target
+        // M:M — keep declaring side, emit per-target insert/remove on inverse.
         filteredChangeset[fieldKey] = change;
-        const mutations = extractMutations(change);
-        if (!mutations) continue;
-        expandManyToManyInverse(parentRef, inverseFieldKey, mutations, result);
+        const deltasResult = await deriveRelationDeltas(
+          tx,
+          namespace,
+          parentRef,
+          fieldKey,
+          change,
+          newEntityRefs,
+        );
+        if (isErr(deltasResult)) return deltasResult;
+        const expandResult = await expandManyToManyInverse(
+          tx,
+          namespace,
+          parentRef,
+          inverseFieldKey,
+          deltasResult.data,
+          result,
+          newEntityRefs,
+        );
+        if (isErr(expandResult)) return expandResult;
       } else {
         // single→multiple: should not happen (validation blocks it), keep as-is
         filteredChangeset[fieldKey] = change;
@@ -1054,7 +1254,12 @@ const expandInverseRelations = async <N extends NamespaceEditable>(
 /**
  * For each deleted entity, scan for other entities that reference its UID
  * in their fields JSON and add cleanup changesets (clear or remove mutations).
- * Skips relation fields with inverseOf since expandInverseRelations handles those.
+ *
+ * For relation fields with `inverseOf`, cleanup is emitted only when
+ * `expandInverseRelations` will not already cover the target — i.e. when the
+ * deleted entity's own counterpart field doesn't carry a matching remove.
+ * This keeps the healthy case single-emission while still cleaning up dangling
+ * refs left behind by broken state.
  */
 const expandDeleteCleanup = async <N extends NamespaceEditable>(
   tx: DbTransaction,
@@ -1064,16 +1269,48 @@ const expandDeleteCleanup = async <N extends NamespaceEditable>(
 ): ResultAsync<void> => {
   const table = editableEntityTables[namespace];
 
-  // Collect UIDs of all entities being deleted
+  // Collect UIDs of entities being deleted and, for each, the refs the
+  // expansion will already remove for every inverseOf field.
   const deletedUids: string[] = [];
+  const handledByExpansion = new Map<string, Map<FieldKey, Set<string>>>();
   for (const [, cs] of objEntries(changesets)) {
     if (!cs || !("uid" in cs)) continue;
     const uidChange = normalizeValueChange(cs.uid);
-    if (isClearChange(uidChange)) deletedUids.push(uidChange[1] as string);
+    if (!isClearChange(uidChange)) continue;
+    const deletedUid = uidChange[1] as string;
+    deletedUids.push(deletedUid);
+
+    const perField = new Map<FieldKey, Set<string>>();
+    handledByExpansion.set(deletedUid, perField);
+    for (const [fieldKey, change] of objEntries(cs)) {
+      const fieldDef = schema.fields[fieldKey];
+      if (!fieldDef?.inverseOf) continue;
+      const counterpart = fieldDef.inverseOf as FieldKey;
+      const mutations = extractMutations(change);
+      const refs = new Set<string>();
+      if (mutations) {
+        for (const m of mutations) {
+          if (!isRemoveMutation(m)) continue;
+          const ref = getRelationRef(m[1]) ?? (m[1] as string);
+          if (typeof ref === "string") refs.add(ref);
+        }
+      } else {
+        const normalized = normalizeValueChange(change);
+        const values = isClearChange(normalized)
+          ? toRelationArray(normalized[1])
+          : [];
+        for (const v of values) {
+          const ref = getRelationRef(v) ?? (v as string);
+          if (typeof ref === "string") refs.add(ref);
+        }
+      }
+      perField.set(counterpart, refs);
+    }
   }
   if (deletedUids.length === 0) return okVoid;
 
   for (const deletedUid of deletedUids) {
+    const handled = handledByExpansion.get(deletedUid);
     // Find entities whose fields JSON contains the deleted UID
     const rows = await tx
       .select({ uid: table.uid, fields: table.fields })
@@ -1092,8 +1329,13 @@ const expandDeleteCleanup = async <N extends NamespaceEditable>(
       for (const [fieldKey, value] of objEntries(fields)) {
         const fieldDef = schema.fields[fieldKey as FieldKey];
         if (!fieldDef || fieldDef.dataType !== "relation") continue;
-        // Skip fields with inverseOf — expandInverseRelations handles those
-        if (fieldDef.inverseOf) continue;
+
+        // For inverseOf fields, only emit cleanup when the deleted entity's
+        // counterpart field won't drive the same removal through expansion.
+        if (fieldDef.inverseOf) {
+          const counterpartHandled = handled?.get(fieldKey as FieldKey);
+          if (counterpartHandled?.has(row.uid as string)) continue;
+        }
 
         const matchingItems = Array.isArray(value)
           ? (value as FieldValue[]).filter(
