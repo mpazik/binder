@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/style.css" />
+    <title>Binder</title>
+  </head>
+  <body>
+    <nav id="sidebar">
+      <div id="sidebar-header">
+        <img src="/logo.png" alt="Binder" />
+        <span>Binder</span>
+      </div>
+      <div id="type-list"><div class="loading">Loading…</div></div>
+    </nav>
+
+    <div id="main">
+      <div id="list-pane">
+        <div id="search-wrap">
+          <input id="search" type="search" placeholder="Search records…" />
+        </div>
+        <div id="filter-wrap"></div>
+        <div id="record-list"><div class="loading">Select a type</div></div>
+      </div>
+      <div id="detail-pane">
+        <div id="detail-empty">Select a record</div>
+        <div id="detail-content" style="display: none"></div>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

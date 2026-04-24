@@ -22,7 +22,6 @@ import {
   type ReadonlyRepo,
 } from "@binder/repo/local";
 import { cliMigrationRunner, cliSchema, type DatabaseCli } from "./db";
-import { documentProviderSchema } from "./document/document-schema.ts";
 import { cliConfigSchema } from "./cli-config-schema.ts";
 import {
   type AppConfig,
@@ -291,7 +290,6 @@ export const initializeDbRuntime = async (
     dbSchema: cliSchema,
     migrate: { run: cliMigrationRunner },
     kgConfigSchema: cliConfigSchema,
-    providerSchema: documentProviderSchema,
     plugins: [journalPlugin()],
     callbacks: buildOrchestratorCallbacks(
       orchestratorCtx,
@@ -541,7 +539,6 @@ export const initializeReadonlyRepoRuntime = async (
     config,
     dbSchema: cliSchema,
     kgConfigSchema: cliConfigSchema,
-    providerSchema: documentProviderSchema,
   });
   if (isErr(repoResult)) {
     log.error("Failed to open repo read-only", { error: repoResult.error });

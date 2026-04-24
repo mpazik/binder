@@ -15,6 +15,7 @@ import { DevCommand } from "./commands/dev.ts";
 import { UndoCommand } from "./commands/undo.ts";
 import { RedoCommand } from "./commands/redo.ts";
 import { McpCommand } from "./commands/mcp.ts";
+import { HttpCommand } from "./commands/http.ts";
 import { LspCommand } from "./commands/lsp.ts";
 import { LocateCommand } from "./commands/locate.ts";
 import { createUi, logo } from "./cli/ui.ts";
@@ -68,6 +69,7 @@ let cli = yargs(hideBin(process.argv))
   .command(UndoCommand)
   .command(RedoCommand)
   .command(McpCommand)
+  .command(HttpCommand)
   .command(LspCommand)
   .command(LocateCommand);
 

@@ -90,3 +90,11 @@ mkdirSync(blueprintsTarget, { recursive: true });
 cpSync(blueprintsSource, blueprintsTarget, { recursive: true });
 
 console.log(`✓ Copied blueprints to dist/blueprints`);
+
+const publicSource = join(import.meta.dir, "src/http/public");
+const publicTarget = join(import.meta.dir, "dist/public");
+
+mkdirSync(publicTarget, { recursive: true });
+cpSync(publicSource, publicTarget, { recursive: true });
+
+console.log(`✓ Copied public dir to dist/public`);

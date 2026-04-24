@@ -101,6 +101,15 @@ export default ts.config(
     },
   },
   {
+    // Plain .js files are non-application assets (browser scripts, configs).
+    // Application code is TypeScript-only.
+    files: ["**/*.js"],
+    rules: {
+      "no-restricted-syntax": "off",
+      "no-console": "off",
+    },
+  },
+  {
     ignores: [
       "**/integration/",
       "**/out/",
