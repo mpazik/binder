@@ -355,6 +355,8 @@ type CommandOptions = {
   telemetryInterface?: TelemetryInterface;
 };
 
+type ErrorWithLogger = ErrorObject & { logger?: Logger };
+
 export const bootstrapMinimal = <TArgs extends object = object>(
   handler: CommandHandlerMinimal<TArgs>,
   options?: CommandOptions,
@@ -400,7 +402,7 @@ export const bootstrapMinimal = <TArgs extends object = object>(
     if (isErr(result) || isErr(result.data)) {
       const error = normalizeError(
         isErr(result) ? result.error : result.data.error,
-      );
+      ) as ErrorWithLogger;
 
       // skip telemetry on dry run to avoid miscounting
       if (!isDryRun(argsRecord) && !SILENT_ERROR_KEYS.has(error.key)) {
@@ -414,7 +416,7 @@ export const bootstrapMinimal = <TArgs extends object = object>(
       }
 
       close();
-      return fatalError(error, minimalRuntime.log, opts.silent);
+      return fatalError(error, error.logger ?? minimalRuntime.log, opts.silent);
     }
 
     const { output, telemetry: handlerExtras } = unpackCommandResult(
@@ -485,7 +487,10 @@ export const runtime = <TArgs extends object = object>(
       if (isErr(result) || isErr(result.data)) {
         const error = normalizeError(
           isErr(result) ? result.error : result.data.error,
-        );
+        ) as ErrorWithLogger;
+        // We are passing the workspace logger downstream,
+        // so the final error message will be logged in the workspace log.
+        error.logger = context.log;
         close();
         return err(error);
       }
