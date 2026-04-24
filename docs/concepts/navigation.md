@@ -46,6 +46,8 @@ The system infers the output format from the navigation item:
 
 Path patterns use `{fieldName}` interpolation. When rendering, the system resolves each entity's field values into the path, sanitising for filesystem safety.
 
+Placeholder values are constrained to a single path segment — they cannot contain `/`. This ensures that when matching a file path back to a navigation rule, a less-specific pattern like `tasks/{priority} {key}` does not greedily consume paths meant for a more specific sibling like `tasks/backlog/{priority} {key}`.
+
 If any referenced path field resolves to `null` or `undefined` (including parent/ancestral placeholders), that entity is skipped for that navigation item and a warning is logged. This prevents invalid outputs such as empty filename segments.
 
 ```yaml

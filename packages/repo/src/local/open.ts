@@ -212,7 +212,6 @@ export const open = async <
   return ok(repo);
 };
 
-
 /**
  * Read-only view of a repo: mutation methods and plugin/subscription surface
  * removed. Returned by {@link openReadonly}.

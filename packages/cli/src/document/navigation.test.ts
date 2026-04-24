@@ -106,6 +106,23 @@ describe("navigation", () => {
       );
     });
 
+    it("prefers a more specific rule over a less specific sibling", () => {
+      const outer: NavigationItem = {
+        path: "tasks/{priority} {key}",
+        view: DOCUMENT_VIEW_KEY,
+      };
+      const inner: NavigationItem = {
+        path: "tasks/backlog/{priority} {key}",
+        view: DOCUMENT_VIEW_KEY,
+      };
+      // Outer rule's `{priority}` must not greedily consume `backlog/p2`.
+      // The inner rule is the correct match regardless of declaration order.
+      check([outer, inner], "tasks/backlog/p2 new-task.md", inner);
+      check([inner, outer], "tasks/backlog/p2 new-task.md", inner);
+      // Outer still matches its own paths.
+      check([outer, inner], "tasks/p2 new-task.md", outer);
+    });
+
     it("matches nested child item", () => {
       const childItem: NavigationItem = {
         path: "info",

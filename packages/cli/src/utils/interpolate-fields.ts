@@ -13,6 +13,8 @@ import {
   serializeFieldValue,
 } from "@binder/repo";
 
+const PLACEHOLDER_RE = /^[\w.-]+$/;
+
 export type StringifyProvider = (placeholder: string) => Result<string>;
 
 export const interpolatePlain = (
@@ -47,7 +49,7 @@ export const interpolatePlain = (
 
       const placeholder = template.slice(i + 1, closeIndex);
 
-      if (!/^[\w.-]+$/.test(placeholder)) {
+      if (!PLACEHOLDER_RE.test(placeholder)) {
         result += char;
         i++;
         continue;
@@ -165,13 +167,10 @@ export const extractFieldNames = (template: string): string[] => {
 
     if (char === "{") {
       const closeIndex = template.indexOf("}", i + 1);
-      if (closeIndex === -1) {
-        break;
-      }
+      if (closeIndex === -1) break;
 
       const fieldName = template.slice(i + 1, closeIndex);
-
-      if (/^[\w.-]+$/.test(fieldName)) {
+      if (PLACEHOLDER_RE.test(fieldName)) {
         fieldNames.push(fieldName);
       }
 
@@ -184,6 +183,15 @@ export const extractFieldNames = (template: string): string[] => {
 
   return fieldNames;
 };
+
+const mismatchError = (
+  template: string,
+  data: string,
+  extra: Record<string, unknown>,
+): Result<never> =>
+  fail("path_template_mismatch", "Path does not match the template", {
+    data: { template, path: data, ...extra },
+  });
 
 export const extractFieldValues = (
   template: string,
@@ -199,28 +207,14 @@ export const extractFieldValues = (
     if (char === "\\") {
       const nextChar = template[templateIndex + 1];
       if (nextChar === "{" || nextChar === "}") {
-        if (data[dataIndex] !== nextChar) {
-          return fail(
-            "path_template_mismatch",
-            "Path does not match the template",
-            {
-              data: { template, path: data, position: dataIndex },
-            },
-          );
-        }
+        if (data[dataIndex] !== nextChar)
+          return mismatchError(template, data, { position: dataIndex });
         templateIndex += 2;
         dataIndex++;
         continue;
       }
-      if (data[dataIndex] !== char) {
-        return fail(
-          "path_template_mismatch",
-          "Path does not match the template",
-          {
-            data: { template, path: data, position: dataIndex },
-          },
-        );
-      }
+      if (data[dataIndex] !== char)
+        return mismatchError(template, data, { position: dataIndex });
       templateIndex++;
       dataIndex++;
       continue;
@@ -236,14 +230,9 @@ export const extractFieldValues = (
 
       const fieldName = template.slice(templateIndex + 1, closeIndex);
 
-      if (!/^[\w.-]+$/.test(fieldName)) {
-        if (data[dataIndex] !== char) {
-          return fail(
-            "path_template_mismatch",
-            "Path does not match the template",
-            { data: { template, path: data, position: dataIndex } },
-          );
-        }
+      if (!PLACEHOLDER_RE.test(fieldName)) {
+        if (data[dataIndex] !== char)
+          return mismatchError(template, data, { position: dataIndex });
         templateIndex++;
         dataIndex++;
         continue;
@@ -256,17 +245,23 @@ export const extractFieldValues = (
       let value: string;
       if (nextLiteral) {
         const literalIndex = data.indexOf(nextLiteral, dataIndex);
-        if (literalIndex === -1) {
-          return fail(
-            "path_template_mismatch",
-            "Path does not match the template",
-            { data: { template, path: data, position: dataIndex } },
-          );
-        }
+        if (literalIndex === -1)
+          return mismatchError(template, data, { position: dataIndex });
+        // Placeholder values must not cross path segments. Filenames
+        // written by `sanitizeFilename` never contain '/', so a legit
+        // extracted value never contains one either. Without this
+        // guard, a less-specific template like `tasks/{priority} {key}`
+        // greedily matches paths under `tasks/backlog/...` and
+        // shadows more specific rules.
+        const slashIndex = data.indexOf("/", dataIndex);
+        if (slashIndex !== -1 && slashIndex < literalIndex)
+          return mismatchError(template, data, { position: dataIndex });
         value = data.slice(dataIndex, literalIndex);
         dataIndex = literalIndex;
       } else {
         value = data.slice(dataIndex);
+        if (value.includes("/"))
+          return mismatchError(template, data, { position: dataIndex });
         dataIndex = data.length;
       }
 
@@ -275,25 +270,17 @@ export const extractFieldValues = (
       continue;
     }
 
-    if (data[dataIndex] !== char) {
-      return fail(
-        "path_template_mismatch",
-        "Path does not match the template",
-        {
-          data: { template, path: data, position: dataIndex },
-        },
-      );
-    }
+    if (data[dataIndex] !== char)
+      return mismatchError(template, data, { position: dataIndex });
 
     templateIndex++;
     dataIndex++;
   }
 
-  if (dataIndex !== data.length) {
-    return fail("path_template_mismatch", "Path does not match the template", {
-      data: { template, path: data, extraData: data.slice(dataIndex) },
+  if (dataIndex !== data.length)
+    return mismatchError(template, data, {
+      extraData: data.slice(dataIndex),
     });
-  }
 
   return ok(fieldset);
 };

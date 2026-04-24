@@ -289,19 +289,11 @@ describe("interpolate-fields", () => {
       );
     });
 
-    it("returns error when path does not match", () => {
-      checkError(
-        "tasks/{title}.md",
-        "projects/binder/tasks/feature-123.md",
-        "path_template_mismatch",
-      );
-    });
-
     it("handles empty value", () => {
       check("/{key}/something", "//something", { key: "" });
     });
 
-    it("handles escaping like \\{key\\}/{key}", () => {
+    it("handles escaped braces", () => {
       check("\\{literal\\}/{key}", "{literal}/value", { key: "value" });
     });
 
@@ -311,11 +303,19 @@ describe("interpolate-fields", () => {
       });
     });
 
-    it("handles unclosed bracket in template", () => {
+    it("returns error when path does not match", () => {
+      checkError(
+        "tasks/{title}.md",
+        "projects/binder/tasks/feature-123.md",
+        "path_template_mismatch",
+      );
+    });
+
+    it("returns error for unclosed bracket in template", () => {
       checkError("{name", "value", "unclosed-bracket");
     });
 
-    it("handles extra data at end", () => {
+    it("returns error for extra data at end", () => {
       checkError(
         "tasks/{title}.md",
         "tasks/my-task.md/extra",
@@ -323,8 +323,24 @@ describe("interpolate-fields", () => {
       );
     });
 
-    it("handles missing data at end", () => {
+    it("returns error for missing data at end", () => {
       checkError("tasks/{title}.md", "tasks/my-task", "path_template_mismatch");
+    });
+
+    it("rejects placeholder value that crosses a '/' before next literal", () => {
+      checkError(
+        "tasks/{priority} {key}.md",
+        "tasks/backlog/p2 new-task.md",
+        "path_template_mismatch",
+      );
+    });
+
+    it("rejects trailing placeholder value that contains '/'", () => {
+      checkError(
+        "tasks/{name}",
+        "tasks/backlog/foo.md",
+        "path_template_mismatch",
+      );
     });
 
     it("round-trips with resolvePath", () => {
