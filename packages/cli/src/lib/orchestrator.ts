@@ -181,6 +181,75 @@ export const repairDbFromLog = async (
   });
 };
 
+export const repairLogFromDb = async (
+  ctx: OrchestratorCtx,
+  options?: { force?: boolean },
+): ResultAsync<{ logBackupPath?: string }> => {
+  const {
+    fs,
+    db,
+    config: { paths },
+  } = ctx;
+  const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
+
+  const kg = openKnowledgeGraph(db, { configSchema: cliConfigSchema });
+  const verifyResult = await verifySync({ fs, kg }, paths.data);
+  if (isErr(verifyResult)) return verifyResult;
+
+  const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
+
+  if (dbOnlyTransactions.length === 0 && logOnlyTransactions.length === 0)
+    return ok({ logBackupPath: undefined });
+
+  if (logOnlyTransactions.length > 0 && !options?.force) {
+    return fail(
+      "log-ahead",
+      `Log has ${logOnlyTransactions.length} transaction(s) not in database. Use --from-log to treat log as authoritative, or --force to overwrite log from DB.`,
+    );
+  }
+
+  let logBackupPath: string | undefined;
+
+  if (await fs.exists(transactionLogPath)) {
+    const timestamp = getTimestampForFileName();
+    const backupFileName = `journal-${timestamp}.jsonl.bac`;
+    logBackupPath = join(paths.backups, backupFileName);
+
+    const readResult = await fs.readFile(transactionLogPath);
+    if (isErr(readResult)) return readResult;
+    const writeResult = await fs.writeFile(logBackupPath, readResult.data);
+    if (isErr(writeResult)) return writeResult;
+  }
+
+  if (options?.force && logOnlyTransactions.length > 0) {
+    const clearResult = await clearLog(fs, transactionLogPath);
+    if (isErr(clearResult)) return clearResult;
+
+    const versionResult = await kg.version();
+    if (isErr(versionResult)) return versionResult;
+
+    for (let i = 1; i <= versionResult.data.id; i++) {
+      const txResult = await kg.fetchTransaction(i as TransactionId);
+      if (isErr(txResult)) return txResult;
+      const logResult = await logTransaction(
+        fs,
+        transactionLogPath,
+        txResult.data,
+      );
+      if (isErr(logResult)) return logResult;
+    }
+
+    return ok({ logBackupPath });
+  }
+
+  for (const transaction of dbOnlyTransactions) {
+    const logResult = await logTransaction(fs, transactionLogPath, transaction);
+    if (isErr(logResult)) return logResult;
+  }
+
+  return ok({ logBackupPath });
+};
+
 export const applyTransactions = async (
   kg: KnowledgeGraph,
   transactions: Transaction[],
@@ -245,7 +314,7 @@ export const undoTransactions = async (
       if (dbTx.hash !== logTx.hash)
         return fail(
           "log-db-mismatch",
-          `Transaction log and database are out of sync — run \`binder tx repair\` to fix`,
+          `Transaction log and database are out of sync — run \`binder journal repair\` to fix`,
           { data: { dbHash: dbTx.hash, logHash: logTx.hash, step: i + 1 } },
         );
     }
@@ -325,10 +394,7 @@ export type OrchestratorCallbacks = KnowledgeGraphCallbacks & {
   onFilesUpdated?: (paths: string[]) => void;
 };
 
-/**
- * Returns a factory `(kg) => KnowledgeGraphCallbacks` so the render callback
- * can close over the final knowledge graph. Transitional — will become plugins.
- */
+// Transitional — will become plugins.
 export const buildOrchestratorCallbacks =
   (
     ctx: OrchestratorCtx,
@@ -374,24 +440,11 @@ export const buildOrchestratorCallbacks =
           return okVoid;
         });
       },
-      beforeCommit: async (transaction: Transaction) => {
-        const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
-        const logResult = await logTransaction(
-          fs,
-          transactionLogPath,
-          transaction,
-        );
-        if (isErr(logResult)) return logResult;
-        const undoLogPath = join(paths.data, UNDO_LOG_FILE);
-        const clearResult = await clearLog(fs, undoLogPath);
-        if (isErr(clearResult)) return clearResult;
-        return okVoid;
-      },
+
       afterCommit: async (transaction) => {
         await releaseLock(fs, paths.data);
         log.debug("Lock released after commit");
 
-        // Invalidate caches before rendering (e.g., view cache)
         await callbacks.afterCommit?.(transaction);
         await renderAndNotify("transaction");
       },
@@ -432,16 +485,6 @@ export const squashTransactions = async (
       );
 
     const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
-    const logResult = await readLastTransactions(fs, transactionLogPath, count);
-    if (isErr(logResult)) return logResult;
-
-    const logEntries = logResult.data;
-
-    if (logEntries.length !== count)
-      return fail(
-        "log-inconsistency",
-        `Log contains ${logEntries.length} transactions but expected ${count}`,
-      );
 
     const dbTransactions: Transaction[] = [];
     for (let i = 0; i < count; i++) {
@@ -449,14 +492,6 @@ export const squashTransactions = async (
       const txResult = await kg.fetchTransaction(txId);
       if (isErr(txResult)) return txResult;
       dbTransactions.push(txResult.data);
-    }
-
-    for (let i = 0; i < count; i++) {
-      if (logEntries[i]!.hash !== dbTransactions[i]!.hash)
-        return fail(
-          "log-db-mismatch",
-          `Transaction #${dbTransactions[i]!.id} hash mismatch between log and database`,
-        );
     }
 
     const recordSchemaResult = await kg.getRecordSchema();

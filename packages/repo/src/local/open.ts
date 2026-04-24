@@ -2,6 +2,7 @@ import { access, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as YAML from "yaml";
 import {
+  assertDefined,
   createError,
   fail,
   isErr,
@@ -19,6 +20,7 @@ import {
   openKnowledgeGraph,
 } from "../knowledge-graph.ts";
 import type * as coreSchema from "../schema.ts";
+import type { BinderRepoPlugin } from "./plugin.ts";
 import { BINDER_DIR, CONFIG_FILE, DB_FILE } from "./constants.ts";
 import {
   type CoreConfig,
@@ -28,6 +30,7 @@ import {
   type WorkspaceConfig,
 } from "./config.ts";
 import { resolveWorkspacePaths } from "./paths.ts";
+import { hooksToPlugin, loadPluginsFromConfig } from "./plugin-loader.ts";
 
 type DbSchema = Record<string, unknown>;
 
@@ -40,42 +43,17 @@ export type OpenOptions<
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
   CS extends z.ZodTypeAny = typeof CoreConfigSchema,
 > = {
-  /** Override for `.binder` directory name. Default `BINDER_DIR`. */
+  plugins?: BinderRepoPlugin[];
   binderDir?: string;
-  /** Pre-loaded workspace config. If omitted, `open()` loads it. */
   config?: WorkspaceConfig<CS>;
-  /** Last-resort author for config loading. */
   defaultAuthor?: string;
-
-  /** Optional Drizzle DB schema extension. */
   dbSchema?: TSchema;
-  /** Migration behavior. `true` runs core migrations. Object enables custom runner. */
   migrate?: boolean | OpenDbMigrationOptions<TSchema>;
-
-  /**
-   * Schema for the workspace `config.yaml` file. Must extend
-   * `CoreConfigSchema`. Defaults to `CoreConfigSchema`.
-   */
   configSchema?: CS;
-
-  /** Optional record-provider schema for knowledge graph. */
   providerSchema?: RecordSchema;
-  /** Optional schema for KG config entities (Types, Fields, Views, ...). */
   kgConfigSchema?: C;
-
-  /**
-   * Knowledge-graph callbacks. Either a plain callbacks object, or a factory
-   * that receives the constructed `KnowledgeGraph` and returns callbacks —
-   * useful when callbacks need to close over the graph itself.
-   *
-   * Transitional API. Will be superseded by the plugin system.
-   */
+  // Transitional — will be superseded by the plugin system.
   callbacks?: KnowledgeGraphCallbacks | OpenCallbacksFactory<C>;
-
-  /**
-   * Options forwarded to `loadWorkspaceConfig` when `config` is omitted.
-   * Rarely needed — the defaults match typical usage.
-   */
   configLoadOptions?: LoadWorkspaceConfigOptions<CS>;
 };
 
@@ -86,7 +64,8 @@ export type Repo<
 > = KnowledgeGraph<C> & {
   readonly config: WorkspaceConfig<CS>;
   readonly db: DrizzleDb<TSchema>;
-  close: () => void;
+  readonly plugins: BinderRepoPlugin[];
+  close: () => Promise<void>;
 };
 
 const exists = async (path: string): Promise<boolean> =>
@@ -106,13 +85,10 @@ const resolveCallbacks = <C extends EntitySchema<ConfigDataType>>(
   const factory = input as OpenCallbacksFactory<C>;
   const getCallbacks = (): KnowledgeGraphCallbacks => {
     if (cached) return cached;
-    if (!kgRef.kg) {
-      // invariant: set synchronously after openKnowledgeGraph returns
-      // eslint-disable-next-line no-restricted-syntax
-      throw new Error(
-        "callback factory invoked before knowledge graph construction completed",
-      );
-    }
+    assertDefined(
+      kgRef.kg,
+      "knowledge graph (must be set before callbacks fire)",
+    );
     cached = factory(kgRef.kg);
     return cached;
   };
@@ -139,12 +115,7 @@ const resolveCallbacks = <C extends EntitySchema<ConfigDataType>>(
   };
 };
 
-/**
- * Open an initialized Binder workspace as a library.
- *
- * Fails with `workspace-not-found` if `<workspaceRoot>/<binderDir>/config.yaml`
- * does not exist. Use {@link init} to create a new workspace.
- */
+// Fails with `workspace-not-found` if config.yaml does not exist.
 export const open = async <
   TSchema extends DbSchema = typeof coreSchema,
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
@@ -189,33 +160,58 @@ export const open = async <
   const db = dbResult.data;
 
   const kgRef: { kg: KnowledgeGraph<C> | null } = { kg: null };
-  const callbacks = resolveCallbacks<C>(options?.callbacks, kgRef);
+  const userCallbacks = resolveCallbacks<C>(options?.callbacks, kgRef);
 
   const kg = openKnowledgeGraph<C>(
     db as unknown as DrizzleDb<typeof coreSchema>,
     {
       providerSchema: options?.providerSchema,
       configSchema: options?.kgConfigSchema,
-      callbacks,
+      callbacks: userCallbacks,
     },
   );
   kgRef.kg = kg;
 
+  const loadedPlugins: BinderRepoPlugin[] = [];
+
   const repo: Repo<TSchema, C, CS> = Object.assign(kg, {
     config,
     db,
-    close: () => {
+    plugins: loadedPlugins,
+    close: async () => {
+      // Dispose in reverse registration order.
+      for (let i = loadedPlugins.length - 1; i >= 0; i--) {
+        await tryCatch(async () => {
+          await loadedPlugins[i]!.dispose?.();
+        });
+        // TODO: log disposal errors.
+      }
       tryCatch(() => db.$client.close());
     },
   });
 
+  const configAny = config as unknown as { plugins?: any[]; hooks?: any[] };
+  const fromConfig = await loadPluginsFromConfig(configAny.plugins);
+  const programmatic = (options?.plugins ?? []).map((p) => ({
+    plugin: p,
+    pluginConfig: undefined,
+  }));
+  const hookPlugin = configAny.hooks?.length
+    ? [{ plugin: hooksToPlugin(configAny.hooks), pluginConfig: undefined }]
+    : [];
+
+  for (const { plugin, pluginConfig } of [
+    ...programmatic,
+    ...fromConfig,
+    ...hookPlugin,
+  ]) {
+    loadedPlugins.push(plugin);
+    await plugin.register?.({ repo, pluginConfig });
+  }
+
   return ok(repo);
 };
 
-/**
- * Read-only view of a repo: mutation methods and plugin/subscription surface
- * removed. Returned by {@link openReadonly}.
- */
 export type ReadonlyRepo<
   TSchema extends DbSchema = typeof coreSchema,
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
@@ -242,16 +238,7 @@ export type OpenReadonlyOptions<
   | "configLoadOptions"
 >;
 
-/**
- * Open an initialized Binder workspace read-only.
- *
- * Skips plugin loading, skips migrations, opens SQLite in readonly mode.
- * Use this for cheap reads (CLI queries, LSP read handlers, analysis
- * scripts) that never mutate state.
- *
- * Fails with `workspace-not-found` if the workspace does not exist.
- * Fails on write attempts at the SQLite driver level.
- */
+// No plugins, no migrations, readonly SQLite. Fails on write attempts.
 export const openReadonly = async <
   TSchema extends DbSchema = typeof coreSchema,
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
@@ -296,7 +283,6 @@ export const openReadonly = async <
   if (isErr(dbResult)) return dbResult;
   const db = dbResult.data;
 
-  // No callbacks, no plugins, no subscriptions. Purely read.
   const kg = openKnowledgeGraph<C>(
     db as unknown as DrizzleDb<typeof coreSchema>,
     {
@@ -321,19 +307,10 @@ export type InitOptions<
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
   CS extends z.ZodTypeAny = typeof CoreConfigSchema,
 > = OpenOptions<TSchema, C, CS> & {
-  /** Fields written to `config.yaml` on creation. */
   initialConfig?: Partial<CoreConfig> & Record<string, unknown>;
-  /** Allow initializing on top of an existing `.binder/`. Default false. */
   overwrite?: boolean;
 };
 
-/**
- * Initialize a new Binder workspace and open it.
- *
- * Creates `<workspaceRoot>/<binderDir>/config.yaml` and `data/` directory.
- * Fails with `workspace-exists` if `<binderDir>` already exists and
- * `overwrite !== true`.
- */
 export const init = async <
   TSchema extends DbSchema = typeof coreSchema,
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,

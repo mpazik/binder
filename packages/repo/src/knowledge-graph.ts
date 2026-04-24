@@ -37,7 +37,7 @@ import {
   validateAppConfigSchema,
 } from "./model";
 import type { Database, DbTransaction } from "./db.ts";
-import { configTable, recordTable } from "./schema.ts";
+import { configTable, recordTable, transactionTable } from "./schema.ts";
 import { dbModelToEntity, fetchEntity } from "./entity-store.ts";
 import { fetchTransaction, getVersion } from "./transaction-store.ts";
 import { processTransactionInput } from "./transaction-processor";
@@ -63,6 +63,12 @@ export type KnowledgeGraph<
     namespace?: NamespaceEditable,
   ) => ResultAsync<Fieldset>;
   fetchTransaction: (ref: TransactionRef) => ResultAsync<Transaction>;
+  listTransactions: (opts?: {
+    after?: TransactionId;
+    before?: TransactionId;
+    limit?: number;
+    order?: "asc" | "desc";
+  }) => ResultAsync<Transaction[]>;
   search: (
     query: QueryParams,
     namespace?: NamespaceEditable,
@@ -79,15 +85,16 @@ export type KnowledgeGraph<
   getSchema: <N extends NamespaceEditable>(
     namespace: N,
   ) => ResultAsync<NamespaceSchema<N>>;
+  onTransaction: (
+    filter: TransactionFilter | undefined,
+    handler: TransactionHandler,
+  ) => Unsubscribe;
 };
 
-/**
- * Narrowed view of {@link KnowledgeGraph} exposing only read methods.
- *
- * Returned by read-only open paths (see `openReadonly` in `@binder/repo/local`).
- * Helpers that only read (formatting, search utilities, etc.) can accept this
- * type to accept both readonly and full graphs.
- */
+export type TransactionFilter = (tx: Transaction) => boolean;
+export type TransactionHandler = (tx: Transaction) => void | Promise<void>;
+export type Unsubscribe = () => void;
+
 export type ReadonlyKnowledgeGraph<
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
 > = Omit<KnowledgeGraph<C>, "update" | "apply" | "rollback">;
@@ -186,6 +193,21 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
   ): ResultAsync<RecordSchema | ConfigSchemaExtended<C>> =>
     namespace === "config" ? ok(configSchema) : getRecordSchema();
 
+  const transactionHandlers: {
+    filter: TransactionFilter | undefined;
+    handler: TransactionHandler;
+  }[] = [];
+
+  const notifyHandlers = async (transaction: Transaction) => {
+    for (const { filter, handler } of transactionHandlers) {
+      if (filter !== undefined && !filter(transaction)) continue;
+      const result = await tryCatch(() => handler(transaction));
+      if (isErr(result)) {
+        console.error("Transaction handler error:", result.error);
+      }
+    }
+  };
+
   const applyAndNotify = async (transaction: Transaction) => {
     let rollbackBeforeHook: TransactionRollback | null = null;
 
@@ -220,6 +242,8 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       await callbacks.afterCommit(transaction);
     }
 
+    await notifyHandlers(transaction);
+
     return ok(transaction);
   };
 
@@ -250,6 +274,41 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       }),
     fetchTransaction: (ref: TransactionRef) =>
       db.transaction((tx) => fetchTransaction(tx, ref)),
+    listTransactions: (opts) =>
+      db.transaction(async (tx) => {
+        const limit = opts?.limit ?? 50;
+        const order =
+          opts?.order === "asc"
+            ? asc(transactionTable.id)
+            : desc(transactionTable.id);
+        const after = opts?.after
+          ? sql`${transactionTable.id} > ${opts.after}`
+          : undefined;
+        const before = opts?.before
+          ? sql`${transactionTable.id} < ${opts.before}`
+          : undefined;
+        const where = and(after, before);
+
+        return tryCatch(
+          tx
+            .select()
+            .from(transactionTable)
+            .where(where)
+            .orderBy(order)
+            .limit(limit)
+            .then((rows) =>
+              rows.map((row) => ({
+                id: row.id,
+                hash: row.hash,
+                previous: row.previous,
+                records: row.records,
+                configs: row.configs,
+                author: row.author ?? undefined,
+                createdAt: row.createdAt,
+              })),
+            ),
+        );
+      }),
     search: async (
       query: QueryParams,
       namespace: "record" | "config" = "record",
@@ -377,5 +436,13 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     getConfigSchema: () => configSchema,
     getSchema: <N extends NamespaceEditable>(namespace: N) =>
       getSchema(namespace) as ResultAsync<NamespaceSchema<N>>,
+    onTransaction: (filter, handler) => {
+      const entry = { filter, handler };
+      transactionHandlers.push(entry);
+      return () => {
+        const idx = transactionHandlers.indexOf(entry);
+        if (idx !== -1) transactionHandlers.splice(idx, 1);
+      };
+    },
   };
 };

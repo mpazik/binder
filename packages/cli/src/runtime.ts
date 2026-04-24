@@ -48,6 +48,7 @@ import {
 } from "./document/navigation.ts";
 import { serializeFormats } from "./utils/serialize.ts";
 import { createViewCache, type ViewLoader } from "./document/view-entity.ts";
+import { journalPlugin } from "./plugins/journal/index.ts";
 import { migrateLegacyDataLayout } from "./migration.ts";
 import {
   initializeTelemetry,
@@ -57,7 +58,6 @@ import {
   track,
 } from "./telemetry.ts";
 
-/** Error keys that represent expected user errors — no telemetry emitted. */
 const SILENT_ERROR_KEYS = new Set(["entity-not-found", "workspace-not-found"]);
 
 type RuntimeOptions = {
@@ -97,11 +97,6 @@ export type RuntimeContextWithDb = RuntimeContext & {
   views: ViewLoader;
 };
 
-// Read-only runtime: no plugins, no caches, no lock, no migrations.
-// For `read`, `search`, `schema`, `locate` and similar cheap queries.
-//
-// kg is typed as ReadonlyKnowledgeGraph: write methods (update/apply/rollback)
-// are absent from the type AND rejected by the SQLite driver at runtime.
 export type RuntimeContextReadonly = RuntimeContext & {
   db: DatabaseCli;
   kg: ReadonlyKnowledgeGraph;
@@ -144,7 +139,6 @@ const unpackCommandResult = (
   return {};
 };
 
-/** Extract telemetry-safe enum-valued flags from parsed argv. */
 const genericTelemetryFlags = (
   args: Record<string, unknown>,
 ): Record<string, unknown> => {
@@ -279,14 +273,12 @@ export const initializeDbRuntime = async (
     onFilesUpdated: callbacks?.onFilesUpdated,
   };
 
-  // Build orchestrator context — note that `views` references viewCache via
-  // closure; viewCache is declared below and is safe because views() is only
-  // invoked inside transaction callbacks, well after assignment.
+  // `db` and `viewCache` are assigned after openRepo; safe because
+  // orchestrator callbacks only fire during transactions, well after init.
   const orchestratorCtx = {
     fs,
     log,
     config,
-    // `db` is assigned below; we point to a lazy getter via a reference object.
     get db() {
       return db;
     },
@@ -300,6 +292,7 @@ export const initializeDbRuntime = async (
     migrate: { run: cliMigrationRunner },
     kgConfigSchema: cliConfigSchema,
     providerSchema: documentProviderSchema,
+    plugins: [journalPlugin()],
     callbacks: buildOrchestratorCallbacks(
       orchestratorCtx,
       orchestratorCallbacks,
@@ -530,13 +523,6 @@ export const runtimeWithDb = <TArgs extends object = object>(
   }, options);
 };
 
-/**
- * Open workspace read-only: no plugins, no lock, no migrations, no caches.
- * SQLite connection refuses writes at the driver level.
- *
- * Use for short query commands where plugin load cost and write machinery
- * are pure overhead.
- */
 export const initializeReadonlyRepoRuntime = async (
   context: RuntimeContext,
 ): ResultAsync<{

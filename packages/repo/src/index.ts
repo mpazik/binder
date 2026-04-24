@@ -2,7 +2,10 @@ export {
   type KnowledgeGraph,
   type KnowledgeGraphCallbacks,
   type ReadonlyKnowledgeGraph,
+  type TransactionFilter,
+  type TransactionHandler,
   type TransactionRollback,
+  type Unsubscribe,
   openKnowledgeGraph,
 } from "./knowledge-graph";
 export {

@@ -11,18 +11,8 @@ import {
   TransactionInputSchema,
 } from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
-import {
-  repairDbFromLog,
-  squashTransactions,
-  verifySync,
-} from "../lib/orchestrator.ts";
-import {
-  readLastTransactions,
-  readTransactionRange,
-  readTransactions,
-  rehashLog,
-  verifyLog,
-} from "../lib/journal.ts";
+import { squashTransactions } from "../lib/orchestrator.ts";
+import { readLastTransactions } from "../lib/journal.ts";
 import { TRANSACTION_LOG_FILE } from "../config.ts";
 import {
   detectFileFormat,
@@ -37,7 +27,7 @@ import {
   selectionOptions,
   yesOption,
 } from "../cli/options.ts";
-import { resolveTransactionDisplayKeys, type Ui } from "../cli/ui.ts";
+import { resolveTransactionDisplayKeys } from "../cli/ui.ts";
 import {
   serialize,
   serializeFormats,
@@ -290,278 +280,6 @@ export const transactionSquashHandler: CommandHandlerWithDb<{
   return okVoid;
 };
 
-const printChainError = (ui: Ui) => {
-  ui.block(() => {
-    ui.danger("Transaction chain broken");
-    ui.info("The transaction log has a broken previous-hash link.");
-    ui.println("");
-    ui.info("This may be caused by:");
-    ui.list(
-      [
-        "Manual modification of the transaction log file",
-        "An external script or sync tool modified or overwrote the log",
-        "A bug in binder. Try updating to the latest version or report it.",
-      ],
-      2,
-    );
-    ui.println("");
-    ui.info("Run 'binder tx repair --rehash' to rebuild the transaction chain");
-  });
-};
-
-export const transactionVerifyHandler: CommandHandlerWithDb = async ({
-  kg,
-  config,
-  ui,
-  fs,
-}) => {
-  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
-
-  const logIntegrityResult = await verifyLog(fs, transactionLogPath, {
-    verifyIntegrity: true,
-  });
-  if (isErr(logIntegrityResult)) {
-    if (logIntegrityResult.error.key === "hash-mismatch") {
-      ui.block(() => {
-        ui.danger("Transaction hash integrity check failed");
-        ui.info("One or more transactions have incorrect hashes");
-        ui.println("");
-        ui.info("This may be caused by:");
-        ui.list(
-          [
-            "Migration to a new hash algorithm",
-            "Data corruption",
-            "Manual modification of transaction log",
-          ],
-          2,
-        );
-        ui.println("");
-        ui.info("Run 'binder tx repair --rehash' to recompute all hashes");
-      });
-    } else if (logIntegrityResult.error.key === "chain-error") {
-      printChainError(ui);
-    }
-    return logIntegrityResult;
-  }
-
-  const verifyResult = await verifySync({ fs, kg }, config.paths.data);
-  if (isErr(verifyResult)) {
-    if (verifyResult.error.key === "chain-error") {
-      printChainError(ui);
-    }
-    return verifyResult;
-  }
-
-  const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
-
-  if (dbOnlyTransactions.length === 0 && logOnlyTransactions.length === 0) {
-    ui.block(() => {
-      ui.success("Database and log are in sync");
-    });
-    return okVoid;
-  }
-
-  ui.block(() => {
-    if (logOnlyTransactions.length > 0 && dbOnlyTransactions.length === 0) {
-      ui.warning(
-        `Database is behind by ${logOnlyTransactions.length} transaction(s)`,
-      );
-      ui.info("Run 'binder tx repair' to apply missing transactions");
-    } else if (
-      dbOnlyTransactions.length > 0 &&
-      logOnlyTransactions.length === 0
-    ) {
-      ui.warning(
-        `Database has ${dbOnlyTransactions.length} extra transaction(s) not in log`,
-      );
-      ui.info("Run 'binder tx repair' to sync");
-    } else {
-      ui.warning("Database and log have diverged");
-      ui.info(`Database has ${dbOnlyTransactions.length} extra transaction(s)`);
-      ui.info(`Log has ${logOnlyTransactions.length} new transaction(s)`);
-      ui.println("");
-      ui.info("Run 'binder tx repair' to sync");
-    }
-  });
-
-  return fail("sync-verification-failed", "Database and log are out of sync");
-};
-
-export const transactionRepairHandler: CommandHandlerWithDb<{
-  dryRun?: boolean;
-  yes?: boolean;
-  rehash?: boolean;
-}> = async (ctx) => {
-  const { kg, config, ui, log, fs, args } = ctx;
-  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
-
-  if (args.rehash) {
-    ui.heading("Rehash transactions");
-
-    ui.warning("This will recompute all transaction hashes");
-    ui.println("");
-
-    ui.info("This operation:");
-    ui.list(
-      [
-        "Rewrites the entire transaction chain",
-        "Updates all transactions with new hashes",
-        "Syncs database with rehashed log",
-        "Creates backup in .binder/data/backups/",
-      ],
-      2,
-    );
-    ui.info("This should only be used for disaster recovery after corruption");
-    ui.println("");
-
-    const confirmResult = await confirmProtected(
-      ui,
-      args,
-      "Continue with rehash? (yes/no): ",
-    );
-    if (isErr(confirmResult)) return confirmResult;
-    if (!confirmResult.data) {
-      ui.info("Rehash cancelled");
-      return okVoid;
-    }
-
-    ui.info("Reading transaction log...");
-
-    const rehashResult = await rehashLog(fs, transactionLogPath, {
-      backupDir: config.paths.backups,
-    });
-    if (isErr(rehashResult)) {
-      log.error("Failed to rehash log", { error: rehashResult.error });
-      return rehashResult;
-    }
-
-    const { transactionsRehashed, backupPath } = rehashResult.data;
-
-    ui.info("Syncing database with rehashed log...");
-
-    const repairResult = await repairDbFromLog(ctx);
-    if (isErr(repairResult)) {
-      log.error("Failed to sync database with rehashed log", {
-        error: repairResult.error,
-      });
-      return repairResult;
-    }
-
-    const { dbTransactionsPath } = repairResult.data;
-
-    ui.block(() => {
-      ui.success("Rehash completed successfully");
-      ui.keyValue("Transactions rehashed", transactionsRehashed.toString());
-      ui.keyValue("Log backup", backupPath);
-      if (dbTransactionsPath) {
-        ui.keyValue("Database backup", dbTransactionsPath);
-      }
-    });
-
-    return okVoid;
-  }
-
-  const verifyResult = await verifySync({ fs, kg }, config.paths.data);
-  if (isErr(verifyResult)) {
-    if (verifyResult.error.key === "chain-error") {
-      printChainError(ui);
-    }
-    return verifyResult;
-  }
-
-  const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
-
-  if (dbOnlyTransactions.length === 0 && logOnlyTransactions.length === 0) {
-    ui.block(() => {
-      ui.success("Database and log are in sync");
-    });
-    return okVoid;
-  }
-
-  ui.block(() => {
-    if (dbOnlyTransactions.length > 0 && logOnlyTransactions.length === 0) {
-      ui.warning(
-        `Will rollback ${dbOnlyTransactions.length} transaction(s) from database`,
-      );
-      ui.info("Backup will be created in .binder/data/backups");
-    } else if (
-      logOnlyTransactions.length > 0 &&
-      dbOnlyTransactions.length === 0
-    ) {
-      ui.info(
-        `Will apply ${logOnlyTransactions.length} transaction(s) from log`,
-      );
-    } else {
-      ui.warning("Database and log have diverged");
-      ui.info(
-        `Will rollback ${dbOnlyTransactions.length} transaction(s) from database`,
-      );
-      ui.info(
-        `Will apply ${logOnlyTransactions.length} transaction(s) from log`,
-      );
-      ui.info("Backup will be created in .binder/data/backups");
-    }
-  });
-
-  if (dbOnlyTransactions.length > 0) {
-    ui.heading("Transactions to rollback:");
-    await ui.printTransactions(kg, dbOnlyTransactions, "concise");
-  }
-
-  if (logOnlyTransactions.length > 0) {
-    ui.heading("Transactions to apply:");
-    await ui.printTransactions(kg, logOnlyTransactions, "concise");
-  }
-
-  if (args.dryRun) {
-    ui.block(() => {
-      ui.info("Dry run complete - no changes made");
-    });
-    return okVoid;
-  }
-
-  if (dbOnlyTransactions.length > 0) {
-    const confirmResult = await confirmProtected(
-      ui,
-      args,
-      "Do you want to proceed with repair? (yes/no): ",
-    );
-    if (isErr(confirmResult)) return confirmResult;
-    if (!confirmResult.data) {
-      ui.info("Repair cancelled");
-      return okVoid;
-    }
-  }
-
-  const repairResult = await repairDbFromLog(ctx);
-  if (isErr(repairResult)) {
-    log.error("Failed to repair sync", { error: repairResult.error });
-    return repairResult;
-  }
-
-  const { dbTransactionsPath } = repairResult.data;
-
-  log.info("Repair completed successfully", {
-    rolledBack: dbOnlyTransactions.length,
-    applied: logOnlyTransactions.length,
-  });
-
-  ui.block(() => {
-    ui.success("Repair completed successfully");
-    if (dbOnlyTransactions.length > 0) {
-      ui.info(`Rolled back ${dbOnlyTransactions.length} transaction(s)`);
-    }
-    if (logOnlyTransactions.length > 0) {
-      ui.info(`Applied ${logOnlyTransactions.length} transaction(s)`);
-    }
-    if (dbTransactionsPath) {
-      ui.info(`Backup created: ${dbTransactionsPath}`);
-    }
-  });
-
-  return okVoid;
-};
-
 export const transactionLogHandler: CommandHandlerWithDb<
   {
     format: string;
@@ -569,22 +287,22 @@ export const transactionLogHandler: CommandHandlerWithDb<
     author?: string;
     chronological?: boolean;
   } & SelectionArgs
-> = async ({ kg, config, ui, fs, args }) => {
-  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
-
+> = async ({ kg, ui, args }) => {
   const count = args.last ?? args.limit ?? 10;
   const readCount = count + (args.skip ?? 0);
 
-  const logResult = await readTransactions(
-    fs,
-    transactionLogPath,
-    readCount,
-    { author: args.author },
-    args.chronological ? "asc" : "desc",
-  );
-  if (isErr(logResult)) return logResult;
+  const listResult = await kg.listTransactions({
+    limit: readCount,
+    order: args.chronological ? "asc" : "desc",
+  });
+  if (isErr(listResult)) return listResult;
 
-  const transactions = applySelection(logResult.data, args);
+  let transactions = listResult.data;
+  if (args.author) {
+    transactions = transactions.filter((tx) => tx.author === args.author);
+  }
+
+  transactions = applySelection(transactions, args);
 
   if (includes(serializeFormats, args.format)) {
     ui.printData(transactions, args.format);
@@ -618,17 +336,23 @@ export const transactionExportHandler: CommandHandlerWithDb<{
   last: number;
   from?: number;
   to?: number;
-}> = async ({ config, ui, fs, args }) => {
-  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
+}> = async ({ kg, ui, fs, args }) => {
+  const useRange = args.from !== undefined || args.to !== undefined;
+  const listResult = await kg.listTransactions({
+    order: useRange ? "asc" : "desc",
+    limit: useRange ? 10000 : args.last,
+  });
+  if (isErr(listResult)) return listResult;
 
-  const transactionsResult =
-    args.from !== undefined || args.to !== undefined
-      ? await readTransactionRange(fs, transactionLogPath, args.from, args.to)
-      : await readLastTransactions(fs, transactionLogPath, args.last);
+  const transactions = useRange
+    ? listResult.data.filter((tx) => {
+        if (args.from !== undefined && tx.id < args.from) return false;
+        if (args.to !== undefined && tx.id > args.to) return false;
+        return true;
+      })
+    : listResult.data.reverse();
 
-  if (isErr(transactionsResult)) return transactionsResult;
-
-  const inputs = transactionsResult.data.map(transactionToInput);
+  const inputs = transactions.map(transactionToInput);
   const format = args.output ? detectFileFormat(args.output) : "jsonl";
   const serialized = serialize(inputs, format, normalizeTransactionInput);
 
@@ -749,31 +473,6 @@ export const TransactionCommand = types({
       )
       .command(
         types({
-          command: "verify",
-          describe: "verify database and log are in sync",
-          handler: runtimeWithDb(transactionVerifyHandler),
-        }),
-      )
-      .command(
-        types({
-          command: "repair",
-          describe:
-            "repair database and log sync by applying missing transactions",
-          builder: (yargs: Argv) => {
-            return yargs
-              .options({ ...dryRunOption, ...yesOption })
-              .option("rehash", {
-                describe:
-                  "recompute all transaction hashes (use for algorithm migration)",
-                type: "boolean",
-                default: false,
-              });
-          },
-          handler: runtimeWithDb(transactionRepairHandler),
-        }),
-      )
-      .command(
-        types({
           command: "log",
           describe: "show recent transactions from the log",
           builder: (yargs: Argv) => {
@@ -807,7 +506,7 @@ export const TransactionCommand = types({
       )
       .demandCommand(
         1,
-        "You need to specify a subcommand: import, export, read, rollback, squash, verify, repair, log",
+        "You need to specify a subcommand: import, export, read, rollback, squash, log",
       );
   },
   handler: async () => {},

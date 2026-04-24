@@ -77,6 +77,16 @@ if (isDevMode()) {
   cli = cli.command(DevCommand);
 }
 
+import { journalPlugin } from "./plugins/journal/index.ts";
+import { loadWorkspacePluginCommands } from "./lib/workspace-plugins.ts";
+
+for (const cmd of journalPlugin().commands ?? []) {
+  cli = cli.command(cmd);
+}
+for (const cmd of await loadWorkspacePluginCommands()) {
+  cli = cli.command(cmd);
+}
+
 cli = cli
   .demandCommand(1, "You need to specify a command")
   .fail((msg) => {

@@ -38,6 +38,12 @@ export {
 } from "./open.ts";
 
 export {
+  type BinderRepoPlugin,
+  type PluginModuleExport,
+  type PluginRepo,
+} from "./plugin.ts";
+
+export {
   type Err,
   type ErrorObject,
   type Ok,

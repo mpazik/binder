@@ -16,13 +16,26 @@ import {
   type WorkspacePaths,
 } from "./paths.ts";
 
-/**
- * Core fields repo/local owns in config files. Clients that want additional
- * fields (e.g. logLevel, telemetry) compose their own schema by extending
- * this one, then pass it via the `configSchema` loader option.
- */
+export const PluginSpecSchema = z.union([
+  z.string(),
+  z.object({
+    name: z.string(),
+    config: z.record(z.string(), z.unknown()).optional(),
+    enabled: z.boolean().optional().default(true),
+  }),
+]);
+export type PluginSpec = z.infer<typeof PluginSpecSchema>;
+
+export const HookSpecSchema = z.object({
+  name: z.string(),
+  command: z.string(),
+});
+export type HookSpec = z.infer<typeof HookSpecSchema>;
+
 export const CoreConfigSchema = z.object({
   author: z.string().optional(),
+  plugins: z.array(PluginSpecSchema).optional(),
+  hooks: z.array(HookSpecSchema).optional(),
 });
 
 export type CoreConfig = z.infer<typeof CoreConfigSchema>;
@@ -64,20 +77,10 @@ const readConfigFile = async <S extends z.ZodTypeAny>(
 export type LoadGlobalConfigOptions<
   S extends z.ZodTypeAny = typeof CoreConfigSchema,
 > = {
-  /**
-   * Schema describing the config file contents. Must extend
-   * `CoreConfigSchema` so the `author` field is parsed. Defaults to
-   * `CoreConfigSchema`.
-   */
   configSchema?: S;
-  /** Absolute path override. Defaults to `$XDG_CONFIG_HOME/binder/config.yaml`. */
   path?: string;
 };
 
-/**
- * Load the global config from `$XDG_CONFIG_HOME/binder/config.yaml`.
- * Missing file is not an error — returns parsed defaults from the schema.
- */
 export const loadGlobalConfig = async <
   S extends z.ZodTypeAny = typeof CoreConfigSchema,
 >(
@@ -88,7 +91,6 @@ export const loadGlobalConfig = async <
   return readConfigFile<S>(path, schema);
 };
 
-/** Persist the global config. Creates the parent directory if missing. */
 export const saveGlobalConfig = async (
   config: Record<string, unknown>,
   options?: { path?: string },
@@ -110,22 +112,9 @@ export const saveGlobalConfig = async (
 export type LoadWorkspaceConfigOptions<
   S extends z.ZodTypeAny = typeof CoreConfigSchema,
 > = {
-  /** Override for the `.binder` directory name (e.g., `.binder-dev`). */
   binderDir?: string;
-  /**
-   * Pre-loaded global config to use as fallback. Only `author` is read.
-   * Loaded internally if omitted.
-   */
   globalConfig?: { author?: string };
-  /**
-   * Schema describing the workspace config file. Must extend
-   * `CoreConfigSchema`. Defaults to `CoreConfigSchema`.
-   */
   configSchema?: S;
-  /**
-   * Last-resort author when no config and no global config supply one.
-   * Defaults to `getDefaultAuthor()` (OS username, git-style).
-   */
   defaultAuthor?: string;
 };
 

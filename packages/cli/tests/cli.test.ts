@@ -32,45 +32,32 @@ describe("CLI", () => {
     });
 
     it("supports positional type filters", async () => {
-      const taskOnly = await run(["schema", "Task", "--format", "json"], {
-        cwd: dir,
+      await check(["schema", "Task", "--format", "json"], (stdout) => {
+        expect(Object.keys(JSON.parse(stdout).types)).toEqual(["Task"]);
       });
-      expect(taskOnly.exitCode).toBe(0);
-      expect(Object.keys(JSON.parse(taskOnly.stdout).types)).toEqual(["Task"]);
-
-      const taskAndProject = await run(
+      await check(
         ["schema", "Task", "Project", "--format", "json"],
-        {
-          cwd: dir,
+        (stdout) => {
+          expect(Object.keys(JSON.parse(stdout).types).sort()).toEqual([
+            "Project",
+            "Task",
+          ]);
         },
       );
-      expect(taskAndProject.exitCode).toBe(0);
-      expect(
-        Object.keys(JSON.parse(taskAndProject.stdout).types).sort(),
-      ).toEqual(["Project", "Task"]);
     });
 
     it("supports field filtering", async () => {
-      const byField = await run(
-        ["schema", "-f", "status", "--format", "json"],
-        {
-          cwd: dir,
+      await check(["schema", "-f", "status", "--format", "json"], (stdout) => {
+        expect(Object.keys(JSON.parse(stdout).fields)).toEqual(["status"]);
+      });
+      await check(
+        ["schema", "Task", "-f", "status", "--format", "json"],
+        (stdout) => {
+          const parsed = JSON.parse(stdout);
+          expect(Object.keys(parsed.types)).toEqual(["Task"]);
+          expect(Object.keys(parsed.fields)).toEqual(["status"]);
         },
       );
-      expect(byField.exitCode).toBe(0);
-
-      const parsedByField = JSON.parse(byField.stdout);
-      expect(Object.keys(parsedByField.fields)).toEqual(["status"]);
-
-      const byTypeAndField = await run(
-        ["schema", "Task", "-f", "status", "--format", "json"],
-        { cwd: dir },
-      );
-      expect(byTypeAndField.exitCode).toBe(0);
-
-      const parsedByTypeAndField = JSON.parse(byTypeAndField.stdout);
-      expect(Object.keys(parsedByTypeAndField.types)).toEqual(["Task"]);
-      expect(Object.keys(parsedByTypeAndField.fields)).toEqual(["status"]);
     });
 
     it("reports unknown type and field keys with suggestions", async () => {
@@ -79,32 +66,37 @@ describe("CLI", () => {
     });
   });
 
-  it("search with filters and plain text", async () => {
-    await check(
-      ["search", "type=Task", "status=active", "--format", "tsv"],
-      (stdout) => {
-        const lines = stdout.trim().split("\n");
-        expect(lines).toEqual([
-          expect.stringContaining("key"),
-          expect.stringContaining("task-create-api"),
-        ]);
-      },
-    );
+  describe("search", () => {
+    it("filters and plain text queries", async () => {
+      await check(
+        ["search", "type=Task", "status=active", "--format", "tsv"],
+        (stdout) => {
+          const lines = stdout.trim().split("\n");
+          expect(lines).toEqual([
+            expect.stringContaining("key"),
+            expect.stringContaining("task-create-api"),
+          ]);
+        },
+      );
 
-    await check(["search", "authentication", "--format", "json"], (stdout) => {
-      const { items } = JSON.parse(stdout);
-      expect(items.length).toBeGreaterThan(0);
-      expect(items[0].key).toBe("task-implement-user-auth");
+      await check(
+        ["search", "authentication", "--format", "json"],
+        (stdout) => {
+          const { items } = JSON.parse(stdout);
+          expect(items.length).toBeGreaterThan(0);
+          expect(items[0].key).toBe("task-implement-user-auth");
+        },
+      );
+
+      await check(
+        ["search", "schema", "type=Task", "--format", "json"],
+        (stdout) => {
+          const { items } = JSON.parse(stdout);
+          expect(items.length).toBe(1);
+          expect(items[0].key).toBe("task-implement-auth");
+        },
+      );
     });
-
-    await check(
-      ["search", "schema", "type=Task", "--format", "json"],
-      (stdout) => {
-        const { items } = JSON.parse(stdout);
-        expect(items.length).toBe(1);
-        expect(items[0].key).toBe("task-implement-auth");
-      },
-    );
   });
 
   describe("read", () => {
@@ -315,7 +307,7 @@ describe("CLI", () => {
     });
 
     it("verify confirms sync", async () => {
-      await check(["tx", "verify"], "Database and log are in sync");
+      await check(["journal", "verify"], "Database and log are in sync");
     });
 
     it("squash merges recent transactions", async () => {
@@ -331,7 +323,7 @@ describe("CLI", () => {
     });
 
     it("verify after squash", async () => {
-      await check(["tx", "verify"], "Database and log are in sync");
+      await check(["journal", "verify"], "Database and log are in sync");
     });
   });
 });

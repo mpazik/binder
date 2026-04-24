@@ -1,4 +1,4 @@
-import { isObjectEmpty, noop } from "@binder/utils";
+import { isErr, isObjectEmpty, noop } from "@binder/utils";
 import { openKnowledgeGraph, type KnowledgeGraph } from "@binder/repo";
 import { type Logger } from "./log.ts";
 import { createUi, type Ui } from "./cli/ui.ts";
@@ -7,12 +7,13 @@ import { getTestDatabaseCli } from "./db/db.mock.ts";
 import { buildOrchestratorCallbacks } from "./lib/orchestrator.ts";
 import { documentProviderSchema } from "./document/document-schema.ts";
 import { cliConfigSchema } from "./cli-config-schema.ts";
-import { BINDER_DIR } from "./config.ts";
+import { BINDER_DIR, TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "./config.ts";
 import type { AppConfig } from "./config.ts";
 import type { RuntimeContextWithDb, RuntimeContext } from "./runtime.ts";
 import type { TelemetryState } from "./telemetry.ts";
 import { createNavigationCache } from "./document/navigation.ts";
 import { createViewCache } from "./document/view-entity.ts";
+import { clearLog, logTransaction } from "./lib/journal.ts";
 
 export const mockConfig: AppConfig = {
   author: "test-user",
@@ -111,6 +112,19 @@ export const createMockRuntimeContextWithDb =
         }),
       ),
     });
+
+    // Wire up journal behavior for tests (mirrors the journal plugin).
+    const txPath = `${mockConfig.paths.data}/${TRANSACTION_LOG_FILE}`;
+    const undoPath = `${mockConfig.paths.data}/${UNDO_LOG_FILE}`;
+    kg.onTransaction(undefined, async (tx) => {
+      const logResult = await logTransaction(context.fs, txPath, tx);
+      if (isErr(logResult))
+        console.error("Journal append failed:", logResult.error);
+      const clearResult = await clearLog(context.fs, undoPath);
+      if (isErr(clearResult))
+        console.error("Undo log clear failed:", clearResult.error);
+    });
+
     const navigationCache = createNavigationCache(kg);
     const viewCache = createViewCache(kg);
     return {

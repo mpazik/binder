@@ -1,6 +1,7 @@
 dist
 **/migrations/**
 **/out/
+tmp/
 *.md
 *.yaml
 *.d.ts
