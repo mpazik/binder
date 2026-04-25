@@ -1,5 +1,5 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import * as YAML from "yaml";
 import {
   assertDefined,
@@ -74,6 +74,63 @@ const exists = async (path: string): Promise<boolean> =>
     () => false,
   );
 
+/**
+ * Walks up from `startPath` looking for a directory containing `marker`.
+ * Returns the first matching ancestor (or `startPath` itself), or `null` if
+ * none is found before reaching the filesystem root.
+ */
+export const findNearestAncestorWith = async (
+  startPath: string,
+  marker: string,
+): Promise<string | null> => {
+  let current = resolve(startPath);
+  const root = resolve("/");
+  while (true) {
+    if (await exists(join(current, marker))) return current;
+    if (current === root) break;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return null;
+};
+
+export type ResolveWorkspaceRootOptions = {
+  /**
+   * Path (relative to each candidate root) that must exist for it to count
+   * as a workspace. Defaults to `<BINDER_DIR>/<CONFIG_FILE>`.
+   */
+  marker?: string;
+};
+
+/**
+ * Resolves the workspace root directory using a three-step fallback:
+ *   1. Explicit `start` path (returned as-is; caller validates)
+ *   2. `BINDER_WORKSPACE` environment variable (returned as-is)
+ *   3. Walk up from `process.cwd()` looking for the `marker`
+ *
+ * Fails with `workspace-not-found` only when the walk-up finds nothing.
+ */
+export const resolveWorkspaceRoot = async (
+  start?: string,
+  options?: ResolveWorkspaceRootOptions,
+): ResultAsync<string> => {
+  if (start !== undefined) return ok(resolve(start));
+
+  const fromEnv = process.env.BINDER_WORKSPACE;
+  if (fromEnv) return ok(resolve(fromEnv));
+
+  const marker = options?.marker ?? join(BINDER_DIR, CONFIG_FILE);
+  const found = await findNearestAncestorWith(process.cwd(), marker);
+  if (found !== null) return ok(found);
+
+  return fail(
+    "workspace-not-found",
+    `No Binder workspace found by walking up from ${process.cwd()} (looking for ${marker})`,
+    { data: { cwd: process.cwd(), marker } },
+  );
+};
+
 const resolveCallbacks = <C extends EntitySchema<ConfigDataType>>(
   input: KnowledgeGraphCallbacks | OpenCallbacksFactory<C> | undefined,
   kgRef: { kg: KnowledgeGraph<C> | null },
@@ -115,24 +172,40 @@ const resolveCallbacks = <C extends EntitySchema<ConfigDataType>>(
   };
 };
 
-// Fails with `workspace-not-found` if config.yaml does not exist.
-export const open = async <
-  TSchema extends DbSchema = typeof coreSchema,
-  C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
-  CS extends z.ZodTypeAny = typeof CoreConfigSchema,
->(
-  workspaceRoot: string,
-  options?: OpenOptions<TSchema, C, CS>,
-): ResultAsync<Repo<TSchema, C, CS>> => {
+type ResolvedWorkspace<CS extends z.ZodTypeAny> = {
+  root: string;
+  paths: ReturnType<typeof resolveWorkspacePaths>;
+  config: WorkspaceConfig<CS>;
+};
+
+/** Resolves root, validates workspace exists, and loads config. Shared by open/openReadonly. */
+const resolveWorkspace = async <CS extends z.ZodTypeAny>(
+  workspaceRoot: string | undefined,
+  options?: {
+    binderDir?: string;
+    config?: WorkspaceConfig<CS>;
+    defaultAuthor?: string;
+    configSchema?: CS;
+    configLoadOptions?: LoadWorkspaceConfigOptions<CS>;
+  },
+): ResultAsync<ResolvedWorkspace<CS>> => {
+  let resolvedRoot: string;
+  if (workspaceRoot !== undefined) {
+    resolvedRoot = workspaceRoot;
+  } else {
+    const rootResult = await resolveWorkspaceRoot();
+    if (isErr(rootResult)) return rootResult;
+    resolvedRoot = rootResult.data;
+  }
   const binderDir = options?.binderDir ?? BINDER_DIR;
-  const paths = resolveWorkspacePaths(workspaceRoot, binderDir);
+  const paths = resolveWorkspacePaths(resolvedRoot, binderDir);
 
   const configPath = join(paths.binder, CONFIG_FILE);
   if (!(await exists(configPath))) {
     return fail(
       "workspace-not-found",
-      `No Binder workspace at ${workspaceRoot} (missing ${configPath})`,
-      { data: { workspaceRoot, configPath } },
+      `No Binder workspace at ${resolvedRoot} (missing ${configPath})`,
+      { data: { workspaceRoot: resolvedRoot, configPath } },
     );
   }
 
@@ -140,7 +213,7 @@ export const open = async <
   if (options?.config) {
     config = options.config;
   } else {
-    const configResult = await loadWorkspaceConfig<CS>(workspaceRoot, {
+    const configResult = await loadWorkspaceConfig<CS>(resolvedRoot, {
       binderDir,
       defaultAuthor: options?.defaultAuthor,
       configSchema: options?.configSchema,
@@ -149,6 +222,26 @@ export const open = async <
     if (isErr(configResult)) return configResult;
     config = configResult.data;
   }
+
+  return ok({ root: resolvedRoot, paths, config });
+};
+
+/**
+ * Opens a binder workspace for read-write access. When `workspaceRoot` is
+ * omitted the root is resolved via {@link resolveWorkspaceRoot}.
+ * Fails with `workspace-not-found` if config.yaml does not exist.
+ */
+export const open = async <
+  TSchema extends DbSchema = typeof coreSchema,
+  C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
+  CS extends z.ZodTypeAny = typeof CoreConfigSchema,
+>(
+  workspaceRoot?: string,
+  options?: OpenOptions<TSchema, C, CS>,
+): ResultAsync<Repo<TSchema, C, CS>> => {
+  const wsResult = await resolveWorkspace<CS>(workspaceRoot, options);
+  if (isErr(wsResult)) return wsResult;
+  const { paths, config } = wsResult.data;
 
   const dbPath = join(paths.data, DB_FILE);
   const dbResult = openDb<TSchema>({
@@ -238,40 +331,22 @@ export type OpenReadonlyOptions<
   | "configLoadOptions"
 >;
 
-// No plugins, no migrations, readonly SQLite. Fails on write attempts.
+/**
+ * Opens a binder workspace in readonly mode (no plugins, no migrations).
+ * When `workspaceRoot` is omitted the root is resolved via
+ * {@link resolveWorkspaceRoot}. Fails on write attempts.
+ */
 export const openReadonly = async <
   TSchema extends DbSchema = typeof coreSchema,
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
   CS extends z.ZodTypeAny = typeof CoreConfigSchema,
 >(
-  workspaceRoot: string,
+  workspaceRoot?: string,
   options?: OpenReadonlyOptions<TSchema, C, CS>,
 ): ResultAsync<ReadonlyRepo<TSchema, C, CS>> => {
-  const binderDir = options?.binderDir ?? BINDER_DIR;
-  const paths = resolveWorkspacePaths(workspaceRoot, binderDir);
-
-  const configPath = join(paths.binder, CONFIG_FILE);
-  if (!(await exists(configPath))) {
-    return fail(
-      "workspace-not-found",
-      `No Binder workspace at ${workspaceRoot} (missing ${configPath})`,
-      { data: { workspaceRoot, configPath } },
-    );
-  }
-
-  let config: WorkspaceConfig<CS>;
-  if (options?.config) {
-    config = options.config;
-  } else {
-    const configResult = await loadWorkspaceConfig<CS>(workspaceRoot, {
-      binderDir,
-      defaultAuthor: options?.defaultAuthor,
-      configSchema: options?.configSchema,
-      ...(options?.configLoadOptions ?? {}),
-    });
-    if (isErr(configResult)) return configResult;
-    config = configResult.data;
-  }
+  const wsResult = await resolveWorkspace<CS>(workspaceRoot, options);
+  if (isErr(wsResult)) return wsResult;
+  const { paths, config } = wsResult.data;
 
   const dbPath = join(paths.data, DB_FILE);
   const dbResult = openDb<TSchema>({

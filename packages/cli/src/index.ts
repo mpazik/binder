@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { join } from "node:path";
 import yargs from "yargs";
+import type { CommandModule } from "yargs";
 import { hideBin } from "yargs/helpers";
 import { isErr, tryCatch } from "@binder/utils";
 import { InitCommand } from "./commands/init.ts";
@@ -18,15 +20,75 @@ import { McpCommand } from "./commands/mcp.ts";
 import { HttpCommand } from "./commands/http.ts";
 import { LspCommand } from "./commands/lsp.ts";
 import { LocateCommand } from "./commands/locate.ts";
+import { createRunCommand } from "./commands/run.ts";
+import { findBinderRoot, BINDER_DIR } from "./config.ts";
+import { findScript } from "./lib/scripts.ts";
 import { createUi, logo } from "./cli/ui.ts";
 import { BINDER_VERSION, isDevMode } from "./environment.ts";
 import { LOG_LEVELS } from "./log.ts";
 import { checkForUpdate } from "./lib/update-check.ts";
 import { groupOptions, runWithFormattedHelp } from "./cli/help.ts";
+import { journalPlugin } from "./plugins/journal/index.ts";
+import { loadWorkspacePluginCommands } from "./lib/workspace-plugins.ts";
 
 const ui = createUi();
 
-let cli = yargs(hideBin(process.argv))
+const rawArgv = hideBin(process.argv);
+
+const collectCommandNames = (
+  commands: Pick<CommandModule, "command" | "aliases">[],
+): Set<string> => {
+  // Always-available pseudo-commands not in the command list.
+  const names = new Set(["run", "help", "completion"]);
+  for (const cmd of commands) {
+    const cmdStr =
+      typeof cmd.command === "string"
+        ? cmd.command
+        : Array.isArray(cmd.command)
+          ? (cmd.command[0] ?? "")
+          : "";
+    const first = cmdStr.split(/\s+/)[0];
+    if (first) names.add(first);
+    const { aliases } = cmd;
+    if (typeof aliases === "string") names.add(aliases);
+    else if (Array.isArray(aliases)) {
+      for (const a of aliases) names.add(a);
+    }
+  }
+  return names;
+};
+
+type CmdMeta = Pick<CommandModule, "command" | "aliases">;
+
+// Built-in commands registered with yargs. The list is also used to detect
+// shadowed names during bare-dispatch and in `binder run` listings.
+const coreCommands: CmdMeta[] = [
+  InitCommand,
+  CreateCommand,
+  ReadCommand,
+  UpdateCommand,
+  DeleteCommand,
+  SchemaCommand,
+  TransactionCommand,
+  SearchCommand,
+  DocsCommand,
+  UndoCommand,
+  RedoCommand,
+  McpCommand,
+  HttpCommand,
+  LspCommand,
+  LocateCommand,
+];
+if (isDevMode()) coreCommands.push(DevCommand);
+
+// Lazily computed; populated after all dynamic commands are registered.
+let builtInNamesCache: Set<string> | undefined;
+const getBuiltInNames = (): Set<string> => {
+  if (!builtInNamesCache) builtInNamesCache = collectCommandNames(allCommands);
+  return builtInNamesCache;
+};
+
+let cli = yargs()
   .scriptName("binder")
   .help("help", "show help")
   .version("version", "show version number", BINDER_VERSION)
@@ -71,22 +133,41 @@ let cli = yargs(hideBin(process.argv))
   .command(McpCommand)
   .command(HttpCommand)
   .command(LspCommand)
-  .command(LocateCommand);
+  .command(LocateCommand)
+  .command(createRunCommand(getBuiltInNames));
 
 cli = groupOptions(cli);
 
-if (isDevMode()) {
-  cli = cli.command(DevCommand);
-}
+if (isDevMode()) cli = cli.command(DevCommand);
 
-import { journalPlugin } from "./plugins/journal/index.ts";
-import { loadWorkspacePluginCommands } from "./lib/workspace-plugins.ts";
-
+// Dynamic commands from plugins and workspace config.
+const allCommands: CmdMeta[] = [...coreCommands];
 for (const cmd of journalPlugin().commands ?? []) {
   cli = cli.command(cmd);
+  allCommands.push(cmd);
 }
 for (const cmd of await loadWorkspacePluginCommands()) {
   cli = cli.command(cmd);
+  allCommands.push(cmd);
+}
+
+// Bare-dispatch: if the first arg is a non-builtin command name and a workspace
+// script with that name exists, rewrite argv to invoke `binder run <name>`.
+const builtInNames = getBuiltInNames();
+let effectiveArgv = rawArgv;
+const firstArg = rawArgv[0];
+if (
+  firstArg &&
+  firstArg.length > 0 &&
+  !firstArg.startsWith("-") &&
+  !builtInNames.has(firstArg)
+) {
+  const rootResult = await findBinderRoot();
+  if (!isErr(rootResult) && rootResult.data) {
+    const scriptsDir = join(rootResult.data, BINDER_DIR, "scripts");
+    const entry = await findScript(scriptsDir, firstArg);
+    if (entry) effectiveArgv = ["run", ...rawArgv];
+  }
 }
 
 cli = cli
@@ -101,7 +182,7 @@ cli = cli
   .strict();
 
 const result = await tryCatch(async () =>
-  runWithFormattedHelp(async () => cli.parse()),
+  runWithFormattedHelp(async () => cli.parse(effectiveArgv)),
 );
 if (isErr(result)) {
   console.error("fatal", result.error);

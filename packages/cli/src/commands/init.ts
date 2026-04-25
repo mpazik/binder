@@ -1,8 +1,16 @@
-import { join } from "path";
+import { join } from "node:path";
 import { execSync } from "node:child_process";
 import type { Argv } from "yargs";
 import { isCancel, select } from "@clack/prompts";
-import { fail, isErr, isOk, ok, okVoid, tryCatch } from "@binder/utils";
+import {
+  assertDefined,
+  fail,
+  isErr,
+  isOk,
+  ok,
+  okVoid,
+  tryCatch,
+} from "@binder/utils";
 import { init as repoInit } from "@binder/repo/local";
 import {
   bootstrapMinimal,
@@ -69,7 +77,7 @@ const initSetupHandler: CommandHandlerMinimal<{
   const currentDir = process.cwd();
   const binderDirPath = join(currentDir, BINDER_DIR);
 
-  const existingRootResult = await findBinderRoot(fs, currentDir);
+  const existingRootResult = await findBinderRoot(currentDir);
   if (isErr(existingRootResult)) return existingRootResult;
 
   if (existingRootResult.data !== null) {
@@ -131,8 +139,9 @@ const initSetupHandler: CommandHandlerMinimal<{
 
   let selectedBlueprint: BlueprintInfo;
   if (args.blueprint) {
-    // Already validated above; findBlueprint is guaranteed to succeed here.
-    selectedBlueprint = findBlueprint(args.blueprint, allBlueprints)!;
+    const found = findBlueprint(args.blueprint, allBlueprints);
+    assertDefined(found, "blueprint (validated above)");
+    selectedBlueprint = found;
   } else if (args.quiet) {
     selectedBlueprint = NONE_BLUEPRINT;
   } else {

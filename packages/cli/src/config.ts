@@ -1,8 +1,9 @@
-import { dirname, join, resolve } from "path";
+import { join } from "node:path";
 import { z } from "zod";
 import { isErr, ok, type ResultAsync } from "@binder/utils";
 import {
   CoreConfigSchema,
+  findNearestAncestorWith,
   getGlobalConfigPath,
   getGlobalStatePath as repoGetGlobalStatePath,
   loadGlobalConfig as repoLoadGlobalConfig,
@@ -13,7 +14,6 @@ import {
   DATA_DIR as REPO_DATA_DIR,
   DB_FILE as REPO_DB_FILE,
 } from "@binder/repo/local";
-import type { FileSystem } from "./lib/filesystem.ts";
 import { LOG_LEVELS, type LogLevel } from "./log.ts";
 import { isDevMode } from "./environment.ts";
 
@@ -60,30 +60,20 @@ export const cliWorkspaceConfigSchema = CoreConfigSchema.extend({
 
 export type UserConfig = z.infer<typeof cliWorkspaceConfigSchema>;
 
+/**
+ * Walk up from `startPath` (or cwd) looking for a `<BINDER_DIR>` directory.
+ * Returns `ok(null)` when no workspace is found — callers decide whether that
+ * is an error. Uses the dir-only marker (not config.yaml) so a partially
+ * initialized workspace still counts as "present" for `init`'s nesting check.
+ */
 export const findBinderRoot = async (
-  fs: FileSystem,
   startPath?: string,
 ): ResultAsync<string | null> => {
-  let currentPath = resolve(startPath ?? process.cwd());
-  const root = resolve("/");
-
-  while (currentPath !== root) {
-    const binderDirPath = join(currentPath, BINDER_DIR);
-
-    if (await fs.exists(binderDirPath)) {
-      return ok(currentPath);
-    }
-
-    const parentPath = dirname(currentPath);
-
-    if (parentPath === currentPath) {
-      break;
-    }
-
-    currentPath = parentPath;
-  }
-
-  return ok(null);
+  const found = await findNearestAncestorWith(
+    startPath ?? process.cwd(),
+    BINDER_DIR,
+  );
+  return ok(found);
 };
 
 export type ConfigPaths = {

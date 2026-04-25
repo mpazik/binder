@@ -2,33 +2,29 @@ import type { CommandModule } from "yargs";
 import { isErr, tryCatch } from "@binder/utils";
 import { loadWorkspaceConfig } from "@binder/repo/local";
 import { findBinderRoot } from "../config.ts";
-import { createRealFileSystem } from "./filesystem.ts";
 
-// Loads yargs commands contributed by user plugins declared in the workspace
-// config. Called at CLI parse time (before any command runs) so help output
-// shows plugin commands. Errors are logged and skipped — a broken plugin
-// should not block the core CLI. `register()` happens later via `openRepo`.
+// Loads yargs commands from user plugins declared in the workspace config.
+// Runs at CLI parse time (before logging exists) so help output shows plugin
+// commands. Errors are logged to stderr and skipped — a broken plugin should
+// not block the core CLI. Full `register()` happens later via `openRepo`.
 export const loadWorkspacePluginCommands = async (): Promise<
   CommandModule[]
 > => {
-  const commands: CommandModule[] = [];
-  const fs = createRealFileSystem();
-
-  const rootResult = await findBinderRoot(fs);
+  const rootResult = await findBinderRoot();
   if (isErr(rootResult)) {
     console.warn(`[plugins] workspace discovery failed: ${rootResult.error}`);
-    return commands;
+    return [];
   }
-  if (!rootResult.data) return commands;
-  const root = rootResult.data;
+  if (!rootResult.data) return [];
 
-  const cfgResult = await loadWorkspaceConfig(root);
+  const cfgResult = await loadWorkspaceConfig(rootResult.data);
   if (isErr(cfgResult)) {
     console.warn(`[plugins] config load failed: ${cfgResult.error}`);
-    return commands;
+    return [];
   }
   const specs = cfgResult.data.plugins ?? [];
 
+  const commands: CommandModule[] = [];
   for (const spec of specs) {
     const name = typeof spec === "string" ? spec : spec.name;
     if (typeof spec !== "string" && spec.enabled === false) continue;

@@ -1,4 +1,4 @@
-import { resolve } from "path";
+import { resolve } from "node:path";
 import process from "node:process";
 import {
   type Err,
@@ -450,9 +450,7 @@ export const runtime = <TArgs extends object = object>(
 ): ((args: TArgs & GlobalOptions) => Promise<void>) => {
   return bootstrapMinimal<TArgs>(
     async (contextInit) => {
-      const { fs } = contextInit;
-
-      const rootResult = await findBinderRoot(fs);
+      const rootResult = await findBinderRoot();
       if (isErr(rootResult))
         return fail("workspace-error", "Failed to find binder root", {
           data: { cause: rootResult.error },

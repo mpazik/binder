@@ -1,11 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
-import { init, open } from "./index.ts";
+import { init, open, resolveWorkspaceRoot } from "./index.ts";
 import { BINDER_DIR, CONFIG_FILE, DB_FILE } from "./constants.ts";
 
 describe("@binder/repo/local", () => {
@@ -28,6 +28,23 @@ describe("@binder/repo/local", () => {
   describe("open()", () => {
     it("errors with workspace-not-found when uninitialized", async () => {
       expect(await open(workspaceRoot)).toBeErrWithKey("workspace-not-found");
+    });
+
+    it("resolves via BINDER_WORKSPACE when called with no argument", async () => {
+      throwIfError(
+        await init(workspaceRoot, { initialConfig: { author: "envuser" } }),
+      );
+      const previous = process.env.BINDER_WORKSPACE;
+      process.env.BINDER_WORKSPACE = workspaceRoot;
+      // eslint-disable-next-line no-restricted-syntax
+      try {
+        const repo = throwIfError(await open());
+        expect(repo.config.author).toBe("envuser");
+        repo.close();
+      } finally {
+        if (previous === undefined) delete process.env.BINDER_WORKSPACE;
+        else process.env.BINDER_WORKSPACE = previous;
+      }
     });
 
     it("loads workspace config and paths", async () => {
@@ -95,7 +112,7 @@ describe("@binder/repo/local", () => {
 
     it("exposes db handle and knowledge-graph methods", async () => {
       const repo = throwIfError(await init(workspaceRoot));
-      const close = repo.close;
+      const { close } = repo;
 
       expect(repo).toMatchObject({
         db: expect.any(Object),
@@ -108,25 +125,86 @@ describe("@binder/repo/local", () => {
     });
   });
 
+  describe("resolveWorkspaceRoot()", () => {
+    it("returns explicit start argument as-is", async () => {
+      const result = throwIfError(await resolveWorkspaceRoot(workspaceRoot));
+      expect(result).toBe(workspaceRoot);
+    });
+
+    it("returns BINDER_WORKSPACE when set and no argument given", async () => {
+      const previous = process.env.BINDER_WORKSPACE;
+      process.env.BINDER_WORKSPACE = workspaceRoot;
+      // eslint-disable-next-line no-restricted-syntax
+      try {
+        const result = throwIfError(await resolveWorkspaceRoot());
+        expect(result).toBe(workspaceRoot);
+      } finally {
+        if (previous === undefined) delete process.env.BINDER_WORKSPACE;
+        else process.env.BINDER_WORKSPACE = previous;
+      }
+    });
+
+    it("walks up from cwd to find .binder/config.yaml", async () => {
+      throwIfError(await init(workspaceRoot));
+      const nested = join(workspaceRoot, "a", "b", "c");
+      await mkdir(nested, { recursive: true });
+
+      const previousCwd = process.cwd();
+      const previousEnv = process.env.BINDER_WORKSPACE;
+      delete process.env.BINDER_WORKSPACE;
+      process.chdir(nested);
+      // eslint-disable-next-line no-restricted-syntax
+      try {
+        const result = throwIfError(await resolveWorkspaceRoot());
+        // macOS tmp paths can be symlinked (/tmp -> /private/tmp); compare by realpath.
+        const { realpathSync } = await import("node:fs");
+        expect(realpathSync(result)).toBe(realpathSync(workspaceRoot));
+      } finally {
+        process.chdir(previousCwd);
+        if (previousEnv !== undefined)
+          process.env.BINDER_WORKSPACE = previousEnv;
+      }
+    });
+
+    it("fails with workspace-not-found when walk-up finds nothing", async () => {
+      const empty = mkdtempSync(join(tmpdir(), "binder-no-ws-"));
+      const previousCwd = process.cwd();
+      const previousEnv = process.env.BINDER_WORKSPACE;
+      delete process.env.BINDER_WORKSPACE;
+      process.chdir(empty);
+      // eslint-disable-next-line no-restricted-syntax
+      try {
+        expect(await resolveWorkspaceRoot()).toBeErrWithKey(
+          "workspace-not-found",
+        );
+      } finally {
+        process.chdir(previousCwd);
+        if (previousEnv !== undefined)
+          process.env.BINDER_WORKSPACE = previousEnv;
+        rmSync(empty, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe("author resolution", () => {
-    const checkAuthor = async (
-      author: string | undefined,
-      globalAuthor: string | undefined,
-      defaultAuthor: string | undefined,
-      expected: string,
-    ) => {
+    type AuthorInput = {
+      workspace?: string;
+      global?: string;
+      default?: string;
+    };
+
+    const check = async (input: AuthorInput, expected: string) => {
       throwIfError(
         await init(workspaceRoot, {
-          initialConfig: author === undefined ? {} : { author },
+          initialConfig: input.workspace ? { author: input.workspace } : {},
         }),
       );
 
       const repo = throwIfError(
         await open(workspaceRoot, {
           configLoadOptions: {
-            globalConfig:
-              globalAuthor === undefined ? {} : { author: globalAuthor },
-            defaultAuthor,
+            globalConfig: input.global ? { author: input.global } : {},
+            defaultAuthor: input.default,
           },
         }),
       );
@@ -135,18 +213,20 @@ describe("@binder/repo/local", () => {
     };
 
     it("prefers workspace author over all others", () =>
-      checkAuthor(
-        "from-workspace",
-        "from-global",
-        "from-option",
+      check(
+        {
+          workspace: "from-workspace",
+          global: "from-global",
+          default: "from-option",
+        },
         "from-workspace",
       ));
 
     it("falls back to global author when workspace is empty", () =>
-      checkAuthor(undefined, "from-global", "from-option", "from-global"));
+      check({ global: "from-global", default: "from-option" }, "from-global"));
 
     it("falls back to defaultAuthor option when no config is set", () =>
-      checkAuthor(undefined, undefined, "from-option", "from-option"));
+      check({ default: "from-option" }, "from-option"));
 
     it("falls back to OS-derived default as last resort", async () => {
       throwIfError(await init(workspaceRoot));

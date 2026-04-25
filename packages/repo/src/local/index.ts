@@ -26,15 +26,18 @@ export {
 } from "./config.ts";
 
 export {
+  findNearestAncestorWith,
   init,
   open,
   openReadonly,
+  resolveWorkspaceRoot,
   type InitOptions,
   type OpenCallbacksFactory,
   type OpenOptions,
   type OpenReadonlyOptions,
   type ReadonlyRepo,
   type Repo,
+  type ResolveWorkspaceRootOptions,
 } from "./open.ts";
 
 export {
