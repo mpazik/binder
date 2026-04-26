@@ -34,6 +34,12 @@ A transaction contains:
 - **configs**: changesets for config namespace entities, keyed by key
 - **author**: who made the change
 - **createdAt**: when the change was made
+- **tags**: string array for categorisation and filtering (e.g. `import-tasks`, `sync`)
+- **message**: optional human-readable summary, like a Git commit message
+- **source**: optional reference (uid or key) to the record that originated the change
+- **channel**: optional origin identifier — `cli`, `lsp`, `mcp`, `agent`, or `engine`
+
+All fields including tags, message, source, and channel are included in the canonical hash, making them immutable once committed.
 
 ### Hierarchical Change Model
 
@@ -61,6 +67,6 @@ Config changesets are processed **before** record changesets. A single transacti
 
 - **Apply**: execute a transaction against the current repository state, producing a new version
 - **Inverse**: create a transaction that reverses all changes. Every set becomes a clear and vice versa, list mutations are reversed. Enables undo.
-- **Squash**: combine multiple consecutive transactions into one with the same net effect. Used to compact history.
+- **Squash**: combine multiple consecutive transactions into one with the same net effect. Tags are merged (union of all tags), and the newest transaction's message, source, and channel are kept. Used to compact history.
 
 Rebase is handled at the changeset level. See Changeset concept.

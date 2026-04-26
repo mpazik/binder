@@ -1,4 +1,4 @@
-import { join } from "path";
+import { basename, extname, join } from "path";
 import type { Argv } from "yargs";
 import { fail, includes, isErr, ok, okVoid, wrapError } from "@binder/utils";
 import {
@@ -25,6 +25,8 @@ import {
   dryRunOption,
   itemFormatOption,
   selectionOptions,
+  type TxMetadataArgs,
+  withTxMetadata,
   yesOption,
 } from "../cli/options.ts";
 import { resolveTransactionDisplayKeys } from "../cli/ui.ts";
@@ -48,9 +50,10 @@ export const transactionImportHandler: CommandHandlerWithDb<
   {
     files?: string[];
     dryRun?: boolean;
-  } & SelectionArgs
+  } & TxMetadataArgs &
+    SelectionArgs
 > = async ({ kg, config, ui, log, fs, args }) => {
-  let allInputs: TransactionInput[] = [];
+  let allInputs: (TransactionInput & { _source?: string })[] = [];
   const files = args.files ?? [];
 
   if (files.length > 0 && isStdinPiped())
@@ -69,7 +72,9 @@ export const transactionImportHandler: CommandHandlerWithDb<
       }),
     );
     if (isErr(parseResult)) return parseResult;
-    allInputs.push(...parseResult.data);
+    allInputs.push(
+      ...parseResult.data.map((input) => ({ ...input, _source: "stdin" })),
+    );
   } else if (files.length === 0) {
     return fail("no-input", "Provide file path(s) or pipe content via stdin");
   } else {
@@ -83,7 +88,12 @@ export const transactionImportHandler: CommandHandlerWithDb<
         config.author,
       );
       if (isErr(parseResult)) return parseResult;
-      allInputs.push(...parseResult.data);
+      allInputs.push(
+        ...parseResult.data.map((input) => ({
+          ...input,
+          _source: basename(path, extname(path)),
+        })),
+      );
     }
   }
 
@@ -115,10 +125,34 @@ export const transactionImportHandler: CommandHandlerWithDb<
     return okVoid;
   }
 
+  const cliMeta = args.txMeta;
+
   const results: Transaction[] = [];
   for (let i = 0; i < allInputs.length; i++) {
     const input = allInputs[i]!;
-    const result = await kg.update(input);
+    const source = input._source;
+    delete (input as Record<string, unknown>)._source;
+
+    const autoTag = source ? `import-${source}` : undefined;
+    const autoMessage = source
+      ? `Imported from ${source}`
+      : "Imported via stdin";
+
+    const mergedTags = [
+      ...(autoTag ? [autoTag] : []),
+      ...(cliMeta.tags ?? []),
+      ...(input.tags ?? []),
+    ];
+
+    const enrichedInput: TransactionInput = {
+      ...input,
+      ...(mergedTags.length > 0 && { tags: [...new Set(mergedTags)] }),
+      message: input.message ?? cliMeta.message ?? autoMessage,
+      source: input.source ?? cliMeta.source,
+      channel: input.channel ?? cliMeta.channel,
+    };
+
+    const result = await kg.update(enrichedInput);
     if (isErr(result)) {
       const summary = transactionInputSummary(input);
       const suffix = summary ? ` (${summary})` : "";
@@ -379,13 +413,18 @@ export const TransactionCommand = types({
           aliases: ["create", "add"],
           describe: "import transactions from file(s) or stdin",
           builder: (yargs: Argv) => {
-            return yargs
-              .positional("files", {
-                describe: "path(s) to transaction file(s), or pipe via stdin",
-                type: "string",
-                array: true,
-              })
-              .options({ ...dryRunOption, ...selectionOptions });
+            return withTxMetadata(
+              yargs
+                .positional("files", {
+                  describe: "path(s) to transaction file(s), or pipe via stdin",
+                  type: "string",
+                  array: true,
+                })
+                .options({
+                  ...dryRunOption,
+                  ...selectionOptions,
+                }),
+            );
           },
           handler: runtimeWithDb(transactionImportHandler),
         }),

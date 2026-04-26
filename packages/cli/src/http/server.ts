@@ -31,6 +31,8 @@ export type HttpServerDeps = {
 
 const BUILTIN_PUBLIC_DIR = new URL("./public", import.meta.url).pathname;
 
+const RESERVED_QUERY_PARAMS = new Set(["limit", "after", "before", "orderBy"]);
+
 const jsonError = (
   c: { json: (obj: unknown, status: ContentfulStatusCode) => Response },
   status: ContentfulStatusCode,
@@ -46,21 +48,19 @@ export const createHttpApp = (
   const { kg, log, config } = deps;
   const app = new Hono();
 
-  // GET /api/schema — merged record schema (built-in + user-defined)
   app.get("/api/schema", async (c) => {
-    const result = await kg.getRecordSchema();
+    const namespace = c.req.query("namespace") ?? "record";
+    const result = await kg.getSchema(namespace as any);
     if (isErr(result)) return jsonError(c, 500, result.error.message);
     return c.json(result.data);
   });
 
-  // GET /api/config — list all config records (types, fields, …)
   app.get("/api/config", async (c) => {
     const result = await kg.search({}, "config");
     if (isErr(result)) return jsonError(c, 500, result.error.message);
     return c.json(result.data);
   });
 
-  // GET /api/config/:ref — single config record by key, uid, or id
   app.get("/api/config/:ref", async (c) => {
     const ref = c.req.param("ref");
     const result = await kg.fetchEntity(ref as any, undefined, "config");
@@ -68,16 +68,12 @@ export const createHttpApp = (
     return c.json(result.data);
   });
 
-  // GET /api/records — search records
-  // Query params mirror QueryParams: filters as JSON, limit, after, before, orderBy
   app.get("/api/records", async (c) => {
     const query = c.req.query();
 
-    // Parse filters: each query param is a filter unless it's a reserved param
-    const RESERVED = new Set(["limit", "after", "before", "orderBy"]);
     const rawFilters: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(query)) {
-      if (!RESERVED.has(k)) rawFilters[k] = v;
+      if (!RESERVED_QUERY_PARAMS.has(k)) rawFilters[k] = v;
     }
 
     const filtersResult = FiltersSchema.safeParse(rawFilters);
@@ -102,7 +98,6 @@ export const createHttpApp = (
     return c.json(result.data);
   });
 
-  // GET /api/records/:ref — single record by key, uid, or id.
   // Relation uids are formatted to keys so the UI can render them as links.
   app.get("/api/records/:ref", async (c) => {
     const ref = c.req.param("ref");
@@ -120,7 +115,6 @@ export const createHttpApp = (
     return c.json(formatted.data);
   });
 
-  // POST /api/transactions — apply a transaction
   app.post("/api/transactions", async (c) => {
     const bodyResult = await tryCatch(() => c.req.json());
     if (isErr(bodyResult)) return jsonError(c, 400, "Invalid JSON body");
@@ -152,7 +146,6 @@ export const createHttpApp = (
     return c.json(result.data, 201);
   });
 
-  // Static file serving + SPA fallback
   if (serverConfig.staticDir !== null) {
     const root = relative(process.cwd(), serverConfig.staticDir);
     app.use("/*", serveStatic({ root }));

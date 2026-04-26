@@ -10,6 +10,20 @@ import {
 import type { DbTransaction } from "./db.ts";
 import { transactionTable } from "./schema.ts";
 
+const pickDefined = <T extends Record<string, unknown>>(obj: T): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined),
+  ) as Partial<T>;
+
+/** Extract transaction metadata fields (message, source, channel) from the JSON `fields` column. */
+export const unpackTxFields = (
+  fields: Record<string, unknown>,
+): Pick<Transaction, "message" | "source" | "channel"> => ({
+  message: typeof fields.message === "string" ? fields.message : undefined,
+  source: typeof fields.source === "string" ? fields.source : undefined,
+  channel: typeof fields.channel === "string" ? fields.channel : undefined,
+});
+
 export const getVersion = async (
   tx: DbTransaction,
 ): ResultAsync<GraphVersion> => {
@@ -57,6 +71,8 @@ export const fetchTransaction = async (
           configs: row.configs,
           author: row.author ?? undefined,
           createdAt: row.createdAt,
+          tags: row.tags,
+          ...unpackTxFields(row.fields as Record<string, unknown>),
         };
       }),
   );
@@ -66,6 +82,11 @@ export const saveTransaction = async (
   tx: DbTransaction,
   transaction: Transaction,
 ): ResultAsync<void> => {
+  const fields = pickDefined({
+    message: transaction.message,
+    source: transaction.source,
+    channel: transaction.channel,
+  });
   return tryCatch(
     async () =>
       await tx.insert(transactionTable).values({
@@ -75,7 +96,8 @@ export const saveTransaction = async (
         records: transaction.records,
         configs: transaction.configs,
         author: transaction.author,
-        fields: {},
+        fields: Object.keys(fields).length > 0 ? fields : {},
+        tags: transaction.tags,
         createdAt: transaction.createdAt,
       }),
   );

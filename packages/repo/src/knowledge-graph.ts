@@ -21,6 +21,7 @@ import {
   type GraphVersion,
   type Includes,
   mergeSchema,
+  type Namespace,
   type NamespaceEditable,
   type NamespaceSchema,
   type PaginationInfo,
@@ -34,12 +35,17 @@ import {
   type TransactionRef,
   type TypeDef,
   typeSystemType,
+  txFields,
   validateAppConfigSchema,
 } from "./model";
 import type { Database, DbTransaction } from "./db.ts";
 import { configTable, recordTable, transactionTable } from "./schema.ts";
 import { dbModelToEntity, fetchEntity } from "./entity-store.ts";
-import { fetchTransaction, getVersion } from "./transaction-store.ts";
+import {
+  fetchTransaction,
+  getVersion,
+  unpackTxFields,
+} from "./transaction-store.ts";
 import { processTransactionInput } from "./transaction-processor";
 import {
   applyAndSaveTransaction,
@@ -82,7 +88,7 @@ export type KnowledgeGraph<
   rollback: (count: number, version?: TransactionId) => ResultAsync<void>;
   getRecordSchema: () => ResultAsync<RecordSchema>;
   getConfigSchema: () => ConfigSchemaExtended<C>;
-  getSchema: <N extends NamespaceEditable>(
+  getSchema: <N extends Namespace>(
     namespace: N,
   ) => ResultAsync<NamespaceSchema<N>>;
   onTransaction: (
@@ -188,10 +194,19 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       return ok(schema);
     });
   };
-  const getSchema = async (
-    namespace: NamespaceEditable,
-  ): ResultAsync<RecordSchema | ConfigSchemaExtended<C>> =>
-    namespace === "config" ? ok(configSchema) : getRecordSchema();
+  const getSchema = async <N extends Namespace>(
+    namespace: N,
+  ): ResultAsync<NamespaceSchema<N>> => {
+    if (namespace === "transaction") {
+      return ok({ fields: txFields, types: {} } as NamespaceSchema<N>);
+    }
+    if (namespace === "config") {
+      return ok(configSchema as NamespaceSchema<N>);
+    }
+    const result = await getRecordSchema();
+    if (isErr(result)) return result;
+    return ok(result.data as NamespaceSchema<N>);
+  };
 
   const transactionHandlers: {
     filter: TransactionFilter | undefined;
@@ -305,6 +320,8 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
                 configs: row.configs,
                 author: row.author ?? undefined,
                 createdAt: row.createdAt,
+                tags: row.tags,
+                ...unpackTxFields(row.fields as Record<string, unknown>),
               })),
             ),
         );
@@ -434,8 +451,7 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     },
     getRecordSchema,
     getConfigSchema: () => configSchema,
-    getSchema: <N extends NamespaceEditable>(namespace: N) =>
-      getSchema(namespace) as ResultAsync<NamespaceSchema<N>>,
+    getSchema: <N extends Namespace>(namespace: N) => getSchema(namespace),
     onTransaction: (filter, handler) => {
       const entry = { filter, handler };
       transactionHandlers.push(entry);

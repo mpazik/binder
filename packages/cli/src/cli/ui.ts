@@ -164,39 +164,6 @@ const keyValuesInline = (...pairs: [string, string][]) => {
   eprintln(`  ${formatted}`);
 };
 
-const formatValue = (value: unknown, indent: string): string => {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean")
-    return String(value);
-  if (value === null || value === undefined) return String(value);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "[]";
-    return (
-      "\n" +
-      value
-        .map((item, i) => {
-          const itemStr = formatValue(item, indent + "  ");
-          return `${indent}  [${i}] ${itemStr}`;
-        })
-        .join("\n")
-    );
-  }
-  if (typeof value === "object") {
-    const entries = Object.entries(value);
-    if (entries.length === 0) return "{}";
-    return (
-      "\n" +
-      entries
-        .map(([k, v]) => {
-          const valStr = formatValue(v, indent + "  ");
-          return `${indent}  ${textInfo(k)}: ${valStr}`;
-        })
-        .join("\n")
-    );
-  }
-  return String(value);
-};
-
 const error = (message: string) => {
   eprintln(textErrBold("Error:") + " " + message);
 };
@@ -352,17 +319,23 @@ const printTransaction = (
   const hash =
     format === "full" ? transaction.hash : shortTransactionHash(transaction);
   const timestamp = new Date(transaction.createdAt).toISOString();
+  const txMessage = transaction.message;
 
   if (format === "oneline") {
     const recordCount = Object.keys(transaction.records).length;
     const configCount = Object.keys(transaction.configs).length;
     const recordText = recordCount === 1 ? "record" : "records";
     const configText = configCount === 1 ? "config" : "configs";
+    const metaParts: string[] = [];
+    if (transaction.tags.length > 0)
+      metaParts.push(`tags:${transaction.tags.join(",")}`);
+    if (txMessage) metaParts.push(txMessage);
+    const meta = metaParts.length > 0 ? ` | ${metaParts.join(" | ")}` : "";
 
     eprintln(
       `${textInfoBold(`#${transaction.id}`)} ` +
         `${textDim(`${hash} (${transaction.author})`)} ` +
-        `${timestamp} - ${recordCount} ${recordText}, ${configCount} ${configText}`,
+        `${timestamp} - ${recordCount} ${recordText}, ${configCount} ${configText}${meta}`,
     );
     return;
   }
@@ -373,6 +346,12 @@ const printTransaction = (
     ["Author", transaction.author],
     ["Created", timestamp],
   );
+  if (txMessage) {
+    keyValue("Message", txMessage);
+  }
+  if (transaction.tags.length > 0) {
+    keyValue("Tags", transaction.tags.join(", "));
+  }
 
   printEntityChanges("Record changes", transaction.records, format);
   printEntityChanges("Config changes", transaction.configs, format);

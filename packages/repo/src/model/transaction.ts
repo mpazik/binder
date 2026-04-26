@@ -35,6 +35,10 @@ export type Transaction = {
   configs: ConfigChangeset;
   author: string;
   createdAt: IsoTimestamp;
+  tags: string[];
+  message?: string;
+  source?: string;
+  channel?: string;
 };
 
 type CanonicalTransaction = {
@@ -43,6 +47,10 @@ type CanonicalTransaction = {
   author: string;
   records?: RecordsChangeset;
   configs?: ConfigChangeset;
+  tags?: string[];
+  message?: string;
+  source?: string;
+  channel?: string;
 };
 
 const isNonEmptyChangeset = (changeset: FieldChangeset): boolean =>
@@ -53,7 +61,15 @@ export const transactionToCanonical = (
   recordSchema: RecordSchema,
   tx: Pick<
     Transaction,
-    "previous" | "author" | "createdAt" | "records" | "configs"
+    | "previous"
+    | "author"
+    | "createdAt"
+    | "records"
+    | "configs"
+    | "tags"
+    | "message"
+    | "source"
+    | "channel"
   >,
 ): CanonicalTransaction => {
   const records = filterObjectValues(
@@ -71,6 +87,10 @@ export const transactionToCanonical = (
     author: tx.author,
     ...(Object.keys(records).length > 0 && { records }),
     ...(Object.keys(configs).length > 0 && { configs }),
+    ...(tx.tags.length > 0 && { tags: tx.tags }),
+    ...(tx.message !== undefined && { message: tx.message }),
+    ...(tx.source !== undefined && { source: tx.source }),
+    ...(tx.channel !== undefined && { channel: tx.channel }),
   };
 };
 
@@ -86,7 +106,15 @@ export const withHashTransaction = async (
   recordSchema: RecordSchema,
   tx: Pick<
     Transaction,
-    "previous" | "author" | "createdAt" | "records" | "configs"
+    | "previous"
+    | "author"
+    | "createdAt"
+    | "records"
+    | "configs"
+    | "tags"
+    | "message"
+    | "source"
+    | "channel"
   >,
   id: TransactionId,
 ): Promise<Transaction> => {
@@ -99,6 +127,10 @@ export const withHashTransaction = async (
     author: canonical.author,
     records: canonical.records ?? {},
     configs: canonical.configs ?? {},
+    tags: tx.tags ?? [],
+    message: tx.message,
+    source: tx.source,
+    channel: tx.channel,
   };
 };
 
@@ -160,6 +192,8 @@ export const squashTransactions = async (
     }
   }
 
+  const allTags = Array.from(new Set(transactions.flatMap((tx) => tx.tags)));
+
   return withHashTransaction(
     configSchema,
     recordSchema,
@@ -169,6 +203,10 @@ export const squashTransactions = async (
       createdAt: newest.createdAt,
       records: squashedRecords,
       configs: squashedConfigs,
+      tags: allTags,
+      message: newest.message,
+      source: newest.source,
+      channel: newest.channel,
     },
     oldest.id,
   );

@@ -8,17 +8,30 @@ import {
 } from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
 
-import { namespaceOption } from "../cli/options.ts";
+import {
+  namespaceOption,
+  type TxMetadataArgs,
+  withTxMetadata,
+} from "../cli/options.ts";
 import { types } from "../cli/types.ts";
 
-const deleteHandler: CommandHandlerWithDb<{
-  ref: EntityRef;
-  namespace: NamespaceEditable;
-}> = async ({ kg, config, ui, args }) => {
+const deleteHandler: CommandHandlerWithDb<
+  {
+    ref: EntityRef;
+    namespace: NamespaceEditable;
+  } & TxMetadataArgs
+> = async ({ kg, config, ui, args }) => {
+  const { tags, message, source, channel } = args.txMeta;
   const result = await kg.update(
-    createTransactionInput(config.author, args.namespace, [
-      { $ref: args.ref, $delete: true },
-    ]),
+    createTransactionInput(
+      config.author,
+      args.namespace,
+      [{ $ref: args.ref, $delete: true }],
+      tags,
+      message,
+      source,
+      channel,
+    ),
   );
   if (isErr(result)) return result;
 
@@ -31,13 +44,15 @@ export const DeleteCommand = types({
   aliases: ["remove"],
   describe: "delete by reference",
   builder: (yargs: Argv) =>
-    yargs
-      .positional("ref", {
-        describe: "reference (id | uid | key)",
-        type: "string",
-        demandOption: true,
-        coerce: (value: string) => normalizeEntityRef(value),
-      })
-      .options(namespaceOption),
+    withTxMetadata(
+      yargs
+        .positional("ref", {
+          describe: "reference (id | uid | key)",
+          type: "string",
+          demandOption: true,
+          coerce: (value: string) => normalizeEntityRef(value),
+        })
+        .options({ ...namespaceOption }),
+    ),
   handler: runtimeWithDb(deleteHandler),
 });

@@ -23,17 +23,35 @@ export const TransactionInputSchema = z.object({
     .array(z.record(z.string(), z.unknown()))
     .transform((val) => val as ChangesetsInput<"config">)
     .optional(),
+  tags: z.array(z.string()).optional(),
+  message: z.string().optional(),
+  source: z.string().optional(),
+  channel: z.string().optional(),
 });
 export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
+/**
+ * Build a {@link TransactionInput} targeting a single namespace with optional metadata.
+ * Convenience wrapper used by CLI commands to construct inputs from parsed arguments.
+ */
 export const createTransactionInput = (
   author: string,
   namespace: NamespaceEditable,
   changesets: EntityChangesetInput<NamespaceEditable>[],
-): TransactionInput =>
-  namespace === "record"
-    ? { author, records: changesets }
-    : { author, configs: changesets };
+  tags?: string[],
+  message?: string,
+  source?: string,
+  channel?: string,
+): TransactionInput => ({
+  author,
+  ...(namespace === "record"
+    ? { records: changesets }
+    : { configs: changesets }),
+  ...(tags && { tags }),
+  ...(message && { message }),
+  ...(source && { source }),
+  ...(channel && { channel }),
+});
 
 const changesetsToInputs = <N extends NamespaceEditable>(
   changesets: Record<string, FieldChangeset>,
@@ -54,6 +72,10 @@ export const transactionToInput = (tx: Transaction): TransactionInput => {
     createdAt: tx.createdAt,
     ...(records.length > 0 && { records }),
     ...(configs.length > 0 && { configs }),
+    ...(tx.tags.length > 0 && { tags: tx.tags }),
+    ...(tx.message !== undefined && { message: tx.message }),
+    ...(tx.source !== undefined && { source: tx.source }),
+    ...(tx.channel !== undefined && { channel: tx.channel }),
   };
 };
 
@@ -67,4 +89,8 @@ export const normalizeTransactionInput = (
     input.configs.length > 0 && {
       configs: input.configs,
     }),
+  ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
+  ...(input.message !== undefined && { message: input.message }),
+  ...(input.source !== undefined && { source: input.source }),
+  ...(input.channel !== undefined && { channel: input.channel }),
 });

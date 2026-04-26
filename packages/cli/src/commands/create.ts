@@ -14,15 +14,22 @@ import {
   parsePatches,
 } from "../lib/patch-parser.ts";
 import { types } from "../cli/types.ts";
-import { itemFormatOption, namespaceOption } from "../cli/options.ts";
+import {
+  itemFormatOption,
+  namespaceOption,
+  type TxMetadataArgs,
+  withTxMetadata,
+} from "../cli/options.ts";
 import type { SerializeItemFormat } from "../utils/serialize.ts";
 import { isStdinPiped, readStdinAsArray } from "../cli/stdin.ts";
 
-const createHandler: CommandHandlerWithDb<{
-  patches: string[];
-  namespace: NamespaceEditable;
-  format?: SerializeItemFormat;
-}> = async ({ kg, config, ui, args }) => {
+const createHandler: CommandHandlerWithDb<
+  {
+    patches: string[];
+    namespace: NamespaceEditable;
+    format?: SerializeItemFormat;
+  } & TxMetadataArgs
+> = async ({ kg, config, ui, args }) => {
   let inputs: EntityCreate<typeof args.namespace>[];
 
   if (isStdinPiped()) {
@@ -61,8 +68,17 @@ const createHandler: CommandHandlerWithDb<{
     ];
   }
 
+  const { tags, message, source, channel } = args.txMeta;
   const result = await kg.update(
-    createTransactionInput(config.author, args.namespace, inputs),
+    createTransactionInput(
+      config.author,
+      args.namespace,
+      inputs,
+      tags,
+      message,
+      source,
+      channel,
+    ),
   );
   if (isErr(result)) return result;
 
@@ -75,19 +91,20 @@ export const CreateCommand = types({
   aliases: ["add"],
   describe: "create with field=value patches or stdin",
   builder: (yargs: Argv) =>
-    yargs
-      .positional("patches", {
-        describe:
-          "type, optional key, then field patches — or all as field=value patches",
-        type: "string",
-        array: true,
-        default: [],
-      })
-      .options({ ...namespaceOption, ...itemFormatOption })
-      .example([
-        ["$0 create Task title=Hello", "Create entity"],
-        ["$0 create Task my-key title=Hello", "Create with key"],
-        ...createPatchExamples("create Task"),
-      ]),
+    withTxMetadata(
+      yargs
+        .positional("patches", {
+          describe:
+            "type, optional key, then field patches — or all as field=value patches",
+          type: "string",
+          array: true,
+          default: [],
+        })
+        .options({ ...namespaceOption, ...itemFormatOption }),
+    ).example([
+      ["$0 create Task title=Hello", "Create entity"],
+      ["$0 create Task my-key title=Hello", "Create with key"],
+      ...createPatchExamples("create Task"),
+    ]),
   handler: runtimeWithDb(createHandler),
 });

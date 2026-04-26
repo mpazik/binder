@@ -41,7 +41,6 @@ export const processTransactionInput = async (
   );
 
   if (isErr(configsResult)) return configsResult;
-  const configs = configsResult.data;
 
   const updatedSchema = applyConfigChangesetToSchema(
     recordSchema,
@@ -66,7 +65,11 @@ export const processTransactionInput = async (
         author: input.author ?? "",
         createdAt,
         records: recordsResult.data,
-        configs: configs,
+        configs: configsResult.data,
+        tags: input.tags ?? [],
+        message: input.message,
+        source: input.source,
+        channel: input.channel,
       },
       incrementEntityId(versionResult.data.id),
     ),

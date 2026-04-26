@@ -3,7 +3,8 @@ import { fail, findSimilar, isErr, okVoid } from "@binder/utils";
 import {
   type EntityKey,
   type EntityType,
-  type NamespaceEditable,
+  type Namespace,
+  namespacesEditable,
 } from "@binder/repo";
 import {
   type CommandHandlerReadonly,
@@ -12,11 +13,16 @@ import {
 import { renderSchemaPreview } from "../schema/schema-preview.ts";
 import { filterSchema } from "../schema/schema-filter.ts";
 import { types } from "../cli/types.ts";
-import { namespaceOption, parseCommaSeparatedList } from "../cli/options.ts";
+import { parseCommaSeparatedList } from "../cli/options.ts";
 import {
   serializeItemFormats,
   type SerializeItemFormat,
 } from "../utils/serialize.ts";
+
+const schemaNamespaces = [
+  ...namespacesEditable,
+  "transaction",
+] as const satisfies Namespace[];
 
 const validateKeys = (
   keys: string[],
@@ -37,7 +43,7 @@ const validateKeys = (
 };
 
 export const schemaHandler: CommandHandlerReadonly<{
-  namespace: NamespaceEditable;
+  namespace: Namespace;
   typeKeys?: EntityType[];
   types?: EntityType[];
   fields?: EntityKey[];
@@ -116,7 +122,12 @@ export const SchemaCommand = types({
           parseCommaSeparatedList<EntityKey>(value),
       })
       .options({
-        ...namespaceOption,
+        namespace: {
+          alias: "n",
+          describe: "namespace",
+          choices: schemaNamespaces,
+          default: "record" as Namespace,
+        },
         format: {
           describe: "output format",
           type: "string" as const,

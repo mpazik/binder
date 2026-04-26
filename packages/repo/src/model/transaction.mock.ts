@@ -46,6 +46,7 @@ export const mockTransactionInit: Transaction = {
       Object.values(mockRecordSchemaRaw.types).map((type) => [type.key, type]),
     ),
   },
+  tags: [],
 };
 
 export const mockTransactionUpdateId = 2 as TransactionId;
@@ -61,6 +62,7 @@ export const mockTransactionUpdate: Transaction = {
     [mockTask1Uid]: mockChangesetUpdateTask1,
   },
   configs: {},
+  tags: [],
 };
 
 export const mockTransaction3Id = 3 as TransactionId;
@@ -79,6 +81,7 @@ export const mockTransaction3: Transaction = {
     },
   },
   configs: {},
+  tags: [],
 };
 
 export const mockTransaction4Id = 4 as TransactionId;
@@ -96,4 +99,5 @@ export const mockTransaction4: Transaction = {
     },
   },
   configs: {},
+  tags: [],
 };

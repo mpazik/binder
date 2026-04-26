@@ -166,11 +166,16 @@ export const logTransaction = (
   path: string,
   transaction: Transaction,
 ): ResultAsync<void> => {
-  const { records, configs, ...rest } = transaction;
+  const { records, configs, tags, message, source, channel, ...core } =
+    transaction;
   const entry = {
-    ...rest,
+    ...core,
     ...(isObjectNonEmpty(records) && { records }),
     ...(isObjectNonEmpty(configs) && { configs }),
+    tags,
+    ...(message !== undefined && { message }),
+    ...(source !== undefined && { source }),
+    ...(channel !== undefined && { channel }),
   };
   return fs.appendFile(path, JSON.stringify(entry) + "\n");
 };

@@ -16,16 +16,23 @@ import {
 } from "../lib/patch-parser.ts";
 import { types } from "../cli/types.ts";
 
-import { itemFormatOption, namespaceOption } from "../cli/options.ts";
+import {
+  itemFormatOption,
+  namespaceOption,
+  type TxMetadataArgs,
+  withTxMetadata,
+} from "../cli/options.ts";
 import type { SerializeItemFormat } from "../utils/serialize.ts";
 import { isStdinPiped, readStdinAsArray } from "../cli/stdin.ts";
 
-const updateHandler: CommandHandlerWithDb<{
-  ref?: EntityRef;
-  patches: string[];
-  namespace: NamespaceEditable;
-  format?: SerializeItemFormat;
-}> = async ({ kg, config, ui, args }) => {
+const updateHandler: CommandHandlerWithDb<
+  {
+    ref?: EntityRef;
+    patches: string[];
+    namespace: NamespaceEditable;
+    format?: SerializeItemFormat;
+  } & TxMetadataArgs
+> = async ({ kg, config, ui, args }) => {
   const hasPositionalArgs = args.ref !== undefined || args.patches.length > 0;
 
   if (isStdinPiped()) {
@@ -39,8 +46,17 @@ const updateHandler: CommandHandlerWithDb<{
     if (isErr(inputsResult)) return inputsResult;
 
     const inputs = inputsResult.data as EntityUpdate<typeof args.namespace>[];
+    const { tags, message, source, channel } = args.txMeta;
     const result = await kg.update(
-      createTransactionInput(config.author, args.namespace, inputs),
+      createTransactionInput(
+        config.author,
+        args.namespace,
+        inputs,
+        tags,
+        message,
+        source,
+        channel,
+      ),
     );
     if (isErr(result)) return result;
 
@@ -65,8 +81,17 @@ const updateHandler: CommandHandlerWithDb<{
     ...fieldsResult.data,
   } as EntityUpdate<typeof args.namespace>;
 
+  const { tags, message, source, channel } = args.txMeta;
   const result = await kg.update(
-    createTransactionInput(config.author, args.namespace, [entityInput]),
+    createTransactionInput(
+      config.author,
+      args.namespace,
+      [entityInput],
+      tags,
+      message,
+      source,
+      channel,
+    ),
   );
   if (isErr(result)) return result;
 
@@ -79,20 +104,21 @@ export const UpdateCommand = types({
   aliases: ["edit"],
   describe: "update with field=value patches or stdin",
   builder: (yargs: Argv) =>
-    yargs
-      .positional("ref", {
-        describe: "reference (id | uid | key) - required unless using stdin",
-        type: "string",
-        coerce: (value: string | undefined) =>
-          value ? normalizeEntityRef(value) : undefined,
-      })
-      .positional("patches", {
-        describe: patchesDescription,
-        type: "string",
-        array: true,
-        default: [],
-      })
-      .options({ ...namespaceOption, ...itemFormatOption })
-      .example(createPatchExamples("update <ref>")),
+    withTxMetadata(
+      yargs
+        .positional("ref", {
+          describe: "reference (id | uid | key) - required unless using stdin",
+          type: "string",
+          coerce: (value: string | undefined) =>
+            value ? normalizeEntityRef(value) : undefined,
+        })
+        .positional("patches", {
+          describe: patchesDescription,
+          type: "string",
+          array: true,
+          default: [],
+        })
+        .options({ ...namespaceOption, ...itemFormatOption }),
+    ).example(createPatchExamples("update <ref>")),
   handler: runtimeWithDb(updateHandler),
 });
