@@ -5,3 +5,10 @@ tmp/
 *.md
 *.yaml
 *.d.ts
+*.svg
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico

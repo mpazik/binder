@@ -227,11 +227,38 @@ $ binder create Task dark-mode title="Add dark mode support" status=active prior
 $ binder update dark-mode status=complete
 ```
 
+### HTTP
+
+For browser UIs, webhooks, and integrations. `binder http` starts a local server with a record browser at `http://127.0.0.1:4000`, plus a JSON API:
+
+- `GET  /api/schema` — types and fields
+- `GET  /api/records?type=Task&status=active` — query records
+- `GET  /api/records/:key` — fetch one
+- `POST /api/transactions` — apply a transaction
+
+Drop a `server.ts` in your workspace root to add custom routes, built on [Hono](https://hono.dev).
+
+```ts
+import { Hono } from "hono";
+import type { ServerModule } from "@binder.do/cli";
+
+const mod: ServerModule = ({ kg }) => {
+  const app = new Hono();
+  app.get("/api/stats", async (c) => {
+    const r = await kg.search({ filters: { type: "Task" } });
+    return c.json({ tasks: "data" in r ? r.data.length : 0 });
+  });
+  return app;
+};
+export default mod;
+```
+
+→ See [HTTP server docs](docs/features/http-server.md) for the full reference.
+
 ## Roadmap
 
 ### Next
 - More blueprints and examples
-- HTTP API
 - TypeScript library
 - Hooks
 - Full-text and semantic search

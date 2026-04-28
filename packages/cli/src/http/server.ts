@@ -1,4 +1,4 @@
-import { relative } from "path";
+import { join, relative } from "path";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -10,6 +10,11 @@ import { formatReferences } from "../document/reference.ts";
 import type { Logger } from "../log.ts";
 import type { AppConfig } from "../config.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
+import {
+  DEFAULT_SERVER_FILES,
+  findShadowedRoutes,
+  loadServerModule,
+} from "./serverModule.ts";
 
 export type HttpServerConfig = {
   port: number;
@@ -40,10 +45,11 @@ const jsonError = (
 ) => c.json({ error: message }, status);
 
 export const createHttpApp = (
-  serverConfig: Omit<HttpServerConfig, "staticDir"> & {
+  serverConfig: Omit<HttpServerConfig, "staticDir" | "serverModule"> & {
     staticDir: string | null;
   },
   deps: HttpServerDeps,
+  serverApp: Hono | null = null,
 ): Hono => {
   const { kg, log, config } = deps;
   const app = new Hono();
@@ -146,7 +152,18 @@ export const createHttpApp = (
     return c.json(result.data, 201);
   });
 
+  // Mount user routes from server.ts after binder's /api/* so binder wins on
+  // collisions, and before static so user API routes aren't shadowed by the
+  // SPA index.html fallback.
+  if (serverApp) app.route("/", serverApp);
+
   if (serverConfig.staticDir !== null) {
+    // Block server module source files from being served as static assets,
+    // even when the static dir contains them.
+    for (const name of DEFAULT_SERVER_FILES) {
+      app.get(`/${name}`, (c) => c.notFound());
+    }
+
     const root = relative(process.cwd(), serverConfig.staticDir);
     app.use("/*", serveStatic({ root }));
     // Serve index.html for any unmatched route so client-side routing works
@@ -160,17 +177,29 @@ export const startHttpServer = async (
   serverConfig: HttpServerConfig,
   deps: HttpServerDeps,
 ): ResultAsync<{ stop: () => Promise<void> }> => {
-  const { log } = deps;
+  const { log, fs, config } = deps;
   const { port, host, staticDir } = serverConfig;
 
+  // Resolve effective static dir.
+  //   null              → static serving disabled
+  //   user dir          → serve user files; look here for server.ts
+  //   .binder/web       → workspace convention default; look here for server.ts
+  //   built-in browser  → fallback default; no server.ts lookup (binder-owned)
   let effectiveStaticDir: string | null;
+  let userStaticDir: string | null = null;
 
   if (staticDir === null) {
     effectiveStaticDir = null;
   } else if (staticDir === undefined) {
-    effectiveStaticDir = BUILTIN_PUBLIC_DIR;
+    const conventionDir = join(config.paths.root, ".binder", "web");
+    if (await fs.exists(conventionDir)) {
+      effectiveStaticDir = conventionDir;
+      userStaticDir = conventionDir;
+    } else {
+      effectiveStaticDir = BUILTIN_PUBLIC_DIR;
+    }
   } else {
-    const exists = await deps.fs.exists(staticDir);
+    const exists = await fs.exists(staticDir);
     if (!exists) {
       log.warn("Static directory does not exist, disabling static serving", {
         staticDir,
@@ -178,12 +207,45 @@ export const startHttpServer = async (
       effectiveStaticDir = null;
     } else {
       effectiveStaticDir = staticDir;
+      userStaticDir = staticDir;
     }
+  }
+
+  // Look for server.ts inside the user-provided static dir only. The built-in
+  // record browser dir is binder-owned and never scanned.
+  let serverApp: Hono | null = null;
+  let serverModulePath: string | null = null;
+  if (userStaticDir) {
+    for (const name of DEFAULT_SERVER_FILES) {
+      const candidate = join(userStaticDir, name);
+      if (await fs.exists(candidate)) {
+        serverModulePath = candidate;
+        break;
+      }
+    }
+  }
+
+  if (serverModulePath) {
+    const loaded = await loadServerModule(deps, serverModulePath);
+    if (isErr(loaded)) return loaded;
+    serverApp = loaded.data;
+    const shadowed = findShadowedRoutes(serverApp);
+    if (shadowed.length > 0) {
+      log.warn(
+        "Server module routes shadowed by binder built-ins (binder wins)",
+        { routes: shadowed },
+      );
+    }
+    log.info("Loaded server module", {
+      path: serverModulePath,
+      routes: serverApp.routes.length,
+    });
   }
 
   const app = createHttpApp(
     { port, host, staticDir: effectiveStaticDir },
     deps,
+    serverApp,
   );
   const server = serve({ fetch: app.fetch, port, hostname: host });
 
@@ -191,6 +253,7 @@ export const startHttpServer = async (
     port,
     host,
     staticDir: effectiveStaticDir ?? "disabled",
+    serverModule: serverModulePath ?? "none",
   });
 
   const stop = (): Promise<void> =>

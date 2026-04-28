@@ -46,8 +46,7 @@ const loadSchema = async () => {
   return schema;
 };
 
-const getTypeKeys = () =>
-  schema ? Object.keys(schema.types).sort() : [];
+const getTypeKeys = () => (schema ? Object.keys(schema.types).sort() : []);
 
 // TypeFieldRef is either a string key or [key, attrs]
 const getTypeFields = (typeKey) => {

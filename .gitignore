@@ -36,6 +36,9 @@ jspm_packages/
 dist
 build
 
+# WebStorm/IntelliJ — locally generated, not shared
+.idea/dictionaries/project.xml
+
 # dotenv environment variable files
 .env
 .env.development.local
