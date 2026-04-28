@@ -35,10 +35,30 @@ export const BACKUPS_DIR = "backups";
 export const LOCK_RETRY_DELAY_MS = 200;
 export const LOCK_MAX_RETRIES = 3;
 
+/** LLM provider/model selector. Both fields optional so per-operation overrides can leave the default in place. */
+const llmModelRefSchema = z
+  .object({
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+  })
+  .strict();
+
+/** LLM config block shared by global and workspace configs. */
+export const llmConfigSchema = z
+  .object({
+    default: llmModelRefSchema.optional(),
+    operations: z.record(z.string(), llmModelRefSchema).optional(),
+  })
+  .strict();
+
+export type LlmModelRef = z.infer<typeof llmModelRefSchema>;
+export type LlmConfig = z.infer<typeof llmConfigSchema>;
+
 /** Complete schema for the CLI's global config file. Extends core. */
 export const cliGlobalConfigSchema = CoreConfigSchema.extend({
   logLevel: z.enum(LOG_LEVELS).optional(),
   telemetry: z.boolean().nullable().optional(),
+  llm: llmConfigSchema.optional(),
 });
 
 export type GlobalConfig = z.infer<typeof cliGlobalConfigSchema>;
@@ -56,6 +76,7 @@ export const cliWorkspaceConfigSchema = CoreConfigSchema.extend({
         .optional(),
     })
     .optional(),
+  llm: llmConfigSchema.optional(),
 });
 
 export type UserConfig = z.infer<typeof cliWorkspaceConfigSchema>;
@@ -101,6 +122,56 @@ export type AppConfig = {
   validation?: {
     rules?: Record<string, "error" | "warning" | "info" | "hint" | "off">;
   };
+  llm?: LlmConfig;
+};
+
+/**
+ * Merge global and workspace `llm` blocks. Workspace overrides global at the
+ * field level: workspace.default.* wins over global.default.*, and per-operation
+ * entries are merged so workspace-only operations are added and shared ones win field-by-field.
+ */
+export const mergeLlmConfig = (
+  global: LlmConfig | undefined,
+  workspace: LlmConfig | undefined,
+): LlmConfig | undefined => {
+  if (!global && !workspace) return undefined;
+  const mergedDefault: LlmModelRef | undefined =
+    global?.default || workspace?.default
+      ? { ...(global?.default ?? {}), ...(workspace?.default ?? {}) }
+      : undefined;
+  const operationKeys = new Set<string>([
+    ...Object.keys(global?.operations ?? {}),
+    ...Object.keys(workspace?.operations ?? {}),
+  ]);
+  const operations: Record<string, LlmModelRef> = {};
+  for (const key of operationKeys) {
+    operations[key] = {
+      ...(global?.operations?.[key] ?? {}),
+      ...(workspace?.operations?.[key] ?? {}),
+    };
+  }
+  const result: LlmConfig = {};
+  if (mergedDefault) result.default = mergedDefault;
+  if (operationKeys.size > 0) result.operations = operations;
+  return result;
+};
+
+/**
+ * Resolve the provider+model for a given operation. Per-operation entries
+ * override `default` field-by-field. Returns null when neither yields
+ * both fields.
+ */
+export const resolveLlmConfig = (
+  llm: LlmConfig | undefined,
+  operation: string,
+): { provider: string; model: string } | null => {
+  if (!llm) return null;
+  const op = llm.operations?.[operation] ?? {};
+  const def = llm.default ?? {};
+  const provider = op.provider ?? def.provider;
+  const model = op.model ?? def.model;
+  if (!provider || !model) return null;
+  return { provider, model };
 };
 
 export { getGlobalConfigPath };
@@ -123,9 +194,11 @@ export const loadWorkspaceConfig = async (
   });
   if (isErr(result)) return result;
 
-  const loaded = result.data;
-  const { docsPath, include, exclude, validation, author, logLevel } = loaded;
+  const loaded = result.data as typeof result.data & { llm?: LlmConfig };
+  const { docsPath, include, exclude, validation, author, logLevel, llm } =
+    loaded;
   const mergedExclude = [...DEFAULT_EXCLUDE_PATTERNS, ...(exclude ?? [])];
+  const mergedLlm = mergeLlmConfig(globalConfig.llm, llm);
 
   return ok({
     author,
@@ -140,5 +213,6 @@ export const loadWorkspaceConfig = async (
     include,
     exclude: mergedExclude,
     validation,
+    llm: mergedLlm,
   });
 };

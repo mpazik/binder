@@ -19,7 +19,7 @@ Binder is a Local-first knowledge base with bidirectional Markdown sync, editor 
 
 Bun workspaces monorepo with three packages under `packages/`:
 
-- **`@binder.do/cli`** — Main entry point. Contains the CLI, LSP server, MCP server, Markdown document sync/diffing, schema loading, and validation logic.
+- **`@binder.do/cli`** — Main entry point. Contains the CLI, LSP server, MCP server, Markdown document sync/diffing, schema loading, validation logic, and LLM integration (via `@mariozechner/pi-ai`).
 - **`@binder/repo`** — Knowledge graph engine. Entity/relationship storage, transaction processing, changeset computation, filtering. The `@binder/repo/local` sub-entry provides workspace bootstrap: config loading, path resolution, and `init`/`open` for using binder as a library.
 - **`@binder/utils`** — Shared utilities. Pure helpers for arrays, strings, encoding, error handling etc.
 
