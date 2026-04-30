@@ -139,23 +139,29 @@ const parseArgs = (
   return { granularity, offset, keyOnly };
 };
 
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
 const getWeekNumber = (date: Date): number => {
-  const target = new Date(date.valueOf());
-  const dayNr = (date.getDay() + 6) % 7;
-  target.setDate(target.getDate() - dayNr + 3);
+  const target = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
   const firstThursday = target.valueOf();
-  target.setMonth(0, 1);
-  if (target.getDay() !== 4) {
-    target.setMonth(0, 1 + ((4 - target.getDay() + 7) % 7));
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCDate(1 + ((4 - target.getUTCDay() + 7) % 7));
   }
-  return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+  return 1 + Math.round((firstThursday - target.valueOf()) / MS_PER_WEEK);
 };
 
 const getWeekYear = (date: Date): number => {
-  const target = new Date(date.valueOf());
-  const dayNr = (date.getDay() + 6) % 7;
-  target.setDate(target.getDate() - dayNr + 3);
-  return target.getFullYear();
+  const target = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  return target.getUTCFullYear();
 };
 
 const getQuarter = (date: Date): number => Math.floor(date.getMonth() / 3) + 1;

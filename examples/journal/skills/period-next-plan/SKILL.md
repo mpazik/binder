@@ -1,7 +1,7 @@
 ---
 name: period-next-plan
-description: Period planning — set goal and plan for a period (w/m/q/y).
-argument-hint: "<w|m|q|y> [offset]"
+description: Period planning (w/m/q/y) — set goal and plan for the next period.
+argument-hint: "[w|m|q|y] [offset]"
 disable-model-invocation: true
 ---
 
@@ -11,10 +11,8 @@ Set up the goal and plan for the target period.
 
 Offset controls direction: **proactive** (positive or default — planning upcoming periods) or **retroactive** (negative — backfilling a past period's plan). Use actual period dates from entries below — do NOT assume "next" or "current."
 
-Ensure the target period exists: !`O=$1; bun scripts/journal.ts $0 ${O:-next}`
-
-Target period with parent and siblings: !`O=$1; binder read $(bun scripts/journal.ts $0 ${O:-next} --key) -f "key,goal,plan,parent(key,goal,plan,children(key,goal,plan,achievements,summary,totalScore))" --format yaml`
-Previous period: !`O=$1; P=$([ "$O" = "next" ] || [ -z "$O" ] && echo 0 || echo $(( O - 1 ))); binder read $(bun scripts/journal.ts $0 $P --key) -f "goal,plan,achievements,events,summary,totalScore" --format yaml`
+Target period with parent and siblings (created if missing): !`G=$0; O=$1; binder read $(bun scripts/journal.ts ${G:-w} ${O:-next} --key) -f "key,goal,plan,parent(key,goal,plan,children(key,goal,plan,achievements,summary,totalScore))" --format yaml`
+Previous period: !`G=$0; O=$1; P=$([ "$O" = "next" ] || [ -z "$O" ] && echo 0 || echo $(( O - 1 ))); binder read $(bun scripts/journal.ts ${G:-w} $P --key) -f "goal,plan,achievements,events,summary,totalScore" --format yaml`
 
 ## Deliver one message
 
@@ -59,14 +57,6 @@ Don't include items already achieved in previous siblings. Flag any carry-forwar
 
 > "What to add, remove, or change?"
 
-### 5. Intention (weeks only)
-
-For weekly periods, suggest an intention — a principle to operate by for the week:
-
-> "Intention for this week? Based on recent patterns, maybe: 'Protect mornings for deep work' or 'Ship over polish.'"
-
-One line. Not a task — a guard rail. Daily intentions can refine this further.
-
 ## After my response
 
 Correct based on input. Max 1 follow-up, then write.
@@ -76,8 +66,7 @@ Correct based on input. Max 1 follow-up, then write.
 Use `binder update` to update the target period's entry (key from context):
 
 1. **`goal`**: the agreed goal
-2. **`intention`**: set the agreed intention (weeks only) — one line
-3. **`plan`**: the agreed plan as a plain bullet list — no checkboxes, no status markers
+2. **`plan`**: the agreed plan as a plain bullet list — no checkboxes, no status markers
 3. **Deferred items**: for any carry-forward item marked "→ parent backlog":
    - Get the parent key from context
    - Append: `binder update <parent-key> 'plan+=<item>'`

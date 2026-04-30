@@ -13,10 +13,9 @@ Offset controls direction: default (0) = today, negative = past day (e.g. -1 for
 
 **Target day** = the day being summarized (offset $0). **Always read its date from the entry below — never assume it's "today."**
 
-Ensure the target day exists: !`O=$0; bun scripts/journal.ts d ${O:-0}`
-
-Target day entry (we are summarizing this): !`O=$0; binder read $(bun scripts/journal.ts d ${O:-0} --key) --format yaml`
+Target day entry (we are summarizing this — created if missing): !`O=$0; binder read $(bun scripts/journal.ts d ${O:-0} --key) --format yaml`
 Week context: !`O=$0; binder read $(bun scripts/journal.ts w ${O:-0} --key) -f "weekPeriod,goal,plan,achievements" --format yaml`
+Extra context: Calendar events, activity dump, and health data are injected automatically by the data-sync extension. Use them if present. Activity dump is background context — not every commit or session is an achievement.
 Recent days: !`binder search type=JournalDay "dayPeriod>=$(date -v-7d +%Y-%m-%d)" -f "dayPeriod,plan,achievements,summary,moodScore,sleepScore,foodScore,workScore,fitnessScore,totalScore" --format yaml`
 
 ---
@@ -29,15 +28,15 @@ After reading the entry, deliver one message. Use plain text throughout — no b
 
 Brief bullet points of what happened based on the log and plan. Cover what got done, what didn't, and anything notable.
 
+Note: log entries may be added retroactively — don't infer energy flow or timing patterns from timestamps alone. Ask if the timeline is unclear.
+
 ### 2. Reflection
 
 Offer a short inferred read on the day — energy, momentum, patterns vs recent days. Honest, not preachy.
 
-If the day had an `intention` set, check it briefly: "Intention was 'timebox auth fix to 2h' — looks like it took 3h. Pattern or one-off?" One line, not a guilt trip. If it held, note it as a win.
-
 ### 3. What's missing?
 
-Numbered list. Call out gaps: things the log doesn't cover, plan items with no mention, anything that feels incomplete. Ask directly — "did X happen?" or "how did Y go?"
+Numbered list. Call out gaps: things the log doesn't cover, plan items with no mention, anything that feels incomplete. Gaps may mean "not logged yet" rather than "didn't happen" — ask "anything not captured yet?" rather than assuming omission.
 
 ### 4. How was it?
 
@@ -54,6 +53,7 @@ Once I've responded with corrections, reflections, and answers, deliver the full
 Based on the log, my responses, and the conversation so far, suggest all scores as a numbered list — one per line for quick correction:
 
 **Scores**
+
 1. Mood: 6
 2. Sleep: 7 — up from yesterday's 5, more rest
 3. Food: 5 — two ice creams, flagged
@@ -61,6 +61,7 @@ Based on the log, my responses, and the conversation so far, suggest all scores 
 5. Fitness: 8
 
 Scale:
+
 - 1-2: extreme, total disaster (rarely used)
 - 3-4: bad day in this area
 - 5: slip-ups, not great
@@ -76,14 +77,17 @@ Flag any score that stands out vs recent days. One line, no lecture.
 Based on the log, plan, and conversation, pre-fill three numbered lists:
 
 **Done**
+
 1. Shipped the frontmatter parser
 2. Hit a new PR on overhead press
 
 **Events** (unexpected things that happened and required attention — interruptions, surprises, incidents)
+
 1. Critical auth bug in prod — dropped everything for 2h
 2. Meeting rescheduled to morning — lost the deep work block
 
 **Still open** (plan items not completed — with progress note if any is apparent)
+
 1. Journaling commands → **next day** — not mentioned in log
 2. Add to backlog command → **next day** — saw a branch started, any progress?
 
@@ -117,6 +121,18 @@ Use `binder update` to update the target day's entry (key from context):
 4. **`summary`**: the confirmed summary text. **Plain paragraphs only — no sub-headers, no bullet lists.**
 5. **`plan`**: DO NOT modify. Plan is set at start of day. Completion is tracked in `achievements` only.
 6. **Carry-forward**: do NOT write carry-forwards to other entries. The "Still open" list with dispositions (→ next day, → specific day, → drop) is informational — `day-next-plan` owns all carry-forward writes. This prevents duplicates when both skills run in the same session or independently.
+
+## After writing — Offer next-day planning
+
+Once the summary is written, ask:
+
+> "Want to plan [next day's date]?"
+
+If yes: read `.pi/skills/day-next-plan/SKILL.md` and follow its full flow from step 1.
+
+Reuse context already present in the conversation when available (source day entry, target day entry, week context, recent days). Only run binder context commands for missing pieces.
+
+If no: close the session.
 
 ## Tone and constraints
 

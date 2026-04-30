@@ -39,7 +39,7 @@ const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 const entry = `${time} - ${message}`;
 const ref = `jd-${date}`;
 
-const changeset = JSON.stringify([{ key: ref, log: [["insert", entry]] }]);
+const changeset = JSON.stringify([{ $ref: ref, log: [["insert", entry]] }]);
 
 try {
   execSync(`${BINDER} update`, {

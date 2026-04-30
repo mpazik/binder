@@ -134,12 +134,13 @@
       allowMultiple: true
       description: Summary of health data imported from a third party like Apple Health
 
-    - key: intention
+    - key: learnings
       type: Field
-      name: Intention
+      name: Learnings
+      description: Key learnings and lessons from the period.
       dataType: richtext
+      allowMultiple: true
       richtextFormat: line
-      description: A principle to operate by — not a task. E.g. "protect mornings for deep work", "don't context-switch before finishing the PR", "ship over polish."
 
     # ====================
     # TYPES
@@ -151,7 +152,6 @@
       description: Daily journal entry
       fields:
         - dayPeriod: { required: true }
-        - intention
         - parent: { only: [JournalWeek] }
         - previous: { only: [JournalDay] }
         - next: { only: [JournalDay] }
@@ -165,6 +165,7 @@
         - achievements
         - events
         - log
+        - learnings
         - summary
         - healthData
 
@@ -174,7 +175,6 @@
       description: Weekly journal entry
       fields:
         - weekPeriod: { required: true }
-        - intention
         - parent: { only: [JournalMonth] }
         - previous: { only: [JournalWeek] }
         - next: { only: [JournalWeek] }
@@ -183,6 +183,7 @@
         - plan
         - achievements
         - events
+        - learnings
         - summary
         - children: { only: [JournalDay] }
 
@@ -199,6 +200,7 @@
         - plan
         - achievements
         - events
+        - learnings
         - summary
         - children: { only: [JournalWeek] }
 
@@ -215,6 +217,7 @@
         - plan
         - achievements
         - events
+        - learnings
         - summary
         - children: { only: [JournalMonth] }
 
@@ -230,6 +233,7 @@
         - plan
         - achievements
         - events
+        - learnings
         - summary
         - children: { only: [JournalQuarter] }
 
@@ -244,7 +248,7 @@
       name: Journal Day Summary
       viewFormat: section
       viewContent: |
-        ### {dayPeriod}
+        ### [{dayPeriod}](../days/{dayPeriod})
         {summary}
 
     - key: journal-week-summary
@@ -252,7 +256,7 @@
       name: Journal Week Summary
       viewFormat: section
       viewContent: |
-        ### {weekPeriod}
+        ### [{weekPeriod}](../weeks/{weekPeriod})
         {summary}
 
     - key: journal-month-summary
@@ -260,7 +264,7 @@
       name: Journal Month Summary
       viewFormat: section
       viewContent: |
-        ### {monthPeriod}
+        ### [{monthPeriod}](../months/{monthPeriod})
         {summary}
 
     - key: journal-quarter-summary
@@ -268,7 +272,7 @@
       name: Journal Quarter Summary
       viewFormat: section
       viewContent: |
-        ### {quarterPeriod}
+        ### [{quarterPeriod}](../quarters/{quarterPeriod})
         {summary}
 
     - key: journal-day-view
@@ -278,17 +282,19 @@
         [
           dayPeriod,
           parent,
+          previous,
           moodScore,
           sleepScore,
           foodScore,
           workScore,
           fitnessScore,
           totalScore,
+          healthData,
         ]
       viewContent: |
         # {dayPeriod}
 
-        ## Context ({parent.weekPeriod})
+        ## Context ([{parent.weekPeriod}](../weeks/{parent.weekPeriod}))
 
         ### Week Goal
         {parent.goal}
@@ -308,17 +314,20 @@
         ## Log
         {log}
 
+        ## Learnings
+        {learnings}
+
         ## Summary
         {summary}
 
     - key: journal-week-view
       type: View
       name: Journal Week View
-      preamble: [weekPeriod, parent, totalScore, goal]
+      preamble: [weekPeriod, parent, previous, totalScore, goal]
       viewContent: |
         # Week {weekPeriod}
 
-        ## Context ({parent.monthPeriod})
+        ## Context ([{parent.monthPeriod}](../months/{parent.monthPeriod}))
 
         ### Month Goal
         {parent.goal}
@@ -338,6 +347,9 @@
         ## Events
         {events}
 
+        ## Learnings
+        {learnings}
+
         ## Days Summary
         {children|view:journal-day-summary}
 
@@ -347,11 +359,11 @@
     - key: journal-month-view
       type: View
       name: Journal Month View
-      preamble: [monthPeriod, parent, goal]
+      preamble: [monthPeriod, parent, previous, goal]
       viewContent: |
         # {monthPeriod}
 
-        ## Context ({parent.quarterPeriod})
+        ## Context ([{parent.quarterPeriod}](../quarters/{parent.quarterPeriod}))
 
         ### Quarter Goal
         {parent.goal}
@@ -371,6 +383,9 @@
         ## Events
         {events}
 
+        ## Learnings
+        {learnings}
+
         ## Weeks Summary
         {children|view:journal-week-summary}
 
@@ -380,11 +395,11 @@
     - key: journal-quarter-view
       type: View
       name: Journal Quarter View
-      preamble: [quarterPeriod, parent, goal]
+      preamble: [quarterPeriod, parent, previous, goal]
       viewContent: |
         # {quarterPeriod}
 
-        ## Context ({parent.yearPeriod})
+        ## Context ([{parent.yearPeriod}](../years/{parent.yearPeriod}))
 
         ### Year Goal
         {parent.goal}
@@ -404,6 +419,9 @@
         ## Events
         {events}
 
+        ## Learnings
+        {learnings}
+
         ## Months Summary
         {children|view:journal-month-summary}
 
@@ -413,7 +431,7 @@
     - key: journal-year-view
       type: View
       name: Journal Year View
-      preamble: [yearPeriod, goal]
+      preamble: [yearPeriod, previous, goal]
       viewContent: |
         # {yearPeriod}
 
@@ -428,6 +446,9 @@
 
         ## Events
         {events}
+
+        ## Learnings
+        {learnings}
 
         ## Quarters Summary
         {children|view:journal-quarter-summary}
