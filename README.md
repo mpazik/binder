@@ -6,16 +6,16 @@
 </picture>
 
 # Binder
-### Headless Knowledge Base for You and Your Agents
+### The database for tools you build with AI
 
-**Local-first** knowledge base with **bidirectional Markdown sync** — edit in any coding editor, query via **CLI** and **MCP**, share with AI agents.
+**Local-first**, accessible from your editor, scripts, agents, and browser.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Built with Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=flat&logo=bun&logoColor=white)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Status](https://img.shields.io/badge/Status-Work_in_Progress-orange)]()
 
-[Features](#features) • [Getting Started](#getting-started) • [How it works](#how-it-works) • [Working with Binder](#working-with-binder) • [Roadmap](#roadmap)
+[What it's for](#what-its-for) • [Getting Started](#getting-started) • [How it works](#how-it-works) • [Features](#features) • [Working with Binder](#working-with-binder) • [Roadmap](#roadmap)
 
 </div>
 
@@ -27,54 +27,18 @@
 > **Data loss is possible.** Do not use for critical data without independent backups.
 
 <div align="center">
-  <video autoplay loop muted playsinline width="720">
-    <source src="https://assets.binder.do/binder-demo.webm" type="video/webm">
-    <source src="https://assets.binder.do/binder-demo.mp4" type="video/mp4">
-  </video>
+  <video src="https://github.com/user-attachments/assets/ad9ac562-50e9-4375-8a2e-c29c6e2a4b4b" autoplay loop muted playsinline width="720"></video>
 </div>
 
-## Features
+## What it's for
 
-<table>
-  <tr>
-    <td align="center" valign="top" width="50%">
-      <img src=".github/assets/screenshots/schema.png" width="100%"/><br/>
-      <b>Data models</b> - define your types and fields in a simple YAML schema. Easy to write, easy to evolve.
-    </td>
-    <td align="center" valign="top" width="50%">
-      <img src=".github/assets/screenshots/autocomplete.png" width="100%"/><br/>
-      <b>Autocomplete</b> - links, field names, and valid values completed as you type.
-    </td>
-  </tr>
-  <tr>
-    <td align="center" valign="top" width="50%">
-      <img src=".github/assets/screenshots/validation.png" width="100%"/><br/>
-      <b>Editor integration</b> - data validation, navigation, autocomplete in your favorite editor.
-    </td>
-    <td align="center" valign="top" width="50%">
-      <img src=".github/assets/screenshots/cli.png" width="100%"/><br/>
-      <b>CLI</b> - search, query, and create from the terminal or script.
-    </td>
-  </tr>
-  <tr>
-    <td align="center" valign="top" width="50%">
-      <img src=".github/assets/screenshots/transactions.png" width="100%"/><br/>
-      <b>Transaction log</b> - every change recorded and attributed to its source. Audit history, undo mistakes, replay any past state.
-    </td>
-    <td align="center" valign="top" width="50%">
-      <img src=".github/assets/screenshots/agent.png" width="100%"/><br/>
-      <b>AI agents</b> - query, create, and update entities via MCP with full audit trail.
-    </td>
-  </tr>
-</table>
+Binder is a perfect storage for all sorts of tools and automation built with agents. It especially excels when you need programmatic access and agent or human in the loop. Things like:
 
-## Use cases
-
-- **Templated notes**: tasks, decisions, contacts, meeting notes. Any collection where every file follows the same shape benefits from schema validation, autocomplete, and queryability.
-- **Embedded views**: write an entity once and have it appear in multiple documents. Views pull entity data into milestone pages, project overviews, and weekly summaries automatically.
-- **Human-agent collaboration**: Markdown keeps things readable for people. CLI & MCP give agents a structured interface to **the same structured data**. Agents can write unexpected or incorrect data. Binder records every agent action with its source: audit what was written, undo any mistake, replay any past state.
-- **Scripting and automation**: query structured data via CLI or API without parsing Markdown. Changes write back to files automatically. Binder is the storage layer your tooling has been missing.
-- **Persistent agent memory**: agents forget between sessions. Binder gives them typed, queryable memory that persists. Preferences, decisions, and indexed context stay structured, not buried in a chat log.
+- **Trackers and pipelines** task tracking, hiring or sales. Binder holds the schema for stages, organizes files by status, and logs every change.
+- **Inboxes and queues** of stuff to triage. Support tickets, leads, things an agent works through. Agents read and write over MCP or CLI. Scripts batch-process. Mistakes undo cleanly.
+- **Catalogs and registries** you look things up in: vendors, subscriptions, research, contacts. Records are typed and link to each other. Query from the CLI. Autocomplete in the editor.
+- **Dashboards and admin panels** for small ops tools that don't justify a SaaS or a full app. `binder http` gives you an API and a record browser. Drop in `server.ts` for your own routes.
+- **Agent context and memory** so your AI tools have somewhere typed and persistent to share state among themselves and people. Structured, fully transparent and easy to maintain.
 
 ## Getting Started
 
@@ -159,15 +123,50 @@ items:
 
 → [Browse all concepts](docs/concepts/)
 
+## Features
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src=".github/assets/screenshots/schema.png" width="100%"/><br/>
+      <b>Data models</b> - define your types and fields in a simple YAML schema. Easy to write, easy to evolve.
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src=".github/assets/screenshots/autocomplete.png" width="100%"/><br/>
+      <b>Autocomplete</b> - links, field names, and valid values completed as you type.
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src=".github/assets/screenshots/validation.png" width="100%"/><br/>
+      <b>Editor integration</b> - data validation, navigation, autocomplete in your favorite editor.
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src=".github/assets/screenshots/cli.png" width="100%"/><br/>
+      <b>CLI</b> - search, query, and create from the terminal or script.
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src=".github/assets/screenshots/transactions.png" width="100%"/><br/>
+      <b>Transaction log</b> - every change recorded and attributed to its source. Audit history, undo mistakes, replay any past state.
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src=".github/assets/screenshots/agent.png" width="100%"/><br/>
+      <b>AI agents</b> - query, create, and update entities via MCP with full audit trail.
+    </td>
+  </tr>
+</table>
+
 ## Working with Binder
 
-The same knowledge graph is accessible through three interfaces. Use whichever fits the task.
+Same data, different surfaces. Use whichever fits the task.
 
 ### Editors
 
 Open any Markdown file in your coding editor to read, adjust, and review. Binder's LSP provides **validation, autocomplete, and navigation** across all entity files.
 
-Install the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Binder.binder-vscode) to get started — or see [Getting Started](#getting-started) for WebStorm/IntelliJ and Neovim setup.
+Install the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Binder.binder-vscode) to get started, or see [Getting Started](#getting-started) for WebStorm/IntelliJ and Neovim setup.
 
 
 ### AI Agents
@@ -188,15 +187,9 @@ Add to `.mcp.json` to enable MCP:
 }
 ```
 
-**Skills** load Binder's CLI and data model into an agent's context, so it can query, create, and update records without extra instructions in every prompt.
-
-```bash
-npx skills add mpazik/binder
-```
-
 ### Scripts and Automation
 
-For pipelines, batch operations, and reports. Query, create, and update records without parsing Markdown. Changes write back to files automatically.
+For pipelines, batch operations, reports, or embedding Binder in your own apps and libraries. Query, create, and update records without parsing Markdown. Changes write back to files automatically.
 
 ```bash
 $ binder search type=Task status=active -f "title,status,priority,partOf(title,status)"
@@ -227,16 +220,40 @@ $ binder create Task dark-mode title="Add dark mode support" status=active prior
 $ binder update dark-mode status=complete
 ```
 
+Embed Binder directly. Use it in a one-off script, a long-running service, a library, or any Node/Bun app:
+
+```ts
+import { open, isErr } from "@binder/repo/local";
+
+const repo = await open("/path/to/workspace"); // omit to run from cwd
+if (isErr(repo)) throw repo.error;
+const { data: kg } = repo;
+
+const r = await kg.search({ filters: { type: "Task", status: "complete" } });
+if (!isErr(r)) for (const t of r.data.items) console.log("-", t.title);
+
+await kg.close();
+```
+
+**Workspace scripts.** As a convenience, files in `.binder/scripts/` (`.ts`, `.js`, `.mjs`, `.sh`) become first-class subcommands:
+
+```bash
+$ binder weekly-report          # runs .binder/scripts/weekly-report.ts
+$ binder run weekly-report      # equivalent, never shadowed by built-ins
+```
+
 ### HTTP
 
 For browser UIs, webhooks, and integrations. `binder http` starts a local server with a record browser at `http://127.0.0.1:4000`, plus a JSON API:
 
-- `GET  /api/schema` — types and fields
-- `GET  /api/records?type=Task&status=active` — query records
-- `GET  /api/records/:key` — fetch one
-- `POST /api/transactions` — apply a transaction
+- `GET  /api/schema` - types and fields
+- `GET  /api/records?type=Task&status=active` - query records
+- `GET  /api/records/:key` - fetch one
+- `POST /api/transactions` - apply a transaction
 
-Drop a `server.ts` in your workspace root to add custom routes, built on [Hono](https://hono.dev).
+Bring your own UI with `--static <dir>`, or drop one at `.binder/web/` for zero config. The built-in record browser is the fallback.
+
+Drop a `server.ts` next to your static files to add custom routes, built on [Hono](https://hono.dev). Source files aren't served.
 
 ```ts
 import { Hono } from "hono";
@@ -253,14 +270,24 @@ const mod: ServerModule = ({ kg }) => {
 export default mod;
 ```
 
-→ See [HTTP server docs](docs/features/http-server.md) for the full reference.
+→ See [HTTP server docs](docs/guides/http-server.md) for the full reference.
+
+### Hooks
+
+Run a shell command on every committed transaction. The transaction is piped to stdin as JSON. Declare them in `.binder/config.yaml`:
+
+```yaml
+hooks:
+  - name: notify-slack
+    command: ./scripts/notify-slack.sh
+  - name: audit
+    command: jq -c . >> .binder/audit.log
+```
 
 ## Roadmap
 
 ### Next
 - More blueprints and examples
-- TypeScript library
-- Hooks
 - Full-text and semantic search
 - Transaction log compaction
 
