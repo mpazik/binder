@@ -7,7 +7,7 @@
   "homepage": "https://binder.do",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mpazik/binder",
+    "url": "git+https://github.com/mpazik/binder.git",
     "directory": "packages/cli"
   },
   "keywords": [
@@ -29,7 +29,7 @@
     "./journal": "./dist/plugins/journal.js"
   },
   "bin": {
-    "binder": "./dist/index.js"
+    "binder": "dist/index.js"
   },
   "engines": {
     "node": ">=22"
