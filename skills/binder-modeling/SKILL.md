@@ -1,6 +1,6 @@
 ---
 name: binder-modeling
-description: Binder data modeling — define entity types, fields, relations, and constraints. Use when asked to "create a type", "add a field", "define a schema", "set up relations", "model entities", or design a binder workspace schema.
+description: Binder data modeling — define entity types, fields, relations, constraints, views, and navigation. Use when asked to "create a type", "add a field", "define a schema", "set up relations", "model entities", "create a view", "set up navigation", "render entities as files", or design a binder workspace schema.
 ---
 
 # Binder Data Modeling
@@ -104,6 +104,53 @@ Attach metadata to field values (e.g. `role` on an `assignedTo` relation). An at
 ```
 
 > Note: `docs/concepts/field-attribute.md` shows `type: Attribute` in examples — that form is rejected by the runtime. Use `type: Field` for the attribute definition itself.
+
+## Rendering: Views and Navigation
+
+A schema describes data shape. Two more config entity types — `View` and `Navigation` — describe how that data is rendered as files and edited back into entities. They live in the same config namespace as `Field` and `Type` and are imported the same way (`binder tx import`).
+
+- **View** — markdown template with `{fieldName}` slots. Renders an entity to markdown; edits to the rendered file extract back into a transaction
+- **Navigation** — maps a query to a file path and a view, producing the workspace's file tree
+
+Minimal view:
+
+```yaml
+- author: system
+  configs:
+    - key: task-view
+      type: View
+      preamble: [key, status, priority, parent]
+      viewContent: |
+        # {title}
+
+        {description}
+
+        ## Details
+        {details}
+```
+
+Minimal navigation wiring that view to a file path:
+
+```yaml
+- author: system
+  configs:
+    - key: nav-tasks
+      type: Navigation
+      path: tasks/{key}
+      where: { type: Task }
+      view: task-view
+```
+
+Result: every `Task` entity renders to `tasks/{key}.md` using `task-view`. Editing the file syncs changes back to the entity.
+
+Key points to know when modeling:
+
+- Path placeholders are single-segment only (cannot contain `/`); fan-out happens automatically on `allowMultiple` path fields
+- Path without a `view` produces a YAML file; path ending with `/` produces a directory for children
+- Items with a `where` clause support **create-by-file**: dropping a new file at a matching path creates the entity
+- When a sub-view renders new relation children, the type must be resolvable: render a `{type}` slot, narrow the field's `range` to one type, or set `only: SingleType` on the parent type's field
+
+See [references/views.md](references/views.md) for slot syntax, expression props (`view:`, `where:`, flags), formats, and bidirectional sync. See [references/navigation.md](references/navigation.md) for path interpolation, fan-out, nested children, and the rendering pipeline.
 
 ## Data Types
 
@@ -283,3 +330,5 @@ Auto-managed, do not set on create or update: `id`, `uid`, `createdAt`, `updated
 
 - [Relations & inverse patterns](references/relations.md)
 - [Field attributes](references/field-attributes.md)
+- [Views](references/views.md)
+- [Navigation](references/navigation.md)
