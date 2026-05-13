@@ -62,6 +62,6 @@ The `sectionDepth` parameter on section-format fields controls which headers are
 
 Each format has a validator that checks content against its constraints. Validators strip fenced code blocks before checking for structural elements (headers, horizontal rules), so code examples don't trigger false validation errors.
 
-### Compatibility Rule
+### Rendering in Views
 
-Content of a smaller format can be used in a larger slot position. A line value can appear anywhere a block or document is expected. A section value cannot be used in an inline or block position.
+A field's format and `allowMultiple` setting constrain which view slot positions can render it. See [view.md](view.md) for slot positions and the format/slot compatibility table.

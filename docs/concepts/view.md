@@ -56,11 +56,30 @@ Field slots are placeholders in views that get replaced with actual field values
 
 ### Slot Positions
 
-The system automatically detects where a field slot appears in the document, which determines how content is rendered and extracted:
-- **Inline**: Slot is part of a sentence or shares a line with other content. Replaces only the slot text. Example: `Author: {author.name}`
-- **Block**: Slot is the only content in a paragraph. The entire paragraph is replaced by the rendered content, allowing views to control their own formatting.
-- **Section**: Slot is a paragraph immediately preceding a header or at end of document. Used for lists of items that need their own subsections.
-- **Document**: Slot is the only content in the entire document body. View has full control over structure.
+The system automatically detects where a field slot appears in the document. The detected position controls how content is rendered and extracted, and which field formats are accepted.
+
+- **Inline** (`phrase`, `line`): Slot shares a line with other content. Replaces only the slot text. Example: `Author: {author.name}`.
+- **Block**: Slot occupies a paragraph surrounded by other paragraphs.
+- **Section**: Slot sits inside heading scope — a heading precedes it or follows it. Bounded by the next heading at the same depth, or end-of-doc.
+- **Part**: Slot is bounded by a thematic break (`---`) on at least one side. Used to embed a self-contained region inside a larger template, overriding any surrounding heading scope.
+- **Document**: Slot is the only content block in the file (frontmatter aside).
+
+Position is derived from the surrounding markdown structure at render time, not declared on the field or view.
+
+### Format / Slot Compatibility
+
+A field's `richtextFormat` and `allowMultiple` together determine which positions can render it. The constraint is that a multi-value field's item delimiter must not collide with the slot's bounding construct, otherwise the parser cannot tell where the field ends.
+
+| Field format / multiplicity | `block` | `section` | `part` | `document` |
+|---|---|---|---|---|
+| `block` (single)    | ✓ | ✓ | ✓ | ✓ |
+| `block` (multi)     | ✗ | ✓ | ✓ | ✓ |
+| `section` (single)  | ✗ | ✓ | ✓ | ✓ |
+| `section` (multi)   | ✗ | ✓ | ✓ | ✓ |
+| `document` (single) | ✗ | ✗ | ✓ | ✓ |
+| `document` (multi)  | ✗ | ✗ | ✗ | ✓ |
+
+Multi `block` and multi `document` bump the minimum slot because their item delimiters (blank line, `---`) coincide with the bounding construct of the same-named slot. Multi `section` does not bump the minimum: section items are delimited by headings at `sectionDepth + 1`, which nest cleanly inside any heading-bounded slot.
 
 ### View Formats
 
@@ -70,7 +89,7 @@ Views come in different granularities matching text formats, composable within e
 - **block**: paragraph-level content block
 - **line**: single line, used for list items
 
-**Compatibility rule**: Content of a smaller format can be used in a larger slot position. A line view can be used anywhere; a section view cannot be used in an inline position.
+A view's format determines which slot positions can use it; see the format/slot compatibility table above.
 
 ### Relation Fields and Filtering
 
