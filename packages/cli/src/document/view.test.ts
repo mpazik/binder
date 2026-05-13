@@ -476,11 +476,13 @@ describe("view", () => {
         );
       });
 
-      it("block position", () => {
-        check(
+      it("block position rejects multi-value block-format view", () => {
+        // Multi-value items delimited by blank lines collide with the slot's
+        // own blank-line boundary; requires section or wider.
+        checkError(
           "{tasks}\n\nMore content below.\n",
           { tasks: [mockTask2Record, mockTask3Record] },
-          `**${mockTask2Record.title}**\n\n${mockTask2Record.description}\n\n**${mockTask3Record.title}**\n\n${mockTask3Record.description}\n\nMore content below.\n`,
+          "format-position-incompatible",
         );
       });
 
@@ -497,6 +499,66 @@ describe("view", () => {
           "{tasks}\n",
           { tasks: [mockTask2Record, mockTask3Record] },
           `# ${mockTask2Record.title}\n\n**Type:** ${mockTask2Record.type}\n**Key:** ${mockTask2Record.key}\n\n## Description\n\n${mockTask2Record.description}\n\n---\n\n# ${mockTask3Record.title}\n\n**Type:** ${mockTask3Record.type}\n**Key:** ${mockTask3Record.key}\n\n## Description\n\n${mockTask3Record.description}\n`,
+        );
+      });
+    });
+
+    describe('richtextFormat: "document"', () => {
+      const docBody = "# Title\n\nBody paragraph.\n\n## Sub\n\nMore.";
+
+      it("single value renders in document slot", () => {
+        check("{content}\n", { content: docBody }, `${docBody}\n`);
+      });
+
+      it("single value renders in part slot (alongside other content)", () => {
+        check(
+          "**Status:** {status}\n\n---\n\n{content}\n",
+          { status: "pending", content: docBody },
+          `**Status:** pending\n\n---\n\n${docBody}\n`,
+        );
+      });
+
+      it("single value rejected in section slot", () => {
+        checkError(
+          "## Heading\n\n{content}\n\n## Next\n",
+          { content: docBody },
+          "format-position-incompatible",
+        );
+      });
+
+      it("multi-value renders in document slot", () => {
+        check(
+          "{chapters}\n",
+          { chapters: ["# Ch 1\n\nFirst.", "# Ch 2\n\nSecond."] },
+          "# Ch 1\n\nFirst.\n\n---\n\n# Ch 2\n\nSecond.\n",
+        );
+      });
+
+      it("multi-value rejected in part slot", () => {
+        checkError(
+          "---\n\n{chapters}\n",
+          { chapters: ["# Ch 1", "# Ch 2"] },
+          "format-position-incompatible",
+        );
+      });
+    });
+
+    describe('richtextFormat: "section"', () => {
+      const sectionBody = "### Sub heading\n\nSection content.";
+
+      it("single value renders in section slot", () => {
+        check(
+          "## Heading\n\n{details}\n\n## Next\n",
+          { details: sectionBody },
+          `## Heading\n\n${sectionBody}\n\n## Next\n`,
+        );
+      });
+
+      it("single value rejected in block slot", () => {
+        checkError(
+          "Intro paragraph.\n\n{details}\n\nOutro paragraph.\n",
+          { details: sectionBody },
+          "format-position-incompatible",
         );
       });
     });

@@ -16,16 +16,18 @@ import type { Literal, Parent, Root, RootContent, Text } from "mdast";
 import type { Plugin, Transformer } from "unified";
 import type { Node } from "unist";
 import { SKIP, visit } from "unist-util-visit";
-import {
-  richtextFormats,
-  type FieldPath,
-  type RichtextFormat,
-} from "@binder/repo";
+import { type FieldPath, type RichtextFormat } from "@binder/repo";
 import type { ErrorObject } from "@binder/utils";
 import { isErr } from "@binder/utils";
 import { parseFieldExpression, type Props } from "./field-expression-parser.ts";
 
-export type SlotPosition = Exclude<RichtextFormat, "word">;
+export type SlotPosition =
+  | "phrase"
+  | "line"
+  | "block"
+  | "section"
+  | "part"
+  | "document";
 
 export interface FieldSlot<T extends Props = Props> extends Literal {
   type: "fieldSlot";
@@ -259,23 +261,58 @@ const fieldSlotFromMarkdown = (): FromMarkdownExtension => {
   };
 };
 
-const richtextFormatOrder: readonly RichtextFormat[] = Object.keys(
-  richtextFormats,
-) as RichtextFormat[];
-
-const slotPositionToFormatIndex: Record<SlotPosition, number> = {
-  phrase: richtextFormatOrder.indexOf("phrase"),
-  line: richtextFormatOrder.indexOf("line"),
-  block: richtextFormatOrder.indexOf("block"),
-  section: richtextFormatOrder.indexOf("section"),
-  document: richtextFormatOrder.indexOf("document"),
+const POSITION_RANK: Record<SlotPosition, number> = {
+  phrase: 0,
+  line: 1,
+  block: 2,
+  section: 3,
+  part: 4,
+  document: 5,
 };
+
+/**
+ * Minimum slot rank a single-value field of each richtext format can fit in.
+ * `document` needs `part` (rank 4) because document content forbids `---`, so a
+ * `---`-bounded slot can unambiguously contain it; but it cannot live inside a
+ * `section` slot because internal headings can collide with the section's
+ * bounding heading depth.
+ */
+const RICHTEXT_FORMAT_MIN_RANK: Record<RichtextFormat, number> = {
+  word: POSITION_RANK.phrase,
+  phrase: POSITION_RANK.phrase,
+  line: POSITION_RANK.line,
+  block: POSITION_RANK.block,
+  section: POSITION_RANK.section,
+  document: POSITION_RANK.part,
+};
+
+/**
+ * For multi-value fields, the item delimiter can collide with the slot's
+ * trailing boundary. Bump the minimum slot rank where that happens:
+ *   - multi `block`: items separated by blank lines collide with `block` slot
+ *     (also blank-line bounded) → needs ≥ `section`.
+ *   - multi `document`: items separated by `---` collide with `part` slot
+ *     (also `---` bounded) → needs `document`.
+ * `section` items are delimited by headers at `sectionDepth + 1`, which nest
+ * cleanly inside the section's bounding heading at `sectionDepth`, so no bump.
+ */
+const RICHTEXT_FORMAT_MIN_RANK_MULTI: Partial<Record<RichtextFormat, number>> =
+  {
+    block: POSITION_RANK.section,
+    document: POSITION_RANK.document,
+  };
 
 export const isFormatCompatibleWithPosition = (
   format: RichtextFormat,
   position: SlotPosition,
-): boolean =>
-  richtextFormatOrder.indexOf(format) <= slotPositionToFormatIndex[position];
+  allowMultiple = false,
+): boolean => {
+  const minRank = allowMultiple
+    ? (RICHTEXT_FORMAT_MIN_RANK_MULTI[format] ??
+      RICHTEXT_FORMAT_MIN_RANK[format])
+    : RICHTEXT_FORMAT_MIN_RANK[format];
+  return POSITION_RANK[position] >= minRank;
+};
 
 const hasNonWhitespaceContent = (child: RootContent): boolean => {
   if (child.type === "text") return (child as Text).value.trim().length > 0;
@@ -292,21 +329,74 @@ const hasNonWhitespaceAfter = (parent: Parent, slotIndex: number): boolean =>
     (child, i) => i > slotIndex && hasNonWhitespaceContent(child),
   );
 
-const isAtSectionBoundary = (root: Root, paragraphIndex: number): boolean => {
-  if (paragraphIndex === root.children.length - 1) return true;
-  const next = root.children[paragraphIndex + 1];
-  return next?.type === "heading" || next?.type === "thematicBreak";
+const FRONTMATTER_BLOCK_TYPES = ["yaml", "toml"];
+
+const isFrontmatter = (child: RootContent): boolean =>
+  FRONTMATTER_BLOCK_TYPES.includes(child.type);
+
+/**
+ * Type of the next non-frontmatter block after the given paragraph, or
+ * undefined if the paragraph is the last content block.
+ */
+const getNextContentBlockType = (
+  root: Root,
+  paragraphIndex: number,
+): string | undefined => {
+  for (let i = paragraphIndex + 1; i < root.children.length; i++) {
+    const child = root.children[i]!;
+    if (isFrontmatter(child)) continue;
+    return child.type;
+  }
+  return undefined;
 };
 
-const isOnlyContentBlock = (root: Root, paragraphIndex: number): boolean => {
-  const frontmatterTypes = ["yaml", "toml"];
-  const contentBlocks = root.children.filter(
-    (child) => !frontmatterTypes.includes(child.type),
-  );
-  return (
-    contentBlocks.length === 1 &&
-    contentBlocks[0] === root.children[paragraphIndex]
-  );
+/**
+ * Type of the previous non-frontmatter block before the given paragraph, or
+ * undefined if the paragraph is the first content block.
+ */
+const getPrevContentBlockType = (
+  root: Root,
+  paragraphIndex: number,
+): string | undefined => {
+  for (let i = paragraphIndex - 1; i >= 0; i--) {
+    const child = root.children[i]!;
+    if (isFrontmatter(child)) continue;
+    return child.type;
+  }
+  return undefined;
+};
+
+const hasHeadingBefore = (root: Root, paragraphIndex: number): boolean => {
+  for (let i = 0; i < paragraphIndex; i++) {
+    if (root.children[i]!.type === "heading") return true;
+  }
+  return false;
+};
+
+/**
+ * Classify a root-level paragraph slot. Rules (in order):
+ *   1. If the immediately preceding or following non-frontmatter block is a
+ *      thematic break (`---`) → `part`. The `---` makes the slot a
+ *      rule-bounded region; it dominates any heading scope it sits inside.
+ *   2. Else if the immediately following block is a heading → `section`.
+ *   3. Else if this is the only content block (frontmatter aside) → `document`.
+ *   4. Else if any heading precedes the slot in the file → `section`. A
+ *      preceding heading establishes scope for the slot.
+ *   5. Else → `block`.
+ */
+const getRootParagraphSlotPosition = (
+  root: Root,
+  paragraphIndex: number,
+): SlotPosition => {
+  const prevType = getPrevContentBlockType(root, paragraphIndex);
+  const nextType = getNextContentBlockType(root, paragraphIndex);
+
+  if (prevType === "thematicBreak" || nextType === "thematicBreak")
+    return "part";
+  if (nextType === "heading") return "section";
+  if (prevType === undefined && nextType === undefined) return "document";
+  if (hasHeadingBefore(root, paragraphIndex)) return "section";
+  return "block";
 };
 
 const getSlotPosition = (
@@ -326,9 +416,7 @@ const getSlotPosition = (
   );
   if (paragraphIndex === -1) return "block";
 
-  if (isOnlyContentBlock(root, paragraphIndex)) return "document";
-  if (isAtSectionBoundary(root, paragraphIndex)) return "section";
-  return "block";
+  return getRootParagraphSlotPosition(root, paragraphIndex);
 };
 
 const transformTree = (): Transformer => {

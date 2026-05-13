@@ -215,15 +215,44 @@ describe("remarkFieldSlot", () => {
         checkSlot("> {quote}", { slotPosition: "block" }));
       it("sole paragraph in list item", () =>
         checkSlot("- {item}", { slotPosition: "block" }));
+      it("paragraph before, paragraph after, no heading", () =>
+        checkSlot("Intro.\n\n{content}\n\nOutro.", { slotPosition: "block" }));
+      it("paragraph before, last block, no heading", () =>
+        checkSlot("Intro paragraph.\n\n{content}", { slotPosition: "block" }));
     });
 
     describe("section position", () => {
       it("sole paragraph before heading", () =>
         checkSlot("{details}\n\n## Next Section", { slotPosition: "section" }));
-      it("sole paragraph before thematic break", () =>
-        checkSlot("{content}\n\n---", { slotPosition: "section" }));
-      it("sole paragraph with other content before, at end", () =>
+      it("last block after heading", () =>
         checkSlot("# Title\n\n{content}", { slotPosition: "section" }));
+      it("heading earlier in file, paragraph after", () =>
+        checkSlot("# Title\n\nIntro.\n\n{content}\n\nMore.", {
+          slotPosition: "section",
+        }));
+    });
+
+    describe("part position", () => {
+      it("hrule before, hrule after", () =>
+        // leading newline dodges the test harness's remarkFrontmatter
+        // (production view parser doesn't run it)
+        checkSlot("\n---\n\n{content}\n\n---", { slotPosition: "part" }));
+      it("hrule before, paragraph after", () =>
+        checkSlot("\n---\n\n{content}\n\nAfter.", { slotPosition: "part" }));
+      it("hrule before, last block", () =>
+        checkSlot("\n---\n\n{content}", { slotPosition: "part" }));
+      it("hrule after, paragraph before", () =>
+        checkSlot("Some text.\n\n{content}\n\n---", { slotPosition: "part" }));
+      it("hrule after, heading before", () =>
+        checkSlot("## Heading\n\n{content}\n\n---", {
+          slotPosition: "part",
+        }));
+      it("hrule after, paragraph before, heading earlier", () =>
+        checkSlot("## Heading\n\n{tasks}\n\n---\n\n## Next", {
+          slotPosition: "part",
+        }));
+      it("sole paragraph before thematic break", () =>
+        checkSlot("{content}\n\n---", { slotPosition: "part" }));
     });
 
     describe("document position", () => {

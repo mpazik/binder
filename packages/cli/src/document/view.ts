@@ -193,6 +193,7 @@ const DEFAULT_VIEW_BY_POSITION: Record<SlotPosition, string> = {
   line: PHRASE_VIEW_KEY,
   block: BLOCK_VIEW_KEY,
   section: SECTION_VIEW_KEY,
+  part: SECTION_VIEW_KEY,
   document: DOCUMENT_VIEW_KEY,
 };
 
@@ -207,11 +208,11 @@ const getItemView = (slot: ViewFieldSlot, views: Views): ViewEntity => {
 };
 
 const getDelimiterForSlotPosition = (
-  slotPosition: SlotPosition,
+  _slotPosition: SlotPosition,
   viewFormat: ViewFormat | undefined,
 ): MultiValueDelimiter => {
   if (viewFormat) return richtextFormats[viewFormat].delimiter;
-  return richtextFormats[slotPosition].delimiter;
+  return "blankline";
 };
 
 const literalMismatch = (context?: string) =>
@@ -354,12 +355,13 @@ const renderNestedFieldValues = (
 const validateFormatPositionCompatibility = (
   format: RichtextFormat | ViewFormat | undefined,
   slotPosition: SlotPosition,
+  allowMultiple = false,
 ): Result<void> => {
   if (!format) return okVoid;
-  if (!isFormatCompatibleWithPosition(format, slotPosition))
+  if (!isFormatCompatibleWithPosition(format, slotPosition, allowMultiple))
     return fail(
       "format-position-incompatible",
-      `Format '${format}' is not compatible with slot position '${slotPosition}'`,
+      `Format '${format}' (${allowMultiple ? "multi" : "single"}-value) is not compatible with slot position '${slotPosition}'`,
     );
   return okVoid;
 };
@@ -401,9 +403,11 @@ const renderFieldSlot = (
 
   const fieldFormat =
     fieldDef.dataType === "richtext" ? fieldDef.richtextFormat : undefined;
+  const isFieldMulti = fieldDef.allowMultiple === true;
   const formatResult = validateFormatPositionCompatibility(
     fieldFormat,
     slotPosition,
+    isFieldMulti,
   );
   if (isErr(formatResult)) return formatResult;
 
@@ -419,6 +423,7 @@ const renderFieldSlot = (
       const viewResult = validateFormatPositionCompatibility(
         itemView.viewFormat,
         slotPosition,
+        true,
       );
       if (isErr(viewResult)) return viewResult;
       return renderRelationField(
@@ -442,6 +447,7 @@ const renderFieldSlot = (
     const viewResult = validateFormatPositionCompatibility(
       itemView.viewFormat,
       slotPosition,
+      false,
     );
     if (isErr(viewResult)) return viewResult;
     return renderRelationField(

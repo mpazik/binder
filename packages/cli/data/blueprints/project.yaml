@@ -54,6 +54,7 @@
         - title: { required: true }
         - description
         - details
+        - content
         - status
         - priority
         - size
@@ -113,6 +114,10 @@
         ## Out of Scope
 
         {outOfScope}
+
+        ---
+
+        {content}
 
     # --- Task navigation ---
     - key: nav-tasks
@@ -229,6 +234,21 @@
       priority: p2
       partOf: mvp-release
       requires: [setup-database]
+      content: |
+        # Implementation plan
+
+        ## Phase 1: Backend
+
+        Wire up JWT issuance and refresh endpoints. Store hashed passwords with bcrypt.
+
+        ## Phase 2: UI
+
+        Build login, signup, and reset screens. Add form validation and error states.
+
+        ## Open questions
+
+        - Should reset links expire after 1 hour or 24 hours?
+        - Do we need email verification at signup?
 
     - type: Task
       key: setup-database
