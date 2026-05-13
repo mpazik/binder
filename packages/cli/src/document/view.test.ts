@@ -315,7 +315,7 @@ describe("view", () => {
         check(
           "{tasks.title}, and more\n",
           { tasks: [mockTask2Record, mockTask3Record] },
-          `${mockTask2Record.title}, ${mockTask3Record.title}, and more\n`,
+          `${mockTask2Record.title}\n${mockTask3Record.title}, and more\n`,
         );
       });
 
@@ -331,7 +331,7 @@ describe("view", () => {
         check(
           "{tasks.title}\n\nMore content.\n",
           { tasks: [mockTask2Record, mockTask3Record] },
-          `${mockTask2Record.title}\n\n${mockTask3Record.title}\n\nMore content.\n`,
+          `${mockTask2Record.title}\n${mockTask3Record.title}\n\nMore content.\n`,
         );
       });
 
@@ -339,7 +339,7 @@ describe("view", () => {
         check(
           "**Descriptions:** {tasks.description}\n",
           { tasks: [mockTask2Record, mockTask3Record] },
-          `**Descriptions:** ${mockTask2Record.description}\n${mockTask3Record.description}\n`,
+          `**Descriptions:** ${mockTask2Record.description}\n\n${mockTask3Record.description}\n`,
         );
       });
 

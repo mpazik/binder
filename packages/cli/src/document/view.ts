@@ -23,6 +23,7 @@ import {
   extractUid,
   getDelimiterString,
   getFieldDefNested,
+  getMultiValueDelimiter,
   getNestedValue,
   isFieldsetNested,
   matchesFilters,
@@ -322,9 +323,7 @@ const renderNestedFieldValues = (
 
   if (values.length === 0) return [{ type: "text", value: "" }];
 
-  const delimiterStr = getDelimiterString(
-    richtextFormats[slotPosition].delimiter,
-  );
+  const delimiterStr = getDelimiterString(getMultiValueDelimiter(fieldDef));
 
   if (!isInlinePosition(slotPosition) && isBlockLevelField(fieldDef)) {
     const combinedMarkdown = values
