@@ -3,6 +3,7 @@ import { styleText } from "node:util";
 import * as readline from "node:readline/promises";
 import * as YAML from "yaml";
 import {
+  type ChangesetValidationError,
   type EntitiesChangeset,
   type FieldChangeset,
   type FieldValue,
@@ -168,8 +169,44 @@ const error = (message: string) => {
   eprintln(textErrBold("Error:") + " " + message);
 };
 
+const formatValidationErrors = (errors: ChangesetValidationError[]): string =>
+  errors
+    .map((e) => {
+      const field = e.field ? ` ${e.field}` : "";
+      return `  [#${e.index}${field}] ${e.message}`;
+    })
+    .join("\n");
+
+type ErrorPrinter = (error: ErrorObject) => string;
+
+// Walks the cause chain — wrapping (e.g. tx import) pushes `data.errors`
+// down into `cause.data.errors`.
+const extractValidationErrors = (
+  error: ErrorObject,
+): ChangesetValidationError[] | undefined => {
+  let current: ErrorObject | undefined = error;
+  while (current) {
+    const errors = (current.data as { errors?: unknown } | undefined)?.errors;
+    if (Array.isArray(errors) && errors.length > 0)
+      return errors as ChangesetValidationError[];
+    current = current.cause;
+  }
+  return undefined;
+};
+
+const printWithValidationErrors: ErrorPrinter = (error) => {
+  const errors = extractValidationErrors(error);
+  if (!errors) return formatError(error);
+  return `${formatError(error)}\n${formatValidationErrors(errors)}`;
+};
+
+const errorPrinters: Record<string, ErrorPrinter> = {
+  "changeset-input-process-failed": printWithValidationErrors,
+};
+
 const printError = (errorObj: ErrorObject) => {
-  eprintln(textErrBold(formatError(errorObj)));
+  const printer = errorPrinters[errorObj.key] ?? formatError;
+  eprintln(textErrBold(printer(errorObj)));
 };
 
 const stripNulls = (_: string, v: unknown) => (v === null ? undefined : v);
