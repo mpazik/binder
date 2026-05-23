@@ -12,6 +12,15 @@ import {
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 
+type SearchFn = (
+  tx: DbTransaction,
+  namespace: NamespaceEditable,
+  filters: Filters,
+  schema: EntitySchema,
+) => ResultAsync<Fieldset[]>;
+
+// --- Field value extraction ---
+
 const getEntityFieldValue = (
   entity: Fieldset,
   fieldName: FieldKey,
@@ -24,9 +33,9 @@ const getEntityFieldValue = (
   return undefined;
 };
 
+/** Extract a relation id from a raw value (string or [key, attrs] tuple). */
 const extractRelationId = (value: unknown): string | undefined => {
   if (typeof value === "string") return value;
-  // Handle tuple format [key, attrs] from TypeFieldRef
   if (Array.isArray(value) && value.length >= 1 && typeof value[0] === "string")
     return value[0];
   return undefined;
@@ -37,7 +46,6 @@ const collectRelationshipIds = (
   fieldName: FieldKey,
 ): Set<string> => {
   const ids = new Set<string>();
-
   for (const entity of entities) {
     const fieldValue = getEntityFieldValue(entity, fieldName);
     if (!fieldValue) continue;
@@ -51,7 +59,6 @@ const collectRelationshipIds = (
       ids.add(fieldValue);
     }
   }
-
   return ids;
 };
 
@@ -61,166 +68,136 @@ const findRelatedEntity = (
 ): Fieldset | undefined =>
   relatedEntities.find((e) => e.uid === ref || e.key === ref);
 
-const pickFields = (entity: Fieldset, keys: Includes): Fieldset => {
-  const result: Fieldset = {};
-  for (const [key, val] of Object.entries(entity)) {
-    if (key in keys) result[key] = val;
+// --- Merge resolved entities back into parent entities ---
+
+const deduplicateByUid = (entities: Fieldset[]): Fieldset[] => {
+  const seen = new Set<string>();
+  const result: Fieldset[] = [];
+  for (const e of entities) {
+    const uid = e.uid as string;
+    if (!seen.has(uid)) {
+      seen.add(uid);
+      result.push(e);
+    }
   }
   return result;
 };
 
-const mergeRelationshipData = (
+const mergeInverseRelation = (
   entities: Fieldset[],
   fieldName: FieldKey,
   relatedEntities: Fieldset[],
-  inverseFieldName: FieldKey | undefined,
+  inverseFieldName: FieldKey,
   fieldIsMultiple: boolean,
 ): void => {
   const isSelfInverse = inverseFieldName === fieldName;
-  if (inverseFieldName) {
-    for (const entity of entities) {
-      const entityUid = entity.uid as string;
-      const inverseMatching = relatedEntities.filter((related) => {
-        const inverseValue = getEntityFieldValue(related, inverseFieldName);
-        if (!inverseValue) return false;
-        if (Array.isArray(inverseValue))
-          return inverseValue.includes(entityUid);
-        return inverseValue === entityUid;
-      });
 
-      if (isSelfInverse && fieldIsMultiple) {
-        // Self-inverse M:M: also resolve forward stored links
-        const fieldValue = getEntityFieldValue(entity, fieldName);
-        const forwardMatching: Fieldset[] = [];
-        if (fieldValue && Array.isArray(fieldValue)) {
-          for (const id of fieldValue) {
-            const idStr = extractRelationId(id);
-            if (!idStr) continue;
-            const found = findRelatedEntity(idStr, relatedEntities);
-            if (found) forwardMatching.push(found);
-          }
-        }
-        // Merge and deduplicate by uid
-        const seen = new Set<string>();
-        const merged: Fieldset[] = [];
-        for (const e of [...forwardMatching, ...inverseMatching]) {
-          const uid = e.uid as string;
-          if (!seen.has(uid)) {
-            seen.add(uid);
-            merged.push(e);
-          }
-        }
-        entity[fieldName] = merged;
-      } else {
-        // For 1:1 inverse (single-value field), return single entity not array
-        entity[fieldName] = fieldIsMultiple
-          ? inverseMatching
-          : (inverseMatching[0] ?? null);
-      }
-    }
-  } else {
-    for (const entity of entities) {
+  for (const entity of entities) {
+    const entityUid = entity.uid as string;
+    const inverseMatching = relatedEntities.filter((related) => {
+      const inverseValue = getEntityFieldValue(related, inverseFieldName);
+      if (!inverseValue) return false;
+      if (Array.isArray(inverseValue)) return inverseValue.includes(entityUid);
+      return inverseValue === entityUid;
+    });
+
+    if (isSelfInverse && fieldIsMultiple) {
+      // Self-inverse M:M: merge forward stored links with inverse matches
       const fieldValue = getEntityFieldValue(entity, fieldName);
-      if (!fieldValue) continue;
-
-      if (Array.isArray(fieldValue)) {
-        const rawFieldValue = entity[fieldName] as FieldValue[];
-        entity[fieldName] = rawFieldValue.map((item, index) => {
-          const idStr = extractRelationId(fieldValue[index]);
-          if (!idStr) return item;
-          return findRelatedEntity(idStr, relatedEntities) ?? item;
-        });
-      } else {
-        const found = findRelatedEntity(fieldValue, relatedEntities);
-        if (found) entity[fieldName] = found;
+      const forwardMatching: Fieldset[] = [];
+      if (fieldValue && Array.isArray(fieldValue)) {
+        for (const id of fieldValue) {
+          const idStr = extractRelationId(id);
+          if (!idStr) continue;
+          const found = findRelatedEntity(idStr, relatedEntities);
+          if (found) forwardMatching.push(found);
+        }
       }
+      entity[fieldName] = deduplicateByUid([
+        ...forwardMatching,
+        ...inverseMatching,
+      ]);
+    } else {
+      entity[fieldName] = fieldIsMultiple
+        ? inverseMatching
+        : (inverseMatching[0] ?? null);
     }
   }
 };
 
-const applyFieldSelection = (
+const mergeForwardRelation = (
   entities: Fieldset[],
-  includes: Includes,
-): Fieldset[] =>
-  entities.map((entity) => {
-    const selected: Fieldset = {};
-    for (const fieldName of Object.keys(includes)) {
-      if (includes[fieldName] && fieldName in entity) {
-        selected[fieldName] = entity[fieldName];
-      }
-    }
-    return selected;
-  });
-
-const cleanRelatedEntities = (
-  entities: Fieldset[],
-  includes: Includes,
+  fieldName: FieldKey,
+  relatedEntities: Fieldset[],
 ): void => {
   for (const entity of entities) {
-    for (const [fieldKey, fieldValue] of Object.entries(entity)) {
-      const fieldInclude = includes[fieldKey];
-      if (!isObjectIncludes(fieldInclude)) continue;
+    const fieldValue = getEntityFieldValue(entity, fieldName);
+    if (!fieldValue) continue;
 
-      const nestedIncludes = isIncludesQuery(fieldInclude)
-        ? fieldInclude.includes
-        : fieldInclude;
-      if (!nestedIncludes) continue;
-
-      if (Array.isArray(fieldValue)) {
-        entity[fieldKey] = (fieldValue as Fieldset[]).map((related) =>
-          pickFields(related, nestedIncludes),
-        );
-      } else if (typeof fieldValue === "object" && fieldValue !== null) {
-        entity[fieldKey] = pickFields(fieldValue as Fieldset, nestedIncludes);
-      }
+    if (Array.isArray(fieldValue)) {
+      const rawFieldValue = entity[fieldName] as FieldValue[];
+      entity[fieldName] = rawFieldValue.map((item, index) => {
+        const idStr = extractRelationId(fieldValue[index]);
+        if (!idStr) return item;
+        return findRelatedEntity(idStr, relatedEntities) ?? item;
+      });
+    } else {
+      const found = findRelatedEntity(fieldValue, relatedEntities);
+      if (found) entity[fieldName] = found;
     }
   }
 };
 
-export const resolveIncludes = async (
+// --- Phase 1: resolve relations recursively ---
+
+const resolveRelations = async (
   tx: DbTransaction,
   entities: Fieldset[],
-  includes: Includes | undefined,
+  includes: Includes,
   namespace: NamespaceEditable,
   schema: EntitySchema,
-  searchFn: (
-    tx: DbTransaction,
-    namespace: NamespaceEditable,
-    filters: Filters,
-    schema: EntitySchema,
-  ) => ResultAsync<Fieldset[]>,
-): ResultAsync<Fieldset[]> => {
-  if (entities.length === 0 || !includes) return ok(entities);
-
+  searchFn: SearchFn,
+): ResultAsync<void> => {
   for (const [fieldKey, includeValue] of Object.entries(includes)) {
     const field = schema.fields[fieldKey];
     if (!field || field.dataType !== "relation") continue;
-    if (!isObjectIncludes(includeValue)) continue;
+
+    const isBooleanInverseInclude = includeValue === true && !!field.inverseOf;
+    if (!isObjectIncludes(includeValue) && !isBooleanInverseInclude) continue;
+
+    // Boolean include on inverse: resolve but don't expand nested fields
+    const effectiveInclude = isBooleanInverseInclude
+      ? { uid: true }
+      : includeValue;
+
     if (
-      !isIncludesQuery(includeValue) &&
-      Object.keys(includeValue).length === 0
+      isObjectIncludes(effectiveInclude) &&
+      !isIncludesQuery(effectiveInclude) &&
+      Object.keys(effectiveInclude).length === 0
     )
       continue;
 
-    const nestedFilters = isIncludesQuery(includeValue)
-      ? includeValue.filters
+    const nestedFilters = isIncludesQuery(effectiveInclude)
+      ? effectiveInclude.filters
       : undefined;
-    const nestedIncludes = isIncludesQuery(includeValue)
-      ? includeValue.includes
-      : includeValue;
+    const nestedIncludes = isIncludesQuery(effectiveInclude)
+      ? effectiveInclude.includes
+      : isObjectIncludes(effectiveInclude)
+        ? effectiveInclude
+        : undefined;
 
-    let relatedFilters: Filters = {};
     const forwardIds = Array.from(collectRelationshipIds(entities, fieldKey));
     const isSelfInverse = field.inverseOf === fieldKey;
 
+    let relatedFilters: Filters;
     if (field.inverseOf) {
       const entityUids = entities.map((e) => e.uid as string).filter(Boolean);
       if (entityUids.length === 0 && forwardIds.length === 0) continue;
-
-      relatedFilters[field.inverseOf] = { op: "in", value: entityUids };
+      relatedFilters = {
+        [field.inverseOf]: { op: "in", value: entityUids },
+      };
     } else {
       if (forwardIds.length === 0) continue;
-
       relatedFilters = { uid: { op: "in", value: forwardIds } };
     }
 
@@ -250,6 +227,7 @@ export const resolveIncludes = async (
       }
     }
 
+    // Fallback: try matching by key when uid lookup returned nothing
     if (
       relatedEntitiesResult.data.length === 0 &&
       !field.inverseOf &&
@@ -264,33 +242,125 @@ export const resolveIncludes = async (
       if (isErr(relatedEntitiesResult)) return relatedEntitiesResult;
     }
 
-    const resolvedResult = await resolveIncludes(
-      tx,
-      relatedEntitiesResult.data,
-      nestedIncludes
-        ? {
-            ...nestedIncludes,
-            uid: true,
-            ...(field.inverseOf ? { [field.inverseOf]: true } : {}),
-          }
-        : undefined,
-      namespace,
-      schema,
-      searchFn,
-    );
-    if (isErr(resolvedResult)) return resolvedResult;
+    if (nestedIncludes) {
+      const nestedResult = await resolveRelations(
+        tx,
+        relatedEntitiesResult.data,
+        nestedIncludes,
+        namespace,
+        schema,
+        searchFn,
+      );
+      if (isErr(nestedResult)) return nestedResult;
+    }
 
-    mergeRelationshipData(
-      entities,
-      fieldKey,
-      resolvedResult.data,
-      field.inverseOf,
-      !!field.allowMultiple,
-    );
+    if (field.inverseOf) {
+      mergeInverseRelation(
+        entities,
+        fieldKey,
+        relatedEntitiesResult.data,
+        field.inverseOf,
+        !!field.allowMultiple,
+      );
+    } else {
+      mergeForwardRelation(entities, fieldKey, relatedEntitiesResult.data);
+    }
   }
 
-  const selectedEntities = applyFieldSelection(entities, includes);
-  cleanRelatedEntities(selectedEntities, includes);
+  return ok(undefined);
+};
 
-  return ok(selectedEntities);
+// --- Phase 2: apply field selection recursively ---
+
+/** Collapse resolved relation entities back to flat uid strings. */
+const collapseToUids = (val: FieldValue): FieldValue => {
+  if (Array.isArray(val)) {
+    return (val as Fieldset[]).map((v) =>
+      typeof v === "object" && v !== null ? ((v as Fieldset).uid as string) : v,
+    );
+  }
+  if (typeof val === "object" && val !== null)
+    return (val as Fieldset).uid as string;
+  return val;
+};
+
+const selectFieldsForEntity = (
+  entity: Fieldset,
+  includes: Includes,
+  schema: EntitySchema,
+): Fieldset => {
+  const selected: Fieldset = {};
+  for (const [fieldKey, includeValue] of Object.entries(includes)) {
+    if (!includeValue || !(fieldKey in entity)) continue;
+
+    const field = schema.fields[fieldKey];
+    const val = entity[fieldKey];
+
+    // Boolean include on inverse relation: collapse to flat uid strings
+    if (includeValue === true && field?.inverseOf) {
+      selected[fieldKey] = collapseToUids(val);
+      continue;
+    }
+
+    if (!isObjectIncludes(includeValue)) {
+      selected[fieldKey] = val;
+      continue;
+    }
+
+    const nestedIncludes = isIncludesQuery(includeValue)
+      ? includeValue.includes
+      : includeValue;
+
+    if (!nestedIncludes) {
+      selected[fieldKey] = val;
+      continue;
+    }
+
+    if (Array.isArray(val)) {
+      selected[fieldKey] = (val as Fieldset[]).map((related) =>
+        selectFieldsForEntity(related, nestedIncludes, schema),
+      );
+    } else if (typeof val === "object" && val !== null) {
+      selected[fieldKey] = selectFieldsForEntity(
+        val as Fieldset,
+        nestedIncludes,
+        schema,
+      );
+    } else {
+      selected[fieldKey] = val;
+    }
+  }
+  return selected;
+};
+
+const selectFields = (
+  entities: Fieldset[],
+  includes: Includes,
+  schema: EntitySchema,
+): Fieldset[] =>
+  entities.map((entity) => selectFieldsForEntity(entity, includes, schema));
+
+// --- Public API ---
+
+export const resolveIncludes = async (
+  tx: DbTransaction,
+  entities: Fieldset[],
+  includes: Includes | undefined,
+  namespace: NamespaceEditable,
+  schema: EntitySchema,
+  searchFn: SearchFn,
+): ResultAsync<Fieldset[]> => {
+  if (entities.length === 0 || !includes) return ok(entities);
+
+  const resolveResult = await resolveRelations(
+    tx,
+    entities,
+    includes,
+    namespace,
+    schema,
+    searchFn,
+  );
+  if (isErr(resolveResult)) return resolveResult;
+
+  return ok(selectFields(entities, includes, schema));
 };

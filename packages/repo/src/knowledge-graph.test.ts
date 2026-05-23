@@ -339,13 +339,17 @@ describe("knowledge graph", () => {
           ],
         ));
 
-      it("does not expand inverse relationship without nested includes", () =>
+      it("returns relation uids for inverse relationship with boolean include", () =>
         checkSearch(
           {
             filters: { type: "Project" },
             includes: { [mockTasksFieldKey]: true },
           },
-          [{}],
+          [
+            {
+              [mockTasksFieldKey]: [mockTask2Record.uid, mockTask3Record.uid],
+            },
+          ],
         ));
 
       it("expands inverse relationship with nested includes", () =>
