@@ -8,15 +8,18 @@ import {
   type FieldChangeset,
   type FieldValue,
   isClearChange,
+  isDiffChange,
   isSeqChange,
   isSetChange,
   type KnowledgeGraph,
+  mapChangesetValues,
   normalizeValueChange,
   type RecordsChangeset,
   type RecordUid,
   shortTransactionHash,
   type Transaction,
   type ValueChange,
+  isValidUid,
 } from "@binder/repo";
 import { type ErrorObject, formatError, isErr, noop } from "@binder/utils";
 import {
@@ -244,17 +247,30 @@ export type TransactionFormat =
   | "full"
   | SerializeItemFormat;
 
-const formatFieldValue = (value: FieldValue | undefined): string => {
-  if (value === null || value === undefined) return String(value);
-  if (typeof value === "string") {
-    if (value.length > 50) return `"${value.slice(0, 47)}..."`;
-    return `"${value}"`;
-  }
+const FIELD_VALUE_MAX = 80;
+
+const formatFieldValueInner = (value: unknown): string => {
+  if (value === undefined) return "—";
+  if (value === null) return "null";
+  if (typeof value === "string") return `"${value}"`;
   if (typeof value === "number" || typeof value === "boolean")
     return String(value);
-  if (Array.isArray(value)) return `[${value.length} items]`;
-  if (typeof value === "object") return `{${Object.keys(value).length} fields}`;
+  if (Array.isArray(value))
+    return `[${value.map(formatFieldValueInner).join(", ")}]`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return `{${entries.map(([k, v]) => `${k}: ${formatFieldValueInner(v)}`).join(", ")}}`;
+  }
   return String(value);
+};
+
+const formatFieldValue = (value: FieldValue | undefined): string => {
+  const formatted = formatFieldValueInner(value);
+  if (formatted.length <= FIELD_VALUE_MAX) return formatted;
+  if (Array.isArray(value)) return `[${value.length} items]`;
+  if (value && typeof value === "object")
+    return `{${Object.keys(value).length} fields}`;
+  return `${formatted.slice(0, FIELD_VALUE_MAX - 4)}...${formatted.startsWith('"') ? '"' : ""}`;
 };
 
 const printFieldChange = (
@@ -291,6 +307,21 @@ const printFieldChange = (
         `${indent}  ${kindColor(`[${kind}]`)} ${formatFieldValue(mutValue)}${textDim(posText)}`,
       );
     }
+  } else if (isDiffChange(change)) {
+    let inserts = 0;
+    let deletes = 0;
+    let retains = 0;
+    for (const op of change[1]) {
+      if (op[0] === "insert") inserts += op[1].length;
+      else if (op[0] === "delete") deletes += op[1].length;
+      else if (op[0] === "retain") retains += op[1];
+    }
+    eprintln(
+      `${indent}${textDim(fieldKey + ":")} ` +
+        textDim(
+          `(diff, ${change[1].length} ops: +${inserts} -${deletes} =${retains})`,
+        ),
+    );
   }
 };
 
@@ -336,7 +367,12 @@ const printEntityChanges = (
       eprintln(`    ${textInfo(uid + entityLabel)} ${operation}`);
 
       const fields = Object.entries(changeset).filter(
-        ([key]) => key !== "createdAt" && key !== "updatedAt",
+        ([key]) =>
+          key !== "createdAt" &&
+          key !== "updatedAt" &&
+          key !== "id" &&
+          key !== "uid" &&
+          key !== "key",
       ) as [string, FieldValue | ValueChange][];
       for (const [fieldKey, change] of fields) {
         printFieldChange(fieldKey, normalizeValueChange(change), "      ");
@@ -353,8 +389,7 @@ const printTransaction = (
     printData(transaction, format);
     return;
   }
-  const hash =
-    format === "full" ? transaction.hash : shortTransactionHash(transaction);
+  const hash = shortTransactionHash(transaction);
   const timestamp = new Date(transaction.createdAt).toISOString();
   const txMessage = transaction.message;
 
@@ -394,20 +429,21 @@ const printTransaction = (
   printEntityChanges("Config changes", transaction.configs, format);
 };
 
-/**
- * Rewrites transaction record keys from UIDs to human-readable keys for display.
- * Extracts keys from changesets first (covers creates), then falls back to a DB
- * lookup for records that didn't have their key in the changeset. Silently keeps
- * the raw UID for deleted or otherwise unresolvable records.
- */
+/** Builds a UID→key map from changesets and DB lookups. */
 const buildUidToKeyMap = async (
   kg: KnowledgeGraph,
   transactions: Transaction[],
 ): Promise<Map<string, string>> => {
   const uidToKey = new Map<string, string>();
+  const referenced = new Set<string>();
 
   for (const tx of transactions) {
     for (const [uid, changeset] of Object.entries(tx.records)) {
+      referenced.add(uid);
+      mapChangesetValues(changeset, (v) => {
+        if (isValidUid(v)) referenced.add(v);
+        return v;
+      });
       if (uidToKey.has(uid)) continue;
       const keyChange = changeset.key;
       if (keyChange !== undefined) {
@@ -419,10 +455,7 @@ const buildUidToKeyMap = async (
     }
   }
 
-  const missing = [
-    ...new Set(transactions.flatMap((tx) => Object.keys(tx.records))),
-  ].filter((uid) => !uidToKey.has(uid));
-
+  const missing = [...referenced].filter((uid) => !uidToKey.has(uid));
   for (const uid of missing) {
     const result = await kg.fetchEntity(uid as RecordUid);
     if (isErr(result)) continue;
@@ -433,7 +466,7 @@ const buildUidToKeyMap = async (
   return uidToKey;
 };
 
-const remapRecordKeys = (
+const remapTransaction = (
   tx: Transaction,
   uidToKey: Map<string, string>,
 ): Transaction => ({
@@ -441,7 +474,9 @@ const remapRecordKeys = (
   records: Object.fromEntries(
     Object.entries(tx.records).map(([uid, changeset]) => [
       uidToKey.get(uid) ?? uid,
-      changeset,
+      mapChangesetValues(changeset, (v) =>
+        isValidUid(v) ? ((uidToKey.get(v) ?? v) as FieldValue) : v,
+      ),
     ]),
   ) as RecordsChangeset,
 });
@@ -451,7 +486,7 @@ export const resolveTransactionDisplayKey = async (
   transaction: Transaction,
 ): Promise<Transaction> => {
   const uidToKey = await buildUidToKeyMap(kg, [transaction]);
-  return remapRecordKeys(transaction, uidToKey);
+  return remapTransaction(transaction, uidToKey);
 };
 
 export const resolveTransactionDisplayKeys = async (
@@ -459,7 +494,7 @@ export const resolveTransactionDisplayKeys = async (
   transactions: Transaction[],
 ): Promise<Transaction[]> => {
   const uidToKey = await buildUidToKeyMap(kg, transactions);
-  return transactions.map((tx) => remapRecordKeys(tx, uidToKey));
+  return transactions.map((tx) => remapTransaction(tx, uidToKey));
 };
 
 export type Ui = {

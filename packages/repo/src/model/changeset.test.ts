@@ -17,6 +17,7 @@ import {
   inverseChangeset,
   inverseMutation,
   type ListMutationPatch,
+  mapChangesetValues,
   normalizeValueChange,
   rebaseChangeset,
   squashChangesets,
@@ -1033,6 +1034,142 @@ describe("changeset", () => {
           ],
         ],
       });
+    });
+  });
+
+  describe("mapChangesetValues", () => {
+    const upper = (v: FieldValue): FieldValue =>
+      typeof v === "string" ? v.toUpperCase() : v;
+
+    const check = (input: FieldChangeset, expected: FieldChangeset) => {
+      expect(mapChangesetValues(input, upper)).toEqual(expected);
+    };
+
+    it("maps plain values", () => {
+      check(
+        { title: "hello", count: 42 },
+        { title: ["set", "HELLO"], count: ["set", 42] },
+      );
+    });
+
+    it("maps set with previous", () => {
+      check({ title: ["set", "new", "old"] }, { title: ["set", "NEW", "OLD"] });
+    });
+
+    it("maps set without previous", () => {
+      check({ title: ["set", "new"] }, { title: ["set", "NEW"] });
+    });
+
+    it("maps clear", () => {
+      check({ title: ["clear", "old"] }, { title: ["clear", "OLD"] });
+    });
+
+    it("maps seq with positions", () => {
+      check(
+        {
+          tags: [
+            "seq",
+            [
+              ["insert", "new-tag", 0],
+              ["remove", "old-tag", 1],
+            ],
+          ],
+        },
+        {
+          tags: [
+            "seq",
+            [
+              ["insert", "NEW-TAG", 0],
+              ["remove", "OLD-TAG", 1],
+            ],
+          ],
+        },
+      );
+    });
+
+    it("maps seq without positions", () => {
+      check(
+        {
+          tags: [
+            "seq",
+            [
+              ["insert", "a"],
+              ["remove", "b"],
+            ],
+          ],
+        },
+        {
+          tags: [
+            "seq",
+            [
+              ["insert", "A"],
+              ["remove", "B"],
+            ],
+          ],
+        },
+      );
+    });
+
+    it("recurses into seq patch mutations", () => {
+      check(
+        {
+          owners: [
+            "seq",
+            [["patch", "user-1", { role: ["set", "admin", "lead"] }]],
+          ],
+        },
+        {
+          owners: [
+            "seq",
+            [["patch", "user-1", { role: ["set", "ADMIN", "LEAD"] }]],
+          ],
+        },
+      );
+    });
+
+    it("recurses into patch change", () => {
+      check(
+        { metadata: ["patch", { label: ["set", "new", "old"] }] },
+        { metadata: ["patch", { label: ["set", "NEW", "OLD"] }] },
+      );
+    });
+
+    it("passes diff through unchanged", () => {
+      check(
+        {
+          description: [
+            "diff",
+            [
+              ["retain", 5],
+              ["insert", "hello"],
+            ],
+          ],
+        },
+        {
+          description: [
+            "diff",
+            [
+              ["retain", 5],
+              ["insert", "hello"],
+            ],
+          ],
+        },
+      );
+    });
+
+    it("maps nested arrays", () => {
+      check({ refs: ["set", ["a", "b"]] }, { refs: ["set", ["A", "B"]] });
+    });
+
+    it("maps nested objects", () => {
+      check(
+        { meta: ["set", { label: "hello" }] },
+        { meta: ["set", { label: "HELLO" }] },
+      );
+    });
+
+    it("returns empty changeset for empty input", () => {
+      check(emptyChangeset, {});
     });
   });
 });

@@ -111,7 +111,8 @@ export const transactionImportHandler: CommandHandlerWithDb<
       "No transactions remaining after applying selection",
     );
 
-  ui.heading(`Importing ${allInputs.length} transaction(s)`);
+  const action = args.dryRun ? "Previewing" : "Importing";
+  ui.heading(`${action} ${allInputs.length} transaction(s)`);
   for (const input of allInputs) {
     const summary = transactionInputSummary(input);
     const detail = summary ? `, ${summary}` : "";
@@ -119,9 +120,20 @@ export const transactionImportHandler: CommandHandlerWithDb<
   }
 
   if (args.dryRun) {
-    ui.block(() => {
-      ui.info("Dry run complete - no changes made");
-    });
+    ui.block(() => ui.info("Dry run preview"));
+    for (let i = 0; i < allInputs.length; i++) {
+      const input = allInputs[i]!;
+      const previewInput = { ...input };
+      delete (previewInput as Record<string, unknown>)._source;
+      const processed = await kg.process(previewInput);
+      if (isErr(processed)) {
+        ui.warning(`Transaction ${i + 1} would fail:`);
+        ui.printError(processed.error);
+        continue;
+      }
+      await ui.printTransaction(kg, processed.data, "full");
+    }
+    ui.block(() => ui.info("Dry run complete - no changes made"));
     return okVoid;
   }
 

@@ -733,6 +733,48 @@ export const canonicalizeFieldChangeset = (
       ),
   );
 
+export const mapChangesetValues = (
+  changeset: FieldChangeset,
+  fn: (value: FieldValue) => FieldValue,
+): FieldChangeset => {
+  const mapDeep = (value: FieldValue): FieldValue => {
+    if (Array.isArray(value))
+      return value.map((item) => mapDeep(item as FieldValue)) as FieldValue;
+    if (value !== null && typeof value === "object")
+      return mapObjectValues(value as Record<string, FieldValue>, (v) =>
+        mapDeep(v),
+      ) as FieldValue;
+    return fn(value);
+  };
+
+  return mapObjectValues(changeset, (value) => {
+    const change = normalizeValueChange(value);
+    if (isSetChange(change)) {
+      return change.length === 3
+        ? ["set", mapDeep(change[1]), mapDeep(change[2])]
+        : ["set", mapDeep(change[1])];
+    }
+    if (isClearChange(change)) return ["clear", mapDeep(change[1])];
+    if (isSeqChange(change)) {
+      return [
+        "seq",
+        change[1].map((mutation): ListMutation => {
+          if (isPatchMutation(mutation))
+            return ["patch", mutation[1], mapChangesetValues(mutation[2], fn)];
+          const mapped = mapDeep(mutation[1]);
+          return mutation[2] !== undefined
+            ? [mutation[0], mapped, mutation[2]]
+            : [mutation[0], mapped];
+        }),
+      ];
+    }
+    if (isPatchChange(change))
+      return ["patch", mapChangesetValues(change[1], fn)];
+    // diff — ops are not field values, pass through
+    return change;
+  }) as FieldChangeset;
+};
+
 export const canonicalizeEntitiesChangeset = <N extends NamespaceEditable>(
   schema: NamespaceSchema<N>,
   changeset: EntitiesChangeset<N>,

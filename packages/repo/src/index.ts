@@ -41,7 +41,7 @@ export {
   matchesFilter,
   matchesFilters,
 } from "./filter-entities.ts";
-export { createUid } from "./utils/uid.ts";
+export { createUid, isValidUid } from "./utils/uid.ts";
 export { applyConfigChangesetToSchema } from "./changeset-applier.ts";
 export type { ChangesetValidationError } from "./changeset-processor.ts";
 export { parseFieldValue, serializeFieldValue } from "./model/field.ts";

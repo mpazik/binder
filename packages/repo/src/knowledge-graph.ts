@@ -84,6 +84,8 @@ export type KnowledgeGraph<
   }>;
   version: () => ResultAsync<GraphVersion>;
   update: (input: TransactionInput) => ResultAsync<Transaction>;
+  /** Resolve and validate an input into a transaction without persisting it. */
+  process: (input: TransactionInput) => ResultAsync<Transaction>;
   apply: (transaction: Transaction) => ResultAsync<Transaction>;
   rollback: (count: number, version?: TransactionId) => ResultAsync<void>;
   getRecordSchema: () => ResultAsync<RecordSchema>;
@@ -430,6 +432,17 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         if (isErr(processedResult)) return processedResult;
 
         return applyAndNotify(processedResult.data);
+      }),
+    process: async (input: TransactionInput) =>
+      db.transaction(async (tx) => {
+        const recordSchemaResult = await getRecordSchema();
+        if (isErr(recordSchemaResult)) return recordSchemaResult;
+        return processTransactionInput(
+          tx,
+          input,
+          recordSchemaResult.data,
+          configSchema,
+        );
       }),
     apply: (transaction: Transaction) => applyAndNotify(transaction),
     rollback: async (count, version) => {
