@@ -19,7 +19,7 @@ import {
   runtimeWithDb,
 } from "../runtime.ts";
 import { cliMigrationRunner, cliSchema } from "../db";
-import { BINDER_DIR, findBinderRoot } from "../config.ts";
+import { BINDER_DIR } from "../config.ts";
 import {
   type BlueprintInfo,
   listBlueprints,
@@ -76,17 +76,6 @@ const initSetupHandler: CommandHandlerMinimal<{
 }> = async ({ fs, args }) => {
   const currentDir = process.cwd();
   const binderDirPath = join(currentDir, BINDER_DIR);
-
-  const existingRootResult = await findBinderRoot(currentDir);
-  if (isErr(existingRootResult)) return existingRootResult;
-
-  if (existingRootResult.data !== null) {
-    const message =
-      existingRootResult.data === currentDir
-        ? "Binder workspace already initialized in current directory"
-        : `Cannot initialize nested workspace. Existing workspace at: ${existingRootResult.data}`;
-    return fail("workspace-exists", message);
-  }
 
   const blueprintsResult = await listBlueprints(fs);
   const availableBlueprints = isOk(blueprintsResult)
