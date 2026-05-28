@@ -64,6 +64,22 @@ describe("frontmatter", () => {
       );
     });
 
+    it("skips empty array values", () => {
+      check(
+        { name: "Task Card", tags: [] },
+        ["name", "tags"],
+        "name: Task Card",
+      );
+    });
+
+    it("returns undefined when all values are empty arrays or null", () => {
+      check(
+        { tags: [], relatesTo: [], description: null },
+        ["tags", "relatesTo", "description"],
+        undefined,
+      );
+    });
+
     it("returns undefined for empty preamble keys", () => {
       check({ name: "Task Card" }, [], undefined);
     });

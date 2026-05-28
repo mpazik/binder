@@ -509,6 +509,15 @@ describe("knowledge graph", () => {
             [{ [mockRelatedToFieldKey]: [] }],
           ));
 
+        it("omits self-inverse M:M field for boolean include when no matches", () =>
+          checkSearch(
+            {
+              filters: { uid: mockTask3Record.uid },
+              includes: { [mockRelatedToFieldKey]: true },
+            },
+            [{}],
+          ));
+
         it("resolves stored forward links on the declaring entity", () =>
           checkSearch(
             {

@@ -296,9 +296,14 @@ const selectFieldsForEntity = (
     const field = schema.fields[fieldKey];
     const val = entity[fieldKey];
 
-    // Boolean include on inverse relation: collapse to flat uid strings
+    // Boolean include on inverse relation: collapse to flat uid strings.
+    // Skip empty results so absent inverse data does not surface as `null`
+    // or `[]` in callers' output (e.g. rendered frontmatter).
     if (includeValue === true && field?.inverseOf) {
-      selected[fieldKey] = collapseToUids(val);
+      const collapsed = collapseToUids(val);
+      if (collapsed == null) continue;
+      if (Array.isArray(collapsed) && collapsed.length === 0) continue;
+      selected[fieldKey] = collapsed;
       continue;
     }
 

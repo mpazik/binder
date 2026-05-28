@@ -20,6 +20,7 @@ export const renderFrontmatterString = (
   for (const key of preambleKeys) {
     const value = entity[key];
     if (value === null || value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
     data[key] = value;
     hasValue = true;
   }
