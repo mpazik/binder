@@ -2,9 +2,14 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { type ErrorObject, throwIfError, throwIfValue } from "@binder/utils";
 import "@binder/utils/tests";
 import {
+  mockProjectKey,
+  mockProjectRecord,
+  mockProjectUid,
+  mockTask1Key,
   mockTask1Record,
   mockTask1Uid,
   mockUserRecord,
+  mockUserUid,
 } from "./model/record.mock.ts";
 import { mockChangesetUpdateTask1 } from "./model/changeset.mock.ts";
 import { computeTextDiff } from "./model/text-diff.ts";
@@ -20,6 +25,7 @@ import {
   fieldSystemType,
   GENESIS_ENTITY_ID,
   type NamespaceEditable,
+  type RecordKey,
   typeSystemType,
 } from "./model";
 import { mockRecordSchema } from "./model/schema.mock.ts";
@@ -32,7 +38,10 @@ import {
   mockTaskTypeKey,
   mockUserTypeKey,
 } from "./model/config.mock.ts";
-import { mockChangesetInputUpdateTask1 } from "./model/changeset-input.mock.ts";
+import {
+  mockChangesetInputCreateTask1,
+  mockChangesetInputUpdateTask1,
+} from "./model/changeset-input.mock.ts";
 
 describe("changeset processor", () => {
   let db: Database;
@@ -148,6 +157,18 @@ describe("changeset processor", () => {
         );
       });
 
+      it("drops no-op set changes from the changeset", async () => {
+        await insertTask1();
+        await checkChangeset(
+          {
+            uid: mockTask1Uid,
+            status: mockTask1Record.status, // restated unchanged
+            title: "Updated title",
+          },
+          { title: ["set", "Updated title", mockTask1Record.title] },
+        );
+      });
+
       it("drops no-op explicit diff input (only retain ops)", async () => {
         await insertTask1();
         const noopOps = [
@@ -185,30 +206,176 @@ describe("changeset processor", () => {
       });
 
       it("creates changeset for new config entity with uid field", async () => {
-        const result = await db.transaction(async (tx) =>
-          throwIfError(
-            await processChangesetInput(
-              tx,
-              "config",
-              [
-                {
-                  type: fieldSystemType,
-                  key: testFieldKey,
-                  dataType: "plaintext",
-                },
-              ],
-              coreConfigSchema,
-              GENESIS_ENTITY_ID,
-            ),
+        const result = throwIfError(
+          await process(
+            [
+              {
+                type: fieldSystemType,
+                key: testFieldKey,
+                dataType: "plaintext",
+              },
+            ],
+            "config",
           ),
         );
-
-        const changeset = result[testFieldKey];
-        expect(changeset).toMatchObject({
+        expect(result[testFieldKey]).toMatchObject({
           uid: expect.any(String),
           key: testFieldKey,
           type: fieldSystemType,
           dataType: "plaintext",
+        });
+      });
+    });
+
+    describe("upsert", () => {
+      it("creates a new entity when the key does not exist", async () => {
+        const result = throwIfError(
+          await process([
+            {
+              type: mockTaskTypeKey,
+              key: "brand-new-task" as RecordKey,
+              title: "New",
+            },
+          ]),
+        );
+        const [ref, changeset] = Object.entries(result)[0]!;
+        expect(changeset).toMatchObject({
+          key: "brand-new-task",
+          type: mockTaskTypeKey,
+          title: "New",
+        });
+        expect(ref).not.toBe(mockTask1Uid);
+      });
+
+      it("updates the existing entity when the key already exists", async () => {
+        await insertTask1();
+        const result = throwIfError(
+          await process([
+            { type: mockTaskTypeKey, key: mockTask1Key, title: "Renamed" },
+          ]),
+        );
+        // update changeset keyed by the existing uid, carries the prior value,
+        // and no `type` (updates never restate type)
+        expect(result[mockTask1Uid]).toEqual({
+          title: ["set", "Renamed", mockTask1Record.title],
+        });
+      });
+
+      it("routes the same create-shaped input to create when absent, update when present", async () => {
+        // The create mock carries `type` + `key` + `uid`: on an empty store it
+        // creates, and re-running it once the record exists updates in place.
+        const created = throwIfError(
+          await process([mockChangesetInputCreateTask1]),
+        );
+        expect(created[mockTask1Uid]).toMatchObject({
+          key: mockTask1Record.key,
+          type: mockTask1Record.type,
+          title: mockTask1Record.title,
+        });
+
+        await insertTask1();
+        const updated = throwIfError(
+          await process([
+            { ...mockChangesetInputCreateTask1, title: "Renamed" },
+          ]),
+        );
+        // resolves to an update keyed by the existing uid (no new uid, no
+        // duplicate-key error); restated unchanged fields are dropped, leaving
+        // only the title change
+        expect(updated[mockTask1Uid]).toEqual({
+          title: ["set", "Renamed", mockTask1Record.title],
+        });
+      });
+
+      it("applies update semantics on the existing path (skips mandatory check)", async () => {
+        await insertTask1();
+        // `title` is mandatory for create; an upsert resolving to an existing
+        // record must not require it.
+        await checkSuccess([
+          { type: mockTaskTypeKey, key: mockTask1Key, status: "active" },
+        ]);
+      });
+
+      it("does not raise a uniqueness error when upserting in place", async () => {
+        await insertRecord(db, mockUserRecord);
+        // A pure create with this email would collide; the upsert resolves to
+        // an update of the same record, changing only the name.
+        await checkSuccess([
+          {
+            type: mockUserTypeKey,
+            uid: mockUserUid,
+            name: "Rick Sanchez",
+            [mockFieldKeyEmail]: "rick@example.com",
+          } as EntityChangesetInput<"record">,
+        ]);
+      });
+
+      it("errors when the upsert type mismatches the existing entity", async () => {
+        await insertTask1();
+        await checkErrors(
+          [{ type: mockProjectTypeKey, key: mockTask1Key, title: "x" }],
+          [
+            {
+              index: 0,
+              namespace: "record",
+              field: "type",
+              message: `type "${mockProjectTypeKey}" does not match existing record entity ${mockTask1Key} of type "${mockTaskTypeKey}"`,
+            },
+          ],
+        );
+      });
+
+      it("resolves a relation ref to an existing upserted entity, not a new uid", async () => {
+        await insertRecord(db, mockProjectRecord);
+        const result = throwIfError(
+          await process([
+            // upsert the project (exists → update)
+            {
+              type: mockProjectTypeKey,
+              key: mockProjectKey,
+              title: "Renamed project",
+            },
+            // create a task that references the project by key
+            {
+              type: mockTaskTypeKey,
+              key: "task-with-project" as RecordKey,
+              title: "Task",
+              project: mockProjectKey,
+            },
+          ]),
+        );
+        const taskChangeset = Object.values(result).find(
+          (changeset) => (changeset as FieldChangeset).project !== undefined,
+        ) as FieldChangeset;
+        expect(taskChangeset.project).toBe(mockProjectUid);
+      });
+
+      it("resolves a batch mixing create and update", async () => {
+        await insertTask1();
+        const result = throwIfError(
+          await process([
+            { type: mockTaskTypeKey, key: mockTask1Key, title: "Updated 1" },
+            {
+              type: mockTaskTypeKey,
+              key: "fresh-task" as RecordKey,
+              title: "Created",
+            },
+          ]),
+        );
+        // existing → update keyed by its uid
+        expect(result[mockTask1Uid]).toEqual({
+          title: ["set", "Updated 1", mockTask1Record.title],
+        });
+        // new → create keyed by a freshly minted uid
+        const createRef = Object.keys(result).find(
+          (ref) => ref !== mockTask1Uid,
+        )!;
+        expect(
+          result[createRef as keyof typeof result] as FieldChangeset,
+        ).toMatchObject({
+          key: "fresh-task",
+          type: mockTaskTypeKey,
+          title: "Created",
         });
       });
     });
@@ -476,7 +643,6 @@ describe("changeset processor", () => {
 
       it("rejects update to status triggering conditional required field", async () => {
         await insertTask1();
-
         await checkErrors(
           [{ uid: mockTask1Record.uid, status: "cancelled" }],
           [
@@ -492,7 +658,6 @@ describe("changeset processor", () => {
 
       it("accepts update to status with conditional required field provided", async () => {
         await insertTask1();
-
         await checkSuccess([
           {
             uid: mockTask1Record.uid,
@@ -548,7 +713,6 @@ describe("changeset processor", () => {
 
       it("rejects undefined fields in schema for create and update", async () => {
         await insertTask1();
-
         await checkErrors(
           [
             {
@@ -577,7 +741,6 @@ describe("changeset processor", () => {
 
       it("rejects reserved keys on create and update", async () => {
         await insertConfig(db, mockPriorityField);
-
         await checkErrors(
           [
             {
@@ -607,7 +770,6 @@ describe("changeset processor", () => {
 
       it("rejects keys that match the UID format", async () => {
         await insertConfig(db, mockPriorityField);
-
         await checkErrors(
           [
             {
@@ -725,7 +887,6 @@ describe("changeset processor", () => {
 
       it("enforces type-level only constraints for option fields on update", async () => {
         await insertTask1();
-
         await checkStatusOnlyConstraintError({
           uid: mockTask1Uid,
           status: "complete",
@@ -734,7 +895,6 @@ describe("changeset processor", () => {
 
       it("validates values in list mutations", async () => {
         await insertTask1();
-
         await checkErrors(
           [
             {
@@ -764,7 +924,6 @@ describe("changeset processor", () => {
 
       it("accepts valid list mutations", async () => {
         await insertTask1();
-
         await checkSuccess([
           {
             uid: mockTask1Record.uid,
@@ -778,7 +937,6 @@ describe("changeset processor", () => {
 
       it("rejects duplicate unique field value", async () => {
         await insertRecord(db, mockUserRecord);
-
         await checkErrors(
           [
             {
@@ -802,7 +960,6 @@ describe("changeset processor", () => {
 
       it("rejects updates to immutable fields", async () => {
         await insertConfig(db, mockPriorityField);
-
         await checkErrors(
           [
             { key: mockPriorityFieldKey, dataType: "integer" },

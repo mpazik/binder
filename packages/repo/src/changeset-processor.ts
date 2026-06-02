@@ -49,6 +49,7 @@ import {
   incrementEntityId,
   isClearChange,
   isDiffInput,
+  isEntityCreate,
   isEntityDelete,
   isEntityUpdate,
   getEntityInputRef,
@@ -83,6 +84,7 @@ import {
   fetchEntity,
   fetchEntityFieldset,
   resolveEntityRefs,
+  resolveExistingEntities,
 } from "./entity-store.ts";
 import { validateDataType } from "./data-type-validators.ts";
 import { editableEntityTables } from "./schema.ts";
@@ -275,22 +277,17 @@ const validateFieldDefaultValue = (
   const inputOptions = input["options"] as OptionDefInput[] | undefined;
   const options = inputOptions ? normalizeOptionSet(inputOptions) : undefined;
 
-  const tempFieldDef = {
-    dataType,
-    allowMultiple: false,
-    options,
-  } as RecordFieldDef;
-  const validationResult = validateDataType(
+  const result = validateDataType(
     "record",
-    tempFieldDef,
+    { dataType, allowMultiple: false, options } as RecordFieldDef,
     defaultValue,
   );
 
-  if (isErr(validationResult)) {
+  if (isErr(result)) {
     return [
       {
         field: "default",
-        message: `default value does not match dataType '${dataType}': ${validationResult.error.message}`,
+        message: `default value does not match dataType '${dataType}': ${result.error.message}`,
       },
     ];
   }
@@ -832,6 +829,16 @@ const toRelationArray = (value: FieldValue | undefined): FieldValue[] => {
 
 type RelationDeltas = { adds: FieldValue[]; removes: FieldValue[] };
 
+const deltasFromMutations = (mutations: ListMutation[]): RelationDeltas => {
+  const adds: FieldValue[] = [];
+  const removes: FieldValue[] = [];
+  for (const mutation of mutations) {
+    if (isInsertMutation(mutation)) adds.push(mutation[1]);
+    else if (isRemoveMutation(mutation)) removes.push(mutation[1]);
+  }
+  return { adds, removes };
+};
+
 /**
  * Normalize any relation-field change into per-item add/remove deltas.
  * Handles explicit seq/mutation-array changes, `set`/`clear` changes, and raw
@@ -848,15 +855,7 @@ const deriveRelationDeltas = async <N extends NamespaceEditable>(
   newEntityRefs: Set<string>,
 ): ResultAsync<RelationDeltas> => {
   const explicit = extractMutations(change);
-  if (explicit) {
-    const adds: FieldValue[] = [];
-    const removes: FieldValue[] = [];
-    for (const mutation of explicit) {
-      if (isInsertMutation(mutation)) adds.push(mutation[1]);
-      else if (isRemoveMutation(mutation)) removes.push(mutation[1]);
-    }
-    return ok({ adds, removes });
-  }
+  if (explicit) return ok(deltasFromMutations(explicit));
 
   const normalized = normalizeValueChange(change);
   let newArray: FieldValue[] = [];
@@ -906,15 +905,7 @@ const deriveOneToManyDeltas = async <N extends NamespaceEditable>(
   newEntityRefs: Set<string>,
 ): ResultAsync<RelationDeltas> => {
   const explicit = extractMutations(change);
-  if (explicit) {
-    const adds: FieldValue[] = [];
-    const removes: FieldValue[] = [];
-    for (const mutation of explicit) {
-      if (isInsertMutation(mutation)) adds.push(mutation[1]);
-      else if (isRemoveMutation(mutation)) removes.push(mutation[1]);
-    }
-    return ok({ adds, removes });
-  }
+  if (explicit) return ok(deltasFromMutations(explicit));
 
   const normalized = normalizeValueChange(change);
   const newArray = isSetChange(normalized)
@@ -1489,6 +1480,8 @@ const buildChangeset = async <N extends NamespaceEditable>(
         changeset[key] = ["diff", ops];
         continue;
       }
+      // drop no-op sets: restating a field's existing value is not a change
+      if (isEqual(inputValue, currentValue)) continue;
       changeset[key] =
         currentValue == null
           ? ["set", inputValue]
@@ -1609,6 +1602,76 @@ const buildChangeset = async <N extends NamespaceEditable>(
 };
 
 /**
+ * Upsert pre-pass: an input with both `type` and a `key`/`uid` leaves the
+ * create-vs-update choice to the system rather than the author. Existence is
+ * resolved here, before relation/uid resolution, so a matched entity keeps its
+ * uid instead of being minted a fresh one.
+ *
+ * Routing keys off `type` alone, never `$ref`, so `$ref` keeps its single role
+ * as an identifier-kind selector.
+ */
+const resolveUpserts = async <N extends NamespaceEditable>(
+  tx: DbTransaction,
+  namespace: N,
+  inputs: ChangesetsInput<N>,
+): ResultAsync<ChangesetsInput<N>, ErrorObject> => {
+  const candidates: { index: number; ref: EntityRef }[] = [];
+  for (let index = 0; index < inputs.length; index++) {
+    const input = inputs[index];
+    // Only a potential create that carries an identifier is upsert intent.
+    // `$ref` stays a pure selector and is never valid on a create.
+    if (!isEntityCreate(input)) continue;
+    const raw = input as Record<string, unknown>;
+    if ("$ref" in raw) continue;
+    const ref = (raw["uid"] ?? raw["key"]) as EntityRef | undefined;
+    if (ref != null) candidates.push({ index, ref });
+  }
+
+  if (candidates.length === 0) return ok(inputs);
+
+  const existingResult = await resolveExistingEntities(
+    tx,
+    namespace,
+    candidates.map((candidate) => candidate.ref),
+  );
+  if (isErr(existingResult)) return existingResult;
+  const existing = existingResult.data;
+
+  const result = [...inputs];
+  const errors: ChangesetValidationError[] = [];
+
+  for (const { index, ref } of candidates) {
+    const match = existing.get(String(ref));
+    if (!match) continue; // miss → stays a create
+
+    const raw = inputs[index] as Record<string, unknown>;
+    const inputType = raw["type"] as string;
+    if (inputType !== match.type) {
+      errors.push({
+        index,
+        namespace,
+        field: "type",
+        message: `type "${inputType}" does not match existing ${namespace} entity ${ref} of type "${match.type}"`,
+      });
+      continue;
+    }
+
+    // Drop the create marker; the existing key/uid then routes through the
+    // normal update path during normalization. No `$ref` is introduced here.
+    const { type: _type, ...rest } = raw;
+    result[index] = rest as EntityChangesetInput<N>;
+  }
+
+  if (errors.length > 0) {
+    return fail("changeset-input-process-failed", "failed creating changeset", {
+      data: { errors },
+    });
+  }
+
+  return ok(result);
+};
+
+/**
  * Normalizes entity mutation inputs into per-entity field changesets, resolving
  * relation refs, validating constraints, expanding inverse relation side effects,
  * and adding reference cleanup for deletes before the transaction is applied.
@@ -1620,7 +1683,12 @@ export const processChangesetInput = async <N extends NamespaceEditable>(
   schema: NamespaceSchema<N>,
   lastEntityId: EntityId,
 ): ResultAsync<EntitiesChangeset<N>, ErrorObject> => {
-  const normalizedInputs = inputs.map((raw) => normalizeInput(raw, schema));
+  const upsertResult = await resolveUpserts(tx, namespace, inputs);
+  if (isErr(upsertResult)) return upsertResult;
+
+  const normalizedInputs = upsertResult.data.map((raw) =>
+    normalizeInput(raw, schema),
+  );
 
   const refToUidResult =
     namespace === "record"

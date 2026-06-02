@@ -45,6 +45,20 @@ export type EntityDb = {
   fields: JsonObject;
 };
 
+type PartitionedRefs = {
+  uids: EntityUid[];
+  ids: EntityId[];
+  keys: EntityKey[];
+};
+
+const partitionRefs = (refs: EntityRef[]): PartitionedRefs => ({
+  uids: refs.filter(isEntityUid) as EntityUid[],
+  ids: refs.filter(isEntityId) as EntityId[],
+  keys: refs.filter(
+    (ref) => !isEntityId(ref) && !isEntityUid(ref),
+  ) as EntityKey[],
+});
+
 const entityRefClause = <N extends Namespace>(
   namespace: N,
   ref: EntityRef,
@@ -57,9 +71,7 @@ const entityRefClause = <N extends Namespace>(
     );
 
   const editableTable = entityTables[namespace as "config" | "record"];
-  if (isEntityUid(ref)) {
-    return eq(editableTable.uid, ref);
-  }
+  if (isEntityUid(ref)) return eq(editableTable.uid, ref);
   return eq(editableTable.key, ref as EntityKey);
 };
 
@@ -202,13 +214,8 @@ export const resolveEntityRefs = async (
   namespace: NamespaceEditable,
   refs: EntityRef[],
 ): ResultAsync<EntityUid[]> => {
-  const entityUids = refs.filter(isEntityUid);
-  if (entityUids.length === refs.length) return ok(entityUids);
-
-  const entityIds = refs.filter(isEntityId);
-  const entityKeys = refs.filter(
-    (id) => !isEntityId(id) && !isEntityUid(id),
-  ) as EntityKey[];
+  const { uids, ids, keys } = partitionRefs(refs);
+  if (uids.length === refs.length) return ok(uids);
 
   const table = entityTables[namespace];
   const lookupResult = await tryCatch(async () =>
@@ -221,12 +228,8 @@ export const resolveEntityRefs = async (
       .from(table)
       .where(
         or(
-          entityIds.length > 0
-            ? inArray(entityTables[namespace].id, entityIds as any)
-            : undefined,
-          entityKeys.length > 0
-            ? inArray(entityTables[namespace].key, entityKeys as any)
-            : undefined,
+          ids.length > 0 ? inArray(table.id, ids as any) : undefined,
+          keys.length > 0 ? inArray(table.key, keys as any) : undefined,
         ),
       ),
   );
@@ -263,6 +266,67 @@ export const resolveEntityRefs = async (
   }
 
   return ok(resolved);
+};
+
+/**
+ * Batched, miss-tolerant existence lookup. Resolves each ref (id, uid, or
+ * key) against the namespace table and returns matches only, keyed by the
+ * original ref string, with the entity's uid and type. Unlike
+ * {@link resolveEntityRefs} this does not fail on missing refs — callers that
+ * need create-or-update routing rely on the absence of a key to mean "create".
+ */
+export const resolveExistingEntities = async (
+  tx: DbTransaction,
+  namespace: NamespaceEditable,
+  refs: EntityRef[],
+): ResultAsync<Map<string, { uid: EntityUid; type: EntityType }>> => {
+  const result = new Map<string, { uid: EntityUid; type: EntityType }>();
+  if (refs.length === 0) return ok(result);
+
+  const { uids, ids, keys } = partitionRefs(refs);
+  const table = entityTables[namespace];
+  const lookupResult = await tryCatch(async () =>
+    tx
+      .select({
+        id: table.id,
+        key: table.key,
+        uid: table.uid,
+        type: table.type,
+      })
+      .from(table)
+      .where(
+        or(
+          uids.length > 0 ? inArray(table.uid, uids as any) : undefined,
+          ids.length > 0 ? inArray(table.id, ids as any) : undefined,
+          keys.length > 0 ? inArray(table.key, keys as any) : undefined,
+        ),
+      ),
+  );
+  if (isErr(lookupResult)) return lookupResult;
+
+  const byUid = new Map<EntityUid, { uid: EntityUid; type: EntityType }>();
+  const byId = new Map<EntityId, { uid: EntityUid; type: EntityType }>();
+  const byKey = new Map<EntityKey, { uid: EntityUid; type: EntityType }>();
+  for (const row of lookupResult.data) {
+    const entry = {
+      uid: row.uid as EntityUid,
+      type: row.type as EntityType,
+    };
+    byUid.set(row.uid as EntityUid, entry);
+    byId.set(row.id as EntityId, entry);
+    if (row.key !== null) byKey.set(row.key as EntityKey, entry);
+  }
+
+  for (const ref of refs) {
+    const entry = isEntityUid(ref)
+      ? byUid.get(ref as EntityUid)
+      : isEntityId(ref)
+        ? byId.get(ref as EntityId)
+        : byKey.get(ref as EntityKey);
+    if (entry) result.set(String(ref), entry);
+  }
+
+  return ok(result);
 };
 
 export const getLastEntityId = async <N extends NamespaceEditable>(

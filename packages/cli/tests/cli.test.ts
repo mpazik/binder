@@ -274,8 +274,11 @@ describe("CLI", () => {
   });
 
   describe("transactions", () => {
-    it("import from file", async () => {
+    it("import from file upserts a repeated key", async () => {
       const txFile = join(dir, "extra-tx.yaml");
+      // Two entries import as sequential transactions. The second restates the
+      // same key+type, so it upserts the record created by the first instead of
+      // failing on the unique key.
       await writeFile(
         txFile,
         [
@@ -285,6 +288,12 @@ describe("CLI", () => {
           "      type: Task",
           "      title: Imported task",
           "      status: active",
+          "- author: test",
+          "  records:",
+          "    - key: task-imported",
+          "      type: Task",
+          "      title: Imported task (revised)",
+          "      status: archived",
         ].join("\n"),
       );
       await check(["tx", "import", txFile, "-q"]);
@@ -292,10 +301,12 @@ describe("CLI", () => {
       await check(
         ["search", "type=Task", "key=task-imported", "--format", "json"],
         (stdout) => {
+          // A single record carrying the upserted values, not a duplicate.
           expect(JSON.parse(stdout).items).toEqual([
             expect.objectContaining({
               key: "task-imported",
-              title: "Imported task",
+              title: "Imported task (revised)",
+              status: "archived",
             }),
           ]);
         },

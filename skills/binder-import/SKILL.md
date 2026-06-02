@@ -100,6 +100,8 @@ Include:
 
 Before generating transactions, check if the target workspace already has records that overlap with the import.
 
+**Prefer upsert when the natural key maps to the binder `key`.** If each source record has a stable identifier you can use as the record `key`, emit an **upsert** (`type` + `key`) and let binder decide create vs update. This skips the per-record search entirely and makes re-imports idempotent. Fall back to the search-based flow below only for fuzzy matching or when the natural key is not the binder `key`.
+
 ### Identify Natural Keys
 
 Determine which source field acts as a natural key, the field most likely to uniquely identify a record. Common candidates:
@@ -123,7 +125,8 @@ binder search type=<TargetType> --format jsonl | jq -r '.<keyField>'
 
 ### Handle Matches
 
-- **Exact match found**: generate a `$ref: <uid>` update instead of a create. Only include fields that differ from the existing record
+- **Stable natural key**: emit an upsert (`type` + `key`) and let binder create-or-update. No search needed
+- **Exact match found** (key not usable): generate a `uid: <uid>` update instead of a create. Only include fields that differ from the existing record
 - **Fuzzy match** (similar but not identical): list the near-matches and ask the user whether to update, skip, or create new
 - **No match**: generate a create
 
@@ -177,12 +180,23 @@ Write a YAML transaction file following Binder's format:
       priority: medium
 ```
 
-For updates to existing records:
+For upserts (create-or-update by stable key):
 
 ```yaml
 - author: import
   records:
-    - $ref: tsk-abc123
+    - type: Task
+      key: gh-1234        # stable natural key → created or updated
+      title: "Implement auth"
+      status: done
+```
+
+For updates to existing records by uid (when no usable key):
+
+```yaml
+- author: import
+  records:
+    - uid: 2Wh6GJpu6k0
       status: done
       completedAt: "2025-01-15"
 ```

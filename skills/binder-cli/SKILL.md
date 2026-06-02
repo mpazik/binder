@@ -34,7 +34,7 @@ Global options: `-C <path>` cwd, `-q` quiet, `--format` output format, `-n` name
 binder read <ref> [--format yaml|json] [-f fields]
 ```
 
-Ref: id (numeric), uid (e.g. `tsk-abc123`), or key (e.g. `Task`, `status`).
+Ref: id (numeric), uid (e.g. `6VI6iLYBQUg`), or key (e.g. type/field keys `Task`, `status`, or a record key like `example-task`).
 
 Use `-f/--fields` to include or traverse relations inline — same syntax as `search`.
 
@@ -98,43 +98,59 @@ Set a relation field to the target's uid or key:
 
 ```bash
 binder create Task key=fix-auth title="Fix auth" taskType=fix partOf=mst-v1
-binder update tsk-abc123 requires+=tsk-def456       # Add a relation
-binder update tsk-abc123 requires-=tsk-def456        # Remove a relation
-binder update tsk-abc123 relatesTo=tsk-x,tsk-y       # Set multiple relations
+binder update example-task requires+=write-tests             # add a relation (refs by key)
+binder update example-task requires-=write-tests             # remove a relation
+binder update example-task relatesTo=write-tests,6VI6iLYBQUg # set multiple, mixing key and uid
 ```
 
-The target record must exist before you can reference it. Use `binder search` to find the target's uid first.
+The target record must exist before you can reference it. Use `binder search` to find the target's key or uid first.
 
 ## Transaction Files
 
-For bulk or multi-step changes, write a transaction YAML file.
+Write a transaction YAML file for bulk changes, or when a set of changes must apply atomically (all-or-nothing).
 
-**Workflow**: write YAML → dry-run (`binder tx import -d file.yaml`) → show output to user and ask for approval → apply (`binder tx import file.yaml`). Always dry-run first, never skip approval.
+**Workflow**: write YAML → dry-run (`binder tx import -d file.yaml`) → show output to the user and get approval → apply (`binder tx import file.yaml`). Always dry-run first, never skip approval.
 
-Each entry has `author` and `records`/`configs` arrays. Use `type` to create, `$ref` (uid or key) to update:
+The file is a list of transaction entries. Each entry holds a `records` and/or `configs` array of changesets that apply together. A changeset is one of:
+
+- **Create / upsert** — has `type`, optionally with a `key` (or `uid`). Creates the entity; if one with that key/uid already exists it updates instead. Re-running is idempotent.
+- **Update** — no `type`; select the existing entity with `key:` or `uid:` and list only the changed fields.
+- **Delete** — an identifier plus `$delete: true`.
+
+If you hold an identifier but don't know whether it's a uid or a key, use `$ref:` and binder resolves it to either. Otherwise prefer `key:` (readable) or `uid:`.
+
+Optional per-entry metadata sits alongside `records`/`configs`:
+
+- `author` — who made the change; defaults to the workspace config author.
+- `message` — short summary, like a commit message.
+- `tags` — labels for categorisation and filtering (e.g. `cleanup`, `import`).
+- `source` — uid/key of the record that triggered the change.
+- `channel` — origin: `cli`, `lsp`, `mcp`, `agent`, or `engine`.
+
+Omit all of these by default. Add a `message` or `tags` only when the user asks for one; `author`, `source`, and `channel` are set by the system.
 
 ```yaml
-- author: agent
-  records:
-    - type: Task
+- records:
+    - type: Task                  # create
+      key: implement-auth
       title: Implement auth
       status: pending
       partOf: mst-v1
-      requires:
-        - tsk-def456
-    - $ref: tsk-abc123
+      requires: [write-tests]      # relation by key (readable)
+    - uid: 6VI6iLYBQUg            # update an entity you only have the uid for
       status: done
-      tags:
-        - - insert
-          - urgent
+      tags: [[insert, "urgent"]]
+    - type: Task                  # upsert: create if `fix-auth` is new, else update
+      key: fix-auth
+      status: done
   configs:
-    - $ref: nav-backlog
+    - key: nav-backlog            # update config by key
       where:
         type: Task
         status: pending
 ```
 
-List field mutations in transaction files: `["insert", value]`, `["insert", value, position]`, `["remove", value]`, `["patch", ref, {attrs}]`.
+List field mutations: `[insert, value]`, `[insert, value, position]`, `[remove, value]`, `[patch, ref, {attrs}]`.
 
 ## History
 
@@ -154,9 +170,11 @@ binder redo [N]                      # Redo last N undone
 
 ## Other Commands
 
+Binder renders files and keeps Markdown and the knowledge graph in sync automatically (the LSP handles it). Run render/sync by hand only for recovery or in non-LSP environments:
+
 ```bash
-binder docs render                   # Render navigation to files
-binder docs sync                     # Sync docs with knowledge graph
+binder docs render                   # Re-render files from the graph
+binder docs sync                     # Re-sync the graph from Markdown
 binder docs lint                     # Validate YAML and Markdown files
 binder locate <ref>                  # Print file path and line number
 binder init                          # Initialize new workspace

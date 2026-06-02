@@ -133,6 +133,16 @@ export const isEntityUpdate = <N extends NamespaceEditable>(
   input: EntityChangesetInput<N>,
 ): input is EntityUpdate<N> => hasRefField(input) && !isEntityDelete(input);
 
+/**
+ * True when the input carries `type`. Only creates name a `type`; updates and
+ * deletes target an existing entity by ref and never restate it, so `type` is
+ * the signal of create intent. The match may still resolve to an update when an
+ * entity with the same key/uid already exists (upsert).
+ */
+export const isEntityCreate = <N extends NamespaceEditable>(
+  input: EntityChangesetInput<N>,
+): input is EntityCreate<N> => "type" in input;
+
 /** Extract the entity ref from an update/delete input. Works before and after normalization. */
 export const getEntityInputRef = <N extends NamespaceEditable>(
   input: EntityUpdate<N> | EntityDelete<N>,
@@ -144,13 +154,13 @@ export const getEntityInputRef = <N extends NamespaceEditable>(
 export const getMutationInputRef = (value: ListMutationInputValue): string =>
   isObjTuple(value) ? objTupleKey(value) : (value as string);
 
+const normalizeItemInputValue = (value: ListMutationInputValue): FieldValue =>
+  isObjTuple(value) ? objTupleToTuple(value) : value;
+
 export const normalizeInputValue = (value: FieldValue): FieldValue =>
   Array.isArray(value)
     ? value.map(normalizeItemInputValue)
     : normalizeItemInputValue(value);
-
-const normalizeItemInputValue = (value: ListMutationInputValue): FieldValue =>
-  isObjTuple(value) ? objTupleToTuple(value) : value;
 
 export const normalizeListMutationInput = (
   input: ListMutationInput,
