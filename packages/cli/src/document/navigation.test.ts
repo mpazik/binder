@@ -713,6 +713,30 @@ describe("navigation", () => {
         ]);
       });
 
+      it("renders results in orderBy order", async () => {
+        const result = await renderItem({
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          orderBy: ["title"],
+        });
+        expect(result.renderedPaths).toEqual([
+          `tasks/${mockTask2Record.title}.yaml`,
+          `tasks/${mockTask1Record.title}.yaml`,
+        ]);
+      });
+
+      it("applies limit to ordered results", async () => {
+        const result = await renderItem({
+          path: "tasks/{title}",
+          where: { type: "Task" },
+          orderBy: ["title"],
+          limit: 1,
+        });
+        expect(result.renderedPaths).toEqual([
+          `tasks/${mockTask2Record.title}.yaml`,
+        ]);
+      });
+
       it("does not log warning when all results fit within default limit", async () => {
         const warnings: string[] = [];
         await renderItem(
@@ -846,6 +870,11 @@ describe("navigation", () => {
           path: "limited-tasks/{key}",
           where: { type: "Task" },
           limit: 10,
+        },
+        {
+          path: "ordered-tasks/{key}",
+          where: { type: "Task" },
+          orderBy: ["title"],
         },
       ]);
     });

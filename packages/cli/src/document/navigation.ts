@@ -15,6 +15,7 @@ import {
   matchesFilters,
   mergeIncludes,
   type NamespaceEditable,
+  type OrderBy,
   pickByIncludes,
   type QueryParams,
   serializeFieldValue,
@@ -67,6 +68,7 @@ export type NavigationItem = {
   includes?: Includes;
   query?: QueryParams;
   limit?: number;
+  orderBy?: OrderBy;
   children?: NavigationItem[];
 };
 
@@ -202,6 +204,7 @@ export const buildNavigationTree = (
       includes: item.includes as Includes | undefined,
       query: item.query as QueryParams | undefined,
       limit: item.limit as number | undefined,
+      orderBy: item.orderBy as OrderBy | undefined,
       ...(children && children.length > 0 ? { children } : {}),
     };
   };
@@ -471,6 +474,7 @@ export const renderNavigationItem = async (
       {
         filters: item.where,
         includes: item.includes,
+        orderBy: item.orderBy,
         pagination: { limit: item.limit ?? DEFAULT_RENDER_LIMIT },
       },
       [emptyFieldset, ...parentEntities],

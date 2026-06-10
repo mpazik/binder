@@ -57,6 +57,16 @@ export const mockNav6Entity = {
   limit: 10,
 } as const satisfies Fieldset;
 
+export const mockNav7Entity = {
+  id: newConfigAppId(7),
+  uid: "_navRoot006" as ConfigUid,
+  key: "nav-ordered-tasks" as ConfigKey,
+  type: typeNavigationKey,
+  path: "ordered-tasks/{key}",
+  where: { type: "Task" },
+  orderBy: ["title"],
+} as const satisfies Fieldset;
+
 export const mockMdTaskViewEntity = {
   id: newConfigAppId(4),
   uid: "_tmplMdTask" as ConfigUid,
@@ -84,6 +94,7 @@ export const mockNavigationConfigInput = [
   changesetInputForNewEntity<"config">(mockMdTaskViewEntity),
   changesetInputForNewEntity<"config">(mockNav5Entity),
   changesetInputForNewEntity<"config">(mockNav6Entity),
+  changesetInputForNewEntity<"config">(mockNav7Entity),
 ];
 
 // -- Status-based navigation for testing entity moves between locations --

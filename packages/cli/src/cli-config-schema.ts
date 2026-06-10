@@ -49,6 +49,9 @@ export const fieldViewUid = "_6Ae9cJjKmN" as ConfigUid;
 export const fieldLimitKey = "limit" as ConfigKey;
 export const fieldLimitUid = "_8Cg1eLlMoP" as ConfigUid;
 
+export const fieldOrderByKey = "orderBy" as ConfigKey;
+export const fieldOrderByUid = "_0Ei3gNnOqR" as ConfigUid;
+
 export const fieldViewFormatKey = "viewFormat" as ConfigKey;
 export const fieldViewFormatUid = "_7Bf0dKkLnO" as ConfigUid;
 
@@ -109,6 +112,18 @@ const fieldLimit: CliConfigFieldDef = {
   dataType: "integer",
 };
 
+const fieldOrderBy: CliConfigFieldDef = {
+  id: newConfigAppId(9),
+  uid: fieldOrderByUid,
+  key: fieldOrderByKey,
+  type: fieldSystemType,
+  name: "Order By",
+  description:
+    "Field keys to order query results by; prefix with ! for descending",
+  dataType: "plaintext",
+  allowMultiple: true,
+};
+
 const fieldViewFormat: CliConfigFieldDef = {
   id: newConfigAppId(6),
   uid: fieldViewFormatUid,
@@ -147,6 +162,7 @@ const typeNavigation: TypeDef = {
     "parent",
     fieldViewKey,
     fieldLimitKey,
+    fieldOrderByKey,
   ],
 };
 
@@ -174,6 +190,7 @@ export const cliConfigSchema: EntitySchema<ConfigDataType> = createSchema(
     fieldPreamble,
     fieldViewFormat,
     fieldLimit,
+    fieldOrderBy,
   ],
   [typeNavigation, typeView, typeSetting],
 );
