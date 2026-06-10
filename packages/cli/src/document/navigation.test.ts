@@ -555,6 +555,38 @@ describe("navigation", () => {
         );
       });
 
+      it("renders frontmatter with filtered preamble entry", async () => {
+        // project has task2 (pending) from init; add an active task so the
+        // filter has something to keep and something to drop
+        throwIfError(
+          await kg.update({
+            author: "test",
+            records: [
+              {
+                type: mockTaskTypeKey,
+                key: "task-active-one" as EntityKey,
+                title: "Active task",
+                status: "active",
+                project: mockProjectUid,
+              },
+            ],
+          }),
+        );
+        await addView("project-filtered-preamble", "# {title}\n", {
+          preamble: ["status", ["tasks", { filters: { status: "active" } }]],
+        });
+
+        await check(
+          {
+            path: "projects/{title}",
+            where: { type: "Project" },
+            view: "project-filtered-preamble",
+          },
+          `projects/${mockProjectRecord.title}.md`,
+          `---\nstatus: ${mockProjectRecord.status}\ntasks:\n  - task-active-one\n---\n\n# ${mockProjectRecord.title}\n`,
+        );
+      });
+
       it("renders view body with key instead of UID for relation fields", async () => {
         await addView("task-ref-body", "# {title}\n\nProject: {project}\n");
 

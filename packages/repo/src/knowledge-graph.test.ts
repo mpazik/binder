@@ -368,6 +368,35 @@ describe("knowledge graph", () => {
           ],
         ));
 
+      it("collapses filters-only include on inverse relation to filtered uids", () =>
+        checkSearch(
+          {
+            filters: { type: "Project" },
+            includes: {
+              [mockTasksFieldKey]: { filters: { status: "active" } },
+            },
+          },
+          [{ [mockTasksFieldKey]: [mockTask3Record.uid] }],
+        ));
+
+      it("collapses filters-only include on forward relation to matching uid", () =>
+        checkSearch(
+          {
+            filters: { key: mockTask2Record.key },
+            includes: { project: { filters: { status: "active" } } },
+          },
+          [{ project: mockProjectRecord.uid }],
+        ));
+
+      it("omits forward relation refs filtered out by filters-only include", () =>
+        checkSearch(
+          {
+            filters: { key: mockTask2Record.key },
+            includes: { project: { filters: { status: "archived" } } },
+          },
+          [{}],
+        ));
+
       it("applies field selection with includes", () =>
         checkSearch(
           {

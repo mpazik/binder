@@ -64,6 +64,14 @@ The `includes` parameter controls which fields appear in the response. When omit
 { "includes": { "title": true, "comments": { "includes": { "body": true, "author": { "includes": { "name": true } } }, "filters": { "status": "approved" } } } }
 ```
 
+**Filters-only (reference-only) includes**: When a relation include has `filters` but no nested `includes`, it acts as a reference-only include. The resolver collapses matching related entities to their uid strings and drops any that don't match the filters:
+
+```json
+{ "includes": { "title": true, "tasks": { "filters": { "status": "active" } } } }
+```
+
+This returns `tasks` as a flat list of uid strings for only the active tasks, rather than expanded objects. Use this form when you need to know which related entities match a condition without fetching their fields.
+
 ### Ordering and Pagination
 
 - **orderBy**: field names with `!` prefix for descending: `["!priority", "createdAt"]`

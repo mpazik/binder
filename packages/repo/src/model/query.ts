@@ -59,7 +59,7 @@ const IncludesBaseSchema: z.ZodType<Includes> = z.record(
   z.string(),
   IncludesValueSchema,
 );
-const IncludesQuerySchema: z.ZodType<IncludesQuery> = z.object({
+export const IncludesQuerySchema: z.ZodType<IncludesQuery> = z.object({
   includes: IncludesBaseSchema.optional(),
   filters: FiltersSchema.optional(),
 });
@@ -105,12 +105,11 @@ export const isObjectIncludes = (
 const addUidToIncludesRecursively = (value: IncludesValue): IncludesValue => {
   if (typeof value === "boolean") return value;
   if (isIncludesQuery(value)) {
-    return {
-      ...value,
-      includes: value.includes
-        ? includesWithUid(value.includes)
-        : { uid: true },
-    };
+    // Filters-only queries are reference-only includes — the resolver
+    // collapses them to uid strings, so injecting includes would change
+    // the result shape.
+    if (!value.includes) return value;
+    return { ...value, includes: includesWithUid(value.includes) };
   }
   return includesWithUid(value);
 };
@@ -119,6 +118,35 @@ export const includesWithUid = (includes: Includes): Includes => ({
   uid: true,
   ...mapObjectValues(includes, addUidToIncludesRecursively),
 });
+
+const toQueryParts = (
+  value: Includes | IncludesQuery,
+): { includes?: Includes; filters?: Filters } =>
+  isIncludesQuery(value) ? value : { includes: value };
+
+const mergeObjectIncludes = (
+  a: Includes | IncludesQuery,
+  b: Includes | IncludesQuery,
+): IncludesValue => {
+  if (!isIncludesQuery(a) && !isIncludesQuery(b)) {
+    return mergeIncludes(a, b)!;
+  }
+  const partsA = toQueryParts(a);
+  const partsB = toQueryParts(b);
+  const includes = mergeIncludes(partsA.includes, partsB.includes);
+  const filters =
+    partsA.filters || partsB.filters
+      ? { ...partsA.filters, ...partsB.filters }
+      : undefined;
+  if (!filters) return includes ?? {};
+  return includes ? { includes, filters } : { filters };
+};
+
+// true means "reference only" — inject key/uid into the object
+const injectRefIncludes = (value: Includes | IncludesQuery): IncludesValue =>
+  isIncludesQuery(value)
+    ? { ...value, includes: { key: true, uid: true, ...value.includes } }
+    : { key: true, uid: true, ...value };
 
 export const mergeIncludes = (
   a: Includes | undefined,
@@ -131,14 +159,12 @@ export const mergeIncludes = (
   const result: Includes = { ...a };
   for (const [key, value] of Object.entries(b)) {
     const existing = result[key];
-    if (typeof existing === "object" && typeof value === "object") {
-      result[key] = mergeIncludes(existing as Includes, value as Includes)!;
-    } else if (typeof existing === "object" && value === true) {
-      // true means "reference only" — inject key/uid into the object
-      result[key] = { key: true, uid: true, ...(existing as Includes) };
-    } else if (typeof value === "object" && existing === true) {
-      // true means "reference only" — inject key/uid into the object
-      result[key] = { key: true, uid: true, ...(value as Includes) };
+    if (isObjectIncludes(existing) && isObjectIncludes(value)) {
+      result[key] = mergeObjectIncludes(existing, value);
+    } else if (isObjectIncludes(existing) && value === true) {
+      result[key] = injectRefIncludes(existing);
+    } else if (isObjectIncludes(value) && existing === true) {
+      result[key] = injectRefIncludes(value);
     } else {
       result[key] = value;
     }

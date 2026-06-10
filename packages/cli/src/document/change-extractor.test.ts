@@ -6,6 +6,7 @@ import {
   type EntityChangesetInput,
   type EntityKey,
   type EntitySchema,
+  type EntityUid,
   type KnowledgeGraph,
 } from "@binder/repo";
 import {
@@ -295,6 +296,88 @@ ${mockTask2Record.description}
         ),
       );
       expect(result).toEqual([]);
+    });
+
+    describe("filtered preamble entry", () => {
+      const activeTask2Uid = "_taskActiv2" as EntityUid;
+      const activeTask2Key = "task-active-2";
+
+      const filteredPreambleView = createViewEntity(
+        "project-filtered-preamble",
+        `# {title}\n`,
+        {
+          preamble: ["status", ["tasks", { filters: { status: "active" } }]],
+        },
+      );
+      const filteredViews = [filteredPreambleView, ...mockViews];
+      const filteredNavItems: NavigationItem[] = [
+        { path: "projects/{key}", view: "project-filtered-preamble" },
+      ];
+
+      beforeEach(async () => {
+        // project tasks: task2 (pending, filtered out), task3 (active),
+        // and a second active task so removal keeps a non-empty list
+        throwIfError(
+          await kg.update({
+            author: "test",
+            records: [
+              pick(mockTask3Record, [
+                "uid",
+                "key",
+                "type",
+                "title",
+                "status",
+                "project",
+              ]),
+              {
+                uid: activeTask2Uid,
+                key: activeTask2Key as EntityKey,
+                type: mockTaskTypeKey,
+                title: "Second active task",
+                status: "active",
+                project: mockProjectUid,
+              },
+            ],
+          }),
+        );
+      });
+
+      const checkFiltered = async (
+        content: string,
+        expected: EntityChangesetInput<"record">[],
+      ) => {
+        const filePath = `projects/${mockProjectRecord.key}.md`;
+        const fullPath = join(ctx.config.paths.docs, filePath);
+        throwIfError(
+          await ctx.fs.mkdir(dirname(fullPath), { recursive: true }),
+        );
+        throwIfError(await ctx.fs.writeFile(fullPath, content));
+        const result = throwIfError(
+          await extractFileChanges(
+            { ...ctx, kg },
+            filteredNavItems,
+            mockRecordSchema,
+            filePath,
+            "record",
+            filteredViews,
+          ),
+        );
+        expect(result).toEqual(expected);
+      };
+
+      it("produces no changesets when frontmatter matches filtered state", async () => {
+        await checkFiltered(
+          `---\nstatus: ${mockProjectRecord.status}\ntasks:\n  - ${mockTask3Record.key}\n  - ${activeTask2Key}\n---\n\n# ${mockProjectRecord.title}\n`,
+          [],
+        );
+      });
+
+      it("produces a single remove mutation when a filtered value is deleted", async () => {
+        await checkFiltered(
+          `---\nstatus: ${mockProjectRecord.status}\ntasks:\n  - ${mockTask3Record.key}\n---\n\n# ${mockProjectRecord.title}\n`,
+          [{ uid: mockProjectUid, tasks: [["remove", activeTask2Uid]] }],
+        );
+      });
     });
   });
 

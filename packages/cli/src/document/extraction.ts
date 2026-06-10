@@ -12,7 +12,11 @@ import { parseMarkdown } from "./markdown.ts";
 import { extractFields } from "./view.ts";
 import { parseYamlEntity, parseYamlList } from "./yaml.ts";
 import { getDocumentFileType } from "./document.ts";
-import type { ViewKey, Views } from "./view-entity.ts";
+import {
+  getPreambleFieldKeys,
+  type ViewKey,
+  type Views,
+} from "./view-entity.ts";
 import { extractFrontmatterFromAst } from "./frontmatter.ts";
 import { createFieldAccumulator } from "./field-accumulator.ts";
 
@@ -133,7 +137,7 @@ const extractFromMarkdown = (
   if (isErr(fileFieldsResult)) return fileFieldsResult;
 
   const accumulator = createFieldAccumulator(base);
-  const preambleKeys = new Set(viewEntity.preamble ?? []);
+  const preambleKeys = new Set(getPreambleFieldKeys(viewEntity.preamble));
 
   for (const [key, value] of Object.entries(fileFieldsResult.data)) {
     // Preamble relation fields appear in the body as projected/included data

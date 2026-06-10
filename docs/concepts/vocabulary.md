@@ -11,6 +11,16 @@ relatesTo:
   - field
   - data-type
   - repository
+  - extension
+  - schema-configuration
+  - autocompletion
+  - diagnostics
+  - code-actions
+  - schema-preview
+  - prob-schema-format
+  - prob-role-of-types
+  - prob-entity-recognition
+  - prob-preset-key-conflicts
 ---
 
 # Vocabulary

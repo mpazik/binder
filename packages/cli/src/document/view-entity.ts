@@ -2,11 +2,20 @@ import {
   buildIncludes,
   getDelimiterString,
   type Includes,
+  type IncludesQuery,
+  IncludesQuerySchema,
   type KnowledgeGraph,
   mergeIncludes,
   richtextFormats,
 } from "@binder/repo";
-import { isErr, ok, type ResultAsync } from "@binder/utils";
+import {
+  isErr,
+  isObjTuple,
+  isTuple,
+  objTupleToTuple,
+  ok,
+  type ResultAsync,
+} from "@binder/utils";
 import { visit } from "unist-util-visit";
 import { type ViewFormat } from "../cli-config-schema.ts";
 import {
@@ -35,22 +44,70 @@ export {
   DOCUMENT_VIEW_KEY,
 } from "./view.const.ts";
 
+/**
+ * A preamble entry is a Field ref, optionally carrying an IncludesQuery as
+ * relation tuple attrs (`[fieldKey, { filters }]`). In view config YAML this
+ * is the obj-tuple form: `- relatesTo: { filters: { type: Concept } }`.
+ *
+ * Preamble fields render as references, so only the `filters` part of the
+ * query is used — nested `includes` are ignored.
+ */
+export type PreambleEntry = string | [string, IncludesQuery];
+
 export type ViewEntity = {
   key: ViewKey;
   name?: string;
   description?: string;
-  preamble?: string[];
+  preamble?: PreambleEntry[];
   viewFormat?: ViewFormat;
   viewContent: string;
   viewAst: ViewAST;
   viewIncludes: Includes | undefined;
 };
 
-const buildPreambleIncludes = (
-  preamble: string[] | undefined,
+type ParsedPreambleEntry = { key: string; query?: IncludesQuery };
+
+const parsePreambleEntry = (
+  entry: PreambleEntry,
+): ParsedPreambleEntry | undefined => {
+  if (typeof entry === "string") return { key: entry };
+  const tuple = isTuple(entry)
+    ? entry
+    : isObjTuple(entry)
+      ? objTupleToTuple(entry)
+      : undefined;
+  if (!tuple) return undefined;
+  const [key, attrs] = tuple;
+  const parsed = IncludesQuerySchema.safeParse(attrs);
+  // Invalid attrs fall back to a plain include so the field still renders.
+  // Preamble fields render as references — keep only the filters part so the
+  // include stays reference-only (collapsed to refs by the resolver).
+  if (!parsed.success || !parsed.data.filters) return { key };
+  return { key, query: { filters: parsed.data.filters } };
+};
+
+/** Ordered field keys of preamble entries, with filter attrs stripped. */
+export const getPreambleFieldKeys = (
+  preamble: PreambleEntry[] | undefined,
+): string[] => {
+  if (!preamble) return [];
+  return preamble
+    .map(parsePreambleEntry)
+    .filter((entry) => entry !== undefined)
+    .map((entry) => entry.key);
+};
+
+export const buildPreambleIncludes = (
+  preamble: PreambleEntry[] | undefined,
 ): Includes | undefined => {
   if (!preamble || preamble.length === 0) return undefined;
-  return buildIncludes(preamble.map((key) => [key]));
+  const includes: Includes = {};
+  for (const entry of preamble) {
+    const parsed = parsePreambleEntry(entry);
+    if (!parsed) continue;
+    includes[parsed.key] = parsed.query ?? true;
+  }
+  return Object.keys(includes).length > 0 ? includes : undefined;
 };
 
 export const createViewEntity = (
@@ -150,8 +207,7 @@ const resolveNestedViewIncludes = (
     if (!nestedIncludes) return;
 
     // Build includes for the relation field with nested view's includes
-    const relationIncludes: Includes = { [fieldKey]: nestedIncludes };
-    includes = mergeIncludes(includes, relationIncludes);
+    includes = mergeIncludes(includes, { [fieldKey]: nestedIncludes });
   });
 
   return includes;
@@ -181,7 +237,7 @@ export const loadViews = async (kg: KnowledgeGraph): ResultAsync<Views> => {
     return createViewEntity(item.key as string, viewContent, {
       name: item.name as string | undefined,
       description: item.description as string | undefined,
-      preamble: item.preamble as string[] | undefined,
+      preamble: item.preamble as PreambleEntry[] | undefined,
       viewFormat: item.viewFormat as ViewFormat | undefined,
     });
   });

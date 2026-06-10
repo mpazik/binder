@@ -1,7 +1,6 @@
 import { extname, join } from "path";
 import {
   type AncestralFieldsetChain,
-  buildIncludes,
   emptyFieldset,
   type EntitySchema,
   type EntityUid,
@@ -53,7 +52,9 @@ import {
 import { formatReferences, formatReferencesList } from "./reference.ts";
 import type { FileType } from "./document.ts";
 import {
+  buildPreambleIncludes,
   DOCUMENT_VIEW_KEY,
+  getPreambleFieldKeys,
   VIEW_VIEW_KEY,
   type ViewEntity,
   type ViewKey,
@@ -240,7 +241,7 @@ export const findNavigationItemByPath = (
     if (fileType === "directory") {
       if (!item.children) continue;
 
-      const slashCount = (item.path.match(/\//g) || []).length;
+      const slashCount = (item.path.match(/\//g) ?? []).length;
       let slashIndex = -1;
       for (let i = 0; i < slashCount; i++) {
         slashIndex = path.indexOf("/", slashIndex + 1);
@@ -406,11 +407,15 @@ const renderContent = async (
     const preamble = viewEntity.preamble;
     if (!preamble || preamble.length === 0) return ok(viewResult.data);
 
-    const preambleIncludes = buildIncludes(preamble.map((key) => [key]));
+    const preambleIncludes = buildPreambleIncludes(preamble);
     if (!preambleIncludes) return ok(viewResult.data);
 
     const pickedEntity = pickByIncludes(formattedEntity.data, preambleIncludes);
-    const frontmatter = renderFrontmatterString(pickedEntity, preamble, schema);
+    const frontmatter = renderFrontmatterString(
+      pickedEntity,
+      getPreambleFieldKeys(preamble),
+      schema,
+    );
     if (!frontmatter) return ok(viewResult.data);
 
     return ok(prependFrontmatter(viewResult.data, frontmatter));
@@ -670,7 +675,7 @@ const scoreNavItem = (item: NavigationItem): number => {
   // e.g., "tasks/{key}.md" is preferred over "projects/{project}/tasks/{key}.md"
   const filters = item.where ?? item.query?.filters;
   const filterCount = filters ? Object.keys(filters).length : 0;
-  const pathDepth = (item.path.match(/\{/g) || []).length;
+  const pathDepth = (item.path.match(/\{/g) ?? []).length;
 
   score -= filterCount;
   score -= pathDepth;

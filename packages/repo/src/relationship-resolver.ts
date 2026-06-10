@@ -284,6 +284,21 @@ const collapseToUids = (val: FieldValue): FieldValue => {
   return val;
 };
 
+/**
+ * Collapse a filtered relation value to flat uid strings, dropping refs that
+ * were not resolved — on forward relations these are the ones filtered out.
+ */
+const collapseFilteredToUids = (val: FieldValue): FieldValue => {
+  if (Array.isArray(val)) {
+    return (val as Fieldset[])
+      .filter((v) => typeof v === "object" && v !== null)
+      .map((v) => (v as Fieldset).uid as string);
+  }
+  if (typeof val === "object" && val !== null)
+    return (val as Fieldset).uid as string;
+  return null;
+};
+
 const selectFieldsForEntity = (
   entity: Fieldset,
   includes: Includes,
@@ -301,6 +316,20 @@ const selectFieldsForEntity = (
     // or `[]` in callers' output (e.g. rendered frontmatter).
     if (includeValue === true && field?.inverseOf) {
       const collapsed = collapseToUids(val);
+      if (collapsed == null) continue;
+      if (Array.isArray(collapsed) && collapsed.length === 0) continue;
+      selected[fieldKey] = collapsed;
+      continue;
+    }
+
+    // Filters-only query on a relation: reference-only include — collapse
+    // to flat uid strings of the entities matching the filters.
+    if (
+      field?.dataType === "relation" &&
+      isIncludesQuery(includeValue) &&
+      !includeValue.includes
+    ) {
+      const collapsed = collapseFilteredToUids(val);
       if (collapsed == null) continue;
       if (Array.isArray(collapsed) && collapsed.length === 0) continue;
       selected[fieldKey] = collapsed;

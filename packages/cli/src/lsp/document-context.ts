@@ -23,6 +23,7 @@ import {
   findView,
   type NavigationItem,
 } from "../document/navigation.ts";
+import { getPreambleFieldKeys } from "../document/view-entity.ts";
 import {
   extractFieldMappings,
   type FieldSlotMapping,
@@ -202,8 +203,7 @@ export const createDocumentCache = (log: Logger): DocumentCache => {
 
     misses++;
 
-    const text = document.getText();
-    const parsed = parseDocument(text, type);
+    const parsed = parseDocument(document.getText(), type);
 
     cache.set(key, { version, parsed });
     return parsed;
@@ -320,11 +320,13 @@ export const getDocumentContext = async (
 
   const typeDef = extractTypeFromNavigation(navigationItem, schema);
 
+  const text = document.getText();
+
   const entityContextResult = await entityContextCache.get(
     schema,
     uri,
     navigationItem,
-    document.getText(),
+    text,
   );
   if (isErr(entityContextResult)) return entityContextResult;
 
@@ -341,7 +343,7 @@ export const getDocumentContext = async (
   const extractResult = extract(
     schema,
     navigationItem,
-    document.getText(),
+    text,
     relativePath,
     viewsResult.data,
     baseEntity,
@@ -392,7 +394,7 @@ export const getDocumentContext = async (
 
     const frontmatter = buildFrontmatterContext(
       parsedMarkdown.root,
-      viewEntity?.preamble,
+      getPreambleFieldKeys(viewEntity?.preamble),
     );
 
     return ok({
