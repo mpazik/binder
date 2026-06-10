@@ -17,6 +17,7 @@ import {
   type KnowledgeGraph,
   type KnowledgeGraphCallbacks,
   type ReadonlyKnowledgeGraph,
+  type SubscriberErrorReporter,
   openKnowledgeGraph,
 } from "../knowledge-graph.ts";
 import type * as coreSchema from "../schema.ts";
@@ -54,6 +55,8 @@ export type OpenOptions<
   kgConfigSchema?: C;
   // Transitional — will be superseded by the plugin system.
   callbacks?: KnowledgeGraphCallbacks | OpenCallbacksFactory<C>;
+  /** Receives subscription handler failures (onCommit/onTransaction). Defaults to `console.error`. */
+  onSubscriberError?: SubscriberErrorReporter;
   configLoadOptions?: LoadWorkspaceConfigOptions<CS>;
 };
 
@@ -261,6 +264,7 @@ export const open = async <
       providerSchema: options?.providerSchema,
       configSchema: options?.kgConfigSchema,
       callbacks: userCallbacks,
+      onSubscriberError: options?.onSubscriberError,
     },
   );
   kgRef.kg = kg;
@@ -377,6 +381,11 @@ export const openReadonly = async <
   return ok(repo);
 };
 
+const workspaceInitError = (message: string) => (error: unknown) =>
+  createError("workspace-init-failed", message, {
+    data: error instanceof Error ? { stack: error.stack } : undefined,
+  });
+
 export type InitOptions<
   TSchema extends DbSchema = typeof coreSchema,
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
@@ -408,12 +417,9 @@ export const init = async <
     async () => {
       await mkdir(paths.data, { recursive: true });
     },
-    (error) =>
-      createError(
-        "workspace-init-failed",
-        `Failed to create workspace directories at ${paths.binder}`,
-        { data: error instanceof Error ? { stack: error.stack } : undefined },
-      ),
+    workspaceInitError(
+      `Failed to create workspace directories at ${paths.binder}`,
+    ),
   );
   if (isErr(mkdirResult)) return mkdirResult;
 
@@ -432,12 +438,7 @@ export const init = async <
       });
       await writeFile(join(paths.binder, CONFIG_FILE), content, "utf-8");
     },
-    (error) =>
-      createError(
-        "workspace-init-failed",
-        `Failed to write config.yaml in ${paths.binder}`,
-        { data: error instanceof Error ? { stack: error.stack } : undefined },
-      ),
+    workspaceInitError(`Failed to write config.yaml in ${paths.binder}`),
   );
   if (isErr(writeResult)) return writeResult;
 

@@ -1,8 +1,11 @@
 import {
+  type ErrorObject,
   fail,
   groupByToObject,
   isErr,
   ok,
+  okVoid,
+  type Result,
   type ResultAsync,
   tryCatch,
   isObjectNonEmpty,
@@ -93,19 +96,53 @@ export type KnowledgeGraph<
   getSchema: <N extends Namespace>(
     namespace: N,
   ) => ResultAsync<NamespaceSchema<N>>;
+  /**
+   * Subscribes to every transaction this instance observes, regardless of
+   * origin. Handlers fire after the `afterCommit` callback. Use for
+   * reactions (hooks, cache refresh), not for writer side effects.
+   */
   onTransaction: (
     filter: TransactionFilter | undefined,
     handler: TransactionHandler,
+    name?: string,
+  ) => Unsubscribe;
+  /**
+   * Subscribes to transactions originated by this process — committed via
+   * `update()` or applied via `apply()`. Handlers fire after the database
+   * commit and before the `afterCommit` callback. A process that merely
+   * observes a transaction never fires `onCommit`; use `onTransaction` for
+   * that. Use for writer side effects that must run exactly once (e.g.
+   * journal append). Handler failures are reported via `onSubscriberError`
+   * and never abort the commit.
+   */
+  onCommit: (
+    filter: TransactionFilter | undefined,
+    handler: TransactionHandler,
+    name?: string,
   ) => Unsubscribe;
 };
 
 export type TransactionFilter = (tx: Transaction) => boolean;
-export type TransactionHandler = (tx: Transaction) => void | Promise<void>;
+/** May report failure by returning an `Err` result; thrown errors are caught too. */
+export type TransactionHandler = (
+  tx: Transaction,
+) => void | Result<unknown> | Promise<void | Result<unknown>>;
 export type Unsubscribe = () => void;
+
+export type SubscriberErrorContext = {
+  event: "commit" | "transaction";
+  transactionId: TransactionId;
+  /** Subscriber name passed at registration, when provided. */
+  subscriber?: string;
+};
+export type SubscriberErrorReporter = (
+  error: ErrorObject,
+  context: SubscriberErrorContext,
+) => void;
 
 export type ReadonlyKnowledgeGraph<
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
-> = Omit<KnowledgeGraph<C>, "update" | "apply" | "rollback">;
+> = Omit<KnowledgeGraph<C>, "update" | "apply" | "rollback" | "onCommit">;
 
 export type TransactionRollback = () => ResultAsync<void>;
 
@@ -149,6 +186,8 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     providerSchema?: RecordSchema;
     configSchema?: C;
     callbacks?: KnowledgeGraphCallbacks;
+    /** Receives subscription handler failures. Defaults to `console.error`. */
+    onSubscriberError?: SubscriberErrorReporter;
   },
 ): KnowledgeGraph<C> => {
   const callbacks = options?.callbacks;
@@ -210,20 +249,59 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     return ok(result.data as NamespaceSchema<N>);
   };
 
-  const transactionHandlers: {
+  type SubscriberEntry = {
     filter: TransactionFilter | undefined;
     handler: TransactionHandler;
-  }[] = [];
+    name?: string;
+  };
 
-  const notifyHandlers = async (transaction: Transaction) => {
-    for (const { filter, handler } of transactionHandlers) {
+  const commitHandlers: SubscriberEntry[] = [];
+  const transactionHandlers: SubscriberEntry[] = [];
+
+  const reportSubscriberError: SubscriberErrorReporter =
+    options?.onSubscriberError ??
+    ((error, context) => {
+      const subscriber =
+        context.subscriber !== undefined ? ` [${context.subscriber}]` : "";
+      console.error(
+        `Subscriber error (${context.event}${subscriber}) for transaction ${context.transactionId}:`,
+        error,
+      );
+    });
+
+  const notifyHandlers = async (
+    handlers: SubscriberEntry[],
+    event: SubscriberErrorContext["event"],
+    transaction: Transaction,
+  ) => {
+    for (const { filter, handler, name } of handlers) {
       if (filter !== undefined && !filter(transaction)) continue;
-      const result = await tryCatch(() => handler(transaction));
-      if (isErr(result)) {
-        console.error("Transaction handler error:", result.error);
+      const outcome = await tryCatch(async () => handler(transaction));
+      const result = isErr(outcome) ? outcome : outcome.data;
+      if (result !== undefined && isErr(result)) {
+        reportSubscriberError(result.error, {
+          event,
+          transactionId: transaction.id,
+          ...(name !== undefined && { subscriber: name }),
+        });
       }
     }
   };
+
+  const subscribe =
+    (handlers: SubscriberEntry[]) =>
+    (
+      filter: TransactionFilter | undefined,
+      handler: TransactionHandler,
+      name?: string,
+    ): Unsubscribe => {
+      const entry = { filter, handler, name };
+      handlers.push(entry);
+      return () => {
+        const idx = handlers.indexOf(entry);
+        if (idx !== -1) handlers.splice(idx, 1);
+      };
+    };
 
   const applyAndNotify = async (transaction: Transaction) => {
     let rollbackBeforeHook: TransactionRollback | null = null;
@@ -255,11 +333,13 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       return dbResult;
     }
 
+    await notifyHandlers(commitHandlers, "commit", transaction);
+
     if (callbacks?.afterCommit) {
       await callbacks.afterCommit(transaction);
     }
 
-    await notifyHandlers(transaction);
+    await notifyHandlers(transactionHandlers, "transaction", transaction);
 
     return ok(transaction);
   };
@@ -385,6 +465,7 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
             .where(whereClause)
             .orderBy(...orderClauses)
             .limit(limit + 1)
+            // converts the drizzle thenable into a real Promise for tryCatch
             .then((rows) => rows),
         );
         if (isErr(results)) return results;
@@ -460,18 +541,12 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       if (callbacks?.afterRollback) {
         await callbacks.afterRollback(dbResult.data, count);
       }
-      return ok(undefined);
+      return okVoid;
     },
     getRecordSchema,
     getConfigSchema: () => configSchema,
-    getSchema: <N extends Namespace>(namespace: N) => getSchema(namespace),
-    onTransaction: (filter, handler) => {
-      const entry = { filter, handler };
-      transactionHandlers.push(entry);
-      return () => {
-        const idx = transactionHandlers.indexOf(entry);
-        if (idx !== -1) transactionHandlers.splice(idx, 1);
-      };
-    },
+    getSchema,
+    onTransaction: subscribe(transactionHandlers),
+    onCommit: subscribe(commitHandlers),
   };
 };

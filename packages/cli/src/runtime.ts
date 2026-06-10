@@ -11,6 +11,7 @@ import {
   isObjectEmpty,
   normalizeError,
   ok,
+  type Result,
   type ResultAsync,
   tryCatch,
   wrapError,
@@ -137,6 +138,11 @@ const unpackCommandResult = (
   }
   return {};
 };
+
+/** Collapses a `tryCatch`-wrapped handler result into the inner result. */
+const flattenHandlerResult = (
+  result: Result<Result<CommandResult>>,
+): Result<CommandResult> => (isErr(result) ? result : result.data);
 
 const genericTelemetryFlags = (
   args: Record<string, unknown>,
@@ -291,6 +297,9 @@ export const initializeDbRuntime = async (
     migrate: { run: cliMigrationRunner },
     kgConfigSchema: cliConfigSchema,
     plugins: [journalPlugin()],
+    onSubscriberError: (error, context) => {
+      log.error("Subscription handler failed", { ...context, error });
+    },
     callbacks: buildOrchestratorCallbacks(
       orchestratorCtx,
       orchestratorCallbacks,
@@ -394,18 +403,19 @@ export const bootstrapMinimal = <TArgs extends object = object>(
 
     const { runtime: minimalRuntime, close } = runtimeResult.data;
 
-    const result = await tryCatch(() => handler({ ...minimalRuntime, args }));
+    const result = flattenHandlerResult(
+      await tryCatch(() => handler({ ...minimalRuntime, args })),
+    );
     const argsRecord = args as Record<string, unknown>;
+    const event = `cli.${command.replace(/ /g, ".")}`;
 
-    if (isErr(result) || isErr(result.data)) {
-      const error = normalizeError(
-        isErr(result) ? result.error : result.data.error,
-      ) as ErrorWithLogger;
+    if (isErr(result)) {
+      const error = normalizeError(result.error) as ErrorWithLogger;
 
       // skip telemetry on dry run to avoid miscounting
       if (!isDryRun(argsRecord) && !SILENT_ERROR_KEYS.has(error.key)) {
         track(minimalRuntime.telemetry, {
-          event: `cli.${command.replace(/ /g, ".")}`,
+          event,
           success: false,
           duration_ms: Date.now() - startedAt,
           error_chain: errorChain(error),
@@ -418,12 +428,12 @@ export const bootstrapMinimal = <TArgs extends object = object>(
     }
 
     const { output, telemetry: handlerExtras } = unpackCommandResult(
-      result.data.data,
+      result.data,
     );
 
     if (!isDryRun(argsRecord)) {
       track(minimalRuntime.telemetry, {
-        event: `cli.${command.replace(/ /g, ".")}`,
+        event,
         success: true,
         duration_ms: Date.now() - startedAt,
         ...genericTelemetryFlags(argsRecord),
@@ -473,17 +483,17 @@ export const runtime = <TArgs extends object = object>(
       const quiet = isQuiet(contextInit.args);
       const quietContext = { ...context, ui: createUi({ quiet }) };
 
-      const result = await tryCatch(() =>
-        handler({
-          ...quietContext,
-          args: contextInit.args,
-        }),
+      const result = flattenHandlerResult(
+        await tryCatch(() =>
+          handler({
+            ...quietContext,
+            args: contextInit.args,
+          }),
+        ),
       );
 
-      if (isErr(result) || isErr(result.data)) {
-        const error = normalizeError(
-          isErr(result) ? result.error : result.data.error,
-        ) as ErrorWithLogger;
+      if (isErr(result)) {
+        const error = normalizeError(result.error) as ErrorWithLogger;
         // We are passing the workspace logger downstream,
         // so the final error message will be logged in the workspace log.
         error.logger = context.log;
@@ -492,7 +502,7 @@ export const runtime = <TArgs extends object = object>(
       }
 
       close();
-      return result.data;
+      return result;
     },
     {
       logFile: "cli.log",

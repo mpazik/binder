@@ -116,14 +116,16 @@ export const createMockRuntimeContextWithDb =
     // Wire up journal behavior for tests (mirrors the journal plugin).
     const txPath = `${mockConfig.paths.data}/${TRANSACTION_LOG_FILE}`;
     const undoPath = `${mockConfig.paths.data}/${UNDO_LOG_FILE}`;
-    kg.onTransaction(undefined, async (tx) => {
-      const logResult = await logTransaction(context.fs, txPath, tx);
-      if (isErr(logResult))
-        console.error("Journal append failed:", logResult.error);
-      const clearResult = await clearLog(context.fs, undoPath);
-      if (isErr(clearResult))
-        console.error("Undo log clear failed:", clearResult.error);
-    });
+    kg.onCommit(
+      undefined,
+      async (tx) => {
+        const logResult = await logTransaction(context.fs, txPath, tx);
+        const clearResult = await clearLog(context.fs, undoPath);
+        if (isErr(logResult)) return logResult;
+        return clearResult;
+      },
+      "journal",
+    );
 
     const navigationCache = createNavigationCache(kg);
     const viewCache = createViewCache(kg);

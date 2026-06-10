@@ -55,18 +55,22 @@ export const hooksToPlugin = (hooks: HookSpec[]): BinderRepoPlugin => ({
   name: "__inline_hooks__",
   register({ repo }: { repo: PluginRepo }) {
     for (const hook of hooks) {
-      repo.onTransaction(undefined, async (tx: unknown) => {
-        // TODO: capture stdout/stderr into repo log.
-        return new Promise<void>((resolve) => {
-          const child = spawn(hook.command, {
-            shell: true,
-            stdio: ["pipe", "inherit", "inherit"],
+      repo.onTransaction(
+        undefined,
+        async (tx: unknown) => {
+          // TODO: capture stdout/stderr into repo log.
+          return new Promise<void>((resolve) => {
+            const child = spawn(hook.command, {
+              shell: true,
+              stdio: ["pipe", "inherit", "inherit"],
+            });
+            child.stdin.write(JSON.stringify(tx));
+            child.stdin.end();
+            child.on("exit", () => resolve());
           });
-          child.stdin.write(JSON.stringify(tx));
-          child.stdin.end();
-          child.on("exit", () => resolve());
-        });
-      });
+        },
+        hook.name,
+      );
     }
   },
 });

@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { isErr, okVoid, throwIfError } from "@binder/utils";
+import {
+  type ErrorObject,
+  fail,
+  isErr,
+  okVoid,
+  throwIfError,
+} from "@binder/utils";
 import "@binder/utils/tests";
 import { getTestDatabase } from "./db.mock";
-import { openKnowledgeGraph } from "./knowledge-graph.ts";
+import {
+  openKnowledgeGraph,
+  type SubscriberErrorContext,
+} from "./knowledge-graph.ts";
 import type { Database } from "./db.ts";
 import { createEntity, fetchEntity, updateEntity } from "./entity-store.ts";
 import {
@@ -646,6 +655,148 @@ describe("knowledge graph", () => {
       expect(updatedResult).toEqual(
         versionFromTransaction(mockTransactionUpdate),
       );
+    });
+  });
+
+  describe("subscriptions", () => {
+    it("notifies onCommit, afterCommit callback, then onTransaction on update", async () => {
+      const calls: string[] = [];
+      const kgWithCallbacks = openKnowledgeGraph(db, {
+        callbacks: {
+          afterCommit: async () => {
+            calls.push("afterCommit");
+          },
+        },
+      });
+      kgWithCallbacks.onCommit(undefined, () => {
+        calls.push("onCommit");
+      });
+      kgWithCallbacks.onTransaction(undefined, () => {
+        calls.push("onTransaction");
+      });
+
+      throwIfError(await kgWithCallbacks.update(mockTransactionInitInput));
+
+      expect(calls).toEqual(["onCommit", "afterCommit", "onTransaction"]);
+    });
+
+    it("fires onCommit with the transaction on apply", async () => {
+      const seen: Transaction[] = [];
+      kg.onCommit(undefined, (tx) => {
+        seen.push(tx);
+      });
+
+      const transaction = throwIfError(
+        await kg.process(mockTransactionInitInput),
+      );
+      throwIfError(await kg.apply(transaction));
+
+      expect(seen).toEqual([transaction]);
+    });
+
+    it("fires neither subscription on rollback", async () => {
+      throwIfError(await kg.update(mockTransactionInitInput));
+      const calls: string[] = [];
+      kg.onCommit(undefined, () => {
+        calls.push("commit");
+      });
+      kg.onTransaction(undefined, () => {
+        calls.push("transaction");
+      });
+
+      throwIfError(await kg.rollback(1));
+
+      expect(calls).toEqual([]);
+    });
+
+    it("skips onCommit handlers whose filter rejects", async () => {
+      const calls: string[] = [];
+      kg.onCommit(
+        () => false,
+        () => {
+          calls.push("rejected");
+        },
+      );
+      kg.onCommit(
+        () => true,
+        () => {
+          calls.push("accepted");
+        },
+      );
+
+      throwIfError(await kg.update(mockTransactionInitInput));
+
+      expect(calls).toEqual(["accepted"]);
+    });
+
+    it("stops notifying after unsubscribe", async () => {
+      const calls: string[] = [];
+      const unsubscribe = kg.onCommit(undefined, () => {
+        calls.push("called");
+      });
+      unsubscribe();
+
+      throwIfError(await kg.update(mockTransactionInitInput));
+
+      expect(calls).toEqual([]);
+    });
+
+    describe("subscriber errors", () => {
+      let reported: { error: ErrorObject; context: SubscriberErrorContext }[];
+      let kgWithReporter: ReturnType<typeof openKnowledgeGraph>;
+
+      beforeEach(() => {
+        reported = [];
+        kgWithReporter = openKnowledgeGraph(db, {
+          onSubscriberError: (error, context) =>
+            reported.push({ error, context }),
+        });
+      });
+
+      it("reports failed onCommit handler and still commits", async () => {
+        const calls: string[] = [];
+        kgWithReporter.onCommit(
+          undefined,
+          () => fail("journal-append-failed", "disk full"),
+          "journal",
+        );
+        kgWithReporter.onCommit(undefined, () => {
+          calls.push("second");
+        });
+
+        const transaction = throwIfError(
+          await kgWithReporter.update(mockTransactionInitInput),
+        );
+
+        expect(calls).toEqual(["second"]);
+        expect(reported).toEqual([
+          {
+            error: expect.objectContaining({ key: "journal-append-failed" }),
+            context: {
+              event: "commit",
+              transactionId: transaction.id,
+              subscriber: "journal",
+            },
+          },
+        ]);
+      });
+
+      it("reports rejected onTransaction handler without a name", async () => {
+        kgWithReporter.onTransaction(undefined, () =>
+          Promise.reject(new Error("boom")),
+        );
+
+        const transaction = throwIfError(
+          await kgWithReporter.update(mockTransactionInitInput),
+        );
+
+        expect(reported).toEqual([
+          {
+            error: expect.objectContaining({ message: "boom" }),
+            context: { event: "transaction", transactionId: transaction.id },
+          },
+        ]);
+      });
     });
   });
 });

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { isErr } from "@binder/utils";
+import { fail, isErr } from "@binder/utils";
 import type { BinderCliPlugin } from "../../cli-plugin.ts";
 import { TRANSACTION_LOG_FILE, UNDO_LOG_FILE } from "../../config.ts";
 import { createRealFileSystem } from "../../lib/filesystem.ts";
@@ -20,16 +20,26 @@ export const journalPlugin = (_pluginConfig?: {
     const txPath = join(dataPath, TRANSACTION_LOG_FILE);
     const undoPath = join(dataPath, UNDO_LOG_FILE);
 
-    repo.onTransaction(undefined, async (tx) => {
-      const logResult = await logTransaction(fs, txPath, tx);
-      if (isErr(logResult)) {
-        console.error("Journal append failed:", logResult.error);
-      }
-      const clearResult = await clearLog(fs, undoPath);
-      if (isErr(clearResult)) {
-        console.error("Undo log clear failed:", clearResult.error);
-      }
-    });
+    // Writer side effect: must run exactly once, in the originating process.
+    // Failures surface via the repo's subscriber error reporter and never
+    // abort the commit — transactions.jsonl is a derived artifact repairable
+    // with `binder journal repair`.
+    repo.onCommit(
+      undefined,
+      async (tx) => {
+        const logResult = await logTransaction(fs, txPath, tx);
+        const clearResult = await clearLog(fs, undoPath);
+        if (isErr(logResult) && isErr(clearResult)) {
+          return fail(
+            "journal-write-failed",
+            "Journal append and undo-log clear both failed",
+            { data: { append: logResult.error, clear: clearResult.error } },
+          );
+        }
+        return isErr(logResult) ? logResult : clearResult;
+      },
+      "journal",
+    );
   },
   commands: [JournalCommand],
   // dispose: no-op. Subscriptions cleaned up on repo close.

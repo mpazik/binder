@@ -1,12 +1,15 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { throwIfError } from "@binder/utils";
+import { fail, throwIfError } from "@binder/utils";
 import "@binder/utils/tests";
+import type { SubscriberErrorContext } from "../knowledge-graph.ts";
+import { mockTransactionInitInput } from "../model/transaction-input.mock.ts";
 import { init, open, resolveWorkspaceRoot } from "./index.ts";
 import { BINDER_DIR, CONFIG_FILE, DB_FILE } from "./constants.ts";
+import type { BinderRepoPlugin } from "./plugin.ts";
 
 describe("@binder/repo/local", () => {
   let workspaceRoot: string;
@@ -25,6 +28,25 @@ describe("@binder/repo/local", () => {
       () => false,
     );
 
+  const withProcessState = async (
+    opts: { env?: string; cwd?: string },
+    fn: () => Promise<void>,
+  ): Promise<void> => {
+    const previousEnv = process.env.BINDER_WORKSPACE;
+    const previousCwd = process.cwd();
+    if (opts.env === undefined) delete process.env.BINDER_WORKSPACE;
+    else process.env.BINDER_WORKSPACE = opts.env;
+    if (opts.cwd) process.chdir(opts.cwd);
+    // eslint-disable-next-line no-restricted-syntax -- try/finally for cleanup, not error handling
+    try {
+      await fn();
+    } finally {
+      process.chdir(previousCwd);
+      if (previousEnv === undefined) delete process.env.BINDER_WORKSPACE;
+      else process.env.BINDER_WORKSPACE = previousEnv;
+    }
+  };
+
   describe("open()", () => {
     it("errors with workspace-not-found when uninitialized", async () => {
       expect(await open(workspaceRoot)).toBeErrWithKey("workspace-not-found");
@@ -34,17 +56,11 @@ describe("@binder/repo/local", () => {
       throwIfError(
         await init(workspaceRoot, { initialConfig: { author: "envuser" } }),
       );
-      const previous = process.env.BINDER_WORKSPACE;
-      process.env.BINDER_WORKSPACE = workspaceRoot;
-      // eslint-disable-next-line no-restricted-syntax
-      try {
+      await withProcessState({ env: workspaceRoot }, async () => {
         const repo = throwIfError(await open());
         expect(repo.config.author).toBe("envuser");
         repo.close();
-      } finally {
-        if (previous === undefined) delete process.env.BINDER_WORKSPACE;
-        else process.env.BINDER_WORKSPACE = previous;
-      }
+      });
     });
 
     it("loads workspace config and paths", async () => {
@@ -112,6 +128,8 @@ describe("@binder/repo/local", () => {
 
     it("exposes db handle and knowledge-graph methods", async () => {
       const repo = throwIfError(await init(workspaceRoot));
+      // Grab close before toMatchObject; Bun replaces matched function
+      // properties on the received object with the asymmetric matchers.
       const { close } = repo;
 
       expect(repo).toMatchObject({
@@ -125,64 +143,81 @@ describe("@binder/repo/local", () => {
     });
   });
 
+  describe("subscriber errors", () => {
+    it("routes plugin onCommit failures to onSubscriberError", async () => {
+      throwIfError(
+        await init(workspaceRoot, { initialConfig: { author: "tester" } }),
+      );
+
+      const reported: SubscriberErrorContext[] = [];
+      const plugin: BinderRepoPlugin = {
+        name: "failing-subscriber",
+        register({ repo }) {
+          repo.onCommit(
+            undefined,
+            () => fail("plugin-failed", "boom"),
+            "failing-subscriber",
+          );
+        },
+      };
+
+      const repo = throwIfError(
+        await open(workspaceRoot, {
+          plugins: [plugin],
+          onSubscriberError: (_error, context) => {
+            reported.push(context);
+          },
+        }),
+      );
+
+      const transaction = throwIfError(
+        await repo.update(mockTransactionInitInput),
+      );
+
+      expect(reported).toEqual([
+        {
+          event: "commit",
+          transactionId: transaction.id,
+          subscriber: "failing-subscriber",
+        },
+      ]);
+      repo.close();
+    });
+  });
+
   describe("resolveWorkspaceRoot()", () => {
     it("returns explicit start argument as-is", async () => {
       const result = throwIfError(await resolveWorkspaceRoot(workspaceRoot));
       expect(result).toBe(workspaceRoot);
     });
 
-    it("returns BINDER_WORKSPACE when set and no argument given", async () => {
-      const previous = process.env.BINDER_WORKSPACE;
-      process.env.BINDER_WORKSPACE = workspaceRoot;
-      // eslint-disable-next-line no-restricted-syntax
-      try {
+    it("returns BINDER_WORKSPACE when set and no argument given", () =>
+      withProcessState({ env: workspaceRoot }, async () => {
         const result = throwIfError(await resolveWorkspaceRoot());
         expect(result).toBe(workspaceRoot);
-      } finally {
-        if (previous === undefined) delete process.env.BINDER_WORKSPACE;
-        else process.env.BINDER_WORKSPACE = previous;
-      }
-    });
+      }));
 
     it("walks up from cwd to find .binder/config.yaml", async () => {
       throwIfError(await init(workspaceRoot));
       const nested = join(workspaceRoot, "a", "b", "c");
       await mkdir(nested, { recursive: true });
 
-      const previousCwd = process.cwd();
-      const previousEnv = process.env.BINDER_WORKSPACE;
-      delete process.env.BINDER_WORKSPACE;
-      process.chdir(nested);
-      // eslint-disable-next-line no-restricted-syntax
-      try {
+      await withProcessState({ cwd: nested }, async () => {
         const result = throwIfError(await resolveWorkspaceRoot());
         // macOS tmp paths can be symlinked (/tmp -> /private/tmp); compare by realpath.
-        const { realpathSync } = await import("node:fs");
         expect(realpathSync(result)).toBe(realpathSync(workspaceRoot));
-      } finally {
-        process.chdir(previousCwd);
-        if (previousEnv !== undefined)
-          process.env.BINDER_WORKSPACE = previousEnv;
-      }
+      });
     });
 
     it("fails with workspace-not-found when walk-up finds nothing", async () => {
       const empty = mkdtempSync(join(tmpdir(), "binder-no-ws-"));
-      const previousCwd = process.cwd();
-      const previousEnv = process.env.BINDER_WORKSPACE;
-      delete process.env.BINDER_WORKSPACE;
-      process.chdir(empty);
-      // eslint-disable-next-line no-restricted-syntax
-      try {
+
+      await withProcessState({ cwd: empty }, async () => {
         expect(await resolveWorkspaceRoot()).toBeErrWithKey(
           "workspace-not-found",
         );
-      } finally {
-        process.chdir(previousCwd);
-        if (previousEnv !== undefined)
-          process.env.BINDER_WORKSPACE = previousEnv;
-        rmSync(empty, { recursive: true, force: true });
-      }
+      });
+      rmSync(empty, { recursive: true, force: true });
     });
   });
 
