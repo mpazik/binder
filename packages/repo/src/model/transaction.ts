@@ -2,7 +2,12 @@ import {
   type BrandDerived,
   filterObjectValues,
   type IsoTimestamp,
+  isErr,
+  isObjectNonEmpty,
   mapObjectValues,
+  ok,
+  parseJson,
+  type Result,
 } from "@binder/utils";
 import { hashString, hashToBase64Uri } from "../utils/hash.ts";
 import { type EntityId, type EntityKey, GENESIS_ENTITY_ID } from "./entity.ts";
@@ -164,6 +169,35 @@ export const shortTransactionHash = (
   tx: Transaction,
   length: number = 8,
 ): string => tx.hash.slice(0, length);
+
+/**
+ * Serializes a transaction to its canonical JSONL line form, omitting empty
+ * `records` / `configs` and absent optional fields.
+ */
+export const serializeTransaction = (transaction: Transaction): string => {
+  const { records, configs, tags, message, source, channel, ...core } =
+    transaction;
+  const entry = {
+    ...core,
+    ...(isObjectNonEmpty(records) && { records }),
+    ...(isObjectNonEmpty(configs) && { configs }),
+    tags,
+    ...(message !== undefined && { message }),
+    ...(source !== undefined && { source }),
+    ...(channel !== undefined && { channel }),
+  };
+  return JSON.stringify(entry);
+};
+
+export const parseTransaction = (line: string): Result<Transaction> => {
+  const result = parseJson<Transaction>(
+    line,
+    "Failed to parse transaction from log",
+  );
+  if (isErr(result)) return result;
+  const { records = {}, configs = {}, ...rest } = result.data;
+  return ok({ ...rest, records, configs });
+};
 
 export const squashTransactions = async (
   transactions: Transaction[],

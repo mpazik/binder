@@ -32,8 +32,6 @@ export const UNDO_LOG_FILE = "undo.jsonl";
 export const LOCK_FILE = "lock";
 export const DATA_DIR = REPO_DATA_DIR;
 export const BACKUPS_DIR = "backups";
-export const LOCK_RETRY_DELAY_MS = 200;
-export const LOCK_MAX_RETRIES = 3;
 
 /** LLM provider/model selector. Both fields optional so per-operation overrides can leave the default in place. */
 const llmModelRefSchema = z

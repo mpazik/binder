@@ -1,19 +1,18 @@
-import { basename, extname, join } from "path";
+import { basename, extname } from "node:path";
 import type { Argv } from "yargs";
 import { fail, includes, isErr, ok, okVoid, wrapError } from "@binder/utils";
 import {
   normalizeEntityRef,
   normalizeTransactionInput,
+  squashTransactions as mergeTransactions,
   type Transaction,
+  type TransactionId,
   type TransactionInput,
   type TransactionRef,
   transactionToInput,
   TransactionInputSchema,
 } from "@binder/repo";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../runtime.ts";
-import { squashTransactions } from "../lib/orchestrator.ts";
-import { readLastTransactions } from "../lib/journal.ts";
-import { TRANSACTION_LOG_FILE } from "../config.ts";
 import {
   detectFileFormat,
   parseTransactionInputContent,
@@ -268,19 +267,41 @@ export const transactionRollbackHandler: CommandHandlerWithDb<{
 export const transactionSquashHandler: CommandHandlerWithDb<{
   count: number;
   yes?: boolean;
-}> = async (context) => {
-  const { kg, ui, log, config, fs, args } = context;
-  const transactionLogPath = join(config.paths.data, TRANSACTION_LOG_FILE);
-  const logResult = await readLastTransactions(
-    fs,
-    transactionLogPath,
-    args.count,
+}> = async ({ kg, ui, log, args }) => {
+  const { count } = args;
+
+  if (count < 2)
+    return fail(
+      "invalid-count",
+      `Count must be at least 2 to squash, got ${count}`,
+    );
+
+  const versionResult = await kg.version();
+  if (isErr(versionResult)) return versionResult;
+
+  const currentId = versionResult.data.id;
+  if (currentId === 0)
+    return fail("invalid-squash", "Cannot squash the genesis transaction");
+
+  if (count > currentId)
+    return fail(
+      "invalid-squash",
+      `Cannot squash ${count} transactions, only ${currentId} available`,
+    );
+
+  // Fetch the transactions to squash.
+  const transactionIds = Array.from(
+    { length: count },
+    (_, index) => (currentId - count + 1 + index) as TransactionId,
   );
-  if (isErr(logResult)) return logResult;
+  const transactionsToSquash: Transaction[] = [];
+  for (const id of transactionIds) {
+    const txResult = await kg.fetchTransaction(id);
+    if (isErr(txResult)) return txResult;
+    transactionsToSquash.push(txResult.data);
+  }
 
-  const transactionsToSquash = logResult.data;
-
-  ui.heading(`Squashing ${args.count} transaction(s)`);
+  ui.heading(`Squashing ${count} transaction(s)`);
 
   await ui.printTransactions(kg, transactionsToSquash, "oneline");
 
@@ -306,21 +327,27 @@ export const transactionSquashHandler: CommandHandlerWithDb<{
     return okVoid;
   }
 
-  const squashResult = await squashTransactions(context, args.count);
-  if (isErr(squashResult)) {
-    log.error("Failed to squash transactions", {
-      error: squashResult.error,
-    });
-    return squashResult;
-  }
+  const recordSchemaResult = await kg.getRecordSchema();
+  if (isErr(recordSchemaResult)) return recordSchemaResult;
 
-  const squashedTransaction = squashResult.data;
+  const squashedTransaction = await mergeTransactions(
+    transactionsToSquash,
+    recordSchemaResult.data,
+    kg.getConfigSchema(),
+  );
 
-  log.info("Squashed successfully", { count: args.count });
+  // Rollback + apply: both plugins react via their subscriptions.
+  const rollbackResult = await kg.rollback(count, currentId);
+  if (isErr(rollbackResult)) return rollbackResult;
+
+  const applyResult = await kg.apply(squashedTransaction);
+  if (isErr(applyResult)) return applyResult;
+
+  log.info("Squashed successfully", { count });
   ui.block(() => {
     ui.success("Squashed successfully");
     ui.info(
-      `Transactions ${transactionsToSquash[0]!.id}-${transactionsToSquash[args.count - 1]!.id} merged into transaction #${squashedTransaction.id}`,
+      `Transactions ${transactionsToSquash[0]!.id}-${transactionsToSquash[count - 1]!.id} merged into transaction #${squashedTransaction.id}`,
     );
   });
   return okVoid;

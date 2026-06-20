@@ -1,13 +1,7 @@
-import { join } from "path";
+import { join } from "node:path";
 import type { Argv } from "yargs";
 import { fail, isErr, okVoid } from "@binder/utils";
 import { type CommandHandlerWithDb, runtimeWithDb } from "../../runtime.ts";
-import {
-  repairDbFromLog,
-  repairLogFromDb,
-  verifySync,
-} from "../../lib/orchestrator.ts";
-import { rehashLog, verifyLog } from "../../lib/journal.ts";
 import { TRANSACTION_LOG_FILE } from "../../config.ts";
 import {
   confirmProtected,
@@ -16,6 +10,8 @@ import {
 } from "../../cli/options.ts";
 import { resolveTransactionDisplayKeys, type Ui } from "../../cli/ui.ts";
 import { types } from "../../cli/types.ts";
+import { rehashLog, verifyLog } from "./integrity.ts";
+import { repairDbFromLog, repairLogFromDb, verifySync } from "./sync.ts";
 
 const printChainError = (ui: Ui) => {
   ui.block(() => {

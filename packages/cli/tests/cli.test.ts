@@ -336,5 +336,28 @@ describe("CLI", () => {
     it("verify after squash", async () => {
       await check(["journal", "verify"], "Database and log are in sync");
     });
+
+    it("rollback trims the log so db and log stay in sync", async () => {
+      await check([
+        "create",
+        "Task",
+        "task-rollback-sync",
+        "title=Rollback sync",
+        "-q",
+      ]);
+      await check(["tx", "rollback", "1", "-y"], "Rolled back successfully");
+
+      // The journal onRollback handler trims the tx-log; without it the log
+      // would run ahead of the DB.
+      await check(["journal", "verify"], "Database and log are in sync");
+      await checkError(["read", "task-rollback-sync"], "task-rollback-sync");
+    });
+
+    it("repair is a no-op when db and log are in sync", async () => {
+      await check(["journal", "repair"], "Database and log are in sync");
+      // Re-running never duplicates or drops entries.
+      await check(["journal", "repair"], "Database and log are in sync");
+      await check(["journal", "verify"], "Database and log are in sync");
+    });
   });
 });

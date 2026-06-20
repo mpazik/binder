@@ -1,8 +1,14 @@
 import { describe, expect, it } from "bun:test";
+import "@binder/utils/tests";
+import { throwIfError } from "@binder/utils";
 import {
   invertTransaction,
+  parseTransaction,
+  serializeTransaction,
   squashTransactions,
+  type Transaction,
   type TransactionId,
+  GENESIS_VERSION,
 } from "./transaction.ts";
 import {
   mockTransactionInit,
@@ -13,6 +19,46 @@ import { inverseChangeset } from "./changeset.ts";
 import { mockRecordSchema } from "./schema.mock.ts";
 
 import { coreConfigSchema } from "./config-schema.ts";
+
+describe("serializeTransaction / parseTransaction", () => {
+  it("round-trips a transaction", () => {
+    const serialized = serializeTransaction(mockTransactionInit);
+    const parsed = parseTransaction(serialized);
+    expect(parsed).toBeOk();
+    expect(throwIfError(parsed)).toEqual(mockTransactionInit);
+  });
+
+  it("omits empty records and configs", () => {
+    const tx: Transaction = {
+      ...mockTransactionInit,
+      records: {},
+      configs: {},
+    };
+    const serialized = serializeTransaction(tx);
+    const obj = JSON.parse(serialized);
+    expect(obj.records).toBeUndefined();
+    expect(obj.configs).toBeUndefined();
+  });
+
+  it("parse defaults records and configs to {}", () => {
+    const json = JSON.stringify({
+      id: 1,
+      hash: GENESIS_VERSION.hash,
+      previous: GENESIS_VERSION.hash,
+      author: "a",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      tags: [],
+    });
+    const parsed = throwIfError(parseTransaction(json));
+    expect(parsed.records).toEqual({});
+    expect(parsed.configs).toEqual({});
+  });
+
+  it("parse returns Err on bad JSON", () => {
+    const parsed = parseTransaction("not valid json");
+    expect(parsed).toBeErr();
+  });
+});
 
 describe("squashTransactions", () => {
   it("squashes two transactions", async () => {

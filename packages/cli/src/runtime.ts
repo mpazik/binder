@@ -35,7 +35,6 @@ import {
 } from "./config.ts";
 import { createUi, type Ui } from "./cli/ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
-import { setupCleanupHandlers } from "./lib/lock.ts";
 import {
   buildOrchestratorCallbacks,
   type OrchestratorCallbacks,
@@ -49,6 +48,7 @@ import {
 import { serializeFormats } from "./utils/serialize.ts";
 import { createViewCache, type ViewLoader } from "./document/view-entity.ts";
 import { journalPlugin } from "./plugins/journal/index.ts";
+import { undoRepoPlugin } from "./plugins/undo/register.ts";
 import { migrateLegacyDataLayout } from "./migration.ts";
 import {
   initializeTelemetry,
@@ -296,7 +296,7 @@ export const initializeDbRuntime = async (
     dbSchema: cliSchema,
     migrate: { run: cliMigrationRunner },
     kgConfigSchema: cliConfigSchema,
-    plugins: [journalPlugin()],
+    plugins: [journalPlugin(), undoRepoPlugin()],
     onSubscriberError: (error, context) => {
       log.error("Subscription handler failed", { ...context, error });
     },
@@ -521,8 +521,6 @@ export const runtimeWithDb = <TArgs extends object = object>(
     const { paths } = config;
     const dirResult = await fs.mkdir(paths.binder, { recursive: true });
     if (isErr(dirResult)) return dirResult;
-
-    setupCleanupHandlers(fs, paths.data);
 
     const dbResult = await initializeDbRuntime(context);
     if (isErr(dbResult)) return dbResult;
