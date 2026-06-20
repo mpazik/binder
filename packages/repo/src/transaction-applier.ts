@@ -1,6 +1,5 @@
 import {
-  createError,
-  err,
+  fail,
   isErr,
   ok,
   okVoid,
@@ -18,7 +17,11 @@ import {
 } from "./model";
 import type { DbTransaction } from "./db.ts";
 import { applyChangeset } from "./changeset-applier.ts";
-import { getVersion, saveTransaction } from "./transaction-store";
+import {
+  getVersion,
+  rowToTransaction,
+  saveTransaction,
+} from "./transaction-store";
 import { transactionTable } from "./schema.ts";
 
 const addTxIdsToChangeset = (
@@ -75,9 +78,7 @@ export const rollbackTransaction = async (
   version: TransactionId,
 ): ResultAsync<Transaction[]> => {
   if (count < 1)
-    return err(
-      createError("invalid-rollback", `Count must be at least 1, got ${count}`),
-    );
+    return fail("invalid-rollback", `Count must be at least 1, got ${count}`);
 
   const versionResult = await getVersion(tx);
   if (isErr(versionResult)) return versionResult;
@@ -85,19 +86,15 @@ export const rollbackTransaction = async (
   const currentId = versionResult.data.id;
 
   if (currentId !== version)
-    return err(
-      createError(
-        "version-mismatch",
-        `Repository version mismatch: expected ${version}, got ${currentId}`,
-      ),
+    return fail(
+      "version-mismatch",
+      `Repository version mismatch: expected ${version}, got ${currentId}`,
     );
 
   if (count > currentId)
-    return err(
-      createError(
-        "invalid-rollback",
-        `Cannot rollback ${count} transactions, only ${currentId} available`,
-      ),
+    return fail(
+      "invalid-rollback",
+      `Cannot rollback ${count} transactions, only ${currentId} available`,
     );
 
   const targetId = (currentId - count + 1) as TransactionId;
@@ -117,7 +114,8 @@ export const rollbackTransaction = async (
   );
   if (isErr(transactionsToRevertResult)) return transactionsToRevertResult;
 
-  const transactionsToRevert: Transaction[] = transactionsToRevertResult.data;
+  const transactionsToRevert: Transaction[] =
+    transactionsToRevertResult.data.map(rowToTransaction);
 
   for (const transaction of transactionsToRevert) {
     const inverted = invertTransaction(transaction);

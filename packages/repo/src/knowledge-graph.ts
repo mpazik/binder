@@ -120,17 +120,40 @@ export type KnowledgeGraph<
     handler: TransactionHandler,
     name?: string,
   ) => Unsubscribe;
+  /**
+   * Subscribes to rollbacks originated by this process via `rollback()`.
+   * Handlers fire after the database rollback commits and before the
+   * `afterRollback` callback, receiving the reverted transactions
+   * (newest-first) and the count. Mirrors `onCommit` for writer side effects
+   * that must undo their commit-time work (e.g. journal trim). Handler
+   * failures are reported via `onSubscriberError` and never abort the
+   * rollback.
+   */
+  onRollback: (
+    filter: RollbackFilter | undefined,
+    handler: RollbackHandler,
+    name?: string,
+  ) => Unsubscribe;
 };
 
 export type TransactionFilter = (tx: Transaction) => boolean;
+export type RollbackFilter = (
+  transactions: Transaction[],
+  count: number,
+) => boolean;
 /** May report failure by returning an `Err` result; thrown errors are caught too. */
 export type TransactionHandler = (
   tx: Transaction,
 ) => void | Result<unknown> | Promise<void | Result<unknown>>;
+/** Batch handler for a rollback. May report failure like {@link TransactionHandler}. */
+export type RollbackHandler = (
+  transactions: Transaction[],
+  count: number,
+) => void | Result<unknown> | Promise<void | Result<unknown>>;
 export type Unsubscribe = () => void;
 
 export type SubscriberErrorContext = {
-  event: "commit" | "transaction";
+  event: "commit" | "transaction" | "rollback";
   transactionId: TransactionId;
   /** Subscriber name passed at registration, when provided. */
   subscriber?: string;
@@ -142,7 +165,10 @@ export type SubscriberErrorReporter = (
 
 export type ReadonlyKnowledgeGraph<
   C extends EntitySchema<ConfigDataType> = EntitySchema<ConfigDataType>,
-> = Omit<KnowledgeGraph<C>, "update" | "apply" | "rollback" | "onCommit">;
+> = Omit<
+  KnowledgeGraph<C>,
+  "update" | "apply" | "rollback" | "onCommit" | "onRollback"
+>;
 
 export type TransactionRollback = () => ResultAsync<void>;
 
@@ -255,8 +281,15 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     name?: string;
   };
 
+  type RollbackSubscriberEntry = {
+    filter: RollbackFilter | undefined;
+    handler: RollbackHandler;
+    name?: string;
+  };
+
   const commitHandlers: SubscriberEntry[] = [];
   const transactionHandlers: SubscriberEntry[] = [];
+  const rollbackHandlers: RollbackSubscriberEntry[] = [];
 
   const reportSubscriberError: SubscriberErrorReporter =
     options?.onSubscriberError ??
@@ -286,6 +319,38 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         });
       }
     }
+  };
+
+  const notifyRollbackHandlers = async (
+    transactions: Transaction[],
+    count: number,
+  ) => {
+    const transactionId = transactions[0]?.id ?? (0 as TransactionId);
+    for (const { filter, handler, name } of rollbackHandlers) {
+      if (filter !== undefined && !filter(transactions, count)) continue;
+      const outcome = await tryCatch(async () => handler(transactions, count));
+      const result = isErr(outcome) ? outcome : outcome.data;
+      if (result !== undefined && isErr(result)) {
+        reportSubscriberError(result.error, {
+          event: "rollback",
+          transactionId,
+          ...(name !== undefined && { subscriber: name }),
+        });
+      }
+    }
+  };
+
+  const subscribeRollback = (
+    filter: RollbackFilter | undefined,
+    handler: RollbackHandler,
+    name?: string,
+  ): Unsubscribe => {
+    const entry = { filter, handler, name };
+    rollbackHandlers.push(entry);
+    return () => {
+      const idx = rollbackHandlers.indexOf(entry);
+      if (idx !== -1) rollbackHandlers.splice(idx, 1);
+    };
   };
 
   const subscribe =
@@ -538,6 +603,8 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       });
       if (isErr(dbResult)) return dbResult;
 
+      await notifyRollbackHandlers(dbResult.data, count);
+
       if (callbacks?.afterRollback) {
         await callbacks.afterRollback(dbResult.data, count);
       }
@@ -548,5 +615,6 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     getSchema,
     onTransaction: subscribe(transactionHandlers),
     onCommit: subscribe(commitHandlers),
+    onRollback: subscribeRollback,
   };
 };

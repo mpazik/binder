@@ -694,7 +694,7 @@ describe("knowledge graph", () => {
       expect(seen).toEqual([transaction]);
     });
 
-    it("fires neither subscription on rollback", async () => {
+    it("fires neither commit nor transaction subscription on rollback", async () => {
       throwIfError(await kg.update(mockTransactionInitInput));
       const calls: string[] = [];
       kg.onCommit(undefined, () => {
@@ -707,6 +707,43 @@ describe("knowledge graph", () => {
       throwIfError(await kg.rollback(1));
 
       expect(calls).toEqual([]);
+    });
+
+    it("fires onRollback before the afterRollback callback", async () => {
+      const calls: string[] = [];
+      const kgWithCallbacks = openKnowledgeGraph(db, {
+        callbacks: {
+          afterRollback: async () => {
+            calls.push("afterRollback");
+          },
+        },
+      });
+      const init = throwIfError(
+        await kgWithCallbacks.update(mockTransactionInitInput),
+      );
+      kgWithCallbacks.onRollback(undefined, () => {
+        calls.push("onRollback");
+      });
+
+      throwIfError(await kgWithCallbacks.rollback(1));
+
+      expect(calls).toEqual(["onRollback", "afterRollback"]);
+      expect(init.id).toBe(mockTransactionInit.id);
+    });
+
+    it("fires onRollback with reverted transactions newest-first and count", async () => {
+      throwIfError(await kg.update(mockTransactionInitInput));
+      const update = throwIfError(await kg.update(mockTransactionInputUpdate));
+      let seen: { transactions: Transaction[]; count: number } | null = null;
+      kg.onRollback(undefined, (transactions, count) => {
+        seen = { transactions, count };
+      });
+
+      throwIfError(await kg.rollback(1));
+
+      expect(seen).not.toBeNull();
+      expect(seen!.count).toBe(1);
+      expect(seen!.transactions.map((t) => t.id)).toEqual([update.id]);
     });
 
     it("skips onCommit handlers whose filter rejects", async () => {
@@ -794,6 +831,33 @@ describe("knowledge graph", () => {
           {
             error: expect.objectContaining({ message: "boom" }),
             context: { event: "transaction", transactionId: transaction.id },
+          },
+        ]);
+      });
+
+      it("reports a failed onRollback handler without aborting the rollback", async () => {
+        const init = throwIfError(
+          await kgWithReporter.update(mockTransactionInitInput),
+        );
+        kgWithReporter.onRollback(
+          undefined,
+          () => fail("journal-trim-failed", "disk full"),
+          "journal",
+        );
+
+        throwIfError(await kgWithReporter.rollback(1));
+
+        expect(throwIfError(await kgWithReporter.version())).toEqual(
+          GENESIS_VERSION,
+        );
+        expect(reported).toEqual([
+          {
+            error: expect.objectContaining({ key: "journal-trim-failed" }),
+            context: {
+              event: "rollback",
+              transactionId: init.id,
+              subscriber: "journal",
+            },
           },
         ]);
       });

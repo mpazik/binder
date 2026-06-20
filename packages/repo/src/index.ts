@@ -2,6 +2,8 @@ export {
   type KnowledgeGraph,
   type KnowledgeGraphCallbacks,
   type ReadonlyKnowledgeGraph,
+  type RollbackFilter,
+  type RollbackHandler,
   type SubscriberErrorContext,
   type SubscriberErrorReporter,
   type TransactionFilter,

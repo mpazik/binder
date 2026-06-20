@@ -24,6 +24,21 @@ export const unpackTxFields = (
   channel: typeof fields.channel === "string" ? fields.channel : undefined,
 });
 
+/** Maps a raw `transactionTable` row into a {@link Transaction}. */
+export const rowToTransaction = (
+  row: typeof transactionTable.$inferSelect,
+): Transaction => ({
+  id: row.id,
+  hash: row.hash,
+  previous: row.previous,
+  records: row.records,
+  configs: row.configs,
+  author: row.author ?? undefined,
+  createdAt: row.createdAt,
+  tags: row.tags,
+  ...unpackTxFields(row.fields as Record<string, unknown>),
+});
+
 export const getVersion = async (
   tx: DbTransaction,
 ): ResultAsync<GraphVersion> => {
@@ -62,18 +77,7 @@ export const fetchTransaction = async (
       .limit(1)
       .then((result) => {
         assertNotEmpty(result);
-        const row = result[0];
-        return {
-          id: row.id,
-          hash: row.hash,
-          previous: row.previous,
-          records: row.records,
-          configs: row.configs,
-          author: row.author ?? undefined,
-          createdAt: row.createdAt,
-          tags: row.tags,
-          ...unpackTxFields(row.fields as Record<string, unknown>),
-        };
+        return rowToTransaction(result[0]);
       }),
   );
 };
