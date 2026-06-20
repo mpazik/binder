@@ -1,11 +1,10 @@
-import { isObjectEmpty, noop } from "@binder/utils";
+import { noop } from "@binder/utils";
 import { openKnowledgeGraph, type KnowledgeGraph } from "@binder/repo";
 import type { PluginRepo } from "@binder/repo/local";
 import { type Logger } from "./log.ts";
 import { createUi, type Ui } from "./cli/ui.ts";
 import { createInMemoryFileSystem } from "./lib/filesystem.mock.ts";
 import { getTestDatabaseCli } from "./db/db.mock.ts";
-import { buildOrchestratorCallbacks } from "./lib/orchestrator.ts";
 import { documentProviderSchema } from "./document/document-schema.ts";
 import { cliConfigSchema } from "./cli-config-schema.ts";
 import { BINDER_DIR } from "./config.ts";
@@ -16,6 +15,7 @@ import { createNavigationCache } from "./document/navigation.ts";
 import { createViewCache } from "./document/view-entity.ts";
 import { journalPlugin } from "./plugins/journal/index.ts";
 import { undoRepoPlugin } from "./plugins/undo/register.ts";
+import { docsPlugin } from "./plugins/docs/index.ts";
 
 export const mockConfig: AppConfig = {
   author: "test-user",
@@ -92,39 +92,37 @@ export const createMockRuntimeContextWithDb =
     const context = await createMockCommandContext();
     const db = getTestDatabaseCli();
 
-    // Build callbacks via the same factory used by initializeDbRuntime.
-    // kg is captured by reference inside the factory closure.
-    const callbackFactory = buildOrchestratorCallbacks(
-      { ...context, db, views: () => viewCache.load() },
-      {
-        afterCommit: async (transaction) => {
-          if (isObjectEmpty(transaction.configs)) return;
-          navigationCache.invalidate();
-          viewCache.invalidate();
-        },
-      },
-    );
     const kg: KnowledgeGraph = openKnowledgeGraph(db, {
       providerSchema: documentProviderSchema,
       configSchema: cliConfigSchema,
-      callbacks: callbackFactory(
-        // Lazy reference; kg is assigned before the callback runs.
-        new Proxy({} as KnowledgeGraph, {
-          get: (_target, prop) => (kg as never)[prop as never],
-        }),
-      ),
     });
-
-    const pluginRepo = {
-      config: mockConfig,
-      onCommit: kg.onCommit.bind(kg),
-      onRollback: kg.onRollback.bind(kg),
-    } as unknown as PluginRepo;
-    journalPlugin({ fs: context.fs }).register?.({ repo: pluginRepo });
-    undoRepoPlugin({ fs: context.fs }).register?.({ repo: pluginRepo });
 
     const navigationCache = createNavigationCache(kg);
     const viewCache = createViewCache(kg);
+
+    // Mirror runtime.ts plugin wiring: journal and undo own the log/redo
+    // stack, docs renders last. The real PluginRepo exposes both `config`
+    // and the full kg surface (onCommit/onRollback for journal/undo, search
+    // for the docs render); proxy kg and override `config` to match.
+    const pluginRepo = new Proxy(kg, {
+      get: (target, prop) =>
+        prop === "config"
+          ? mockConfig
+          : (target as unknown as Record<string, unknown>)[prop as string],
+    }) as unknown as PluginRepo;
+    journalPlugin({ fs: context.fs }).register?.({ repo: pluginRepo });
+    undoRepoPlugin({ fs: context.fs }).register?.({ repo: pluginRepo });
+    docsPlugin({
+      context: () => ({
+        ...context,
+        db,
+        views: () => viewCache.load(),
+        invalidateCaches: () => {
+          navigationCache.invalidate();
+          viewCache.invalidate();
+        },
+      }),
+    }).register?.({ repo: pluginRepo });
     return {
       ...context,
       db,

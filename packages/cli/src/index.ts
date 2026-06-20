@@ -12,7 +12,6 @@ import { DeleteCommand } from "./commands/delete.ts";
 import { SchemaCommand } from "./commands/schema.ts";
 import { TransactionCommand } from "./commands/transaction.ts";
 import { SearchCommand } from "./commands/search.ts";
-import { DocsCommand } from "./commands/docs.ts";
 import { DevCommand } from "./commands/dev.ts";
 
 import { McpCommand } from "./commands/mcp.ts";
@@ -29,6 +28,7 @@ import { checkForUpdate } from "./lib/update-check.ts";
 import { groupOptions, runWithFormattedHelp } from "./cli/help.ts";
 import { journalPlugin } from "./plugins/journal/index.ts";
 import { undoPlugin } from "./plugins/undo/index.ts";
+import { docsPlugin } from "./plugins/docs/index.ts";
 import { loadWorkspacePluginCommands } from "./lib/workspace-plugins.ts";
 
 const ui = createUi();
@@ -71,7 +71,6 @@ const coreCommands: CmdMeta[] = [
   SchemaCommand,
   TransactionCommand,
   SearchCommand,
-  DocsCommand,
   McpCommand,
   HttpCommand,
   LspCommand,
@@ -125,7 +124,6 @@ let cli = yargs()
   .command(SchemaCommand)
   .command(TransactionCommand)
   .command(SearchCommand)
-  .command(DocsCommand)
   .command(McpCommand)
   .command(HttpCommand)
   .command(LspCommand)
@@ -138,13 +136,11 @@ if (isDevMode()) cli = cli.command(DevCommand);
 
 // Dynamic commands from plugins and workspace config.
 const allCommands: CmdMeta[] = [...coreCommands];
-for (const cmd of journalPlugin().commands ?? []) {
-  cli = cli.command(cmd);
-  allCommands.push(cmd);
-}
-for (const cmd of undoPlugin().commands ?? []) {
-  cli = cli.command(cmd);
-  allCommands.push(cmd);
+for (const plugin of [docsPlugin(), journalPlugin(), undoPlugin()]) {
+  for (const cmd of plugin.commands ?? []) {
+    cli = cli.command(cmd);
+    allCommands.push(cmd);
+  }
 }
 for (const cmd of await loadWorkspacePluginCommands()) {
   cli = cli.command(cmd);

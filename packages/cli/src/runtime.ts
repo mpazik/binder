@@ -8,7 +8,6 @@ import {
   fail,
   includes,
   isErr,
-  isObjectEmpty,
   normalizeError,
   ok,
   type Result,
@@ -35,10 +34,6 @@ import {
 } from "./config.ts";
 import { createUi, type Ui } from "./cli/ui.ts";
 import { createRealFileSystem, type FileSystem } from "./lib/filesystem.ts";
-import {
-  buildOrchestratorCallbacks,
-  type OrchestratorCallbacks,
-} from "./lib/orchestrator.ts";
 import { createLogger, type Logger, type LogLevel } from "./log.ts";
 import { isDevMode } from "./environment.ts";
 import {
@@ -49,6 +44,7 @@ import { serializeFormats } from "./utils/serialize.ts";
 import { createViewCache, type ViewLoader } from "./document/view-entity.ts";
 import { journalPlugin } from "./plugins/journal/index.ts";
 import { undoRepoPlugin } from "./plugins/undo/register.ts";
+import { docsPlugin } from "./plugins/docs/index.ts";
 import { migrateLegacyDataLayout } from "./migration.ts";
 import {
   initializeTelemetry,
@@ -269,41 +265,37 @@ export const initializeDbRuntime = async (
     return migrateResult;
   }
 
-  const orchestratorCallbacks: OrchestratorCallbacks = {
-    afterCommit: async (transaction) => {
-      if (isObjectEmpty(transaction.configs)) return;
-      navigationCache.invalidate();
-      viewCache.invalidate();
-    },
-    onFilesUpdated: callbacks?.onFilesUpdated,
-  };
-
-  // `db` and `viewCache` are assigned after openRepo; safe because
-  // orchestrator callbacks only fire during transactions, well after init.
-  const orchestratorCtx = {
-    fs,
-    log,
-    config,
-    get db() {
-      return db;
-    },
-    views: () => viewCache.load(),
-  };
-
   const repoResult = await openRepo(config.paths.root, {
     binderDir: BINDER_DIR,
     config,
     dbSchema: cliSchema,
     migrate: { run: cliMigrationRunner },
     kgConfigSchema: cliConfigSchema,
-    plugins: [journalPlugin(), undoRepoPlugin()],
+    plugins: [
+      journalPlugin(),
+      undoRepoPlugin(),
+      // Registered after journal and undo: onCommit/onRollback handlers fire
+      // in registration order, so the log is reconciled before docs render.
+      docsPlugin({
+        // Lazy — db and caches are assigned after openRepo returns; the
+        // handler only fires on commit/rollback, well after init.
+        context: () => ({
+          fs,
+          log,
+          config,
+          db,
+          views: () => viewCache.load(),
+          invalidateCaches: () => {
+            navigationCache.invalidate();
+            viewCache.invalidate();
+          },
+          onFilesUpdated: callbacks?.onFilesUpdated,
+        }),
+      }),
+    ],
     onSubscriberError: (error, context) => {
       log.error("Subscription handler failed", { ...context, error });
     },
-    callbacks: buildOrchestratorCallbacks(
-      orchestratorCtx,
-      orchestratorCallbacks,
-    ),
   });
   if (isErr(repoResult)) {
     log.error("Failed to open repo", { error: repoResult.error });

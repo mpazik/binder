@@ -1,9 +1,9 @@
 import type {
   EntitySchema,
-  FieldDef,
   FieldKey,
   FieldsetNested,
   FieldValue,
+  NamespaceEditable,
   ReadonlyKnowledgeGraph,
 } from "@binder/repo";
 import {
@@ -19,14 +19,8 @@ type ReferenceMap = Map<string, { uid: string; key: string }>;
 
 type TransformMode = "normalized" | "formatted";
 
-const isRelationField = (
-  fieldKey: FieldKey,
-  schema: EntitySchema,
-): FieldDef | undefined => {
-  const field = schema.fields[fieldKey];
-  if (!field || field.dataType !== "relation") return undefined;
-  return field;
-};
+const isRelationField = (fieldKey: FieldKey, schema: EntitySchema): boolean =>
+  schema.fields[fieldKey]?.dataType === "relation";
 
 const collectReferenceValues = (
   entities: FieldsetNested[],
@@ -60,6 +54,18 @@ const collectReferenceValues = (
   return refs;
 };
 
+const addToReferenceMap = (
+  map: ReferenceMap,
+  entities: FieldsetNested[],
+): void => {
+  for (const entity of entities) {
+    const uid = entity.uid as string;
+    const key = entity.key as string;
+    map.set(uid, { uid, key });
+    map.set(key, { uid, key });
+  }
+};
+
 const buildReferenceMap = async (
   kg: ReadonlyKnowledgeGraph,
   refs: Set<string>,
@@ -67,57 +73,35 @@ const buildReferenceMap = async (
   if (refs.size === 0) return ok(new Map());
 
   const refArray = Array.from(refs);
-  const searchResult = await kg.search({
-    filters: {
-      uid: { op: "in", value: refArray },
-    },
+  const map: ReferenceMap = new Map();
+
+  const uidSearchResult = await kg.search({
+    filters: { uid: { op: "in", value: refArray } },
   });
 
-  if (isErr(searchResult)) {
+  // When the uid lookup fails, fall back to resolving every ref by key.
+  if (isErr(uidSearchResult)) {
     const keySearchResult = await kg.search({
-      filters: {
-        key: { op: "in", value: refArray },
-      },
+      filters: { key: { op: "in", value: refArray } },
     });
     if (isErr(keySearchResult)) return keySearchResult;
-
-    const map: ReferenceMap = new Map();
-    for (const entity of keySearchResult.data.items) {
-      const uid = entity.uid as string;
-      const key = entity.key as string;
-      map.set(uid, { uid, key });
-      map.set(key, { uid, key });
-    }
+    addToReferenceMap(map, keySearchResult.data.items);
     return ok(map);
   }
 
+  addToReferenceMap(map, uidSearchResult.data.items);
+
   const foundUids = new Set(
-    searchResult.data.items.map((e) => e.uid as string),
+    uidSearchResult.data.items.map((e) => e.uid as string),
   );
   const remainingRefs = refArray.filter((r) => !foundUids.has(r));
 
-  const map: ReferenceMap = new Map();
-  for (const entity of searchResult.data.items) {
-    const uid = entity.uid as string;
-    const key = entity.key as string;
-    map.set(uid, { uid, key });
-    map.set(key, { uid, key });
-  }
-
   if (remainingRefs.length > 0) {
     const keySearchResult = await kg.search({
-      filters: {
-        key: { op: "in", value: remainingRefs },
-      },
+      filters: { key: { op: "in", value: remainingRefs } },
     });
     if (isErr(keySearchResult)) return keySearchResult;
-
-    for (const entity of keySearchResult.data.items) {
-      const uid = entity.uid as string;
-      const key = entity.key as string;
-      map.set(uid, { uid, key });
-      map.set(key, { uid, key });
-    }
+    addToReferenceMap(map, keySearchResult.data.items);
   }
 
   return ok(map);
@@ -206,7 +190,7 @@ const transformEntity = (
   const result: FieldsetNested = {};
 
   for (const [fieldKey, value] of Object.entries(entity)) {
-    const isRelation = !!isRelationField(fieldKey, schema);
+    const isRelation = isRelationField(fieldKey, schema);
 
     if (typeof value === "string" && isRelation) {
       result[fieldKey] = transformValue(value, refMap, mode);
@@ -233,34 +217,11 @@ const transformEntity = (
   return result;
 };
 
-export const normalizeReferences = async (
-  entity: FieldsetNested,
-  schema: EntitySchema,
-  kg: ReadonlyKnowledgeGraph,
-): ResultAsync<FieldsetNested> => {
-  const refs = collectReferenceValues([entity], schema);
-  const refMapResult = await buildReferenceMap(kg, refs);
-  if (isErr(refMapResult)) return refMapResult;
-
-  return ok(transformEntity(entity, schema, refMapResult.data, "normalized"));
-};
-
-export const formatReferences = async (
-  entity: FieldsetNested,
-  schema: EntitySchema,
-  kg: ReadonlyKnowledgeGraph,
-): ResultAsync<FieldsetNested> => {
-  const refs = collectReferenceValues([entity], schema);
-  const refMapResult = await buildReferenceMap(kg, refs);
-  if (isErr(refMapResult)) return refMapResult;
-
-  return ok(transformEntity(entity, schema, refMapResult.data, "formatted"));
-};
-
-export const normalizeReferencesList = async (
+const transformReferenceList = async (
   entities: FieldsetNested[],
   schema: EntitySchema,
   kg: ReadonlyKnowledgeGraph,
+  mode: TransformMode,
 ): ResultAsync<FieldsetNested[]> => {
   const refs = collectReferenceValues(entities, schema);
   const refMapResult = await buildReferenceMap(kg, refs);
@@ -268,23 +229,68 @@ export const normalizeReferencesList = async (
 
   return ok(
     entities.map((entity) =>
-      transformEntity(entity, schema, refMapResult.data, "normalized"),
+      transformEntity(entity, schema, refMapResult.data, mode),
     ),
   );
 };
 
-export const formatReferencesList = async (
+const transformReference = async (
+  entity: FieldsetNested,
+  schema: EntitySchema,
+  kg: ReadonlyKnowledgeGraph,
+  mode: TransformMode,
+): ResultAsync<FieldsetNested> => {
+  const result = await transformReferenceList([entity], schema, kg, mode);
+  if (isErr(result)) return result;
+  return ok(result.data[0]!);
+};
+
+export const normalizeReferences = (
+  entity: FieldsetNested,
+  schema: EntitySchema,
+  kg: ReadonlyKnowledgeGraph,
+): ResultAsync<FieldsetNested> =>
+  transformReference(entity, schema, kg, "normalized");
+
+export const formatReferences = (
+  entity: FieldsetNested,
+  schema: EntitySchema,
+  kg: ReadonlyKnowledgeGraph,
+): ResultAsync<FieldsetNested> =>
+  transformReference(entity, schema, kg, "formatted");
+
+export const normalizeReferencesList = (
   entities: FieldsetNested[],
   schema: EntitySchema,
   kg: ReadonlyKnowledgeGraph,
-): ResultAsync<FieldsetNested[]> => {
-  const refs = collectReferenceValues(entities, schema);
-  const refMapResult = await buildReferenceMap(kg, refs);
-  if (isErr(refMapResult)) return refMapResult;
+): ResultAsync<FieldsetNested[]> =>
+  transformReferenceList(entities, schema, kg, "normalized");
 
-  return ok(
-    entities.map((entity) =>
-      transformEntity(entity, schema, refMapResult.data, "formatted"),
-    ),
-  );
+export const formatReferencesList = (
+  entities: FieldsetNested[],
+  schema: EntitySchema,
+  kg: ReadonlyKnowledgeGraph,
+): ResultAsync<FieldsetNested[]> =>
+  transformReferenceList(entities, schema, kg, "formatted");
+
+/** Loads the namespace schema, then formats relation references on `entity`. */
+export const formatNamespaceReferences = async (
+  kg: ReadonlyKnowledgeGraph,
+  entity: FieldsetNested,
+  namespace: NamespaceEditable,
+): ResultAsync<FieldsetNested> => {
+  const schemaResult = await kg.getSchema(namespace);
+  if (isErr(schemaResult)) return schemaResult;
+  return formatReferences(entity, schemaResult.data, kg);
+};
+
+/** Loads the namespace schema, then formats relation references on `entities`. */
+export const formatNamespaceReferencesList = async (
+  kg: ReadonlyKnowledgeGraph,
+  entities: FieldsetNested[],
+  namespace: NamespaceEditable,
+): ResultAsync<FieldsetNested[]> => {
+  const schemaResult = await kg.getSchema(namespace);
+  if (isErr(schemaResult)) return schemaResult;
+  return formatReferencesList(entities, schemaResult.data, kg);
 };

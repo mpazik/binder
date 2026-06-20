@@ -6,7 +6,7 @@ import { isErr, ok, tryCatch, type ResultAsync } from "@binder/utils";
 import { FiltersSchema, TransactionInputSchema } from "@binder/repo";
 import type { KnowledgeGraph } from "@binder/repo";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { formatReferences } from "../document/reference.ts";
+import { formatReferences } from "../lib/reference.ts";
 import type { Logger } from "../log.ts";
 import type { AppConfig } from "../config.ts";
 import type { FileSystem } from "../lib/filesystem.ts";

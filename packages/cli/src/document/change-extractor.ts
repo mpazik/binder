@@ -38,6 +38,10 @@ import type { MatchOptions } from "../utils/file.ts";
 import type { Logger } from "../log.ts";
 import type { RuntimeContextWithDb } from "../runtime.ts";
 import {
+  normalizeReferences,
+  normalizeReferencesList,
+} from "../lib/reference.ts";
+import {
   buildNavigationTree,
   CONFIG_NAVIGATION_ITEMS,
   findNavigationItemByPath,
@@ -51,7 +55,6 @@ import {
   type ExtractedFileData,
   type ExtractedProjection,
 } from "./extraction.ts";
-import { normalizeReferences, normalizeReferencesList } from "./reference.ts";
 import type { Views } from "./view-entity.ts";
 
 const getChangesetRef = (cs: Record<string, unknown>): string | undefined => {

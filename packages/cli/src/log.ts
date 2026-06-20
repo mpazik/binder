@@ -8,8 +8,8 @@ import {
   wrapError,
 } from "@binder/utils";
 import { Document, isMap } from "yaml";
-import { applyInlineFormatting } from "./document/yaml.ts";
 import type { FileSystem } from "./lib/filesystem.ts";
+import { applyInlineFormatting } from "./utils/yaml-format.ts";
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];

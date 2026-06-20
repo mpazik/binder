@@ -13,23 +13,20 @@ import {
   mockTasksField,
   mockTransactionInitInput,
 } from "@binder/repo/mocks";
-import { createMockRuntimeContextWithDb } from "../runtime.mock.ts";
-import type { RuntimeContextWithDb } from "../runtime.ts";
-import { mockDocumentTransactionInput } from "./document.mock.ts";
+import { createMockRuntimeContextWithDb } from "../runtime.mock";
+import { mockDocumentTransactionInput } from "../document/document.mock";
 import {
   formatReferences,
   formatReferencesList,
   normalizeReferences,
   normalizeReferencesList,
-} from "./reference.ts";
+} from "./reference";
 
 describe("reference", () => {
-  let ctx: RuntimeContextWithDb;
   let kg: KnowledgeGraph;
 
   beforeEach(async () => {
-    ctx = await createMockRuntimeContextWithDb();
-    kg = ctx.kg;
+    kg = (await createMockRuntimeContextWithDb()).kg;
     throwIfError(await kg.update(mockTransactionInitInput));
     throwIfError(await kg.update(mockDocumentTransactionInput));
   });

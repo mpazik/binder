@@ -5,25 +5,25 @@ import {
   type CommandHandlerWithDb,
   type RuntimeContextWithDb,
   runtimeWithDb,
-} from "../runtime.ts";
-import { renderDocs } from "../document/repository.ts";
-import { extractModifiedFileChanges } from "../document/change-extractor.ts";
+} from "../../runtime";
+import { renderDocs } from "../../document/repository";
+import { extractModifiedFileChanges } from "../../document/change-extractor";
 import {
   findNavigationItemByPath,
   loadNavigation,
-} from "../document/navigation.ts";
+} from "../../document/navigation";
 import {
   getRelativeSnapshotPath,
   namespaceFromSnapshotPath,
   resolveSnapshotPath,
   snapshotRootForNamespace,
-} from "../lib/snapshot.ts";
-import type { ValidationError } from "../validation";
-import { validateDocument } from "../validation";
-import { getDocumentFileType, parseDocument } from "../document/document.ts";
-import { createPathMatcher } from "../utils/file.ts";
-import { types } from "../cli/types.ts";
-import { resolveTransactionDisplayKey } from "../cli/ui.ts";
+} from "../../lib/snapshot";
+import type { ValidationError } from "../../validation/index";
+import { validateDocument } from "../../validation/index";
+import { getDocumentFileType, parseDocument } from "../../document/document";
+import { createPathMatcher } from "../../utils/file";
+import { types } from "../../cli/types";
+import { resolveTransactionDisplayKey } from "../../cli/ui";
 
 export const docsRenderHandler: CommandHandlerWithDb<{
   force?: boolean;

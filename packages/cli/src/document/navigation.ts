@@ -43,13 +43,13 @@ import { interpolateQueryParams } from "../utils/query.ts";
 import { saveSnapshot, type SnapshotMode } from "../lib/snapshot.ts";
 import type { FileSystem } from "../lib/filesystem.ts";
 import { BINDER_DIR, type ConfigPaths } from "../config.ts";
+import { formatReferences, formatReferencesList } from "../lib/reference.ts";
 import { renderView } from "./view.ts";
 import {
   findEntityInYamlList,
   renderYamlEntity,
   renderYamlList,
 } from "./yaml.ts";
-import { formatReferences, formatReferencesList } from "./reference.ts";
 import type { FileType } from "./document.ts";
 import {
   buildPreambleIncludes,

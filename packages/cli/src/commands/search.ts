@@ -1,10 +1,8 @@
 import type { Argv } from "yargs";
 import { fail, isErr, ok } from "@binder/utils";
 import {
-  type Fieldset,
   type Includes,
   type NamespaceEditable,
-  type ReadonlyKnowledgeGraph,
   type OrderBy,
   type QueryParams,
   QueryParamsSchema,
@@ -25,17 +23,7 @@ import {
 import { type SerializeFormat, flatListFormats } from "../utils/serialize.ts";
 import { applySelection } from "../utils/selection.ts";
 import { isStdinPiped, readStdinAs } from "../cli/stdin.ts";
-import { formatReferencesList } from "../document/reference.ts";
-
-const resolveFormattedItems = async (
-  kg: ReadonlyKnowledgeGraph,
-  items: Fieldset[],
-  namespace: NamespaceEditable,
-) => {
-  const schemaResult = await kg.getSchema(namespace);
-  if (isErr(schemaResult)) return schemaResult;
-  return formatReferencesList(items, schemaResult.data, kg);
-};
+import { formatNamespaceReferencesList } from "../lib/reference.ts";
 
 const searchHandler: CommandHandlerReadonly<{
   query: string[];
@@ -81,7 +69,11 @@ const searchHandler: CommandHandlerReadonly<{
   if (isErr(result)) return result;
 
   const items = applySelection(result.data.items, { limit: args.limit });
-  const formatted = await resolveFormattedItems(kg, items, args.namespace);
+  const formatted = await formatNamespaceReferencesList(
+    kg,
+    items,
+    args.namespace,
+  );
   if (isErr(formatted)) return formatted;
 
   const data = flatListFormats.includes(args.format!)

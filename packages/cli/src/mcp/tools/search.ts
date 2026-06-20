@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErr, ok } from "@binder/utils";
 import { FiltersSchema } from "@binder/repo";
-import { formatReferencesList } from "../../document/reference.ts";
+import { formatNamespaceReferencesList } from "../../lib/reference.ts";
 import { defineTool } from "./types.ts";
 
 export const searchToolName = "search";
@@ -45,10 +45,7 @@ Filter examples:
 
     const { items, pagination } = searchResult.data;
 
-    const schemaResult = await kg.getSchema("record");
-    if (isErr(schemaResult)) return schemaResult;
-
-    const formatted = await formatReferencesList(items, schemaResult.data, kg);
+    const formatted = await formatNamespaceReferencesList(kg, items, "record");
     if (isErr(formatted)) return formatted;
 
     return ok({

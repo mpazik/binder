@@ -6,7 +6,8 @@ import type {
 } from "@binder/repo";
 import { isErr, ok, type Result } from "@binder/utils";
 import { Document, isMap } from "yaml";
-import { applyInlineFormatting, parseYamlEntity } from "./yaml.ts";
+import { applyInlineFormatting } from "../utils/yaml-format.ts";
+import { parseYamlEntity } from "./yaml.ts";
 import type { BlockAST } from "./markdown.ts";
 
 export const renderFrontmatterString = (
