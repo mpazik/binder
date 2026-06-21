@@ -31,8 +31,8 @@ export const TransactionInputSchema = z.object({
 export type TransactionInput = z.infer<typeof TransactionInputSchema>;
 
 /**
- * Build a {@link TransactionInput} targeting a single namespace with optional metadata.
- * Convenience wrapper used by CLI commands to construct inputs from parsed arguments.
+ * Build a {@link TransactionInput} targeting a single namespace from individual
+ * fields, rather than assembling the object literal by hand.
  */
 export const createTransactionInput = (
   author: string,

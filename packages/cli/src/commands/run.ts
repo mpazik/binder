@@ -1,10 +1,11 @@
 import { join } from "node:path";
 import process from "node:process";
 import type { Argv } from "yargs";
-import { fail, okVoid } from "@binder/utils";
+import { fail, isErr, okVoid } from "@binder/utils";
 import { type CommandHandler, runtime } from "../runtime.ts";
 import { types } from "../cli/types.ts";
 import { discoverScripts, runScript } from "../lib/scripts.ts";
+import { ensureWorkspaceCliLink } from "../lib/workspace-link.ts";
 
 const SCRIPTS_DIR_NAME = "scripts";
 
@@ -60,6 +61,16 @@ const makeRunHandler =
         "script-not-found",
         `No script named '${args.name}' in ${scriptsDir}`,
         { data: { name: args.name, scriptsDir } },
+      );
+    }
+
+    // Link the running CLI into the workspace so scripts can resolve
+    // `import "@binder.do/cli/workspace"` to this exact version. Best-effort:
+    // a script that doesn't import the library still runs without it.
+    const linkResult = await ensureWorkspaceCliLink(config.paths.binder);
+    if (isErr(linkResult)) {
+      ui.println(
+        `warning: could not link the binder library for scripts: ${linkResult.error.message}`,
       );
     }
 

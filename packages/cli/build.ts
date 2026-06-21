@@ -47,7 +47,15 @@ const nodeCompatPlugin: BunPlugin = {
 };
 
 const result = await Bun.build({
-  entrypoints: ["./src/index.ts", "./src/telemetry-flush.ts"],
+  // workspace.ts is a separate entrypoint so importing it never runs the CLI
+  // (index.ts runs yargs as a top-level side effect on import).
+  // NOTE: index.js and workspace.js will duplicate shared code until code
+  // splitting is enabled (accepted; follow-up task).
+  entrypoints: [
+    "./src/index.ts",
+    "./src/telemetry-flush.ts",
+    "./src/workspace.ts",
+  ],
   outdir: "./dist",
   target: "node",
   packages: "bundle",

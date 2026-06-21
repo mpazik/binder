@@ -112,8 +112,8 @@ export type KnowledgeGraph<
    * commit and before the `afterCommit` callback. A process that merely
    * observes a transaction never fires `onCommit`; use `onTransaction` for
    * that. Use for writer side effects that must run exactly once (e.g.
-   * journal append). Handler failures are reported via `onSubscriberError`
-   * and never abort the commit.
+   * mirroring each commit to an append-only log). Handler failures are
+   * reported via `onSubscriberError` and never abort the commit.
    */
   onCommit: (
     filter: TransactionFilter | undefined,
@@ -125,7 +125,7 @@ export type KnowledgeGraph<
    * Handlers fire after the database rollback commits and before the
    * `afterRollback` callback, receiving the reverted transactions
    * (newest-first) and the count. Mirrors `onCommit` for writer side effects
-   * that must undo their commit-time work (e.g. journal trim). Handler
+   * that must undo their commit-time work (e.g. trimming that log). Handler
    * failures are reported via `onSubscriberError` and never abort the
    * rollback.
    */
@@ -214,9 +214,23 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
     callbacks?: KnowledgeGraphCallbacks;
     /** Receives subscription handler failures. Defaults to `console.error`. */
     onSubscriberError?: SubscriberErrorReporter;
+    /**
+     * Default provenance stamped on transactions originated through `update()`
+     * and `process()` when the input omits `source`. An explicit per-input
+     * `source` always wins. `apply()` is never affected — a replayed
+     * transaction keeps its own source.
+     */
+    source?: string;
   },
 ): KnowledgeGraph<C> => {
   const callbacks = options?.callbacks;
+  const defaultSource = options?.source;
+
+  // Stamp the kg's default source onto an input that does not specify one.
+  const withDefaultSource = (input: TransactionInput): TransactionInput =>
+    defaultSource === undefined || input.source !== undefined
+      ? input
+      : { ...input, source: defaultSource };
   if (options?.configSchema) {
     validateAppConfigSchema(options.configSchema);
   }
@@ -571,7 +585,7 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
 
         const processedResult = await processTransactionInput(
           tx,
-          input,
+          withDefaultSource(input),
           recordSchemaResult.data,
           configSchema,
         );
@@ -585,7 +599,7 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         if (isErr(recordSchemaResult)) return recordSchemaResult;
         return processTransactionInput(
           tx,
-          input,
+          withDefaultSource(input),
           recordSchemaResult.data,
           configSchema,
         );

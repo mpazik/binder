@@ -251,6 +251,7 @@ export const initializeRuntime = async (
 export const initializeDbRuntime = async (
   context: RuntimeContext,
   callbacks?: RuntimeDbCallbacks,
+  options?: { source?: string },
 ): ResultAsync<{
   runtime: RuntimeContextWithDb;
   close: () => void;
@@ -271,6 +272,7 @@ export const initializeDbRuntime = async (
     dbSchema: cliSchema,
     migrate: { run: cliMigrationRunner },
     kgConfigSchema: cliConfigSchema,
+    source: options?.source,
     plugins: [
       journalPlugin(),
       undoRepoPlugin(),
@@ -325,6 +327,7 @@ export const initializeFullRuntime = async (
   minimalContext: RuntimeContextInit,
   root: string,
   callbacks?: RuntimeDbCallbacks,
+  options?: { source?: string },
 ): ResultAsync<{
   runtime: RuntimeContextWithDb;
   close: () => void;
@@ -334,7 +337,7 @@ export const initializeFullRuntime = async (
 
   const { runtime: context, close: closeLog } = runtimeResult.data;
 
-  const dbResult = await initializeDbRuntime(context, callbacks);
+  const dbResult = await initializeDbRuntime(context, callbacks, options);
   if (isErr(dbResult)) return dbResult;
 
   const { runtime: dbRuntime, close: closeDb } = dbResult.data;

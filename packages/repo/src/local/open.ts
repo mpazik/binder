@@ -57,6 +57,8 @@ export type OpenOptions<
   callbacks?: KnowledgeGraphCallbacks | OpenCallbacksFactory<C>;
   /** Receives subscription handler failures (onCommit/onTransaction). Defaults to `console.error`. */
   onSubscriberError?: SubscriberErrorReporter;
+  /** Default provenance stamped on originated transactions when the input omits `source`. */
+  source?: string;
   configLoadOptions?: LoadWorkspaceConfigOptions<CS>;
 };
 
@@ -265,6 +267,7 @@ export const open = async <
       configSchema: options?.kgConfigSchema,
       callbacks: userCallbacks,
       onSubscriberError: options?.onSubscriberError,
+      source: options?.source,
     },
   );
   kgRef.kg = kg;

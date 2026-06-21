@@ -313,7 +313,7 @@ const selectFieldsForEntity = (
 
     // Boolean include on inverse relation: collapse to flat uid strings.
     // Skip empty results so absent inverse data does not surface as `null`
-    // or `[]` in callers' output (e.g. rendered frontmatter).
+    // or `[]` in callers' output.
     if (includeValue === true && field?.inverseOf) {
       const collapsed = collapseToUids(val);
       if (collapsed == null) continue;

@@ -185,6 +185,23 @@ describe("@binder/repo/local", () => {
     });
   });
 
+  describe("source option", () => {
+    it("stamps the source on transactions originated through the repo", async () => {
+      throwIfError(await init(workspaceRoot));
+
+      const repo = throwIfError(
+        await open(workspaceRoot, { source: "nightly-sync" }),
+      );
+
+      const transaction = throwIfError(
+        await repo.update(mockTransactionInitInput),
+      );
+
+      expect(transaction.source).toBe("nightly-sync");
+      repo.close();
+    });
+  });
+
   describe("resolveWorkspaceRoot()", () => {
     it("returns explicit start argument as-is", async () => {
       const result = throwIfError(await resolveWorkspaceRoot(workspaceRoot));

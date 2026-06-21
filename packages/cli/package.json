@@ -26,7 +26,11 @@
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
-    "./journal": "./dist/plugins/journal.js"
+    "./journal": "./dist/plugins/journal.js",
+    "./workspace": {
+      "bun": "./src/workspace.ts",
+      "default": "./dist/workspace.js"
+    }
   },
   "bin": {
     "binder": "dist/index.js"

@@ -97,7 +97,8 @@ export const fieldTypes = [fieldSystemType] as const;
 export type ConfigFieldDef = FieldDef<ConfigDataType>;
 export const configFieldsDefs = {
   ...coreFields,
-  // Structural fields shared with record namespace (used by Navigation hierarchy)
+  // Structural fields shared with the record namespace: let config entities
+  // form parent/child hierarchies.
   parent: standardFields.parent,
   children: standardFields.children,
   dataType: {

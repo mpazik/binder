@@ -863,4 +863,49 @@ describe("knowledge graph", () => {
       });
     });
   });
+
+  describe("default source", () => {
+    it("stamps the kg source on update() when the input omits one", async () => {
+      const kgWithSource = openKnowledgeGraph(db, { source: "script-x" });
+
+      const tx = throwIfError(
+        await kgWithSource.update(mockTransactionInitInput),
+      );
+
+      expect(tx.source).toBe("script-x");
+    });
+
+    it("keeps an explicit per-input source over the kg default", async () => {
+      const kgWithSource = openKnowledgeGraph(db, { source: "script-x" });
+
+      const tx = throwIfError(
+        await kgWithSource.update({
+          ...mockTransactionInitInput,
+          source: "explicit",
+        }),
+      );
+
+      expect(tx.source).toBe("explicit");
+    });
+
+    it("stamps the kg source on process() too", async () => {
+      const kgWithSource = openKnowledgeGraph(db, { source: "script-x" });
+
+      const tx = throwIfError(
+        await kgWithSource.process(mockTransactionInitInput),
+      );
+
+      expect(tx.source).toBe("script-x");
+    });
+
+    it("never stamps apply() — a replayed transaction keeps its own source", async () => {
+      const built = throwIfError(await kg.process(mockTransactionInitInput));
+      expect(built.source).toBeUndefined();
+
+      const kgWithSource = openKnowledgeGraph(db, { source: "script-x" });
+      const applied = throwIfError(await kgWithSource.apply(built));
+
+      expect(applied.source).toBeUndefined();
+    });
+  });
 });

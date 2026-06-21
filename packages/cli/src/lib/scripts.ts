@@ -4,6 +4,7 @@ import { access, readdir, stat } from "node:fs/promises";
 import { constants as osConstants } from "node:os";
 import { extname, join } from "node:path";
 import { fail, isErr, ok, type ResultAsync, tryCatch } from "@binder/utils";
+import { isDevMode } from "../environment.ts";
 
 export type ScriptEntry = {
   /** Stem of the script filename (basename without extension). */
@@ -91,13 +92,20 @@ export const resolveRunner = async (
 ): ResultAsync<RunnerCommand> => {
   switch (entry.ext) {
     case ".ts":
-      return ok({
-        cmd: "node",
-        args: ["--experimental-strip-types", entry.path],
-      });
     case ".js":
     case ".mjs":
-      return ok({ cmd: "node", args: [entry.path] });
+      // Dev mode runs from source (not bundled), so use bun: it resolves
+      // workspace packages (@binder/*) and TS imports, letting scripts import
+      // the source `binder` entry and stay in dev mode (BINDER_DIR=.binder-dev).
+      // Production uses node, which strips types (.ts) and loads the bundled entry.
+      if (isDevMode()) return ok({ cmd: "bun", args: [entry.path] });
+      return ok({
+        cmd: "node",
+        args:
+          entry.ext === ".ts"
+            ? ["--experimental-strip-types", entry.path]
+            : [entry.path],
+      });
     case ".sh":
       if (await isExecutable(entry.path))
         return ok({ cmd: entry.path, args: [] });
