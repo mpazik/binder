@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isErr, ok, type ResultAsync } from "@binder/utils";
 import {
   CoreConfigSchema,
+  type CoreConfig,
   findNearestAncestorWith,
   getGlobalConfigPath,
   getGlobalStatePath as repoGetGlobalStatePath,
@@ -121,6 +122,9 @@ export type AppConfig = {
     rules?: Record<string, "error" | "warning" | "info" | "hint" | "off">;
   };
   llm?: LlmConfig;
+  // Passed through to `openRepo` so config-declared hooks/plugins actually run.
+  hooks?: CoreConfig["hooks"];
+  plugins?: CoreConfig["plugins"];
 };
 
 /**
@@ -193,8 +197,17 @@ export const loadWorkspaceConfig = async (
   if (isErr(result)) return result;
 
   const loaded = result.data as typeof result.data & { llm?: LlmConfig };
-  const { docsPath, include, exclude, validation, author, logLevel, llm } =
-    loaded;
+  const {
+    docsPath,
+    include,
+    exclude,
+    validation,
+    author,
+    logLevel,
+    llm,
+    hooks,
+    plugins,
+  } = loaded;
   const mergedExclude = [...DEFAULT_EXCLUDE_PATTERNS, ...(exclude ?? [])];
   const mergedLlm = mergeLlmConfig(globalConfig.llm, llm);
 
@@ -212,5 +225,7 @@ export const loadWorkspaceConfig = async (
     exclude: mergedExclude,
     validation,
     llm: mergedLlm,
+    hooks,
+    plugins,
   });
 };
