@@ -46,6 +46,8 @@ export {
   type PluginRepo,
 } from "./plugin.ts";
 
+export { fatalError } from "./script.ts";
+
 export {
   type Err,
   type ErrorObject,
