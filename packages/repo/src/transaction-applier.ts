@@ -10,6 +10,7 @@ import { and, desc, gte, lte } from "drizzle-orm";
 import {
   type ConfigUid,
   type FieldChangeset,
+  incrementEntityId,
   invertTransaction,
   type RecordUid,
   type Transaction,
@@ -67,6 +68,20 @@ export const applyAndSaveTransaction = async (
   tx: DbTransaction,
   transaction: Transaction,
 ): ResultAsync<void> => {
+  const versionResult = await getVersion(tx);
+  if (isErr(versionResult)) return versionResult;
+
+  const expectedId = incrementEntityId(versionResult.data.id);
+  if (
+    transaction.id !== expectedId ||
+    transaction.previous !== versionResult.data.hash
+  ) {
+    return fail(
+      "version-mismatch",
+      `Repository version mismatch: expected transaction ${expectedId} after ${versionResult.data.hash}, got ${transaction.id} after ${transaction.previous}`,
+    );
+  }
+
   const applyResult = await applyTransaction(tx, transaction);
   if (isErr(applyResult)) return applyResult;
   return saveTransaction(tx, transaction);

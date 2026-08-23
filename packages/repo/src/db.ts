@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
@@ -47,57 +48,102 @@ export type OpenDbOptions<TSchema extends DbSchema = typeof coreSchema> =
   | FileDbOptions<TSchema>
   | MemoryDbOptions<TSchema>;
 
-/**
- * Patch transaction() to tolerate async callbacks.
- *
- * The knowledge-graph transaction callbacks are `async (tx) => { ... }`.
- * All Drizzle SQLite operations inside resolve synchronously, so the async
- * is effectively a no-op. But better-sqlite3 explicitly throws when a
- * transaction callback returns a Promise. This wrapper captures the return
- * value before better-sqlite3 sees it.
- *
- * Under Bun (bun:sqlite) the patch is harmless -- it just adds an extra
- * indirection layer that doesn't change behavior.
- */
-const patchTransactionForAsyncCompat = (
-  db: InstanceType<typeof SqliteDatabase>,
+type TransactionBehavior = "deferred" | "immediate" | "exclusive";
+
+type AsyncTransactionContext = {
+  active: boolean;
+  nextSavepoint: number;
+};
+
+const isErrResult = (value: unknown): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  "error" in value &&
+  value.error !== undefined;
+
+const rollbackIgnoringFailure = (
+  sqlite: InstanceType<typeof SqliteDatabase>,
+  statement: string,
 ): void => {
-  const origTransaction = db.transaction.bind(db);
+  void tryCatch(() => sqlite.exec(statement));
+};
 
-  db.transaction = ((fn: (...args: any[]) => any) => {
-    let capturedResult: any;
-    // typed as `any` because bun:sqlite and better-sqlite3 expose different
-    // transaction method shapes (.default exists only in better-sqlite3)
-    const wrapped: any = origTransaction((...args: any[]) => {
-      capturedResult = fn(...args);
-    });
+/**
+ * Keep explicit SQLite transactions open until async callbacks settle.
+ * Operations on one connection are queued, with savepoints for nested calls.
+ */
+const patchTransactionForAsyncCompat = <TSchema extends DbSchema>(
+  db: DrizzleDb<TSchema>,
+  sqlite: InstanceType<typeof SqliteDatabase>,
+): void => {
+  const originalTransaction = db.transaction.bind(db);
+  const transactionHandle = originalTransaction((tx) => tx);
+  const contextStorage = new AsyncLocalStorage<AsyncTransactionContext>();
+  let queueTail: Promise<void> = Promise.resolve();
 
-    const patched = Object.assign(
-      (...args: any[]) => {
-        wrapped(...args);
-        return capturedResult;
-      },
-      {
-        default: (...args: any[]) => {
-          wrapped.default(...args);
-          return capturedResult;
-        },
-        deferred: (...args: any[]) => {
-          wrapped.deferred(...args);
-          return capturedResult;
-        },
-        immediate: (...args: any[]) => {
-          wrapped.immediate(...args);
-          return capturedResult;
-        },
-        exclusive: (...args: any[]) => {
-          wrapped.exclusive(...args);
-          return capturedResult;
-        },
-      },
+  const runNested = <T>(
+    fn: (tx: typeof transactionHandle) => T | Promise<T>,
+    context: AsyncTransactionContext,
+  ): Promise<T> => {
+    const savepoint = `binder_async_${context.nextSavepoint++}`;
+    sqlite.exec(`SAVEPOINT ${savepoint}`);
+
+    return Promise.resolve()
+      .then(() => fn(transactionHandle))
+      .then((result) => {
+        if (isErrResult(result))
+          sqlite.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        sqlite.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        return result;
+      })
+      .catch((error) => {
+        rollbackIgnoringFailure(sqlite, `ROLLBACK TO SAVEPOINT ${savepoint}`);
+        rollbackIgnoringFailure(sqlite, `RELEASE SAVEPOINT ${savepoint}`);
+        return Promise.reject(error);
+      });
+  };
+
+  const runTopLevel = <T>(
+    fn: (tx: typeof transactionHandle) => T | Promise<T>,
+    behavior: TransactionBehavior,
+  ): Promise<T> => {
+    sqlite.exec(`BEGIN ${behavior.toUpperCase()}`);
+    const context: AsyncTransactionContext = {
+      active: true,
+      nextSavepoint: 0,
+    };
+
+    return contextStorage.run(context, () =>
+      Promise.resolve()
+        .then(() => fn(transactionHandle))
+        .then((result) => {
+          sqlite.exec(isErrResult(result) ? "ROLLBACK" : "COMMIT");
+          return result;
+        })
+        .catch((error) => {
+          rollbackIgnoringFailure(sqlite, "ROLLBACK");
+          return Promise.reject(error);
+        })
+        .finally(() => {
+          context.active = false;
+        }),
     );
+  };
 
-    return patched;
+  db.transaction = ((
+    fn: (tx: typeof transactionHandle) => unknown,
+    config?: { behavior?: TransactionBehavior },
+  ) => {
+    const context = contextStorage.getStore();
+    if (context?.active) return runNested(fn, context);
+
+    const behavior = config?.behavior ?? "deferred";
+    const run = queueTail.then(() => runTopLevel(fn, behavior));
+    queueTail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }) as typeof db.transaction;
 };
 
@@ -157,7 +203,6 @@ export const openDb = <TSchema extends DbSchema = typeof coreSchema>(
   if (isErr(sqliteResult)) return sqliteResult;
 
   const sqlite = sqliteResult.data;
-  patchTransactionForAsyncCompat(sqlite);
 
   // Pragmas that write (journal_mode=WAL, foreign_keys) fail on readonly
   // connections. Skip pragma setup entirely; readonly callers don't need
@@ -233,6 +278,8 @@ export const openDb = <TSchema extends DbSchema = typeof coreSchema>(
       }
     }
   }
+
+  patchTransactionForAsyncCompat(db, sqlite);
 
   return ok(db);
 };

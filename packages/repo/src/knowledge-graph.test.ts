@@ -3,6 +3,7 @@ import {
   type ErrorObject,
   fail,
   isErr,
+  ok,
   okVoid,
   throwIfError,
 } from "@binder/utils";
@@ -47,6 +48,7 @@ import {
   type Fieldset,
   GENESIS_VERSION,
   type Transaction,
+  type TransactionId,
   versionFromTransaction,
 } from "./model";
 import { applyAndSaveTransaction } from "./transaction-applier.ts";
@@ -87,6 +89,62 @@ describe("knowledge graph", () => {
       const schema = throwIfError(await kg.getRecordSchema());
 
       expect(Object.keys(schema.fields)).toEqual(predefinedFieldKeys);
+    });
+
+    it("serializes concurrent updates before they read the graph head", async () => {
+      throwIfError(await kg.update(mockTransactionInitInput));
+
+      let releaseFirst!: () => void;
+      const firstMayCommit = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let firstEntered!: () => void;
+      const firstPrepared = new Promise<void>((resolve) => {
+        firstEntered = resolve;
+      });
+      let secondReachedCommit = false;
+
+      const firstKg = openKnowledgeGraph(db, {
+        callbacks: {
+          beforeTransaction: async () => {
+            firstEntered();
+            await firstMayCommit;
+            return ok(async () => okVoid);
+          },
+        },
+      });
+      const secondKg = openKnowledgeGraph(db, {
+        callbacks: {
+          beforeTransaction: async () => {
+            secondReachedCommit = true;
+            return ok(async () => okVoid);
+          },
+        },
+      });
+
+      const firstUpdate = firstKg.update({
+        author: "first",
+        records: [{ $ref: mockTask1Uid, title: "First update" }],
+      });
+      await firstPrepared;
+
+      const secondUpdate = secondKg.update({
+        author: "second",
+        records: [{ $ref: mockTask2Uid, title: "Second update" }],
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(secondReachedCommit).toBe(false);
+      releaseFirst();
+
+      const [firstTransaction, secondTransaction] = await Promise.all([
+        firstUpdate,
+        secondUpdate,
+      ]).then((results) => results.map(throwIfError));
+
+      expect(firstTransaction.id).toBe(2 as TransactionId);
+      expect(secondTransaction.id).toBe(3 as TransactionId);
+      expect(secondTransaction.previous).toBe(firstTransaction.hash);
     });
   });
 
@@ -232,6 +290,22 @@ describe("knowledge graph", () => {
 
         expect(updatedRecord).toEqual(mockTaskRecord1Updated);
         expect(savedTransaction).toEqual(mockTransactionUpdate);
+      });
+
+      it("rolls back entity changes when a callback rejects the commit", async () => {
+        const kgWithCallback = openKnowledgeGraph(db, {
+          callbacks: {
+            beforeCommit: async () => fail("commit-rejected", "Rejected"),
+          },
+        });
+
+        expect(
+          await kgWithCallback.update(mockTransactionInputUpdate),
+        ).toBeErrWithKey("commit-rejected");
+        expect(throwIfError(await kg.fetchEntity(mockTask1Uid))).toEqual(
+          mockTask1Record,
+        );
+        expect(throwIfError(await kg.version()).id).toBe(1 as TransactionId);
       });
     });
 

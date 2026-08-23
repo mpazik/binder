@@ -12,6 +12,7 @@ import {
 } from "./model/transaction.mock.ts";
 import {
   coreConfigSchema,
+  GENESIS_VERSION,
   type TransactionId,
   type TransactionInput,
 } from "./model";
@@ -59,6 +60,26 @@ describe("transaction applier", () => {
 
       expect(updatedRecord).toEqual(mockTaskRecord1Updated);
       expect(transaction).toEqual(mockTransactionUpdate);
+    });
+
+    it("rejects a transaction that does not extend the current head", async () => {
+      await db.transaction((tx) =>
+        applyAndSaveTransaction(tx, mockTransactionInit),
+      );
+
+      const result = await db.transaction((tx) =>
+        applyAndSaveTransaction(tx, {
+          ...mockTransactionUpdate,
+          previous: GENESIS_VERSION.hash,
+        }),
+      );
+
+      expect(result).toBeErrWithKey("version-mismatch");
+      expect(
+        await db.transaction(async (tx) =>
+          throwIfError(await fetchEntity(tx, "record", mockTask1Uid)),
+        ),
+      ).toEqual(mockTask1Record);
     });
   });
 

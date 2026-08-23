@@ -2,6 +2,7 @@ import {
   type ErrorObject,
   fail,
   groupByToObject,
+  includes,
   isErr,
   ok,
   okVoid,
@@ -241,39 +242,42 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
 
   let recordSchemaCache: RecordSchema | null = null;
 
+  const loadRecordSchema = async (
+    tx: DbTransaction,
+  ): ResultAsync<RecordSchema> => {
+    const configsResult = await tryCatch(
+      tx
+        .select()
+        .from(configTable)
+        .where(inArray(configTable.type, [...fieldTypes, typeSystemType]))
+        .then((rows) => rows.map(dbModelToEntity)),
+    );
+
+    if (isErr(configsResult)) return configsResult;
+
+    const fields = configsResult.data.filter((config) =>
+      includes(fieldTypes, config.type),
+    ) as unknown as RecordFieldDef[];
+
+    const types = configsResult.data.filter(
+      (config) => config.type === typeSystemType,
+    ) as unknown as TypeDef[];
+
+    const schema: RecordSchema = mergeSchema(
+      mergeSchema(coreRecordSchema(), options?.providerSchema),
+      {
+        fields: groupByToObject(fields, (f) => f.key),
+        types: groupByToObject(types, (t) => t.key),
+      },
+    );
+
+    recordSchemaCache = schema;
+    return ok(schema);
+  };
+
   const getRecordSchema = async (): ResultAsync<RecordSchema> => {
     if (recordSchemaCache !== null) return ok(recordSchemaCache);
-
-    return db.transaction(async (tx) => {
-      const configsResult = await tryCatch(
-        tx
-          .select()
-          .from(configTable)
-          .where(inArray(configTable.type, [...fieldTypes, typeSystemType]))
-          .then((rows) => rows.map(dbModelToEntity)),
-      );
-
-      if (isErr(configsResult)) return configsResult;
-
-      const fields = configsResult.data.filter((config) =>
-        fieldTypes.includes(config.type as any),
-      ) as unknown as RecordFieldDef[];
-
-      const types = configsResult.data.filter(
-        (config) => config.type === typeSystemType,
-      ) as unknown as TypeDef[];
-
-      const schema: RecordSchema = mergeSchema(
-        mergeSchema(coreRecordSchema(), options?.providerSchema),
-        {
-          fields: groupByToObject(fields, (f) => f.key),
-          types: groupByToObject(types, (t) => t.key),
-        },
-      );
-
-      recordSchemaCache = schema;
-      return ok(schema);
-    });
+    return db.transaction(loadRecordSchema);
   };
   const getSchema = async <N extends Namespace>(
     namespace: N,
@@ -382,35 +386,54 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
       };
     };
 
-  const applyAndNotify = async (transaction: Transaction) => {
-    let rollbackBeforeHook: TransactionRollback | null = null;
+  const prepareApplyAndNotify = async (
+    prepare: (
+      tx: DbTransaction,
+    ) => Result<Transaction> | ResultAsync<Transaction>,
+  ): ResultAsync<Transaction> => {
+    const beforeHookState: { rollback: TransactionRollback | null } = {
+      rollback: null,
+    };
 
-    if (callbacks?.beforeTransaction) {
-      const beforeResult = await callbacks.beforeTransaction(transaction);
-      if (isErr(beforeResult)) return beforeResult;
-      rollbackBeforeHook = beforeResult.data;
-    }
+    const transactionOutcome = await tryCatch(
+      db.transaction(
+        async (tx) => {
+          const transactionResult = await prepare(tx);
+          if (isErr(transactionResult)) return transactionResult;
+          const transaction = transactionResult.data;
 
-    const dbResult = await db.transaction(async (tx) => {
-      const applyResult = await applyAndSaveTransaction(tx, transaction);
-      if (isErr(applyResult)) return applyResult;
+          if (callbacks?.beforeTransaction) {
+            const beforeResult = await callbacks.beforeTransaction(transaction);
+            if (isErr(beforeResult)) return beforeResult;
+            beforeHookState.rollback = beforeResult.data;
+          }
 
-      if (isObjectNonEmpty(transaction.configs)) {
-        recordSchemaCache = null;
-      }
+          const applyResult = await applyAndSaveTransaction(tx, transaction);
+          if (isErr(applyResult)) return applyResult;
 
-      if (callbacks?.beforeCommit) {
-        const commitResult = await callbacks.beforeCommit(transaction);
-        if (isErr(commitResult)) return commitResult;
-      }
+          if (isObjectNonEmpty(transaction.configs)) {
+            recordSchemaCache = null;
+          }
 
-      return ok(transaction);
-    });
+          if (callbacks?.beforeCommit) {
+            const commitResult = await callbacks.beforeCommit(transaction);
+            if (isErr(commitResult)) return commitResult;
+          }
 
+          return ok(transaction);
+        },
+        { behavior: "immediate" },
+      ),
+    );
+
+    const dbResult = isErr(transactionOutcome)
+      ? transactionOutcome
+      : transactionOutcome.data;
     if (isErr(dbResult)) {
-      if (rollbackBeforeHook) await rollbackBeforeHook();
+      if (beforeHookState.rollback) await beforeHookState.rollback();
       return dbResult;
     }
+    const transaction = dbResult.data;
 
     await notifyHandlers(commitHandlers, "commit", transaction);
 
@@ -578,20 +601,19 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
         });
       }),
     version: () => db.transaction((tx) => getVersion(tx)),
-    update: async (input: TransactionInput) =>
-      db.transaction(async (tx) => {
-        const recordSchemaResult = await getRecordSchema();
+    update: (input: TransactionInput) =>
+      prepareApplyAndNotify(async (tx) => {
+        // Always reload inside the reserved write transaction. A cached schema
+        // may be stale after another process commits config changes.
+        const recordSchemaResult = await loadRecordSchema(tx);
         if (isErr(recordSchemaResult)) return recordSchemaResult;
 
-        const processedResult = await processTransactionInput(
+        return processTransactionInput(
           tx,
           withDefaultSource(input),
           recordSchemaResult.data,
           configSchema,
         );
-        if (isErr(processedResult)) return processedResult;
-
-        return applyAndNotify(processedResult.data);
       }),
     process: async (input: TransactionInput) =>
       db.transaction(async (tx) => {
@@ -604,17 +626,21 @@ export const openKnowledgeGraph = <C extends EntitySchema<ConfigDataType>>(
           configSchema,
         );
       }),
-    apply: (transaction: Transaction) => applyAndNotify(transaction),
+    apply: (transaction: Transaction) =>
+      prepareApplyAndNotify(() => ok(transaction)),
     rollback: async (count, version) => {
-      const dbResult = await db.transaction(async (dbTx) => {
-        const versionResult = await getVersion(dbTx);
-        if (isErr(versionResult)) return versionResult;
-        const txId = version ?? versionResult.data.id;
+      const dbResult = await db.transaction(
+        async (dbTx) => {
+          const versionResult = await getVersion(dbTx);
+          if (isErr(versionResult)) return versionResult;
+          const txId = version ?? versionResult.data.id;
 
-        recordSchemaCache = null;
+          recordSchemaCache = null;
 
-        return rollbackTransaction(dbTx, count, txId);
-      });
+          return rollbackTransaction(dbTx, count, txId);
+        },
+        { behavior: "immediate" },
+      );
       if (isErr(dbResult)) return dbResult;
 
       await notifyRollbackHandlers(dbResult.data, count);
