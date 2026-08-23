@@ -10,24 +10,8 @@ sourceFiles:
   - packages/cli/src/document/view-entity.ts
   - packages/cli/src/document/extraction.ts
 relatesTo:
-  - entity
-  - type
   - navigation
   - query
-  - feat-preamble-include-filters
-  - fix-preamble-body-slot-conflict
-  - view-system
-  - doc-navigation
-  - bidirectional-sync
-  - nested-view-rendering
-  - preamble
-  - language-server
-  - save-triggered-sync
-  - prob-snapshot-versioning
-  - prob-document-schema-model
-  - fix-markdown-escaping
-  - refactor-rename-template-to-view
-  - fix-empty-richtext-render
 ---
 
 # View

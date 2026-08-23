@@ -15,6 +15,10 @@ relatesTo:
   - type
   - reference
   - changeset
+  - entity-identity
+  - layer
+  - repository
+  - namespace
 ---
 
 # Entity

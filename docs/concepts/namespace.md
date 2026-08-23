@@ -9,6 +9,8 @@ sourceFiles: [ packages/repo/src/model/namespace.ts ]
 relatesTo:
   - repository
   - entity
+  - entity-identity
+  - workspace
 ---
 
 # Namespace

@@ -14,6 +14,11 @@ sourceFiles:
 relatesTo:
   - changeset
   - repository
+  - entity-identity
+  - transaction-segment
+  - layer
+  - inbox
+  - workflow
 ---
 
 # Transaction

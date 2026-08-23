@@ -13,6 +13,9 @@ sourceFiles:
 relatesTo:
   - transaction
   - entity
+  - entity-identity
+  - layer
+  - transaction-segment
 ---
 
 # Changeset

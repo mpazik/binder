@@ -15,6 +15,9 @@ relatesTo:
   - entity
   - namespace
   - transaction
+  - layer
+  - transaction-segment
+  - workspace
 ---
 
 # Repository

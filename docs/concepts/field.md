@@ -15,6 +15,8 @@ relatesTo:
   - field-attribute
   - entity
   - vocabulary
+  - entity-identity
+  - type
 ---
 
 # Field
@@ -51,6 +53,8 @@ Because fields exist independently of types, the same field definition serves mu
 - Cross-type queries work naturally: "find everything with status=active" spans all types
 - Adding a field to a new type requires no migration, just reference it in the type definition
 
-### When to Create a New Field vs Reuse
+### Shared vs Type-Specific Fields
 
-Create a **new** field when the property has genuinely different meaning, like `taskPriority` vs `bugSeverity`. **Reuse** an existing field when the meaning is the same across types, even if types constrain it differently, like `status` with different allowed values per type.
+A shared field is a semantic contract, not merely a reused label. **Reuse** a field when it has the same meaning, data type, cardinality, and should be queried consistently across types. Types may still narrow its options, range, defaults, or requirements.
+
+Create a **type-specific** field when the meaning or behaviour differs, even if the display name is similar. For example, `workStatus` and `paymentStatus` represent different concepts and should not share a generic `status` field.

@@ -7,8 +7,11 @@ description: A structured request for entities from the repository. Supports fil
 alternativeNames: [ search, filter ]
 sourceFiles: [ packages/repo/src/model/query.ts, packages/repo/src/model/query-serial.ts ]
 relatesTo:
-  - entity
-  - repository
+  - layer
+  - view
+  - navigation
+  - subscription
+  - reactive-query
 ---
 
 # Query

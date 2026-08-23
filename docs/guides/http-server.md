@@ -1,6 +1,7 @@
 ---
+key: http-server
 title: HTTP Server
-tags: [ http, guide ]
+tags: [ guide, http ]
 ---
 
 # HTTP Server
@@ -8,7 +9,6 @@ tags: [ http, guide ]
 ## Overview
 
 `binder http` starts a local HTTP server with three things:
-
 - A **JSON API** over the knowledge graph — query records, read schema, apply transactions.
 - A **static file server** for a UI — the built-in record browser by default, your own assets when you opt in.
 - An **extension hook** (`server.ts`) for adding custom routes in the same process. Colocated with the static dir.
@@ -24,7 +24,6 @@ binder http --host 0.0.0.0 --port 4000
 ```
 
 Flags:
-
 - `--port, -p` — port to bind (default `4000`)
 - `--host` — host to bind (default `127.0.0.1`)
 - `--static <dir>` — serve static files from `<dir>` instead of the built-in record browser
@@ -82,7 +81,6 @@ Returns the transaction result with changesets and HTTP `201`.
 ## Serving static files
 
 Resolution order for the static directory:
-
 1. `--static <dir>` flag (or `http.static` in config) — your assets.
 2. `.binder/web/` if it exists — zero-config convention.
 3. The built-in record browser — fallback default.
@@ -96,7 +94,6 @@ Static files are mounted last, after binder's `/api/*` routes and any `server.ts
 ## Extending with `server.ts`
 
 Drop a `server.ts` (or `server.mjs` / `server.js`) **inside your static directory** and `binder http` picks it up automatically:
-
 - With `--static ./web`, `server.ts` lives at `./web/server.ts`.
 - Without flags, `server.ts` lives at `.binder/web/server.ts`.
 - The built-in record browser dir is binder-owned and never scanned, so when no static dir is configured there is no extension point.
@@ -132,7 +129,6 @@ export default mod;
 ```
 
 The factory receives `{ kg, log, config, fs }`:
-
 - `kg` — the [`KnowledgeGraph`](../concepts/repository.md) (search, fetch, update, …)
 - `log` — structured logger
 - `config` — workspace config (paths, author, …)

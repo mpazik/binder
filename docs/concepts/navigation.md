@@ -12,7 +12,6 @@ sourceFiles:
 relatesTo:
   - view
   - query
-  - type
 ---
 
 # Navigation

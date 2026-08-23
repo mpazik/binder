@@ -13,6 +13,7 @@ relatesTo:
   - field
   - data-type
   - entity
+  - entity-identity
 ---
 
 # Reference

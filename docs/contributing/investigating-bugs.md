@@ -3,8 +3,6 @@ key: investigating-bugs
 title: Investigating Bugs
 tags: [ contributing ]
 description: Tips for investigating and root-causing bugs in the binder codebase.
-relatesTo:
-  - testing-style
 ---
 
 # Investigating Bugs

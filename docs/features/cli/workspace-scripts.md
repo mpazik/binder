@@ -11,8 +11,6 @@ sourceFiles:
   - packages/repo/src/local/open.ts
 relatesTo:
   - cli-interface
-  - feat-workspace-scripts
-  - feat-workspace-open-entry
 ---
 
 # Workspace Scripts
@@ -81,15 +79,14 @@ try {
 
 Resolves the workspace from `BINDER_WORKSPACE`, then by walking up from `options.cwd` (or `process.cwd()`) to find `.binder/config.yaml`.
 
-| Option     | Type     | Default          | Description |
-|------------|----------|------------------|-------------|
-| `clientId` | `string` | —                | Identifies the client (script, agent, service) opening the workspace, **kebab-case** (lowercase letters, digits, single hyphens). Stamped verbatim as `source` on originated transactions, and used as the log file stem (`<clientId>.log`). An invalid id fails the open with `invalid-client-id`. |
-| `cwd`      | `string` | `process.cwd()`  | Directory to start workspace resolution from. |
-| `silent`   | `boolean`| `true`           | Suppress interactive output. |
-| `logLevel` | `string` | `"info"`         | Log verbosity (`debug`, `info`, `warn`, `error`). |
+| Option     | Type      | Default         | Description                                                                                                                                                                                                                                                                                         |
+| ---------- | --------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clientId` | `string`  | —               | Identifies the client (script, agent, service) opening the workspace, **kebab-case** (lowercase letters, digits, single hyphens). Stamped verbatim as `source` on originated transactions, and used as the log file stem (`<clientId>.log`). An invalid id fails the open with `invalid-client-id`. |
+| `cwd`      | `string`  | `process.cwd()` | Directory to start workspace resolution from.                                                                                                                                                                                                                                                       |
+| `silent`   | `boolean` | `true`          | Suppress interactive output.                                                                                                                                                                                                                                                                        |
+| `logLevel` | `string`  | `"info"`        | Log verbosity (`debug`, `info`, `warn`, `error`).                                                                                                                                                                                                                                                   |
 
 Returns a `Result<WorkspaceHandle>`, where the handle exposes:
-
 - **`kg`** — the repo knowledge graph, opened with full `binder update` parity: writes run migrations and fire the journal, undo, and docs plugins, so committed transactions are journaled, remain undoable, and re-render their Markdown files just as a CLI write would.
 - **`config`** — resolved workspace configuration (paths, author, etc.).
 - **`close()`** — async, idempotent teardown.
