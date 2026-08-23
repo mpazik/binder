@@ -15,6 +15,7 @@ import {
   getTimestampForFileName,
   isErr,
   ok,
+  okVoid,
   readLinesFromEnd,
   type ResultAsync,
 } from "@binder/utils";
@@ -32,6 +33,7 @@ export type VerifySync = {
 export type VerifySyncCtx = Pick<RuntimeContextWithDb, "fs" | "kg">;
 export type RepairDbCtx = Pick<RuntimeContextWithDb, "fs" | "kg" | "config">;
 export type RepairLogCtx = Pick<RuntimeContextWithDb, "fs" | "db" | "config">;
+export type SyncLogCtx = Pick<RuntimeContextWithDb, "fs" | "kg" | "config">;
 
 export const verifySync = async (
   ctx: VerifySyncCtx,
@@ -149,6 +151,51 @@ export const repairDbFromLog = async (
   }
 
   return ok({ dbTransactionsPath });
+};
+
+/** Reconcile the derived log while the caller holds a SQLite writer lock. */
+export const syncLogFromDb = async (ctx: SyncLogCtx): ResultAsync<void> => {
+  const {
+    fs,
+    kg,
+    config: { paths },
+  } = ctx;
+  const transactionLogPath = join(paths.data, TRANSACTION_LOG_FILE);
+  const verifyResult = await verifySync({ fs, kg }, paths.data);
+  if (isErr(verifyResult)) return verifyResult;
+
+  const { dbOnlyTransactions, logOnlyTransactions } = verifyResult.data;
+  if (dbOnlyTransactions.length === 0 && logOnlyTransactions.length === 0) {
+    return okVoid;
+  }
+
+  if (logOnlyTransactions.length === 0) {
+    return appendLines(
+      fs,
+      transactionLogPath,
+      dbOnlyTransactions,
+      serializeTransaction,
+    );
+  }
+
+  const clearResult = await clearLog(fs, transactionLogPath);
+  if (isErr(clearResult)) return clearResult;
+
+  const versionResult = await kg.version();
+  if (isErr(versionResult)) return versionResult;
+
+  const transactionsResult = await kg.listTransactions({
+    limit: versionResult.data.id,
+    order: "asc",
+  });
+  if (isErr(transactionsResult)) return transactionsResult;
+
+  return appendLines(
+    fs,
+    transactionLogPath,
+    transactionsResult.data,
+    serializeTransaction,
+  );
 };
 
 /**

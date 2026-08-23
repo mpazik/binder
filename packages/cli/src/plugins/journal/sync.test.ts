@@ -27,6 +27,7 @@ import type { FileSystem } from "../../lib/filesystem.ts";
 import {
   applyTransactions,
   repairDbFromLog,
+  syncLogFromDb,
   type VerifySync,
   verifySync,
 } from "./sync.ts";
@@ -123,6 +124,58 @@ describe("journal sync", () => {
         logOnlyTransactions: [mockTransactionInit, mockTransactionUpdate],
         lastSyncedId: GENESIS_VERSION.id,
       });
+    });
+  });
+
+  describe("syncLogFromDb", () => {
+    it("appends transactions missing from the log", async () => {
+      const kg = openKnowledgeGraph(db);
+      throwIfError(await kg.apply(mockTransactionInit));
+      throwIfError(await kg.apply(mockTransactionUpdate));
+      throwIfError(
+        await appendLines(
+          fs,
+          transactionLogPath,
+          [mockTransactionInit],
+          serializeTransaction,
+        ),
+      );
+
+      throwIfError(await syncLogFromDb(context));
+
+      expect(
+        throwIfError(
+          await readLastLines(fs, transactionLogPath, 10, parseTransaction),
+        ),
+      ).toEqual([mockTransactionInit, mockTransactionUpdate]);
+    });
+
+    it("rebuilds a divergent log from the database", async () => {
+      const kg = openKnowledgeGraph(db);
+      throwIfError(await kg.apply(mockTransactionInit));
+      throwIfError(await kg.apply(mockTransactionUpdate));
+      const divergedTx = await withHashTransaction(
+        coreConfigSchema,
+        mockRecordSchema,
+        { ...mockTransactionUpdate, author: "different-user" },
+        mockTransactionUpdate.id,
+      );
+      throwIfError(
+        await appendLines(
+          fs,
+          transactionLogPath,
+          [mockTransactionInit, divergedTx],
+          serializeTransaction,
+        ),
+      );
+
+      throwIfError(await syncLogFromDb(context));
+
+      expect(
+        throwIfError(
+          await readLastLines(fs, transactionLogPath, 10, parseTransaction),
+        ),
+      ).toEqual([mockTransactionInit, mockTransactionUpdate]);
     });
   });
 

@@ -100,15 +100,13 @@ export const createMockRuntimeContextWithDb =
     const navigationCache = createNavigationCache(kg);
     const viewCache = createViewCache(kg);
 
-    // Mirror runtime.ts plugin wiring: journal and undo own the log/redo
-    // stack, docs renders last. The real PluginRepo exposes both `config`
-    // and the full kg surface (onCommit/onRollback for journal/undo, search
-    // for the docs render); proxy kg and override `config` to match.
+    // Mirror runtime plugin ordering and the Repo fields used by plugins.
     const pluginRepo = new Proxy(kg, {
-      get: (target, prop) =>
-        prop === "config"
-          ? mockConfig
-          : (target as unknown as Record<string, unknown>)[prop as string],
+      get: (target, prop) => {
+        if (prop === "config") return mockConfig;
+        if (prop === "db") return db;
+        return Reflect.get(target, prop);
+      },
     }) as unknown as PluginRepo;
     journalPlugin({ fs: context.fs }).register?.({ repo: pluginRepo });
     undoRepoPlugin({ fs: context.fs }).register?.({ repo: pluginRepo });
